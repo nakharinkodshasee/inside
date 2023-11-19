@@ -1,0 +1,55 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005B3 RID: 1459
+public class ShadowFish : MonoBehaviour
+{
+	// Token: 0x0600252E RID: 9518 RVA: 0x00131220 File Offset: 0x0012F420
+	private void Start()
+	{
+		base.transform.rotation = Random.rotation;
+		this.mTargetOnBoy = Random.onUnitSphere * 7f;
+	}
+
+	// Token: 0x0600252F RID: 9519 RVA: 0x00131254 File Offset: 0x0012F454
+	private void Update()
+	{
+		base.transform.position += base.transform.forward * this.speed * Time.deltaTime;
+		if (!this.bounds.bounds.Contains(base.transform.position))
+		{
+			base.transform.rotation = Quaternion.LookRotation((this.GetRandomPosInBounds() - base.transform.position).normalized, base.transform.up);
+		}
+		float num = Mathf.Abs(ScriptGlobals.boy.pos3.x - base.transform.position.x) + Mathf.Abs(ScriptGlobals.boy.pos3.y - base.transform.position.y);
+		float num2 = (this.alertRadius - num) / this.alertRadius;
+		num2 = Mathf.Clamp01(num2 * num2 * Mathf.Sign(num2));
+		Quaternion quaternion = Quaternion.Slerp(Random.rotation, Quaternion.LookRotation((ScriptGlobals.boy.pos3 + this.mTargetOnBoy - base.transform.position) * (float)this.mDir, Vector3.up), num2);
+		base.transform.rotation = Quaternion.RotateTowards(base.transform.rotation, quaternion, this.maxRotationSpeed * Time.deltaTime);
+	}
+
+	// Token: 0x06002530 RID: 9520 RVA: 0x001313E0 File Offset: 0x0012F5E0
+	private Vector3 GetRandomPosInBounds()
+	{
+		return new Vector3(Random.Range(this.bounds.bounds.min.x, this.bounds.bounds.max.x), Random.Range(this.bounds.bounds.min.y, this.bounds.bounds.max.y), Random.Range(this.bounds.bounds.min.z, this.bounds.bounds.max.z));
+	}
+
+	// Token: 0x04004423 RID: 17443
+	public float speed = 1f;
+
+	// Token: 0x04004424 RID: 17444
+	public float maxRotationSpeed = 360f;
+
+	// Token: 0x04004425 RID: 17445
+	public float alertRadius = 15f;
+
+	// Token: 0x04004426 RID: 17446
+	public BoxCollider bounds;
+
+	// Token: 0x04004427 RID: 17447
+	private Vector3 mTargetOnBoy;
+
+	// Token: 0x04004428 RID: 17448
+	private int mDir = -1;
+}
+
+using System;
+using UnityEngine;

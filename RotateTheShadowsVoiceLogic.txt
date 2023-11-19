@@ -1,0 +1,125 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004A1 RID: 1185
+public class RotateTheShadowsVoiceLogic : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001EFC RID: 7932 RVA: 0x00109450 File Offset: 0x00107650
+	public bool PreAwake(int callcount)
+	{
+		this.enterCover = SignalIn.Create("enterCover", base.gameObject, new Action(this.OnEnterCover));
+		this.exitCover = SignalIn.Create("exitCover", base.gameObject, new Action(this.OnExitCover));
+		this.enterPuzzle = SignalIn.Create("enterPuzzle", base.gameObject, delegate
+		{
+			this.isAtPuzzle = true;
+		});
+		this.exitPuzzle = SignalIn.Create("exitPuzzle", base.gameObject, delegate
+		{
+			this.isAtPuzzle = false;
+		});
+		this.inCover = SignalOut.Create("inCover", base.gameObject);
+		this.notInCover = SignalOut.Create("notInCover", base.gameObject);
+		this.boyWillDie = SignalOut.Create("boyWillDie", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001EFD RID: 7933 RVA: 0x00109528 File Offset: 0x00107728
+	private bool LightRightOfShadowCaster()
+	{
+		return this.lightObject.position.x > this.shadowCaster.position.x + 1.2f;
+	}
+
+	// Token: 0x06001EFE RID: 7934 RVA: 0x0010956C File Offset: 0x0010776C
+	private bool LightMovingRight()
+	{
+		return this.lightObject.position.x > this.previousLightPos.x;
+	}
+
+	// Token: 0x06001EFF RID: 7935 RVA: 0x001095A0 File Offset: 0x001077A0
+	private bool BoyRightOfShadowCaster()
+	{
+		return ScriptGlobals.boy.pos3.x > this.shadowCaster.position.x + 1.2f && ScriptGlobals.boy.pos3.x > this.lightObject.position.x;
+	}
+
+	// Token: 0x06001F00 RID: 7936 RVA: 0x0010960C File Offset: 0x0010780C
+	private bool CasterLowEnough()
+	{
+		return this.shadowCaster.position.y < this.correctCasterPos.position.y && this.shadowCaster.position.x > this.correctCasterPos.position.x;
+	}
+
+	// Token: 0x06001F01 RID: 7937 RVA: 0x00109674 File Offset: 0x00107874
+	private void FixedUpdate()
+	{
+		if (this.isAtPuzzle && !this.dieMessageSend && !this.isInCover && !this.CasterLowEnough() && this.LightRightOfShadowCaster() && this.LightMovingRight() && this.BoyRightOfShadowCaster())
+		{
+			this.boyWillDie.Signal();
+			this.dieMessageSend = true;
+		}
+		this.previousLightPos = this.lightObject.position;
+	}
+
+	// Token: 0x06001F02 RID: 7938 RVA: 0x001096F4 File Offset: 0x001078F4
+	private void OnEnterCover()
+	{
+		if (!this.isInCover && this.isAtPuzzle)
+		{
+			this.isInCover = true;
+			this.inCover.Signal();
+		}
+	}
+
+	// Token: 0x06001F03 RID: 7939 RVA: 0x0010972C File Offset: 0x0010792C
+	private void OnExitCover()
+	{
+		if (this.isInCover && this.isAtPuzzle)
+		{
+			this.isInCover = false;
+			this.notInCover.Signal();
+		}
+	}
+
+	// Token: 0x04003963 RID: 14691
+	public Transform shadowCaster;
+
+	// Token: 0x04003964 RID: 14692
+	public Transform correctCasterPos;
+
+	// Token: 0x04003965 RID: 14693
+	public Transform lightObject;
+
+	// Token: 0x04003966 RID: 14694
+	private SignalIn enterCover;
+
+	// Token: 0x04003967 RID: 14695
+	private SignalIn exitCover;
+
+	// Token: 0x04003968 RID: 14696
+	private SignalIn enterPuzzle;
+
+	// Token: 0x04003969 RID: 14697
+	private SignalIn exitPuzzle;
+
+	// Token: 0x0400396A RID: 14698
+	private SignalOut inCover;
+
+	// Token: 0x0400396B RID: 14699
+	private SignalOut notInCover;
+
+	// Token: 0x0400396C RID: 14700
+	private SignalOut boyWillDie;
+
+	// Token: 0x0400396D RID: 14701
+	private bool isInCover;
+
+	// Token: 0x0400396E RID: 14702
+	private bool dieMessageSend;
+
+	// Token: 0x0400396F RID: 14703
+	private Vector3 previousLightPos;
+
+	// Token: 0x04003970 RID: 14704
+	private bool isAtPuzzle;
+
+	// Token: 0x04003971 RID: 14705
+	private int noOfProbesInside;
+}

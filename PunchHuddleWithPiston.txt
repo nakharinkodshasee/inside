@@ -1,0 +1,54 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005CB RID: 1483
+public class PunchHuddleWithPiston : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060025AE RID: 9646 RVA: 0x00133BE8 File Offset: 0x00131DE8
+	public bool PreAwake(int callcount)
+	{
+		this.doPunch = SignalIn.Create("doPunch", base.gameObject, new Action(this.Punch));
+		return true;
+	}
+
+	// Token: 0x060025AF RID: 9647 RVA: 0x00133C10 File Offset: 0x00131E10
+	private void Start()
+	{
+		Debug.Log("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
+		this.huddle = ScriptGlobals.huddle;
+	}
+
+	// Token: 0x060025B0 RID: 9648 RVA: 0x00133C28 File Offset: 0x00131E28
+	private void Punch()
+	{
+		Vector3 normalized = (this.huddle.pos3 - this.pistonPoint.position).normalized;
+		float num = Mathf.Abs(this.huddle.velocity3.x);
+		Vector3 vector;
+		vector..ctor(this.pistonPoint.position.x, this.huddle.pos3.y, 0f);
+		float magnitude = (vector - this.huddle.pos3).magnitude;
+		float num2 = Mathf.InverseLerp(0.5f, 2f, magnitude);
+		float num3 = Mathf.Lerp(1f, 0.5f, num2);
+		float num4 = Mathf.InverseLerp(4f, 1f, num);
+		float num5 = Mathf.Lerp(1f, 0.7f, num4);
+		Vector3 vector2 = normalized * this.force;
+		vector2..ctor(vector2.x * num3 * num5, vector2.y * num3 * num5, 0f);
+		Debug.Log("forceToApply:" + vector2);
+		Debug.Log("huddleSpeedX " + num);
+		Debug.Log("forceVelocityMultiplier:" + num5);
+		Debug.Log("forceMultiplier: " + num3);
+		Debug.Log("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
+		this.huddle.AddVelocity(vector2 * 0.016666668f / this.huddle.mass);
+	}
+
+	// Token: 0x040044D7 RID: 17623
+	public float force;
+
+	// Token: 0x040044D8 RID: 17624
+	public Transform pistonPoint;
+
+	// Token: 0x040044D9 RID: 17625
+	private SignalIn doPunch;
+
+	// Token: 0x040044DA RID: 17626
+	private Huddle huddle;
+}

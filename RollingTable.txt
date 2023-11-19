@@ -1,0 +1,321 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000513 RID: 1299
+public class RollingTable : MonoBehaviour
+{
+	// Token: 0x060021D8 RID: 8664 RVA: 0x0011B6E0 File Offset: 0x001198E0
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioShake = new AudioEventSimpleLocal(this.audioPrefix + "_audioShake", akGameObj);
+	}
+
+	// Token: 0x060021D9 RID: 8665 RVA: 0x0011B72C File Offset: 0x0011992C
+	private void Start()
+	{
+		this.OnPreProcess();
+		int i = 0;
+		int num = this.wheels.Length;
+		while (i < num)
+		{
+			this.wheels[i].RandomizeTimer();
+			i++;
+		}
+		this.previousPos = this.tableRigidbody.position;
+		this.groundPosY = this.tableRigidbody.position.y + this.shakePos.y;
+		this.rumbleCountdown = Random.Range(2, 5);
+	}
+
+	// Token: 0x060021DA RID: 8666 RVA: 0x0011B7AC File Offset: 0x001199AC
+	private void FixedUpdate()
+	{
+		Vector3 position = this.tableRigidbody.position;
+		float num = this.previousPos.x - position.x;
+		if (Mathf.Abs(num) > 0f)
+		{
+			Vector3 zero = Vector3.zero;
+			zero.x = ((num <= 0f) ? -1f : 1f);
+			float num2 = Mathf.Abs(num) * Time.deltaTime;
+			int i = 0;
+			int num3 = this.wheels.Length;
+			while (i < num3)
+			{
+				this.wheels[i].RotateTowards(zero, num2);
+				i++;
+			}
+			if (this.isShaking && num2 > 0.0001f)
+			{
+				this.shakeTimer -= num2 * Time.deltaTime * 1000f * this.shakeSpeed;
+				if (this.shakeFadeTimer < this.shakeFadeDuration)
+				{
+					this.shakeFadeTimer += Time.deltaTime;
+				}
+				this.ShakePhone();
+				if (this.shakeTimer <= 0f)
+				{
+					bool flag = ScriptGlobals.boy.state is BoyGrabState;
+					this.shakeTimer = 1f + Random.value * 0.1f;
+					Vector3 position2 = this.tableRigidbody.position;
+					position2.x += ((!this.shakeRightNext) ? (-this.shakePos.x) : this.shakePos.x);
+					position2.y = this.groundPosY;
+					Vector3 vector = Vector3.up * Time.deltaTime * this.shakeSize;
+					if (flag)
+					{
+						float num4 = Mathf.Sign(num);
+						if ((num4 == 1f && this.shakeRightNext) || (num4 == -1f && !this.shakeRightNext))
+						{
+							vector.y *= this.extraBackForce;
+						}
+					}
+					if (this.shakeFadeTimer < this.shakeFadeDuration)
+					{
+						vector.y *= 0.5f + 0.5f * (this.shakeFadeTimer / this.shakeFadeDuration);
+					}
+					this.tableRigidbody.AddForceAtPosition(vector, position2, 1);
+					this.audioShake.PostFast();
+					this.shakeRightNext = !this.shakeRightNext;
+					this.rumbleCountdown--;
+					if (this.rumbleCountdown <= 0)
+					{
+						this.rumbleCountdown = Random.Range(4, 7);
+						if (flag)
+						{
+							RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Constant, this.rumbleStrength, 0.15f, 0, 0f);
+						}
+					}
+				}
+				this.tableRigidbody.AddForce(Vector3.right * this.tableRigidbody.velocity.x * -Mathf.Abs(this.gridFriction) * Time.deltaTime);
+			}
+		}
+		if (this.tableCollider && ScriptGlobals.boy.isCharacterActive)
+		{
+			BoyReachPlateauState boyReachPlateauState = ScriptGlobals.boy.state as BoyReachPlateauState;
+			if ((boyReachPlateauState != null && boyReachPlateauState.plateau.collider == this.tableCollider) || ScriptGlobals.boy.status.groundCollider == this.tableCollider)
+			{
+				this.tableRigidbody.AddForce(Vector3.right * this.tableRigidbody.velocity.x * -45f * Time.deltaTime);
+			}
+		}
+		if (this.restrictRotation && this.creasePos && this.tableRigidbody.position.x > this.creasePos.position.x)
+		{
+			this.restrictRotation.restrictZ = 2.5f;
+		}
+		else
+		{
+			this.restrictRotation.restrictZ = 1f;
+		}
+		this.previousPos = position;
+	}
+
+	// Token: 0x060021DB RID: 8667 RVA: 0x0011BBC0 File Offset: 0x00119DC0
+	private void ShakePhone()
+	{
+		if (this.phoneShakeTimer > 0f)
+		{
+			this.phoneShakeTimer -= Time.deltaTime;
+		}
+		else
+		{
+			int i = 0;
+			int num = this.phoneParts.Length;
+			while (i < num)
+			{
+				Rigidbody rigidbody = this.phoneParts[i];
+				float num2 = rigidbody.position.y - this.previousPos.y;
+				if (num2 > 0.75f)
+				{
+					rigidbody.AddForce(this.phoneForce, 1);
+					rigidbody.AddTorque(Random.onUnitSphere * this.phoneTorque, 1);
+				}
+				i++;
+			}
+			this.phoneShakeTimer = this.phoneShakeInterval;
+		}
+	}
+
+	// Token: 0x060021DC RID: 8668 RVA: 0x0011BC70 File Offset: 0x00119E70
+	private void OnTriggerExit(Collider collider)
+	{
+		if (this.shakeTriggers == null || this.shakeTriggers.Length <= 0)
+		{
+			return;
+		}
+		int i = 0;
+		int num = this.shakeTriggers.Length;
+		while (i < num)
+		{
+			if (collider == this.shakeTriggers[i])
+			{
+				this.isShaking = false;
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x060021DD RID: 8669 RVA: 0x0011BCCC File Offset: 0x00119ECC
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (this.shakeTriggers == null || this.shakeTriggers.Length <= 0)
+		{
+			return;
+		}
+		int i = 0;
+		int num = this.shakeTriggers.Length;
+		while (i < num)
+		{
+			if (collider == this.shakeTriggers[i] && !this.isShaking)
+			{
+				this.isShaking = true;
+				this.shakeTimer = 0f;
+				this.shakeFadeTimer = 0f;
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x04003F04 RID: 16132
+	public Rigidbody tableRigidbody;
+
+	// Token: 0x04003F05 RID: 16133
+	public RollingTable.Wheel[] wheels;
+
+	// Token: 0x04003F06 RID: 16134
+	public Collider[] shakeTriggers;
+
+	// Token: 0x04003F07 RID: 16135
+	public Vector3 shakePos;
+
+	// Token: 0x04003F08 RID: 16136
+	public RestrictRotation restrictRotation;
+
+	// Token: 0x04003F09 RID: 16137
+	public Transform creasePos;
+
+	// Token: 0x04003F0A RID: 16138
+	public float shakeSize = 2f;
+
+	// Token: 0x04003F0B RID: 16139
+	public float shakeSpeed = 1f;
+
+	// Token: 0x04003F0C RID: 16140
+	public float rumbleStrength = 0.3f;
+
+	// Token: 0x04003F0D RID: 16141
+	public float gridFriction = -50f;
+
+	// Token: 0x04003F0E RID: 16142
+	public float extraBackForce = 1.5f;
+
+	// Token: 0x04003F0F RID: 16143
+	public float shakeFadeDuration = 0.4f;
+
+	// Token: 0x04003F10 RID: 16144
+	public Collider tableCollider;
+
+	// Token: 0x04003F11 RID: 16145
+	public Rigidbody[] phoneParts;
+
+	// Token: 0x04003F12 RID: 16146
+	public Vector3 phoneForce = new Vector3(0f, 0.026f, 0.036f);
+
+	// Token: 0x04003F13 RID: 16147
+	public float phoneTorque = 0.0014f;
+
+	// Token: 0x04003F14 RID: 16148
+	public float phoneShakeInterval = 0.2f;
+
+	// Token: 0x04003F15 RID: 16149
+	public string audioPrefix;
+
+	// Token: 0x04003F16 RID: 16150
+	private Vector3 previousPos;
+
+	// Token: 0x04003F17 RID: 16151
+	private float shakeTimer;
+
+	// Token: 0x04003F18 RID: 16152
+	private float groundPosY;
+
+	// Token: 0x04003F19 RID: 16153
+	private bool shakeRightNext;
+
+	// Token: 0x04003F1A RID: 16154
+	private bool isShaking;
+
+	// Token: 0x04003F1B RID: 16155
+	private int rumbleCountdown;
+
+	// Token: 0x04003F1C RID: 16156
+	private float shakeFadeTimer;
+
+	// Token: 0x04003F1D RID: 16157
+	private float phoneShakeTimer;
+
+	// Token: 0x04003F1E RID: 16158
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioShake;
+
+	// Token: 0x04003F1F RID: 16159
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x02000514 RID: 1300
+	[Serializable]
+	public class Wheel
+	{
+		// Token: 0x060021DF RID: 8671 RVA: 0x0011BD78 File Offset: 0x00119F78
+		public void RandomizeTimer()
+		{
+			this.wobbleTimer = Random.value;
+			Vector3 localEulerAngles = this.wheelWobbleTransform.localEulerAngles;
+			localEulerAngles.y = this.wobbleCurve.Evaluate(this.wobbleTimer) * this.wobbleAngle;
+			this.wheelWobbleTransform.localEulerAngles = localEulerAngles;
+		}
+
+		// Token: 0x060021E0 RID: 8672 RVA: 0x0011BDC8 File Offset: 0x00119FC8
+		public void RotateTowards(Vector3 target, float moveDist)
+		{
+			this.wheelTransform.rotation = Quaternion.Slerp(this.wheelTransform.rotation, Quaternion.LookRotation(target), moveDist * this.turnSpeed);
+			if (this.wheelWobbleTransform && this.wobbleAngle != 0f)
+			{
+				this.wobbleTimer += this.wobbleSpeed * moveDist;
+				if (this.wobbleTimer > 1f)
+				{
+					this.wobbleTimer = 0f;
+				}
+				Vector3 localEulerAngles = this.wheelWobbleTransform.localEulerAngles;
+				localEulerAngles.y = this.wobbleCurve.Evaluate(this.wobbleTimer) * this.wobbleAngle;
+				this.wheelWobbleTransform.localEulerAngles = localEulerAngles;
+			}
+		}
+
+		// Token: 0x04003F20 RID: 16160
+		public Transform wheelTransform;
+
+		// Token: 0x04003F21 RID: 16161
+		public Transform wheelWobbleTransform;
+
+		// Token: 0x04003F22 RID: 16162
+		public float turnSpeed = 1400f;
+
+		// Token: 0x04003F23 RID: 16163
+		public float wobbleAngle = 17f;
+
+		// Token: 0x04003F24 RID: 16164
+		public float wobbleSpeed = 70f;
+
+		// Token: 0x04003F25 RID: 16165
+		public AnimationCurve wobbleCurve;
+
+		// Token: 0x04003F26 RID: 16166
+		private float wobbleTimer;
+	}
+}

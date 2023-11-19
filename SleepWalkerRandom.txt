@@ -1,0 +1,198 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000E8 RID: 232
+public class SleepWalkerRandom : MonoBehaviour
+{
+	// Token: 0x06000742 RID: 1858 RVA: 0x00051664 File Offset: 0x0004F864
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.anim = base.GetComponentInChildren<Animation>();
+		this.skinnedMesh = base.GetComponentInChildren<SkinnedMeshRenderer>();
+		if (this.skinnedMesh)
+		{
+			this.skinnedMesh.updateWhenOffscreen = false;
+		}
+		this.skinnedMesh.quality = 1;
+		this.sleepWalkerTransform = base.transform;
+	}
+
+	// Token: 0x06000743 RID: 1859 RVA: 0x000516D0 File Offset: 0x0004F8D0
+	private void Start()
+	{
+		if (!this.standIdle)
+		{
+			this.SetMoveState();
+		}
+		else
+		{
+			this.SetWaitState();
+		}
+	}
+
+	// Token: 0x06000744 RID: 1860 RVA: 0x000516F0 File Offset: 0x0004F8F0
+	public void InitializeSleepWalker(float lineLength, Vector3 startLinePos, Vector3 modelScale, SleepWalkerSpawner spawner)
+	{
+		this.OnPreProcess();
+		this.lineupLength = lineLength;
+		this.startLinePos = startLinePos;
+		this.spawner = spawner;
+		this.pos = this.sleepWalkerTransform.localPosition;
+		this.anim.transform.localScale = modelScale;
+		this.anim.wrapMode = 2;
+		this.anim.Play(this.walkAnim);
+	}
+
+	// Token: 0x06000745 RID: 1861 RVA: 0x0005175C File Offset: 0x0004F95C
+	public void SetWaitState()
+	{
+		this.state = SleepWalkerRandom.State.Wait;
+		if (this.idleAnim != string.Empty)
+		{
+			this.anim.Play(this.idleAnim);
+		}
+	}
+
+	// Token: 0x06000746 RID: 1862 RVA: 0x00051798 File Offset: 0x0004F998
+	public void SetMoveState()
+	{
+		this.state = SleepWalkerRandom.State.Move;
+		if (this.walkAnim != string.Empty)
+		{
+			this.anim.Play(this.walkAnim);
+		}
+	}
+
+	// Token: 0x06000747 RID: 1863 RVA: 0x000517D4 File Offset: 0x0004F9D4
+	public void UpdateSleepWalker(float dt)
+	{
+		if (!this.isActive)
+		{
+			return;
+		}
+		if (this.state == SleepWalkerRandom.State.Move)
+		{
+			this.pos.x = this.pos.x + dt * this.speed;
+			if (this.pos.x > this.startLinePos.x + this.lineupLength)
+			{
+				this.pos.x = this.pos.x - this.lineupLength;
+				this.spawner.AddSleepwalkerToPool(base.gameObject);
+				this.isActive = false;
+			}
+			this.sleepWalkerTransform.localPosition = this.pos;
+		}
+	}
+
+	// Token: 0x06000748 RID: 1864 RVA: 0x00051878 File Offset: 0x0004FA78
+	public void SetIsActive(bool b)
+	{
+		this.isActive = b;
+		base.gameObject.SetActive(b);
+	}
+
+	// Token: 0x06000749 RID: 1865 RVA: 0x00051890 File Offset: 0x0004FA90
+	public void SetModelIndex(int index)
+	{
+		this.modelIndex = index;
+	}
+
+	// Token: 0x0600074A RID: 1866 RVA: 0x0005189C File Offset: 0x0004FA9C
+	public int GetModelIndex()
+	{
+		return this.modelIndex;
+	}
+
+	// Token: 0x04000C98 RID: 3224
+	public string walkAnim;
+
+	// Token: 0x04000C99 RID: 3225
+	public string idleAnim;
+
+	// Token: 0x04000C9A RID: 3226
+	public bool standIdle;
+
+	// Token: 0x04000C9B RID: 3227
+	public float lowQualityDistance = 30f;
+
+	// Token: 0x04000C9C RID: 3228
+	public float mediumQualityDistance = 20f;
+
+	// Token: 0x04000C9D RID: 3229
+	public float speed = 0.85f;
+
+	// Token: 0x04000C9E RID: 3230
+	private SleepWalkerRandom.State state;
+
+	// Token: 0x04000C9F RID: 3231
+	private float qualityTimer;
+
+	// Token: 0x04000CA0 RID: 3232
+	private float qualityDelay = 4f;
+
+	// Token: 0x04000CA1 RID: 3233
+	[SerializeField]
+	[HideInInspector]
+	private bool isActive;
+
+	// Token: 0x04000CA2 RID: 3234
+	[SerializeField]
+	[HideInInspector]
+	private Transform sleepWalkerTransform;
+
+	// Token: 0x04000CA3 RID: 3235
+	[HideInInspector]
+	[SerializeField]
+	private Vector3 pos;
+
+	// Token: 0x04000CA4 RID: 3236
+	[SerializeField]
+	[HideInInspector]
+	private float lineupLength;
+
+	// Token: 0x04000CA5 RID: 3237
+	[SerializeField]
+	[HideInInspector]
+	private Vector3 startLinePos;
+
+	// Token: 0x04000CA6 RID: 3238
+	[HideInInspector]
+	[SerializeField]
+	private SleepWalkerSpawner spawner;
+
+	// Token: 0x04000CA7 RID: 3239
+	[HideInInspector]
+	[SerializeField]
+	private int modelIndex = -1;
+
+	// Token: 0x04000CA8 RID: 3240
+	[SerializeField]
+	[HideInInspector]
+	private SkinnedMeshRenderer skinnedMesh;
+
+	// Token: 0x04000CA9 RID: 3241
+	[HideInInspector]
+	[SerializeField]
+	private Animation anim;
+
+	// Token: 0x04000CAA RID: 3242
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x020000E9 RID: 233
+	private enum State
+	{
+		// Token: 0x04000CAC RID: 3244
+		None,
+		// Token: 0x04000CAD RID: 3245
+		Wait,
+		// Token: 0x04000CAE RID: 3246
+		Move
+	}
+}

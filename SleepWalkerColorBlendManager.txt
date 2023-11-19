@@ -1,0 +1,216 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020000E7 RID: 231
+public class SleepWalkerColorBlendManager : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600073C RID: 1852 RVA: 0x00050FCC File Offset: 0x0004F1CC
+	[LateProcessBuild(0)]
+	public void OnPreprocess()
+	{
+		if (this.preprocessed)
+		{
+			return;
+		}
+		this.preprocessed = true;
+		int count = this.blendProbes.Count;
+		if (count == 0)
+		{
+			return;
+		}
+		this.blendProbesFAST = new ColorBlendProbe[count];
+		for (int i = 0; i < count; i++)
+		{
+			this.blendProbesFAST[i] = this.blendProbes[i];
+		}
+		int count2 = this.materialInstanceBlendBox.Count;
+		this.materialInstanceBlendBoxFAST = new MaterialInstanceBlendBox[count2];
+		this.blendBoxColliderInvTransform = new Matrix4x4[count2];
+		this.boxBoundX = new Vector2[count2];
+		this.boxBoundZ = new Vector2[count2];
+		int j = 0;
+		int num = count2;
+		while (j < num)
+		{
+			MaterialInstanceBlendBox materialInstanceBlendBox = this.materialInstanceBlendBox[j];
+			this.materialInstanceBlendBoxFAST[j] = materialInstanceBlendBox;
+			BoxCollider component = materialInstanceBlendBox.GetComponent<BoxCollider>();
+			if (component != null)
+			{
+				this.blendBoxColliderInvTransform[j] = materialInstanceBlendBox.transform.worldToLocalMatrix;
+				Bounds bounds = PhysicsUtils.CalculateBounds(component);
+				this.boxBoundX[j] = new Vector2(bounds.min.x, bounds.max.x);
+				this.boxBoundZ[j] = new Vector2(bounds.min.z, bounds.max.z);
+			}
+			else
+			{
+				this.blendBoxColliderInvTransform[j] = default(Matrix4x4);
+				this.boxBoundX[j] = new Vector2(float.MaxValue, float.MinValue);
+				this.boxBoundZ[j] = new Vector2(float.MaxValue, float.MinValue);
+			}
+			j++;
+		}
+	}
+
+	// Token: 0x0600073D RID: 1853 RVA: 0x000511A4 File Offset: 0x0004F3A4
+	public bool PreAwake(int callCount)
+	{
+		this.OnPreprocess();
+		int num = this.materialInstanceBlendBoxFAST.Length;
+		int num2 = this.blendProbesFAST.Length;
+		int i = 0;
+		int num3 = num;
+		while (i < num3)
+		{
+			FastList<bool> fastList = new FastList<bool>(0, FastListExpandMode.Exponential, 100);
+			for (int j = 0; j < num2; j++)
+			{
+				fastList.Add(false);
+			}
+			this.dudeInside.Add(fastList);
+			i++;
+		}
+		return true;
+	}
+
+	// Token: 0x0600073E RID: 1854 RVA: 0x00051214 File Offset: 0x0004F414
+	private Bounds GetBounds(BoxCollider col)
+	{
+		Bounds result = default(Bounds);
+		List<Vector3> list = new List<Vector3>();
+		Transform transform = col.transform;
+		list.Add(transform.TransformPoint(-0.5f, -0.5f, -0.5f));
+		list.Add(transform.TransformPoint(-0.5f, -0.5f, 0.5f));
+		list.Add(transform.TransformPoint(-0.5f, 0.5f, -0.5f));
+		list.Add(transform.TransformPoint(-0.5f, 0.5f, 0.5f));
+		list.Add(transform.TransformPoint(0.5f, -0.5f, -0.5f));
+		list.Add(transform.TransformPoint(0.5f, -0.5f, 0.5f));
+		list.Add(transform.TransformPoint(0.5f, 0.5f, -0.5f));
+		list.Add(transform.TransformPoint(0.5f, 0.5f, 0.5f));
+		float num = float.MaxValue;
+		float num2 = float.MaxValue;
+		float num3 = float.MaxValue;
+		float num4 = float.MinValue;
+		float num5 = float.MinValue;
+		float num6 = float.MinValue;
+		int i = 0;
+		int count = list.Count;
+		while (i < count)
+		{
+			Vector3 vector = list[i];
+			num = FastMath.Min(num, vector.x);
+			num2 = FastMath.Min(num2, vector.y);
+			num3 = FastMath.Min(num3, vector.z);
+			num4 = FastMath.Max(num4, vector.x);
+			num5 = FastMath.Max(num5, vector.y);
+			num6 = FastMath.Max(num6, vector.z);
+			i++;
+		}
+		result.min = new Vector3(num, num2, num3);
+		result.max = new Vector3(num4, num5, num6);
+		return result;
+	}
+
+	// Token: 0x0600073F RID: 1855 RVA: 0x000513E4 File Offset: 0x0004F5E4
+	private void UpdateColorBlend()
+	{
+		int num = this.boxBoundX.Length;
+		int num2 = this.blendProbesFAST.Length;
+		if (num2 > 0)
+		{
+			for (int i = 0; i < num; i++)
+			{
+				MaterialInstanceBlendBox materialInstanceBlendBox = this.materialInstanceBlendBoxFAST[i];
+				if (materialInstanceBlendBox.enabled && materialInstanceBlendBox.gameObject.activeInHierarchy)
+				{
+					for (int j = 0; j < num2; j++)
+					{
+						if (j == this.currentUpdateIndex)
+						{
+							bool flag = this.dudeInside.raw[i].raw[j];
+							ColorBlendProbe colorBlendProbe = this.blendProbesFAST[j];
+							Vector3 curPos = colorBlendProbe.GetCurPos();
+							bool flag2 = false;
+							if (curPos.x > this.boxBoundX[i].x && curPos.x < this.boxBoundX[i].y && curPos.z > this.boxBoundZ[i].x && curPos.z < this.boxBoundZ[i].y)
+							{
+								Vector3 vector = this.blendBoxColliderInvTransform[i].MultiplyPoint3x4(curPos);
+								flag2 = (vector.x > -0.5f && vector.x < 0.5f && vector.y > -0.5f && vector.y < 0.5f && vector.z > -0.5f && vector.z < 0.5f);
+							}
+							if (flag2 != flag)
+							{
+								if (flag2)
+								{
+									ColorBlendProbe colorBlendProbe2 = this.blendProbes[j];
+									if (!colorBlendProbe2.activeBlendBoxes.Contains(materialInstanceBlendBox))
+									{
+										colorBlendProbe2.activeBlendBoxes.Add(materialInstanceBlendBox);
+									}
+								}
+								else
+								{
+									ColorBlendProbe colorBlendProbe3 = this.blendProbes[j];
+									colorBlendProbe3.activeBlendBoxes.Remove(materialInstanceBlendBox);
+								}
+							}
+							this.dudeInside.raw[i].raw[j] = flag2;
+						}
+						else
+						{
+							this.blendProbesFAST[j].skipThisUpdate = true;
+						}
+					}
+				}
+			}
+			this.currentUpdateIndex = (this.currentUpdateIndex + 1) % num2;
+		}
+	}
+
+	// Token: 0x06000740 RID: 1856 RVA: 0x00051620 File Offset: 0x0004F820
+	private void Update()
+	{
+		this.UpdateColorBlend();
+	}
+
+	// Token: 0x04000C8E RID: 3214
+	public List<MaterialInstanceBlendBox> materialInstanceBlendBox = new List<MaterialInstanceBlendBox>();
+
+	// Token: 0x04000C8F RID: 3215
+	public List<ColorBlendProbe> blendProbes = new List<ColorBlendProbe>();
+
+	// Token: 0x04000C90 RID: 3216
+	private FastList<FastList<bool>> dudeInside = new FastList<FastList<bool>>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04000C91 RID: 3217
+	[SerializeField]
+	[HideInInspector]
+	public MaterialInstanceBlendBox[] materialInstanceBlendBoxFAST;
+
+	// Token: 0x04000C92 RID: 3218
+	[HideInInspector]
+	[SerializeField]
+	public ColorBlendProbe[] blendProbesFAST;
+
+	// Token: 0x04000C93 RID: 3219
+	[HideInInspector]
+	[SerializeField]
+	public Vector2[] boxBoundX;
+
+	// Token: 0x04000C94 RID: 3220
+	[HideInInspector]
+	[SerializeField]
+	public Vector2[] boxBoundZ;
+
+	// Token: 0x04000C95 RID: 3221
+	[HideInInspector]
+	[SerializeField]
+	public Matrix4x4[] blendBoxColliderInvTransform;
+
+	// Token: 0x04000C96 RID: 3222
+	[SerializeField]
+	[HideInInspector]
+	public bool preprocessed;
+
+	// Token: 0x04000C97 RID: 3223
+	private int currentUpdateIndex;
+}

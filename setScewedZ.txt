@@ -1,0 +1,116 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005EA RID: 1514
+public class setScewedZ : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002631 RID: 9777 RVA: 0x00136BE4 File Offset: 0x00134DE4
+	public bool PreAwake(int callcount)
+	{
+		this.enableZone = SignalIn.Create("enableZone", base.gameObject, new Action(this.setEnableZone));
+		this.disableZone = SignalIn.Create("disableZone", base.gameObject, new Action(this.setDisableZone));
+		return true;
+	}
+
+	// Token: 0x06002632 RID: 9778 RVA: 0x00136C38 File Offset: 0x00134E38
+	private void Start()
+	{
+		this.startZVal = this.start.transform.position.z;
+		this.endZVal = this.end.transform.position.z;
+		this.startXVal = this.start.transform.position.x;
+		this.endXVal = this.end.transform.position.x;
+		this.dist = (this.start.transform.position - this.end.transform.position).magnitude;
+		this.boyToInfluence = this.targetBoy.GetComponentInChildren<Boy>();
+	}
+
+	// Token: 0x06002633 RID: 9779 RVA: 0x00136D04 File Offset: 0x00134F04
+	private void setEnableZone()
+	{
+		this.zoneActive = true;
+	}
+
+	// Token: 0x06002634 RID: 9780 RVA: 0x00136D10 File Offset: 0x00134F10
+	private void setDisableZone()
+	{
+		this.zoneActive = false;
+		this.setFinalPos();
+	}
+
+	// Token: 0x06002635 RID: 9781 RVA: 0x00136D20 File Offset: 0x00134F20
+	private void setFinalPos()
+	{
+		if (!this.zoneActive && this.boyToInfluence.pos.x <= this.start.transform.position.x)
+		{
+			this.boyToInfluence.plane.posz = this.finalStartValue;
+		}
+		else if (!this.zoneActive && this.boyToInfluence.pos.x >= this.end.transform.position.x)
+		{
+			this.boyToInfluence.plane.posz = this.finalEndValue;
+		}
+	}
+
+	// Token: 0x06002636 RID: 9782 RVA: 0x00136DD4 File Offset: 0x00134FD4
+	private void FixedUpdate()
+	{
+		if (this.boyToInfluence.pos.x >= this.start.transform.position.x && this.boyToInfluence.pos.x <= this.end.transform.position.x && this.zoneActive)
+		{
+			float num = this.dist - Mathf.Abs(Mathf.Abs(this.endXVal) - Mathf.Abs(this.boyToInfluence.pos.x));
+			float num2 = Mathf.InverseLerp(this.startXVal, this.endXVal, num);
+			float num3 = Mathf.Lerp(this.startZVal, this.endZVal, num2);
+			Debug.Log(string.Concat(new object[]
+			{
+				"Total Dist: ",
+				this.dist,
+				", howFar: ",
+				num,
+				", of: ",
+				Mathf.Abs(Mathf.Abs(this.boyToInfluence.pos.x) - Mathf.Abs(this.endXVal))
+			}));
+			Debug.Log("boyPlaceVal: " + num2);
+			Debug.Log("newZpos: " + num3);
+			this.boyToInfluence.plane.posz = num3;
+		}
+	}
+
+	// Token: 0x04004586 RID: 17798
+	public GameObject start;
+
+	// Token: 0x04004587 RID: 17799
+	public GameObject end;
+
+	// Token: 0x04004588 RID: 17800
+	public GameObject targetBoy;
+
+	// Token: 0x04004589 RID: 17801
+	public float finalStartValue;
+
+	// Token: 0x0400458A RID: 17802
+	public float finalEndValue;
+
+	// Token: 0x0400458B RID: 17803
+	private SignalIn enableZone;
+
+	// Token: 0x0400458C RID: 17804
+	private SignalIn disableZone;
+
+	// Token: 0x0400458D RID: 17805
+	private float startZVal;
+
+	// Token: 0x0400458E RID: 17806
+	private float endZVal;
+
+	// Token: 0x0400458F RID: 17807
+	private float startXVal;
+
+	// Token: 0x04004590 RID: 17808
+	private float endXVal;
+
+	// Token: 0x04004591 RID: 17809
+	private float dist;
+
+	// Token: 0x04004592 RID: 17810
+	private bool zoneActive;
+
+	// Token: 0x04004593 RID: 17811
+	private Boy boyToInfluence;
+}

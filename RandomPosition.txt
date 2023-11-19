@@ -1,0 +1,84 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200054A RID: 1354
+public class RandomPosition : MonoBehaviour
+{
+	// Token: 0x06002323 RID: 8995 RVA: 0x00125C80 File Offset: 0x00123E80
+	public static float GetRandomRange(float min, float max)
+	{
+		return min + Random.value * (max - min);
+	}
+
+	// Token: 0x06002324 RID: 8996 RVA: 0x00125C90 File Offset: 0x00123E90
+	private void Start()
+	{
+		this.localStartPos = base.transform.parent.worldToLocalMatrix.MultiplyPoint(base.transform.position);
+		this.upJitter = RandomPosition.GetRandomRange(0f - this.jitter / 2f, this.jitter / 2f);
+		this.rightJitter = RandomPosition.GetRandomRange(0f - this.jitter / 2f, this.jitter / 2f);
+		this.forwardJitter = RandomPosition.GetRandomRange(0f - this.jitter / 2f, this.jitter / 2f);
+		this.rndUp = this.speed + this.upJitter;
+		this.rndRight = this.speed + this.rightJitter;
+		this.rndForward = this.speed + this.forwardJitter;
+	}
+
+	// Token: 0x06002325 RID: 8997 RVA: 0x00125D7C File Offset: 0x00123F7C
+	public void SetPos(Vector3 pos)
+	{
+		this.hackPos = pos;
+		this.hackPosSet = true;
+	}
+
+	// Token: 0x06002326 RID: 8998 RVA: 0x00125D8C File Offset: 0x00123F8C
+	private void Update()
+	{
+		Vector3 vector = Vector3.up * ((float)Math.Sin(Time.timeDbl * (double)this.rndUp) - 0.5f);
+		Vector3 vector2 = Vector3.right * ((float)Math.Sin(Time.timeDbl * (double)this.rndRight) - 0.5f);
+		Vector3 vector3 = Vector3.forward * ((float)Math.Sin(Time.timeDbl * (double)this.rndForward) - 0.5f);
+		Vector3 vector4 = base.transform.parent.localToWorldMatrix.MultiplyPoint(this.localStartPos);
+		if (!this.hackPosSet)
+		{
+			base.transform.position = vector4 + (vector + vector2 + vector3) * this.amplitude;
+		}
+		else
+		{
+			base.transform.position = this.hackPos + (vector + vector2 + vector3) * this.amplitude;
+		}
+	}
+
+	// Token: 0x040041B6 RID: 16822
+	private Vector3 localStartPos;
+
+	// Token: 0x040041B7 RID: 16823
+	public float speed = 1f;
+
+	// Token: 0x040041B8 RID: 16824
+	public float jitter = 1f;
+
+	// Token: 0x040041B9 RID: 16825
+	public float amplitude = 1f;
+
+	// Token: 0x040041BA RID: 16826
+	private float rndUp;
+
+	// Token: 0x040041BB RID: 16827
+	private float rndRight;
+
+	// Token: 0x040041BC RID: 16828
+	private float rndForward;
+
+	// Token: 0x040041BD RID: 16829
+	private float upJitter;
+
+	// Token: 0x040041BE RID: 16830
+	private float rightJitter;
+
+	// Token: 0x040041BF RID: 16831
+	private float forwardJitter;
+
+	// Token: 0x040041C0 RID: 16832
+	private bool hackPosSet;
+
+	// Token: 0x040041C1 RID: 16833
+	private Vector3 hackPos;
+}

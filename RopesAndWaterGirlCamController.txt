@@ -1,0 +1,41 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004A0 RID: 1184
+public class RopesAndWaterGirlCamController : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001EF9 RID: 7929 RVA: 0x0010938C File Offset: 0x0010758C
+	public bool PreAwake(int callcount)
+	{
+		this.enableZones = SignalOut.Create("enableZones", base.gameObject);
+		this.disableZones = SignalOut.Create("disableZones", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001EFA RID: 7930 RVA: 0x001093C8 File Offset: 0x001075C8
+	private void FixedUpdate()
+	{
+		if (this.isEnabled && !this.waterGirl.GetBoyInWater())
+		{
+			this.disableZones.Signal();
+			this.isEnabled = false;
+		}
+		else if (!this.isEnabled && this.waterGirl.GetBoyInWater() && !(ScriptGlobals.boy.state is BoyRopeState))
+		{
+			this.enableZones.Signal();
+			this.isEnabled = true;
+		}
+	}
+
+	// Token: 0x0400395F RID: 14687
+	public WaterGirl waterGirl;
+
+	// Token: 0x04003960 RID: 14688
+	private bool isEnabled = true;
+
+	// Token: 0x04003961 RID: 14689
+	private SignalOut enableZones;
+
+	// Token: 0x04003962 RID: 14690
+	private SignalOut disableZones;
+}

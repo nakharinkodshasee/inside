@@ -1,0 +1,493 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000418 RID: 1048
+public class PullOffBoards : Device, IPreAwake
+{
+	// Token: 0x06001B8C RID: 7052 RVA: 0x000F1154 File Offset: 0x000EF354
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, null);
+		this.audioGrab = new AudioEventSimpleLocal("env_city_start_planks_grab", akGameObj);
+		this.audioBigCrack = new AudioEventSimpleLocal("env_city_start_planks_bigCrack", akGameObj);
+		this.audioSmallCrack = new AudioEventSimpleLocal("env_city_start_planks_smallCrack", akGameObj);
+		this.audioCloseToBurst = new AudioEventSimpleLocal("env_city_start_planks_closeToBurst", akGameObj);
+		this.audioBurst = new AudioEventSimpleLocal("env_city_start_planks_burst", akGameObj);
+		this.audioLetGo = new AudioEventSimpleLocal("env_city_start_planks_letGo", akGameObj);
+	}
+
+	// Token: 0x06001B8D RID: 7053 RVA: 0x000F11E8 File Offset: 0x000EF3E8
+	public bool PreAwake(int callcount)
+	{
+		this.boardRippedOff = SignalOut.Create("boardRippedOff", base.gameObject);
+		this.boardRippedLast = SignalOut.Create("boardRippedLast", base.gameObject);
+		this.startGrab = SignalOut.Create("startGrab", base.gameObject);
+		this.stopGrab = SignalOut.Create("stopGrab", base.gameObject);
+		this.startPull = SignalOut.Create("startPull", base.gameObject);
+		this.stopPull = SignalOut.Create("stopPull", base.gameObject);
+		this.loadCompleted = SignalIn.Create("loadCompleted", base.gameObject, new Action(this.DoLoadCompleted));
+		return true;
+	}
+
+	// Token: 0x06001B8E RID: 7054 RVA: 0x000F129C File Offset: 0x000EF49C
+	protected override void Start()
+	{
+		this.OnPreProcess();
+		base.Start();
+		this.currentBoard = this.boards[this.currentBoardIndex];
+		this.currentHitPoints = this.currentBoard.hitPoints;
+		this.SetIdleState();
+	}
+
+	// Token: 0x06001B8F RID: 7055 RVA: 0x000F12E0 File Offset: 0x000EF4E0
+	private void DoLoadCompleted()
+	{
+		this.state = PullOffBoards.State.None;
+	}
+
+	// Token: 0x06001B90 RID: 7056 RVA: 0x000F12EC File Offset: 0x000EF4EC
+	private void SetIdleState()
+	{
+		this.state = PullOffBoards.State.Idle;
+	}
+
+	// Token: 0x06001B91 RID: 7057 RVA: 0x000F12F8 File Offset: 0x000EF4F8
+	private void FixedUpdate()
+	{
+		this.timeSincePullCrackDamage += Time.deltaTime;
+		if (this.state != PullOffBoards.State.None)
+		{
+			switch (this.state)
+			{
+			case PullOffBoards.State.Idle:
+				this.IdleState();
+				break;
+			case PullOffBoards.State.Grab:
+				this.GrabState();
+				break;
+			case PullOffBoards.State.PullOff:
+				this.PullOffState();
+				break;
+			}
+		}
+	}
+
+	// Token: 0x06001B92 RID: 7058 RVA: 0x000F1364 File Offset: 0x000EF564
+	private void IdleState()
+	{
+		if (this.goThroughLogic.activeSelf)
+		{
+			this.goThroughLogic.SetActive(false);
+		}
+		if (this.releaseTimer > 0f)
+		{
+			this.releaseTimer -= Time.deltaTime;
+			return;
+		}
+		if (this.boyGrabbing == null)
+		{
+			int i = 0;
+			int count = this.boysInside.Count;
+			while (i < count)
+			{
+				Boy boy = this.boysInside[i];
+				if (Device.GrabCheck(boy, true) && boy.facing == 1f && boy.visualBoy.IsPoseFacing(1f, 100f))
+				{
+					this.SetGrabState(boy);
+					break;
+				}
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x06001B93 RID: 7059 RVA: 0x000F1430 File Offset: 0x000EF630
+	private void SetGrabState(Boy boy)
+	{
+		this.boyGrabbing = boy;
+		this.startGrab.Signal();
+		this.currentFraction = 0f;
+		this.currentBoard.animPull.currentBlendValue = this.currentFraction;
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.currentBoard.animPull, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		Device.SetVoicePassive();
+		this.grabTimer = this.grabDelay;
+		this.grabStunTimer = this.grabStunDelay;
+		this.state = PullOffBoards.State.Grab;
+	}
+
+	// Token: 0x06001B94 RID: 7060 RVA: 0x000F14B4 File Offset: 0x000EF6B4
+	private void GrabState()
+	{
+		if (this.grabStunTimer > 0f)
+		{
+			this.grabStunTimer -= Time.deltaTime;
+		}
+		if (this.boyGrabbing.isDead || (this.grabStunTimer <= 0f && !this.boyGrabbing.input.rawAction))
+		{
+			this.Release();
+			return;
+		}
+		if (this.grabTimer > 0f)
+		{
+			this.grabTimer -= Time.deltaTime;
+			if (this.grabTimer > 0f)
+			{
+				return;
+			}
+			this.audioGrab.PostFast();
+		}
+		float num = this.boyGrabbing.input.stick.x * -1f;
+		bool flag = Mathf.Abs(num) > 0.1f;
+		if (flag && !this.previousPull)
+		{
+			this.startPull.Signal();
+			Device.SetVoiceActive();
+		}
+		else if (!flag && this.previousPull)
+		{
+			this.stopPull.Signal();
+			Device.SetVoicePassive();
+		}
+		this.previousPull = flag;
+		float num2 = Mathf.Sign(num - this.currentFraction);
+		float num3;
+		if (num < 0f)
+		{
+			num3 = Mathf.Lerp(this.goToIdlePoseTime, this.goToAnticipationPoseTime, Mathf.Abs(num));
+		}
+		else
+		{
+			num3 = Mathf.Lerp(this.goToIdlePoseTime, this.goToPullPoseTime, Mathf.Abs(num));
+		}
+		this.currentFraction += Time.deltaTime / num3 * num2;
+		if (this.currentFraction * num2 > num * num2)
+		{
+			this.currentFraction = num;
+		}
+		if (num >= 0.5f && this.currentFraction >= 0.5f)
+		{
+			float num4 = 1f - this.currentHitPoints / this.hitPointsLeft;
+			this.currentFraction = 0.5f + 0.5f * num4;
+		}
+		this.currentBoard.animPull.currentBlendValue = this.currentFraction;
+		if (this.currentFraction < -0.75f)
+		{
+			this.anticipationTimer += Time.deltaTime;
+			this.anticipationTimer = Mathf.Min(0.25f, this.anticipationTimer);
+		}
+		else
+		{
+			this.anticipationTimer -= Time.deltaTime;
+			this.anticipationTimer = Mathf.Max(0f, this.anticipationTimer);
+		}
+		if (this.currentFraction < 0.4f)
+		{
+			this.halfAnticipationTimer += Time.deltaTime;
+			this.halfAnticipationTimer = Mathf.Min(0.25f, this.halfAnticipationTimer);
+		}
+		else
+		{
+			this.halfAnticipationTimer -= Time.deltaTime;
+			this.halfAnticipationTimer = Mathf.Max(0f, this.halfAnticipationTimer);
+		}
+		if (this.currentFraction >= 0.5f)
+		{
+			float num5 = 1f;
+			if (this.timeSincePullCrackDamage < 1f)
+			{
+				num5 = 0.65f;
+			}
+			if (this.anticipationTimer > 0f)
+			{
+				this.currentHitPoints -= this.anticipationDamage * num5;
+				this.anticipationTimer = 0f;
+				this.halfAnticipationTimer = 0f;
+				if (num5 >= 1f)
+				{
+					this.timeSincePullCrackDamage = 0f;
+				}
+				this.audioBigCrack.PostFast();
+			}
+			else if (this.halfAnticipationTimer > 0f)
+			{
+				this.currentHitPoints -= this.halfAnticipationDamage * num5;
+				this.anticipationTimer = 0f;
+				this.halfAnticipationTimer = 0f;
+				if (num5 >= 1f)
+				{
+					this.timeSincePullCrackDamage = 0f;
+				}
+				this.audioSmallCrack.PostFast();
+			}
+			else
+			{
+				this.currentHitPoints -= this.pullDamagePerSecond * Time.deltaTime;
+			}
+		}
+		else
+		{
+			if (this.currentHitPoints < this.minimumHitPoints)
+			{
+				this.currentHitPoints += Time.deltaTime * 5f;
+				this.almostBurstSoundSend = false;
+			}
+			this.hitPointsLeft = this.currentHitPoints;
+		}
+		if (this.currentHitPoints <= 0f)
+		{
+			this.SetPullOffState();
+		}
+		else if (!this.almostBurstSoundSend && (double)this.currentHitPoints < 0.5)
+		{
+			this.audioCloseToBurst.PostFast();
+			this.almostBurstSoundSend = true;
+		}
+	}
+
+	// Token: 0x06001B95 RID: 7061 RVA: 0x000F192C File Offset: 0x000EFB2C
+	private void SetPullOffState()
+	{
+		this.currentFraction = 0f;
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.currentBoard.animRipOff, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.animVisuals.Play(this.currentBoard.boardRip.name);
+		if (this.currentBoard.particles)
+		{
+			this.currentBoard.particles.Play();
+		}
+		this.stopPull.Signal();
+		this.stopGrab.Signal();
+		this.boardRippedOff.Signal();
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Constant, this.currentBoard.rumbleAmount, this.currentBoard.rumbleTime, 0, 0f);
+		this.currentBoardIndex++;
+		this.audioBurst.PostFast();
+		this.state = PullOffBoards.State.PullOff;
+	}
+
+	// Token: 0x06001B96 RID: 7062 RVA: 0x000F1A0C File Offset: 0x000EFC0C
+	private void PullOffState()
+	{
+		if (!(this.boyGrabbing.state is BoyCustomAnimState))
+		{
+			Device.SetVoiceNone();
+			this.boyGrabbing = null;
+			if (this.currentBoardIndex >= this.boards.Length)
+			{
+				this.goThroughLogic.SetActive(true);
+				this.boardRippedLast.Signal();
+				if (this.boardCollider)
+				{
+					this.boardCollider.SetActive(false);
+				}
+				this.state = PullOffBoards.State.None;
+			}
+			else
+			{
+				this.currentBoard = this.boards[this.currentBoardIndex];
+				this.currentHitPoints = this.currentBoard.hitPoints;
+				this.releaseTimer = 0f;
+				this.SetIdleState();
+			}
+		}
+	}
+
+	// Token: 0x06001B97 RID: 7063 RVA: 0x000F1AC4 File Offset: 0x000EFCC4
+	private void Release()
+	{
+		BoyUtils.ClearState(this.boyGrabbing, -1f);
+		if (this.grabTimer <= 0f)
+		{
+			this.audioLetGo.PostFast();
+		}
+		this.boyGrabbing = null;
+		this.stopPull.Signal();
+		this.stopGrab.Signal();
+		Device.SetVoiceNone();
+		this.releaseTimer = this.releaseDelay;
+		this.SetIdleState();
+	}
+
+	// Token: 0x04003218 RID: 12824
+	public GameObject goThroughLogic;
+
+	// Token: 0x04003219 RID: 12825
+	public GameObject boardCollider;
+
+	// Token: 0x0400321A RID: 12826
+	public Animation animVisuals;
+
+	// Token: 0x0400321B RID: 12827
+	public PullOffBoards.PullOfBoard[] boards;
+
+	// Token: 0x0400321C RID: 12828
+	private SignalIn loadCompleted;
+
+	// Token: 0x0400321D RID: 12829
+	private SignalOut boardRippedOff;
+
+	// Token: 0x0400321E RID: 12830
+	private SignalOut boardRippedLast;
+
+	// Token: 0x0400321F RID: 12831
+	private SignalOut startGrab;
+
+	// Token: 0x04003220 RID: 12832
+	private SignalOut stopGrab;
+
+	// Token: 0x04003221 RID: 12833
+	private SignalOut startPull;
+
+	// Token: 0x04003222 RID: 12834
+	private SignalOut stopPull;
+
+	// Token: 0x04003223 RID: 12835
+	private PullOffBoards.State state;
+
+	// Token: 0x04003224 RID: 12836
+	private PullOffBoards.PullOfBoard currentBoard;
+
+	// Token: 0x04003225 RID: 12837
+	private int currentBoardIndex;
+
+	// Token: 0x04003226 RID: 12838
+	private float goToPullPoseTime = 0.05f;
+
+	// Token: 0x04003227 RID: 12839
+	private float goToIdlePoseTime = 0.5f;
+
+	// Token: 0x04003228 RID: 12840
+	private float goToAnticipationPoseTime = 0.1f;
+
+	// Token: 0x04003229 RID: 12841
+	private float anticipationTimer;
+
+	// Token: 0x0400322A RID: 12842
+	private float anticipationDamage = 2f;
+
+	// Token: 0x0400322B RID: 12843
+	private float halfAnticipationTimer;
+
+	// Token: 0x0400322C RID: 12844
+	private float halfAnticipationDamage = 1f;
+
+	// Token: 0x0400322D RID: 12845
+	private float currentHitPoints;
+
+	// Token: 0x0400322E RID: 12846
+	private float hitPointsLeft;
+
+	// Token: 0x0400322F RID: 12847
+	private float pullDamagePerSecond = 2f;
+
+	// Token: 0x04003230 RID: 12848
+	private float minimumHitPoints = 1f;
+
+	// Token: 0x04003231 RID: 12849
+	private float grabTimer;
+
+	// Token: 0x04003232 RID: 12850
+	private float grabDelay = 0.12f;
+
+	// Token: 0x04003233 RID: 12851
+	private float releaseTimer;
+
+	// Token: 0x04003234 RID: 12852
+	private float releaseDelay = 0.12f;
+
+	// Token: 0x04003235 RID: 12853
+	private float grabStunTimer;
+
+	// Token: 0x04003236 RID: 12854
+	private float grabStunDelay = 0.12f;
+
+	// Token: 0x04003237 RID: 12855
+	private float currentFraction;
+
+	// Token: 0x04003238 RID: 12856
+	private bool previousPull;
+
+	// Token: 0x04003239 RID: 12857
+	private bool almostBurstSoundSend;
+
+	// Token: 0x0400323A RID: 12858
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioGrab;
+
+	// Token: 0x0400323B RID: 12859
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioBigCrack;
+
+	// Token: 0x0400323C RID: 12860
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioSmallCrack;
+
+	// Token: 0x0400323D RID: 12861
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioCloseToBurst;
+
+	// Token: 0x0400323E RID: 12862
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioBurst;
+
+	// Token: 0x0400323F RID: 12863
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioLetGo;
+
+	// Token: 0x04003240 RID: 12864
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04003241 RID: 12865
+	private float timeSincePullCrackDamage;
+
+	// Token: 0x02000419 RID: 1049
+	private enum State
+	{
+		// Token: 0x04003243 RID: 12867
+		None,
+		// Token: 0x04003244 RID: 12868
+		Idle,
+		// Token: 0x04003245 RID: 12869
+		Grab,
+		// Token: 0x04003246 RID: 12870
+		PullOff
+	}
+
+	// Token: 0x0200041A RID: 1050
+	[Serializable]
+	public class PullOfBoard
+	{
+		// Token: 0x04003247 RID: 12871
+		public AnimClipNode animRipOff;
+
+		// Token: 0x04003248 RID: 12872
+		public AnimBlendNode animPull;
+
+		// Token: 0x04003249 RID: 12873
+		public AnimationClip boardRip;
+
+		// Token: 0x0400324A RID: 12874
+		public ParticleSystem particles;
+
+		// Token: 0x0400324B RID: 12875
+		public float rumbleAmount = 0.5f;
+
+		// Token: 0x0400324C RID: 12876
+		public float rumbleTime = 0.2f;
+
+		// Token: 0x0400324D RID: 12877
+		public float hitPoints = 5f;
+	}
+}

@@ -1,0 +1,16 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005E5 RID: 1509
+public class punchableOcbject : MonoBehaviour
+{
+	// Token: 0x06002620 RID: 9760 RVA: 0x00136738 File Offset: 0x00134938
+	private void Start()
+	{
+	}
+
+	// Token: 0x06002621 RID: 9761 RVA: 0x0013673C File Offset: 0x0013493C
+	private void Update()
+	{
+	}
+}

@@ -1,0 +1,84 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005CF RID: 1487
+public class RotateFromMovement : MonoBehaviour
+{
+	// Token: 0x060025BC RID: 9660 RVA: 0x00134140 File Offset: 0x00132340
+	private void Start()
+	{
+		this.posLastFrame = this.objectThatMoves.position;
+	}
+
+	// Token: 0x060025BD RID: 9661 RVA: 0x00134154 File Offset: 0x00132354
+	private float getMovementSinceLastFrame()
+	{
+		Vector3 vector = this.objectThatMoves.position - this.posLastFrame;
+		this.posLastFrame = this.objectThatMoves.position;
+		float result = 0f;
+		if (this.moveAxis == RotateFromMovement.Axis.X)
+		{
+			result = vector.x;
+		}
+		else if (this.moveAxis == RotateFromMovement.Axis.Y)
+		{
+			result = vector.y;
+		}
+		else if (this.moveAxis == RotateFromMovement.Axis.Z)
+		{
+			result = vector.z;
+		}
+		return result;
+	}
+
+	// Token: 0x060025BE RID: 9662 RVA: 0x001341D8 File Offset: 0x001323D8
+	private void Update()
+	{
+		float movementSinceLastFrame = this.getMovementSinceLastFrame();
+		if (movementSinceLastFrame != 0f)
+		{
+			float num = movementSinceLastFrame * Time.deltaTime * this.multiplier * 1000f;
+			if (this.rotationAxis == RotateFromMovement.Axis.X)
+			{
+				this.objectToRotate.Rotate(num, 0f, 0f);
+			}
+			else if (this.rotationAxis == RotateFromMovement.Axis.Y)
+			{
+				this.objectToRotate.Rotate(0f, num, 0f);
+			}
+			else if (this.rotationAxis == RotateFromMovement.Axis.Z)
+			{
+				this.objectToRotate.Rotate(0f, 0f, num);
+			}
+		}
+	}
+
+	// Token: 0x040044E2 RID: 17634
+	public Transform objectToRotate;
+
+	// Token: 0x040044E3 RID: 17635
+	public Transform objectThatMoves;
+
+	// Token: 0x040044E4 RID: 17636
+	public float multiplier;
+
+	// Token: 0x040044E5 RID: 17637
+	public RotateFromMovement.Axis rotationAxis;
+
+	// Token: 0x040044E6 RID: 17638
+	public RotateFromMovement.Axis moveAxis;
+
+	// Token: 0x040044E7 RID: 17639
+	private Vector3 posLastFrame;
+
+	// Token: 0x020005D0 RID: 1488
+	public enum Axis
+	{
+		// Token: 0x040044E9 RID: 17641
+		X,
+		// Token: 0x040044EA RID: 17642
+		Y,
+		// Token: 0x040044EB RID: 17643
+		Z
+	}
+}

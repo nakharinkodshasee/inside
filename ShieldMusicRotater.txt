@@ -1,0 +1,141 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004F2 RID: 1266
+public class ShieldMusicRotater : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002129 RID: 8489 RVA: 0x00115E58 File Offset: 0x00114058
+	public bool PreAwake(int callcount)
+	{
+		this.offsetCheck = SignalIn.Create("offsetCheck", base.gameObject, new Action(this.OnOffsetCheck));
+		this.shakeRotater = SignalIn.Create("shakeRotater", base.gameObject, new Action(this.OnShake));
+		return true;
+	}
+
+	// Token: 0x0600212A RID: 8490 RVA: 0x00115EAC File Offset: 0x001140AC
+	private void Start()
+	{
+		this.fullMusicCycle = this.musicCycleTime * this.cyclesPerRotation;
+		if (this.animVisuals)
+		{
+			this.animRotate = this.animVisuals["Rotate"];
+			this.animRotate.speed = 0f;
+			this.animRotate.layer = 0;
+			this.animShake = this.animVisuals["Blast"];
+			this.animShake.blendMode = 1;
+			this.animShake.layer = 1;
+			this.animVisuals.Play(this.animRotate.name);
+		}
+	}
+
+	// Token: 0x0600212B RID: 8491 RVA: 0x00115F54 File Offset: 0x00114154
+	private void Update()
+	{
+		this.MusicTime();
+		float num = 1f - this.musicTime / this.fullMusicCycle;
+		if (this.addCycle)
+		{
+			num += 0.5f;
+		}
+		if (this.animVisuals)
+		{
+			this.animRotate.normalizedTime = 1f - num + this.animOffset;
+		}
+		else
+		{
+			base.transform.localRotation = Quaternion.Euler(0f, 0f, num * 360f);
+		}
+		if (this.cover != null)
+		{
+			if (this.rotateCoverTrigger)
+			{
+				this.cover.GetComponent<Rigidbody>().MoveRotation(this.coverTarget.rotation);
+			}
+			this.cover.GetComponent<Rigidbody>().MovePosition(this.coverTarget.position);
+		}
+	}
+
+	// Token: 0x0600212C RID: 8492 RVA: 0x00116030 File Offset: 0x00114230
+	private void MusicTime()
+	{
+		float musicPosition_s = PersistentBehaviour<GlobalAudio>.instance.music.GetMusicPosition_s();
+		if (musicPosition_s < this.previousMusicTime)
+		{
+			this.secondCycle = !this.secondCycle;
+		}
+		this.musicTime = musicPosition_s;
+		if (this.secondCycle)
+		{
+			this.musicTime += this.musicCycleTime;
+		}
+		this.previousMusicTime = musicPosition_s;
+	}
+
+	// Token: 0x0600212D RID: 8493 RVA: 0x00116094 File Offset: 0x00114294
+	private void OnShake()
+	{
+		AnimationState animationState = this.animVisuals.CrossFadeQueued(this.animShake.name, 0.1f, 2);
+		animationState.layer = this.animShake.layer;
+		animationState.blendMode = this.animShake.blendMode;
+	}
+
+	// Token: 0x0600212E RID: 8494 RVA: 0x001160E0 File Offset: 0x001142E0
+	public void OnOffsetCheck()
+	{
+		if (this.secondCycle)
+		{
+			this.addCycle = true;
+		}
+	}
+
+	// Token: 0x04003D7A RID: 15738
+	public float musicCycleTime = 6f;
+
+	// Token: 0x04003D7B RID: 15739
+	public float cyclesPerRotation = 2f;
+
+	// Token: 0x04003D7C RID: 15740
+	public Transform cover;
+
+	// Token: 0x04003D7D RID: 15741
+	public Transform coverTarget;
+
+	// Token: 0x04003D7E RID: 15742
+	public Animation animVisuals;
+
+	// Token: 0x04003D7F RID: 15743
+	public bool rotateCoverTrigger = true;
+
+	// Token: 0x04003D80 RID: 15744
+	public bool addCycle;
+
+	// Token: 0x04003D81 RID: 15745
+	public float animOffset;
+
+	// Token: 0x04003D82 RID: 15746
+	private bool clockwise = true;
+
+	// Token: 0x04003D83 RID: 15747
+	private float previousMusicTime;
+
+	// Token: 0x04003D84 RID: 15748
+	private float musicTime;
+
+	// Token: 0x04003D85 RID: 15749
+	private bool secondCycle;
+
+	// Token: 0x04003D86 RID: 15750
+	private float fullMusicCycle;
+
+	// Token: 0x04003D87 RID: 15751
+	private AnimationState animRotate;
+
+	// Token: 0x04003D88 RID: 15752
+	private AnimationState animShake;
+
+	// Token: 0x04003D89 RID: 15753
+	private SignalIn offsetCheck;
+
+	// Token: 0x04003D8A RID: 15754
+	private SignalIn shakeRotater;
+}

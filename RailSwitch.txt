@@ -1,0 +1,464 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020001E6 RID: 486
+public class RailSwitch : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06000E9B RID: 3739 RVA: 0x0008AD68 File Offset: 0x00088F68
+	public bool PreAwake(int callcount)
+	{
+		this.left = SignalOut.Create("left", base.gameObject);
+		this.center = SignalOut.Create("center", base.gameObject);
+		this.right = SignalOut.Create("right", base.gameObject);
+		this.neutral = SignalOut.Create("neutral", base.gameObject);
+		this.grabbed = SignalOut.Create("grabbed", base.gameObject);
+		this.released = SignalOut.Create("released", base.gameObject);
+		this.leftInitialize = SignalIn.Create("leftInitialize", base.gameObject, new Action(this.LeftInitialize));
+		this.rightInitialize = SignalIn.Create("rightInitialize", base.gameObject, new Action(this.RightInitialize));
+		return true;
+	}
+
+	// Token: 0x06000E9C RID: 3740 RVA: 0x0008AE40 File Offset: 0x00089040
+	private void Awake()
+	{
+		this.triggerGrab.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.triggerGrab.exitTrigger.Register(this, ref this.triggerExitHandle);
+	}
+
+	// Token: 0x06000E9D RID: 3741 RVA: 0x0008AE7C File Offset: 0x0008907C
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.triggerGrab.enterTrigger)
+		{
+			this.TriggerEnter(collider);
+		}
+		else if (sender == this.triggerGrab.exitTrigger)
+		{
+			this.TriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06000E9E RID: 3742 RVA: 0x0008AEB8 File Offset: 0x000890B8
+	private void Start()
+	{
+		this.speedIncrease *= this.handleSpeed;
+		this.animStick = this.visuals.GetComponent<Animation>()["Linear"];
+		this.blend.Current = ((float)this.startPos + 1f) / 2f;
+		this.AnimStick(this.blend.Current);
+		this.SetIdleState();
+		OnNextUpdate.Do(new Action(this.SetInitialState));
+	}
+
+	// Token: 0x06000E9F RID: 3743 RVA: 0x0008AF3C File Offset: 0x0008913C
+	private void SetInitialState()
+	{
+		if (!this.signalInitialized)
+		{
+			if (this.startPos == 1)
+			{
+				this.SendSignal(this.right);
+			}
+			else if (this.startPos == -1)
+			{
+				this.SendSignal(this.left);
+			}
+			else if (this.returnToCenter || this.startPos == 0)
+			{
+				this.SendSignal(this.center);
+			}
+		}
+	}
+
+	// Token: 0x06000EA0 RID: 3744 RVA: 0x0008AFB0 File Offset: 0x000891B0
+	private void SetIdleState()
+	{
+		this.boyGrabbingHandle = null;
+		this.visualsHandleTarget = 0f;
+		this.state = RailSwitch.State.Idle;
+	}
+
+	// Token: 0x06000EA1 RID: 3745 RVA: 0x0008AFCC File Offset: 0x000891CC
+	private void IdleState()
+	{
+		if (this.boyGrabbingHandle == null)
+		{
+			int i = 0;
+			int count = this.boysInside.Count;
+			while (i < count)
+			{
+				Boy boy = this.boysInside[i];
+				if (boy.input.rawAction && !boy.isDead && !(ScriptGlobals.boy.state is BoyGrabState))
+				{
+					this.SetGrabState(boy);
+					break;
+				}
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x06000EA2 RID: 3746 RVA: 0x0008B050 File Offset: 0x00089250
+	private void SetGrabState(Boy boy)
+	{
+		this.boyGrabbingHandle = boy;
+		float num = 0f;
+		if (!this.returnToCenter)
+		{
+			num = -0.2f;
+			if (this.blend.Current == 0f)
+			{
+				num *= -1f;
+			}
+			num += boy.facing * -0.1f;
+		}
+		if (boy.transform.position.x + num < base.transform.position.x)
+		{
+			this.grabDirection = -1;
+			this.animBlend.gameObject.transform.rotation = this.animLeft.gameObject.transform.rotation;
+			this.animBlend.gameObject.transform.position = this.animLeft.gameObject.transform.position;
+		}
+		else
+		{
+			this.grabDirection = 1;
+			this.animBlend.gameObject.transform.rotation = this.animRight.gameObject.transform.rotation;
+			this.animBlend.gameObject.transform.position = this.animRight.gameObject.transform.position;
+		}
+		this.delayTimer = this.delayGrab;
+		this.AnimBoy(this.blend.Current);
+		BoyUtils.StartCustomAnim(boy, this.animBlend, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.grabbed.Signal();
+		this.state = RailSwitch.State.Grab;
+	}
+
+	// Token: 0x06000EA3 RID: 3747 RVA: 0x0008B1D4 File Offset: 0x000893D4
+	private void GrabState()
+	{
+		if (!this.boyGrabbingHandle.input.rawAction || this.boyGrabbingHandle.isDead)
+		{
+			this.Release();
+			return;
+		}
+		if (this.delayTimer > 0f)
+		{
+			this.delayTimer -= Time.deltaTime;
+			return;
+		}
+		float x = this.boyGrabbingHandle.input.stick.x;
+		this.visualsHandleTarget = -14.5f;
+		if (Mathf.Abs(x) > 0.6f)
+		{
+			if (x > 0f)
+			{
+				this.SetDirection(1);
+			}
+			else
+			{
+				this.SetDirection(-1);
+			}
+			this.movingLever = true;
+		}
+		else
+		{
+			this.movingLever = false;
+		}
+	}
+
+	// Token: 0x06000EA4 RID: 3748 RVA: 0x0008B298 File Offset: 0x00089498
+	private void MoveHandle()
+	{
+		if (this.returnToCenter && !this.movingLever && this.blend.Current == 0.5f)
+		{
+			this.SendSignal(this.center);
+			return;
+		}
+		if (!this.returnToCenter || (this.returnToCenter && this.movingLever))
+		{
+			if (this.dir == 1 && this.blend.Current == 1f)
+			{
+				this.SendSignal(this.right);
+				return;
+			}
+			if (this.dir == -1 && this.blend.Current == 0f)
+			{
+				this.SendSignal(this.left);
+				return;
+			}
+		}
+		this.currentSpeed += this.speedIncrease;
+		if (!this.movingLever)
+		{
+			if (this.returnToCenter)
+			{
+				if (this.blend.Current > 0.5f)
+				{
+					this.SetDirection(-1);
+				}
+				else
+				{
+					this.SetDirection(1);
+				}
+			}
+			else if (this.blend.Current > 0.5f)
+			{
+				this.SetDirection(1);
+			}
+			else
+			{
+				this.SetDirection(-1);
+			}
+		}
+		this.blend.Current += this.currentSpeed * (float)this.dir * Time.deltaTime;
+		if (this.blend.Current > 1f)
+		{
+			this.blend.Current = 1f;
+			this.SendSignal(this.right);
+		}
+		else if (this.blend.Current < 0f)
+		{
+			this.blend.Current = 0f;
+			this.SendSignal(this.left);
+		}
+		else
+		{
+			this.SendSignal(this.neutral);
+		}
+		if (!this.movingLever && this.returnToCenter)
+		{
+			this.SendSignal(this.center);
+			if ((this.dir == 1 && this.blend.Current > 0.5f) || (this.dir == -1 && this.blend.Current < 0.5f))
+			{
+				this.blend.Current = 0.5f;
+				this.currentSpeed = 0f;
+			}
+		}
+		this.AnimBoy(this.blend.Current);
+	}
+
+	// Token: 0x06000EA5 RID: 3749 RVA: 0x0008B508 File Offset: 0x00089708
+	private void Update()
+	{
+		this.AnimStick(this.blend.GetInterpolated());
+		this.AnimHandle();
+	}
+
+	// Token: 0x06000EA6 RID: 3750 RVA: 0x0008B524 File Offset: 0x00089724
+	private void FixedUpdate()
+	{
+		if (this.state == RailSwitch.State.Grab)
+		{
+			this.GrabState();
+		}
+		else if (this.state == RailSwitch.State.Idle)
+		{
+			this.IdleState();
+		}
+		if (this.animBlend)
+		{
+			this.MoveHandle();
+		}
+	}
+
+	// Token: 0x06000EA7 RID: 3751 RVA: 0x0008B570 File Offset: 0x00089770
+	private void SendSignal(SignalOut s)
+	{
+		if (s != this.lastSignal)
+		{
+			this.lastSignal = s;
+			s.Signal();
+		}
+	}
+
+	// Token: 0x06000EA8 RID: 3752 RVA: 0x0008B58C File Offset: 0x0008978C
+	private void SetDirection(int d)
+	{
+		if (this.dir != d)
+		{
+			this.dir = d;
+			this.currentSpeed = 0f;
+		}
+	}
+
+	// Token: 0x06000EA9 RID: 3753 RVA: 0x0008B5AC File Offset: 0x000897AC
+	private void AnimBoy(float p)
+	{
+		if (this.grabDirection == 1)
+		{
+			p = (p - 1f) * -1f;
+		}
+		this.animBlend.currentBlendValue = p;
+	}
+
+	// Token: 0x06000EAA RID: 3754 RVA: 0x0008B5D8 File Offset: 0x000897D8
+	private void AnimStick(float p)
+	{
+		this.visuals.GetComponent<Animation>()[this.visuals.GetComponent<Animation>().clip.name].speed = 0f;
+		this.animStick.time = (1f - p) * this.animStick.length;
+	}
+
+	// Token: 0x06000EAB RID: 3755 RVA: 0x0008B634 File Offset: 0x00089834
+	private void AnimHandle()
+	{
+		float x = this.visualsHandle.transform.localRotation.eulerAngles.x;
+		if (x != this.visualsHandleTarget)
+		{
+			this.visualsHandle.transform.localRotation = Quaternion.Euler(this.visualsHandleTarget, 0f, 0f);
+		}
+	}
+
+	// Token: 0x06000EAC RID: 3756 RVA: 0x0008B694 File Offset: 0x00089894
+	private void Release()
+	{
+		BoyUtils.ClearState(this.boyGrabbingHandle, -1f);
+		this.movingLever = false;
+		this.released.Signal();
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000EAD RID: 3757 RVA: 0x0008B6CC File Offset: 0x000898CC
+	private void TriggerEnter(Collider c)
+	{
+		if (c.attachedRigidbody && c.attachedRigidbody.GetComponent<Boy>())
+		{
+			this.boysInside.Add(c.attachedRigidbody.GetComponent<Boy>());
+		}
+	}
+
+	// Token: 0x06000EAE RID: 3758 RVA: 0x0008B714 File Offset: 0x00089914
+	private void TriggerExit(Collider c)
+	{
+		if (c.attachedRigidbody && c.attachedRigidbody.GetComponent<Boy>())
+		{
+			this.boysInside.Remove(c.attachedRigidbody.GetComponent<Boy>());
+		}
+	}
+
+	// Token: 0x06000EAF RID: 3759 RVA: 0x0008B760 File Offset: 0x00089960
+	private void LeftInitialize()
+	{
+		this.signalInitialized = true;
+		this.blend.Current = 0f;
+		this.AnimStick(this.blend.Current);
+	}
+
+	// Token: 0x06000EB0 RID: 3760 RVA: 0x0008B798 File Offset: 0x00089998
+	private void RightInitialize()
+	{
+		this.signalInitialized = true;
+		this.blend.Current = 1f;
+		this.AnimStick(this.blend.Current);
+	}
+
+	// Token: 0x04001A4C RID: 6732
+	public CollisionEvents triggerGrab;
+
+	// Token: 0x04001A4D RID: 6733
+	public AnimBlendNode animBlend;
+
+	// Token: 0x04001A4E RID: 6734
+	public GameObject animLeft;
+
+	// Token: 0x04001A4F RID: 6735
+	public GameObject animRight;
+
+	// Token: 0x04001A50 RID: 6736
+	public GameObject visuals;
+
+	// Token: 0x04001A51 RID: 6737
+	public GameObject visualsHandle;
+
+	// Token: 0x04001A52 RID: 6738
+	private float visualsHandleTarget;
+
+	// Token: 0x04001A53 RID: 6739
+	public float handleSpeed = 1f;
+
+	// Token: 0x04001A54 RID: 6740
+	public bool returnToCenter;
+
+	// Token: 0x04001A55 RID: 6741
+	public int startPos;
+
+	// Token: 0x04001A56 RID: 6742
+	private RailSwitch.State state;
+
+	// Token: 0x04001A57 RID: 6743
+	private Boy boyGrabbingHandle;
+
+	// Token: 0x04001A58 RID: 6744
+	private int grabDirection;
+
+	// Token: 0x04001A59 RID: 6745
+	private int dir;
+
+	// Token: 0x04001A5A RID: 6746
+	private Interpolated<float> blend = new Interpolated<float>(new Func<float, float, float, float>(Mathf.Lerp));
+
+	// Token: 0x04001A5B RID: 6747
+	private AnimationState animStick;
+
+	// Token: 0x04001A5C RID: 6748
+	private bool movingLever;
+
+	// Token: 0x04001A5D RID: 6749
+	private float speedIncrease = 0.22f;
+
+	// Token: 0x04001A5E RID: 6750
+	private float currentSpeed;
+
+	// Token: 0x04001A5F RID: 6751
+	private float delayTimer;
+
+	// Token: 0x04001A60 RID: 6752
+	private float delayGrab = 0.12f;
+
+	// Token: 0x04001A61 RID: 6753
+	private SignalOut left;
+
+	// Token: 0x04001A62 RID: 6754
+	private SignalOut center;
+
+	// Token: 0x04001A63 RID: 6755
+	private SignalOut right;
+
+	// Token: 0x04001A64 RID: 6756
+	private SignalOut neutral;
+
+	// Token: 0x04001A65 RID: 6757
+	private SignalOut grabbed;
+
+	// Token: 0x04001A66 RID: 6758
+	private SignalOut released;
+
+	// Token: 0x04001A67 RID: 6759
+	private SignalIn leftInitialize;
+
+	// Token: 0x04001A68 RID: 6760
+	private SignalIn rightInitialize;
+
+	// Token: 0x04001A69 RID: 6761
+	private SignalOut lastSignal;
+
+	// Token: 0x04001A6A RID: 6762
+	private List<Boy> boysInside = new List<Boy>();
+
+	// Token: 0x04001A6B RID: 6763
+	private bool signalInitialized;
+
+	// Token: 0x04001A6C RID: 6764
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04001A6D RID: 6765
+	private int triggerExitHandle = -1;
+
+	// Token: 0x020001E7 RID: 487
+	private enum State
+	{
+		// Token: 0x04001A6F RID: 6767
+		None,
+		// Token: 0x04001A70 RID: 6768
+		Idle,
+		// Token: 0x04001A71 RID: 6769
+		Grab
+	}
+}

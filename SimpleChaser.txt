@@ -1,0 +1,162 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000455 RID: 1109
+public class SimpleChaser : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001D3C RID: 7484 RVA: 0x000FCCA4 File Offset: 0x000FAEA4
+	public bool PreAwake(int callcount)
+	{
+		this.startChase = SignalIn.Create("startChase", base.gameObject, new Action(this.StartChase));
+		this.stopChase = SignalIn.Create("stopChase", base.gameObject, new Action(this.StopChase));
+		return true;
+	}
+
+	// Token: 0x06001D3D RID: 7485 RVA: 0x000FCCF8 File Offset: 0x000FAEF8
+	private void Start()
+	{
+		this.dudeA.SetActive(false);
+		if (!this.flashLightStartOn)
+		{
+			this.flashLight.gameObject.SetActive(false);
+		}
+	}
+
+	// Token: 0x06001D3E RID: 7486 RVA: 0x000FCD30 File Offset: 0x000FAF30
+	private void StartChase()
+	{
+		this.chaseStarted = true;
+		this.dudeA.SetActive(true);
+		this.dudeA.GetComponent<Animation>().Play("RunFlashLight");
+	}
+
+	// Token: 0x06001D3F RID: 7487 RVA: 0x000FCD5C File Offset: 0x000FAF5C
+	private void StopChase()
+	{
+		this.chaseStarted = false;
+		this.dudeA.GetComponent<Animation>().Play("IdleGuardingForestA");
+	}
+
+	// Token: 0x06001D40 RID: 7488 RVA: 0x000FCD7C File Offset: 0x000FAF7C
+	private void UpdateInMud()
+	{
+		if (this.mudStart == null || this.mudEnd == null)
+		{
+			return;
+		}
+		if (base.transform.position.x > this.mudStart.position.x && base.transform.position.x < this.mudEnd.position.x)
+		{
+			this.isInMud = true;
+		}
+		else
+		{
+			this.isInMud = false;
+		}
+	}
+
+	// Token: 0x06001D41 RID: 7489 RVA: 0x000FCE18 File Offset: 0x000FB018
+	private void FixedUpdate()
+	{
+		this.UpdateInMud();
+		if (this.chaseStarted)
+		{
+			if (!this.killStarted && ScriptGlobals.boy.isDead)
+			{
+				this.StopChase();
+			}
+			if (this.alternativeChaseTarget != null && Mathf.Abs(this.alternativeChaseTarget.position.x - base.transform.position.x) < 0.5f)
+			{
+				this.alternativeChaseTarget = null;
+			}
+			Transform transform = ScriptGlobals.boy.transform;
+			if (this.alternativeChaseTarget != null)
+			{
+				transform = this.alternativeChaseTarget;
+			}
+			this.chaseTimer += Time.deltaTime;
+			if (this.chaseTimer > 0.75f && !this.flashLight.gameObject.activeSelf)
+			{
+				this.flashLight.gameObject.SetActive(true);
+			}
+			float magnitude = (base.transform.position - ScriptGlobals.boy.transform.position).magnitude;
+			if (magnitude > 2f)
+			{
+				Vector3 position = transform.position;
+				position.y = base.transform.position.y;
+				base.transform.LookAt(position, Vector3.up);
+			}
+			float num = Mathf.InverseLerp(5f, 1f, magnitude);
+			Vector3 position2 = transform.position;
+			position2.y = base.transform.position.y;
+			float num2 = 1f;
+			if (this.isInMud)
+			{
+				num2 = 0.7f;
+			}
+			Vector3 position3 = Vector3.MoveTowards(base.transform.position, position2, Time.deltaTime * 4.7f * (1f + num * 0.62f) * this.moveSpeedScale * num2);
+			RaycastHit[] array = Physics.RaycastAll(new Ray(base.transform.position + Vector3.up, Vector3.down), 5f);
+			if (array.Length > 0)
+			{
+				RaycastHit closestValidHit = PhysicsUtils.GetClosestValidHit(array, LayerMask.NameToLayer("Player"), true);
+				if (closestValidHit.point != Vector3.zero)
+				{
+					position3.y = closestValidHit.point.y;
+				}
+			}
+			base.transform.position = position3;
+			if (magnitude < 1.25f)
+			{
+				this.chaseStarted = false;
+				this.killStarted = true;
+				this.dudeA.GetComponent<Animation>().Play("BoyChase_AttackA");
+				ScriptGlobals.boy.Kill();
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyAnim, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+			}
+		}
+		if (this.killStarted)
+		{
+		}
+	}
+
+	// Token: 0x040035AB RID: 13739
+	public GameObject dudeA;
+
+	// Token: 0x040035AC RID: 13740
+	public AnimClipNode boyAnim;
+
+	// Token: 0x040035AD RID: 13741
+	public Transform flashLight;
+
+	// Token: 0x040035AE RID: 13742
+	public Transform alternativeChaseTarget;
+
+	// Token: 0x040035AF RID: 13743
+	public bool flashLightStartOn;
+
+	// Token: 0x040035B0 RID: 13744
+	public float moveSpeedScale = 1f;
+
+	// Token: 0x040035B1 RID: 13745
+	public Transform mudStart;
+
+	// Token: 0x040035B2 RID: 13746
+	public Transform mudEnd;
+
+	// Token: 0x040035B3 RID: 13747
+	private SignalIn startChase;
+
+	// Token: 0x040035B4 RID: 13748
+	private SignalIn stopChase;
+
+	// Token: 0x040035B5 RID: 13749
+	private bool chaseStarted;
+
+	// Token: 0x040035B6 RID: 13750
+	private bool killStarted;
+
+	// Token: 0x040035B7 RID: 13751
+	private float chaseTimer;
+
+	// Token: 0x040035B8 RID: 13752
+	private bool isInMud;
+}

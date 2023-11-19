@@ -1,0 +1,104 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000218 RID: 536
+public class SearchPath : MonoBehaviour
+{
+	// Token: 0x06001083 RID: 4227 RVA: 0x0009BE40 File Offset: 0x0009A040
+	private void Start()
+	{
+	}
+
+	// Token: 0x06001084 RID: 4228 RVA: 0x0009BE44 File Offset: 0x0009A044
+	public void PausePath()
+	{
+		this.paused = true;
+	}
+
+	// Token: 0x06001085 RID: 4229 RVA: 0x0009BE50 File Offset: 0x0009A050
+	public void ResumePath()
+	{
+		this.paused = false;
+	}
+
+	// Token: 0x06001086 RID: 4230 RVA: 0x0009BE5C File Offset: 0x0009A05C
+	private bool MoveTowardsCurrentPoint()
+	{
+		bool result = false;
+		Vector3 vector = this.path[this.pathIndex].transform.position - this.target.transform.position;
+		float magnitude = vector.magnitude;
+		float num = this.pathSpeed * Time.deltaTime;
+		if (num > magnitude)
+		{
+			num = magnitude;
+			result = true;
+		}
+		Vector3 vector2 = this.target.transform.position;
+		vector2 += vector.normalized * num;
+		this.target.transform.position = vector2;
+		return result;
+	}
+
+	// Token: 0x06001087 RID: 4231 RVA: 0x0009BEF8 File Offset: 0x0009A0F8
+	private void SetNextPathPoint()
+	{
+		int num = this.pathIndex + this.pingPongSign;
+		if (num >= this.path.Count || num < 0)
+		{
+			if (this.loopStyle == SearchPath.LoopStyle.loop)
+			{
+				num = 0;
+			}
+			else if (this.loopStyle == SearchPath.LoopStyle.pingpong)
+			{
+				this.pingPongSign = -this.pingPongSign;
+				num = this.pathIndex + this.pingPongSign;
+			}
+		}
+		this.pathIndex = num;
+	}
+
+	// Token: 0x06001088 RID: 4232 RVA: 0x0009BF6C File Offset: 0x0009A16C
+	private void FixedUpdate()
+	{
+		if (!this.paused)
+		{
+			bool flag = this.MoveTowardsCurrentPoint();
+			if (flag)
+			{
+				this.SetNextPathPoint();
+			}
+		}
+	}
+
+	// Token: 0x04001DBD RID: 7613
+	public GameObject target;
+
+	// Token: 0x04001DBE RID: 7614
+	public List<GameObject> path;
+
+	// Token: 0x04001DBF RID: 7615
+	public SearchPath.LoopStyle loopStyle;
+
+	// Token: 0x04001DC0 RID: 7616
+	public float pathSpeed = 2f;
+
+	// Token: 0x04001DC1 RID: 7617
+	private int pathIndex;
+
+	// Token: 0x04001DC2 RID: 7618
+	private bool paused;
+
+	// Token: 0x04001DC3 RID: 7619
+	private int pingPongSign = 1;
+
+	// Token: 0x02000219 RID: 537
+	public enum LoopStyle
+	{
+		// Token: 0x04001DC5 RID: 7621
+		loop,
+		// Token: 0x04001DC6 RID: 7622
+		pingpong
+	}
+}

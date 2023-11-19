@@ -1,0 +1,854 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+// Token: 0x02000212 RID: 530
+public class RopeGun : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001052 RID: 4178 RVA: 0x00099C7C File Offset: 0x00097E7C
+	[LateProcessBuild(0)]
+	[ContextMenu("PreProcessTest")]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioShoot = new AudioEventSimpleLocal(this.audioPrefix + "_wireGun_shoot", akGameObj);
+		this.audioReelInStart = new AudioEventSimpleLocal(this.audioPrefix + "_wireGun_reelIn", akGameObj);
+		this.audioReelInStop = new AudioEventSimpleLocal(this.audioPrefix + "_wireGun_reelInStop", akGameObj);
+		this.audioHitBoy = new AudioEventSimple(this.audioPrefix + "_wireGun_hitBoy");
+		this.rtpcPhyRope = new RTPCLocal("rtpc_phy_rope", akGameObj, false, float.Epsilon);
+		if (this.wire)
+		{
+			RopePhysicsSettings component = this.wire.GetComponent<RopePhysicsSettings>();
+			if (component)
+			{
+				component.OnPreProcess();
+			}
+		}
+		if (this.spiralEffectRenderer)
+		{
+			this.spiralEffectRenderer.OnPreProcess();
+		}
+		this.BuildRope();
+		if (this.ropeEnd != null)
+		{
+			this.ropeEnd.transform.parent.gameObject.SetActive(false);
+		}
+		if (this.wire)
+		{
+			this.wire.DeactivateScript();
+		}
+	}
+
+	// Token: 0x06001053 RID: 4179 RVA: 0x00099DC4 File Offset: 0x00097FC4
+	public bool PreAwake(int callcount)
+	{
+		this.shootAtBoy = SignalOut.Create("shootAtBoy", base.gameObject);
+		this.boyHit = SignalOut.Create("boyHit", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001054 RID: 4180 RVA: 0x00099E00 File Offset: 0x00098000
+	private void LateUpdate()
+	{
+		if (this.rendering == RopeGun.Rendering.lineRenderer && this.wire)
+		{
+			this.wire.SetCutOffIndex(this.mRopeCutoffIndex);
+		}
+		if (this.useSpiralEffect)
+		{
+			float num = this.mRopeLength / (float)this.mRope.Count * (float)this.mRopeCutoffIndex;
+			if (num > 0f)
+			{
+				float num2 = (num - (base.transform.position - this.ropeEnd.transform.position).magnitude) / num;
+				this.ropeAndMuzzle.Clear();
+				for (int i = 0; i <= this.mRopeCutoffIndex; i++)
+				{
+					this.ropeAndMuzzle.Add(this.mRope[i].gameObject);
+				}
+				this.ropeAndMuzzle.Add(base.gameObject);
+				this.ropeAndMuzzle.Reverse();
+				this.spiralEffectRenderer.SetPoints(this.ropeAndMuzzle);
+			}
+		}
+		if (this.reelInIsActive)
+		{
+			this.ReelInAudioCountDown();
+		}
+	}
+
+	// Token: 0x06001055 RID: 4181 RVA: 0x00099F18 File Offset: 0x00098118
+	private void UpdateRopeSoundParameters()
+	{
+		float num = this.fakeRope.GetInternalRopeVelocity() * 15f;
+		if (!this.audioActive)
+		{
+			this.audioActive = true;
+		}
+		else
+		{
+			this.rtpcPhyRope.SetFast(Mathf.Clamp(num, 0f, 100f), 0f);
+		}
+	}
+
+	// Token: 0x06001056 RID: 4182 RVA: 0x00099F70 File Offset: 0x00098170
+	private void FixedUpdate()
+	{
+		if (this.mShootingState == RopeGun.ShootingState.shooting)
+		{
+			this.RotateRope();
+			this.UpdateShooting();
+		}
+		else if (this.mShootingState == RopeGun.ShootingState.done)
+		{
+			this.UpdateRopeSoundParameters();
+		}
+	}
+
+	// Token: 0x06001057 RID: 4183 RVA: 0x00099FA4 File Offset: 0x000981A4
+	private void RotateRope()
+	{
+		if (this.mRopeBegin == null || this.ropeEnd == null)
+		{
+			return;
+		}
+		Transform parent = this.mRopeBegin.transform.parent;
+		if (this.mShootingState != RopeGun.ShootingState.done)
+		{
+			float magnitude = (parent.position - base.transform.position).magnitude;
+			parent.position = base.transform.position;
+			parent.rotation = base.transform.rotation;
+			parent.transform.Translate(Vector3.back * magnitude, 1);
+		}
+	}
+
+	// Token: 0x06001058 RID: 4184 RVA: 0x0009A050 File Offset: 0x00098250
+	private void BuildRope()
+	{
+		if (this.ropeEnd == null)
+		{
+			return;
+		}
+		this.mRope = new List<Rigidbody>();
+		GameObject gameObject = this.ropeEnd;
+		int i = 0;
+		while (i <= 300)
+		{
+			i++;
+			Rigidbody component = gameObject.GetComponent<Rigidbody>();
+			if (component == null)
+			{
+			}
+			this.mRope.Add(component);
+			this.InitializeSegment(gameObject);
+			GameObject gameObject2 = (!(gameObject.GetComponent<HingeJoint>() == null)) ? gameObject.GetComponent<HingeJoint>().connectedBody.gameObject : null;
+			if (gameObject2 == null)
+			{
+				this.mRopeBegin = gameObject;
+				IL_A7:
+				this.AlignRopeWithParentZAxis();
+				return;
+			}
+			gameObject = gameObject2;
+		}
+		goto IL_A7;
+	}
+
+	// Token: 0x06001059 RID: 4185 RVA: 0x0009A10C File Offset: 0x0009830C
+	public GameObject GetRopeParent()
+	{
+		return this.newRopeParent;
+	}
+
+	// Token: 0x0600105A RID: 4186 RVA: 0x0009A114 File Offset: 0x00098314
+	private void AlignRopeWithParentZAxis()
+	{
+		Transform parent = this.mRopeBegin.transform.parent;
+		parent.position = base.transform.position;
+		Vector3 vector = -this.ropeEnd.transform.TransformDirection(this.ropeEnd.GetComponent<HingeJoint>().anchor.normalized);
+		Vector3 forward = base.transform.forward;
+		Vector3 vector2 = Vector3.Cross(vector, forward);
+		Vector3 vector3 = Vector3.Cross(vector2.normalized, vector);
+		float num = Vector3.Dot(vector, forward);
+		float num2 = Mathf.Acos(num) * 57.29578f;
+		if (Vector3.Dot(vector3, forward) < 0f)
+		{
+			num2 *= -1f;
+		}
+		parent.Rotate(vector2.normalized, num2, 0);
+		parent.Translate(Vector3.back * this.mRopeLength, base.transform);
+		this.newRopeParent = new GameObject("ropeParent");
+		this.newRopeParent.transform.parent = parent.parent;
+		this.newRopeParent.transform.rotation = base.transform.rotation;
+		this.newRopeParent.transform.position = parent.transform.position;
+		foreach (Rigidbody rigidbody in this.mRope)
+		{
+			rigidbody.transform.parent = this.newRopeParent.transform;
+		}
+	}
+
+	// Token: 0x0600105B RID: 4187 RVA: 0x0009A2C0 File Offset: 0x000984C0
+	private void InitializeSegment(GameObject currSegment)
+	{
+		currSegment.GetComponent<Rigidbody>().isKinematic = true;
+		currSegment.transform.GetChild(0).GetComponent<Renderer>().enabled = false;
+		currSegment.transform.GetChild(0).GetComponent<Collider>().enabled = false;
+		HingeJoint component = currSegment.GetComponent<HingeJoint>();
+		if (component != null)
+		{
+			this.mRopeLength += 2f * Mathf.Abs(component.anchor.y);
+		}
+		else
+		{
+			this.mRopeLength += currSegment.transform.GetChild(0).localScale.y;
+		}
+		if (this.limits == RopeGun.JointSettingsState.on && currSegment.GetComponent<HingeJoint>() != null)
+		{
+			this.SetJointLimitsOfSegment(currSegment);
+		}
+		if (this.spring == RopeGun.JointSettingsState.on && currSegment.GetComponent<HingeJoint>() != null)
+		{
+			this.SetJointSpringOfSegment(currSegment);
+		}
+	}
+
+	// Token: 0x0600105C RID: 4188 RVA: 0x0009A3B4 File Offset: 0x000985B4
+	private void SetJointSpringOfSegment(GameObject currSegment)
+	{
+		JointSpring jointSpring = default(JointSpring);
+		jointSpring.spring = this.springAmount;
+		jointSpring.damper = this.springDamper;
+		jointSpring.targetPosition = this.springTarget;
+		JointSpring jointSpring2 = jointSpring;
+		currSegment.GetComponent<HingeJoint>().spring = jointSpring2;
+		currSegment.GetComponent<HingeJoint>().useSpring = true;
+	}
+
+	// Token: 0x0600105D RID: 4189 RVA: 0x0009A40C File Offset: 0x0009860C
+	private void SetJointLimitsOfSegment(GameObject currSegment)
+	{
+		JointLimits jointLimits = default(JointLimits);
+		jointLimits.max = this.maxLimit;
+		jointLimits.min = this.minLimit;
+		jointLimits.maxBounce = this.maxLimitBounce;
+		jointLimits.minBounce = this.minLimitBounce;
+		JointLimits jointLimits2 = jointLimits;
+		currSegment.GetComponent<HingeJoint>().limits = jointLimits2;
+		currSegment.GetComponent<HingeJoint>().useLimits = true;
+	}
+
+	// Token: 0x0600105E RID: 4190 RVA: 0x0009A474 File Offset: 0x00098674
+	public void ExtendRope()
+	{
+		if (this.mShootingState == RopeGun.ShootingState.shooting)
+		{
+		}
+		this.RotateRope();
+		if (this.ropeEnd != null && this.mRopeBegin != null)
+		{
+			Vector3 vector = base.transform.position - this.mRopeBegin.transform.position;
+			this.mRopeBegin.transform.parent.Translate(vector.normalized * Mathf.Min(this.extentionSpeed * Time.deltaTime, vector.magnitude), 0);
+			for (int i = 0; i < this.mRope.Count; i++)
+			{
+				Rigidbody rigidbody = this.mRope[i];
+				if (rigidbody != this.mRopeBegin && rigidbody.isKinematic && base.transform.InverseTransformPoint(rigidbody.transform.position).z > 0f)
+				{
+					if (this.rendering == RopeGun.Rendering.mesh && !rigidbody.transform.GetChild(0).GetComponent<Renderer>().enabled)
+					{
+						this.mRopeCutoffIndex = i;
+						rigidbody.transform.GetChild(0).GetComponent<Renderer>().enabled = true;
+					}
+					else if (this.rendering == RopeGun.Rendering.lineRenderer)
+					{
+						this.mRopeCutoffIndex = i;
+					}
+					rigidbody.transform.parent = rigidbody.transform.parent.parent;
+					rigidbody.isKinematic = false;
+					rigidbody.gameObject.layer = CollisionUtils.Layers.player;
+					rigidbody.transform.GetChild(0).GetComponent<Collider>().enabled = true;
+				}
+			}
+		}
+	}
+
+	// Token: 0x0600105F RID: 4191 RVA: 0x0009A624 File Offset: 0x00098824
+	public bool ReadyForReelIn()
+	{
+		return this.mShootingState != RopeGun.ShootingState.shooting && !this.mHasStartedReelingIn;
+	}
+
+	// Token: 0x06001060 RID: 4192 RVA: 0x0009A640 File Offset: 0x00098840
+	public void ReelIn()
+	{
+		if (this.mShootingState == RopeGun.ShootingState.shooting)
+		{
+		}
+		this.RotateRope();
+		float deltaTime = Time.deltaTime;
+		this.reelInTime += Time.deltaTime;
+		if (this.reelInTime >= 0f && this.fakeRope != null)
+		{
+			Vector3 vector = this.fakeRope.bottomPoint.transform.position - base.transform.position;
+			float num = vector.magnitude;
+			num = Mathf.Min(num * 0.2f, 1.3f);
+			float num2 = Mathf.Sin(this.reelInTime * 3.1f) * 0.7f + Mathf.Cos(this.reelInTime * 4.123f) * 0.4f;
+			if (-vector.y > 4f * FastMath.Abs(vector.x))
+			{
+				this.reelFromTop = true;
+			}
+			if (this.reelFromTop)
+			{
+				this.fakeRope.gravityFactor = Mathf.Max(this.fakeRope.gravityFactor - deltaTime * 1f, 0.08f - num2 * 0.06f);
+			}
+			else
+			{
+				this.fakeRope.gravityFactor = Mathf.Max(this.fakeRope.gravityFactor - deltaTime * 0.15f, 0.15f - num2 * 0.12f);
+			}
+			float num3 = 1.6f + num2;
+			if (this.reelFromTop)
+			{
+				this.reelFromTopBlendIn = Mathf.Min(this.reelFromTopBlendIn + 2f * deltaTime, 1f);
+				if (this.fakeRope.gravityFactor > 0.23f && this.fakeRope.gravityFactor < 0.33f)
+				{
+					num3 *= FastMath.Min(10f * (0.33f - this.fakeRope.gravityFactor), 1f);
+				}
+				else if (this.fakeRope.gravityFactor >= 0.33f)
+				{
+					num3 = 0f;
+				}
+				this.fakeRope.PullBottomTowardRoot(num * num3 * this.reelFromTopBlendIn);
+			}
+			else
+			{
+				this.fakeRope.PullBottomTowardRoot(num * num3);
+			}
+		}
+		if (this.ropeEnd != null)
+		{
+			if (!this.mHasStartedReelingIn)
+			{
+				this.mHasStartedReelingIn = true;
+				foreach (Rigidbody rigidbody in from segment in this.mRope
+				where segment.GetComponent<HingeJoint>() != null
+				select segment)
+				{
+					if (this.spring == RopeGun.JointSettingsState.onWhenReelingIn)
+					{
+						this.SetJointSpringOfSegment(rigidbody.gameObject);
+					}
+					if (this.limits == RopeGun.JointSettingsState.onWhenReelingIn)
+					{
+						this.SetJointSpringOfSegment(this.mRope[this.mRopeCutoffIndex].gameObject);
+					}
+				}
+			}
+			this.mRope[this.mRopeCutoffIndex].isKinematic = true;
+			Transform transform = this.mRope[this.mRopeCutoffIndex].transform;
+			transform.localRotation = Quaternion.Lerp(transform.localRotation, this.mRopeBegin.transform.localRotation, 5f * Time.deltaTime);
+			Vector3 vector2 = base.transform.position - transform.position;
+			transform.position += vector2.normalized * Mathf.Min(this.reelInSpeed * Time.deltaTime, vector2.magnitude);
+			if (vector2.magnitude < 0.1f && this.mRope[this.mRopeCutoffIndex].gameObject != this.ropeEnd)
+			{
+				this.mRopeCutoffIndex--;
+			}
+		}
+		if (!this.reelInAudioSent)
+		{
+			this.audioReelInStart.PostFast();
+			this.reelInIsActive = true;
+			this.reelInAudioSent = true;
+		}
+	}
+
+	// Token: 0x06001061 RID: 4193 RVA: 0x0009AA5C File Offset: 0x00098C5C
+	private void ReelInAudioCountDown()
+	{
+		if (!this.reelInIsActive)
+		{
+			return;
+		}
+		this.audioTimer += Time.deltaTime;
+		if (this.audioTimer >= this.reelInAudioTime)
+		{
+			this.audioReelInStop.PostFast();
+			this.reelInIsActive = false;
+		}
+	}
+
+	// Token: 0x06001062 RID: 4194 RVA: 0x0009AAAC File Offset: 0x00098CAC
+	public float GetStretchPercentage()
+	{
+		Rigidbody rigidbody = this.mRope[this.mRopeCutoffIndex];
+		float num = this.mRopeLength / (float)this.mRope.Count;
+		float num2 = (float)this.mRopeCutoffIndex * num;
+		float magnitude = (rigidbody.transform.position - this.ropeEnd.transform.position).magnitude;
+		return magnitude / num2;
+	}
+
+	// Token: 0x06001063 RID: 4195 RVA: 0x0009AB18 File Offset: 0x00098D18
+	public void DoCancelShot()
+	{
+		this.cancelShot = true;
+	}
+
+	// Token: 0x06001064 RID: 4196 RVA: 0x0009AB24 File Offset: 0x00098D24
+	public void ShootAt(Rigidbody anObject, Vector3 aLocalOffset, Space aSpace = 1)
+	{
+		if (this.mShootingState != RopeGun.ShootingState.none)
+		{
+			return;
+		}
+		if (this.neighborGuns != null)
+		{
+			int i = 0;
+			int num = this.neighborGuns.Length;
+			while (i < num)
+			{
+				RopeGun ropeGun = this.neighborGuns[i];
+				if (ropeGun && (ropeGun.IsShooting() || ropeGun.DoneShooting()))
+				{
+					return;
+				}
+				i++;
+			}
+		}
+		else if (this.cancelShot)
+		{
+			return;
+		}
+		this.audioShoot.PostFast();
+		this.shootAtBoy.Signal();
+		if (this.fakeRope)
+		{
+			this.reelInTime = -this.fakeRope.pauseBeforeReelIn;
+			this.fakeRope.transform.parent.gameObject.SetActive(true);
+			this.fakeRope.StartShoot();
+		}
+		if (this.ropeEnd != null)
+		{
+			this.ropeEnd.transform.parent.gameObject.SetActive(true);
+		}
+		this.mShootingState = RopeGun.ShootingState.shooting;
+		this.mTarget = anObject;
+		this.mTargetOffset = aLocalOffset;
+		this.mOffsetSpace = aSpace;
+		if (this.wire != null)
+		{
+			this.RotateRope();
+			this.UpdateShooting();
+			this.wire.ActivateScript();
+		}
+	}
+
+	// Token: 0x06001065 RID: 4197 RVA: 0x0009AC70 File Offset: 0x00098E70
+	private void UpdateShooting()
+	{
+		Vector3 vector = (this.mOffsetSpace != 1) ? this.mTargetOffset : this.mTarget.transform.TransformDirection(this.mTargetOffset);
+		base.transform.LookAt(this.mTarget.transform.position + vector, Vector3.up);
+		if (this.fakeRope != null)
+		{
+			Vector3 vector2 = this.mTarget.transform.position + vector - this.fakeRope.transform.position;
+			float magnitude = vector2.magnitude;
+			this.ropeLengthExteded = FastMath.Min(this.ropeLengthExteded += this.shootSpeed * Time.deltaTime, magnitude);
+			this.fakeRope.bottomPoint.transform.position = base.transform.position + vector2 * (this.ropeLengthExteded / magnitude);
+			if (this.ropeLengthExteded >= magnitude)
+			{
+				this.mShootingState = RopeGun.ShootingState.done;
+				if (!this.doNotAttachToTarget)
+				{
+					this.AttachRopeToTarget();
+				}
+			}
+		}
+		if (this.ropeEnd != null)
+		{
+			Vector3 vector3 = this.mTarget.transform.position + vector - this.ropeEnd.transform.position;
+			float magnitude2 = vector3.magnitude;
+			this.mRopeBegin.transform.parent.Translate(vector3.normalized * Mathf.Min(this.shootSpeed * Time.deltaTime, magnitude2), 0);
+			float magnitude3 = (this.ropeEnd.transform.position - base.transform.position).magnitude;
+			for (int i = 0; i < this.mRope.Count; i++)
+			{
+				Rigidbody rigidbody = this.mRope[i];
+				if (base.transform.InverseTransformPoint(rigidbody.transform.position).z > 0f)
+				{
+					if (this.rendering == RopeGun.Rendering.mesh && !rigidbody.transform.GetChild(0).GetComponent<Renderer>().enabled)
+					{
+						this.mRopeCutoffIndex = i;
+						rigidbody.transform.GetChild(0).GetComponent<Renderer>().enabled = true;
+					}
+					else if (this.rendering == RopeGun.Rendering.lineRenderer)
+					{
+						this.mRopeCutoffIndex = i;
+					}
+					rigidbody.transform.GetChild(0).GetComponent<Collider>().enabled = true;
+					rigidbody.transform.GetChild(0).gameObject.layer = CollisionUtils.Layers.player;
+					if (magnitude2 < 0.1f || this.mRopeLength - magnitude3 < 0.1f)
+					{
+						rigidbody.GetComponent<Rigidbody>().isKinematic = false;
+						rigidbody.transform.parent = rigidbody.transform.parent.parent;
+						rigidbody.gameObject.layer = CollisionUtils.Layers.player;
+						rigidbody.transform.GetChild(0).GetComponent<Collider>().enabled = true;
+					}
+				}
+			}
+			float num = Vector3.Distance(this.mTarget.transform.position + vector, this.ropeEnd.transform.position);
+			if (num < this.targetDistanceTolerance)
+			{
+				this.mShootingState = RopeGun.ShootingState.done;
+				if (!this.doNotAttachToTarget)
+				{
+					this.AttachRopeToTarget();
+				}
+				for (int j = 0; j <= this.mRopeCutoffIndex; j++)
+				{
+					this.mRope[j].isKinematic = false;
+					this.mRope[j].transform.parent = this.mRope[j].transform.parent.parent;
+					this.mRope[j].gameObject.layer = CollisionUtils.Layers.player;
+				}
+				if (this.useSpiralEffect)
+				{
+					this.spiralEffectRenderer.AddVelocityOnAllSegments(this.forceAddedToSpiralOnImpact);
+				}
+			}
+			else if (this.mRopeLength - magnitude3 < 0.1f)
+			{
+				this.mShootingState = RopeGun.ShootingState.done;
+			}
+		}
+	}
+
+	// Token: 0x06001066 RID: 4198 RVA: 0x0009B0B4 File Offset: 0x000992B4
+	private void AttachRopeToTarget()
+	{
+		this.audioHitBoy.PostFast(AudioKeyObject.AkGameObjs.boy);
+		this.boyHit.Signal();
+		HingeJoint hingeJoint;
+		if (this.mTarget.GetComponent<HingeJoint>())
+		{
+			hingeJoint = this.mTarget.gameObject.GetComponent<HingeJoint>();
+		}
+		else
+		{
+			hingeJoint = this.mTarget.gameObject.AddComponent<HingeJoint>();
+		}
+		Vector3 vector = (this.mOffsetSpace != 1) ? this.mTargetOffset : this.mTarget.transform.TransformDirection(this.mTargetOffset);
+		hingeJoint.anchor = this.mTargetOffset;
+		if (this.fakeRope != null)
+		{
+			this.fakeRope.bottomPoint.transform.position = this.mTarget.transform.position + vector;
+			Vector3 vector2 = this.fakeRope.bottomPoint.transform.position - base.transform.position;
+			float magnitude = vector2.magnitude;
+			this.fakeRope.PullBottomTowardRoot(0f);
+			this.fakeRope.SetBottomVelocity(vector2 / magnitude * 3f);
+			hingeJoint.connectedBody = this.fakeRope.bottomPoint.GetComponent<Rigidbody>();
+		}
+		else
+		{
+			hingeJoint.connectedBody = this.ropeEnd.GetComponent<Rigidbody>();
+			int i = 0;
+			int childCount = this.ropeEnd.transform.childCount;
+			while (i < childCount)
+			{
+				if (this.ropeEnd.transform.GetChild(i).GetComponent<Collider>().enabled && this.mTarget.GetComponent<Collider>().enabled)
+				{
+					Physics.IgnoreCollision(this.ropeEnd.transform.GetChild(i).GetComponent<Collider>(), this.mTarget.GetComponent<Collider>());
+				}
+				i++;
+			}
+		}
+		if (this.fxAttach != null)
+		{
+			if (this.ropeEnd != null)
+			{
+				this.fxAttach.transform.position = this.ropeEnd.transform.position;
+				this.fxAttach.transform.rotation = this.ropeEnd.transform.rotation;
+				this.fxAttach.transform.parent = this.ropeEnd.transform;
+			}
+			else
+			{
+				this.fxAttach.transform.position = this.fakeRope.bottomPoint.transform.position;
+				this.fxAttach.transform.rotation = this.fakeRope.bottomPoint.transform.rotation;
+				this.fxAttach.transform.parent = this.fakeRope.bottomPoint.transform;
+			}
+			this.fxAttach.Play();
+		}
+	}
+
+	// Token: 0x06001067 RID: 4199 RVA: 0x0009B394 File Offset: 0x00099594
+	public void LetGoOfHuddle(bool powerFull = true)
+	{
+		HingeJoint component = this.mTarget.GetComponent<HingeJoint>();
+		if (component != null)
+		{
+			component.connectedBody = null;
+			Object.Destroy(component);
+			float num = 80f;
+			if (!powerFull)
+			{
+				num = 15f;
+			}
+			this.ropeEnd.GetComponent<Rigidbody>().AddForce(Vector3.up * num, 2);
+			this.ropeEnd.GetComponent<Rigidbody>().velocity = Vector3.up * num;
+		}
+	}
+
+	// Token: 0x06001068 RID: 4200 RVA: 0x0009B410 File Offset: 0x00099610
+	public Rigidbody GetRopePartFromBottom(int dist)
+	{
+		Rigidbody rigidbody = this.ropeEnd.GetComponent<Rigidbody>();
+		for (int i = 0; i < dist; i++)
+		{
+			Joint component = rigidbody.gameObject.GetComponent<Joint>();
+			rigidbody = component.connectedBody;
+		}
+		return rigidbody;
+	}
+
+	// Token: 0x06001069 RID: 4201 RVA: 0x0009B450 File Offset: 0x00099650
+	public bool DoneShooting()
+	{
+		return this.mShootingState == RopeGun.ShootingState.done;
+	}
+
+	// Token: 0x0600106A RID: 4202 RVA: 0x0009B45C File Offset: 0x0009965C
+	public bool IsShooting()
+	{
+		return this.mShootingState == RopeGun.ShootingState.shooting;
+	}
+
+	// Token: 0x0600106B RID: 4203 RVA: 0x0009B468 File Offset: 0x00099668
+	public bool ReadyToShoot()
+	{
+		return this.mShootingState == RopeGun.ShootingState.none;
+	}
+
+	// Token: 0x04001D69 RID: 7529
+	public GameObject ropeEnd;
+
+	// Token: 0x04001D6A RID: 7530
+	public RopeGun.Rendering rendering;
+
+	// Token: 0x04001D6B RID: 7531
+	public Material lineRendererMaterial;
+
+	// Token: 0x04001D6C RID: 7532
+	public float lineRendererThickness = 0.05f;
+
+	// Token: 0x04001D6D RID: 7533
+	public float targetDistanceTolerance = 0.1f;
+
+	// Token: 0x04001D6E RID: 7534
+	public float shootSpeed = 100f;
+
+	// Token: 0x04001D6F RID: 7535
+	public float extentionSpeed = 10f;
+
+	// Token: 0x04001D70 RID: 7536
+	public float reelInSpeed = 10f;
+
+	// Token: 0x04001D71 RID: 7537
+	public RopeGun.JointSettingsState limits;
+
+	// Token: 0x04001D72 RID: 7538
+	public float minLimit;
+
+	// Token: 0x04001D73 RID: 7539
+	public float maxLimit;
+
+	// Token: 0x04001D74 RID: 7540
+	public float minLimitBounce;
+
+	// Token: 0x04001D75 RID: 7541
+	public float maxLimitBounce;
+
+	// Token: 0x04001D76 RID: 7542
+	public RopeGun.JointSettingsState spring;
+
+	// Token: 0x04001D77 RID: 7543
+	public float springAmount;
+
+	// Token: 0x04001D78 RID: 7544
+	public float springDamper;
+
+	// Token: 0x04001D79 RID: 7545
+	public float springTarget;
+
+	// Token: 0x04001D7A RID: 7546
+	public bool useSpiralEffect;
+
+	// Token: 0x04001D7B RID: 7547
+	public RopeSpiralEffect spiralEffectRenderer;
+
+	// Token: 0x04001D7C RID: 7548
+	public float forceAddedToSpiralOnImpact = 1f;
+
+	// Token: 0x04001D7D RID: 7549
+	public bool doNotAttachToTarget;
+
+	// Token: 0x04001D7E RID: 7550
+	public SplineLineRenderer wire;
+
+	// Token: 0x04001D7F RID: 7551
+	public RopeGun[] neighborGuns;
+
+	// Token: 0x04001D80 RID: 7552
+	public ParticleSystem fxAttach;
+
+	// Token: 0x04001D81 RID: 7553
+	public float reelInAudioTime = 6f;
+
+	// Token: 0x04001D82 RID: 7554
+	public string audioPrefix = "env_mechanism";
+
+	// Token: 0x04001D83 RID: 7555
+	public FakeSpringRope fakeRope;
+
+	// Token: 0x04001D84 RID: 7556
+	private int mRopeCutoffIndex;
+
+	// Token: 0x04001D85 RID: 7557
+	private Rigidbody mTarget;
+
+	// Token: 0x04001D86 RID: 7558
+	private Vector3 mTargetOffset = Vector3.zero;
+
+	// Token: 0x04001D87 RID: 7559
+	private Space mOffsetSpace = 1;
+
+	// Token: 0x04001D88 RID: 7560
+	private RopeGun.ShootingState mShootingState;
+
+	// Token: 0x04001D89 RID: 7561
+	private bool cancelShot;
+
+	// Token: 0x04001D8A RID: 7562
+	private SignalOut shootAtBoy;
+
+	// Token: 0x04001D8B RID: 7563
+	private SignalOut boyHit;
+
+	// Token: 0x04001D8C RID: 7564
+	[HideInInspector]
+	[SerializeField]
+	private RTPCLocal rtpcPhyRope;
+
+	// Token: 0x04001D8D RID: 7565
+	[SerializeField]
+	[HideInInspector]
+	private float mRopeLength;
+
+	// Token: 0x04001D8E RID: 7566
+	[SerializeField]
+	[HideInInspector]
+	private GameObject mRopeBegin;
+
+	// Token: 0x04001D8F RID: 7567
+	[SerializeField]
+	[HideInInspector]
+	private List<Rigidbody> mRope;
+
+	// Token: 0x04001D90 RID: 7568
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04001D91 RID: 7569
+	[SerializeField]
+	[HideInInspector]
+	private GameObject newRopeParent;
+
+	// Token: 0x04001D92 RID: 7570
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioShoot;
+
+	// Token: 0x04001D93 RID: 7571
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioReelInStart;
+
+	// Token: 0x04001D94 RID: 7572
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioReelInStop;
+
+	// Token: 0x04001D95 RID: 7573
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioHitBoy;
+
+	// Token: 0x04001D96 RID: 7574
+	private FastList<GameObject> ropeAndMuzzle = new FastList<GameObject>(100, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04001D97 RID: 7575
+	private bool audioActive;
+
+	// Token: 0x04001D98 RID: 7576
+	private Quaternion mPrevRotation;
+
+	// Token: 0x04001D99 RID: 7577
+	private Vector3 mPrevPosition;
+
+	// Token: 0x04001D9A RID: 7578
+	private bool unparanted;
+
+	// Token: 0x04001D9B RID: 7579
+	private bool mHasStartedReelingIn;
+
+	// Token: 0x04001D9C RID: 7580
+	private bool reelInIsActive;
+
+	// Token: 0x04001D9D RID: 7581
+	private bool reelInAudioSent;
+
+	// Token: 0x04001D9E RID: 7582
+	private float reelInTime = -1f;
+
+	// Token: 0x04001D9F RID: 7583
+	private bool reelFromTop;
+
+	// Token: 0x04001DA0 RID: 7584
+	private float reelFromTopBlendIn;
+
+	// Token: 0x04001DA1 RID: 7585
+	private float audioTimer;
+
+	// Token: 0x04001DA2 RID: 7586
+	private float ropeLengthExteded;
+
+	// Token: 0x02000213 RID: 531
+	private enum ShootingState
+	{
+		// Token: 0x04001DA5 RID: 7589
+		none,
+		// Token: 0x04001DA6 RID: 7590
+		shooting,
+		// Token: 0x04001DA7 RID: 7591
+		done
+	}
+
+	// Token: 0x02000214 RID: 532
+	public enum JointSettingsState
+	{
+		// Token: 0x04001DA9 RID: 7593
+		off,
+		// Token: 0x04001DAA RID: 7594
+		on,
+		// Token: 0x04001DAB RID: 7595
+		onWhenReelingIn
+	}
+
+	// Token: 0x02000215 RID: 533
+	public enum Rendering
+	{
+		// Token: 0x04001DAD RID: 7597
+		mesh,
+		// Token: 0x04001DAE RID: 7598
+		lineRenderer
+	}
+}

@@ -1,0 +1,42 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000143 RID: 323
+public class SinusRotaterSetup : MonoBehaviour
+{
+	// Token: 0x040010D9 RID: 4313
+	public float amplitude1;
+
+	// Token: 0x040010DA RID: 4314
+	public float amplitude1Spread;
+
+	// Token: 0x040010DB RID: 4315
+	public float loopTime1;
+
+	// Token: 0x040010DC RID: 4316
+	public float loopTime1Spread;
+
+	// Token: 0x040010DD RID: 4317
+	public float phase1;
+
+	// Token: 0x040010DE RID: 4318
+	public float phase1Spread;
+
+	// Token: 0x040010DF RID: 4319
+	public float amplitude2;
+
+	// Token: 0x040010E0 RID: 4320
+	public float amplitude2Spread;
+
+	// Token: 0x040010E1 RID: 4321
+	public float loopTime2;
+
+	// Token: 0x040010E2 RID: 4322
+	public float loopTime2Spread;
+
+	// Token: 0x040010E3 RID: 4323
+	public float phase2;
+
+	// Token: 0x040010E4 RID: 4324
+	public float phase2Spread;
+}

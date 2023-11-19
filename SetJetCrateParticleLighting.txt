@@ -1,0 +1,127 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000362 RID: 866
+public class SetJetCrateParticleLighting : MonoBehaviour
+{
+	// Token: 0x060017D1 RID: 6097 RVA: 0x000CFF88 File Offset: 0x000CE188
+	private void Start()
+	{
+		if (SingletonBehaviour<CompanionManager>.instance)
+		{
+			Companion companion = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.labJetCrate);
+			if (companion)
+			{
+				this.jetCrate = companion.GetComponent<JetCrate>();
+			}
+		}
+		if (this.jetCrate)
+		{
+			SmokeLight[] componentsInChildren = this.jetCrate.thrustParticleSystem.GetComponentsInChildren<SmokeLight>(true);
+			SmokeLight[] componentsInChildren2 = this.jetCrate.thrustMidAirParticleSystem.GetComponentsInChildren<SmokeLight>(true);
+			MaterialInstance[] componentsInChildren3 = this.jetCrate.thrustParticleSystem.GetComponentsInChildren<MaterialInstance>(true);
+			MaterialInstance[] componentsInChildren4 = this.jetCrate.thrustMidAirParticleSystem.GetComponentsInChildren<MaterialInstance>(true);
+			this.lights = new SmokeLight[componentsInChildren.Length + componentsInChildren2.Length];
+			this.mis = new MaterialInstance[componentsInChildren3.Length + componentsInChildren4.Length];
+			this.colProps = new MaterialInstance.ColorProperty[componentsInChildren3.Length + componentsInChildren4.Length];
+			int num = 0;
+			int i = 0;
+			while (i < componentsInChildren.Length)
+			{
+				this.lights[num] = componentsInChildren[i];
+				i++;
+				num++;
+			}
+			int j = 0;
+			while (j < componentsInChildren2.Length)
+			{
+				this.lights[num] = componentsInChildren2[j];
+				j++;
+				num++;
+			}
+			num = 0;
+			int k = 0;
+			while (k < componentsInChildren3.Length)
+			{
+				this.mis[num] = componentsInChildren3[k];
+				k++;
+				num++;
+			}
+			int l = 0;
+			while (l < componentsInChildren4.Length)
+			{
+				this.mis[num] = componentsInChildren4[l];
+				l++;
+				num++;
+			}
+			for (int m = 0; m < this.mis.Length; m++)
+			{
+				this.colProps[m] = this.mis[m].GetColorProperty("_MainCol");
+			}
+		}
+	}
+
+	// Token: 0x060017D2 RID: 6098 RVA: 0x000D0148 File Offset: 0x000CE348
+	private void OnTriggerEnter(Collider other)
+	{
+		if (other.GetComponent<JetCrate>() == this.jetCrate)
+		{
+			this.doSet = true;
+		}
+	}
+
+	// Token: 0x060017D3 RID: 6099 RVA: 0x000D0168 File Offset: 0x000CE368
+	private void OnTriggerExit(Collider other)
+	{
+		if (other.GetComponent<JetCrate>() != this.jetCrate)
+		{
+			this.doSet = false;
+		}
+	}
+
+	// Token: 0x060017D4 RID: 6100 RVA: 0x000D0188 File Offset: 0x000CE388
+	private void Update()
+	{
+		if (this.jetCrate && !this.jetCrate.thrustParticleSystem.isPlaying && !this.jetCrate.thrustMidAirParticleSystem.isPlaying && this.doSet)
+		{
+			for (int i = 0; i < this.lights.Length; i++)
+			{
+				this.lights[i].color = this.lightColor;
+				this.lights[i].lightProbe = this.lightPos;
+				this.lights[i].range = this.range;
+			}
+			for (int j = 0; j < this.mis.Length; j++)
+			{
+				this.mis[j].SetColorProperty(this.colProps[j], this.color.Alpha(this.mis[j].GetColorValue(this.colProps[j]).a));
+			}
+			this.doSet = false;
+		}
+	}
+
+	// Token: 0x04002AAD RID: 10925
+	public Color color;
+
+	// Token: 0x04002AAE RID: 10926
+	public Color lightColor;
+
+	// Token: 0x04002AAF RID: 10927
+	public Transform lightPos;
+
+	// Token: 0x04002AB0 RID: 10928
+	public float range;
+
+	// Token: 0x04002AB1 RID: 10929
+	private JetCrate jetCrate;
+
+	// Token: 0x04002AB2 RID: 10930
+	private SmokeLight[] lights = new SmokeLight[0];
+
+	// Token: 0x04002AB3 RID: 10931
+	private MaterialInstance[] mis = new MaterialInstance[0];
+
+	// Token: 0x04002AB4 RID: 10932
+	private MaterialInstance.ColorProperty[] colProps;
+
+	// Token: 0x04002AB5 RID: 10933
+	private bool doSet;
+}

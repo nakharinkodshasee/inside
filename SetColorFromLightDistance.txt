@@ -1,0 +1,215 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000360 RID: 864
+public class SetColorFromLightDistance : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060017C6 RID: 6086 RVA: 0x000CFC1C File Offset: 0x000CDE1C
+	public bool PreAwake(int callcount)
+	{
+		this.enableSetColor = SignalIn.Create("enableSetColor", base.gameObject, new Action(this.OnEnableSetColor));
+		this.disableSetColor = SignalIn.Create("disableSetColor", base.gameObject, new Action(this.OnDisableSetColor));
+		return true;
+	}
+
+	// Token: 0x060017C7 RID: 6087 RVA: 0x000CFC70 File Offset: 0x000CDE70
+	private void OnEnableSetColor()
+	{
+		this.enabledSetColor = true;
+	}
+
+	// Token: 0x060017C8 RID: 6088 RVA: 0x000CFC7C File Offset: 0x000CDE7C
+	private void OnDisableSetColor()
+	{
+		this.enabledSetColor = false;
+		if (this.vfxConfig != null)
+		{
+			this.vfxConfig.visualConfig.color = this.vfxColorBackup;
+		}
+		if (this.miCP != null)
+		{
+			this.materialInstance.SetColorProperty(this.miCP, this.miColorBackup);
+		}
+	}
+
+	// Token: 0x060017C9 RID: 6089 RVA: 0x000CFCDC File Offset: 0x000CDEDC
+	private void Start()
+	{
+		if (this.materialInstance != null)
+		{
+			this.miCP = this.materialInstance.GetColorProperty(this.shaderProperty);
+			if (this.miCP != null)
+			{
+				this.miColorBackup = this.materialInstance.GetColorValue(this.miCP);
+			}
+		}
+		if (this.vfxConfig != null)
+		{
+			this.vfxColorBackup = this.vfxConfig.visualConfig.color;
+		}
+		this.SetIdleState();
+	}
+
+	// Token: 0x060017CA RID: 6090 RVA: 0x000CFD60 File Offset: 0x000CDF60
+	private void Update()
+	{
+		if (this.state == SetColorFromLightDistance.State.Update)
+		{
+			this.UpdateState();
+		}
+	}
+
+	// Token: 0x060017CB RID: 6091 RVA: 0x000CFD74 File Offset: 0x000CDF74
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			if (this.debug)
+			{
+			}
+			this.SetUpdateState();
+		}
+	}
+
+	// Token: 0x060017CC RID: 6092 RVA: 0x000CFD98 File Offset: 0x000CDF98
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			if (this.debug)
+			{
+			}
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x060017CD RID: 6093 RVA: 0x000CFDBC File Offset: 0x000CDFBC
+	private void SetUpdateState()
+	{
+		this.state = SetColorFromLightDistance.State.Update;
+	}
+
+	// Token: 0x060017CE RID: 6094 RVA: 0x000CFDC8 File Offset: 0x000CDFC8
+	private void UpdateState()
+	{
+		if (!this.enabledSetColor)
+		{
+			return;
+		}
+		if (this.distanceFalloff > 0f)
+		{
+			this.maxLightIntensity = Mathf.Clamp(this.maxLightIntensity, 0.01f, 8f);
+			float num;
+			if (this.customTransform != null)
+			{
+				num = Vector3.Distance(this.customTransform.position, this.targetLight.transform.position);
+			}
+			else
+			{
+				num = Vector3.Distance(ScriptGlobals.mainCharacter.pos3, this.targetLight.transform.position);
+			}
+			float num2 = Mathf.Clamp01(1f - num / this.distanceFalloff);
+			float num3 = Mathf.Clamp01(num2 * (this.targetLight.intensity / this.maxLightIntensity));
+			if (this.debug)
+			{
+			}
+			if (this.vfxConfig != null)
+			{
+				if (this.useGradient)
+				{
+					this.vfxConfig.visualConfig.color = this.falloffGradient.Evaluate(num2);
+				}
+				else
+				{
+					this.vfxConfig.visualConfig.color = Color.Lerp(this.falloffColor, this.vfxColorBackup, num3);
+				}
+			}
+			if (this.miCP != null)
+			{
+				if (this.useGradient)
+				{
+					this.materialInstance.SetColorProperty(this.miCP, this.falloffGradient.Evaluate(num2));
+				}
+				else
+				{
+					this.materialInstance.SetColorProperty(this.miCP, Color.Lerp(this.falloffColor, this.miColorBackup, num3));
+				}
+			}
+		}
+	}
+
+	// Token: 0x060017CF RID: 6095 RVA: 0x000CFF5C File Offset: 0x000CE15C
+	private void SetIdleState()
+	{
+		this.state = SetColorFromLightDistance.State.None;
+	}
+
+	// Token: 0x04002A96 RID: 10902
+	public float distanceFalloff = 5f;
+
+	// Token: 0x04002A97 RID: 10903
+	public float maxLightIntensity = 1f;
+
+	// Token: 0x04002A98 RID: 10904
+	public Color startColor = Color.white;
+
+	// Token: 0x04002A99 RID: 10905
+	public Color falloffColor = Color.black;
+
+	// Token: 0x04002A9A RID: 10906
+	public bool useGradient;
+
+	// Token: 0x04002A9B RID: 10907
+	public Gradient falloffGradient;
+
+	// Token: 0x04002A9C RID: 10908
+	public Light targetLight;
+
+	// Token: 0x04002A9D RID: 10909
+	public VfxConfig vfxConfig;
+
+	// Token: 0x04002A9E RID: 10910
+	private Color vfxColorBackup;
+
+	// Token: 0x04002A9F RID: 10911
+	public Transform customTransform;
+
+	// Token: 0x04002AA0 RID: 10912
+	public MaterialInstance materialInstance;
+
+	// Token: 0x04002AA1 RID: 10913
+	public string shaderProperty = "_Color";
+
+	// Token: 0x04002AA2 RID: 10914
+	public bool enabledSetColor = true;
+
+	// Token: 0x04002AA3 RID: 10915
+	private MaterialInstance.ColorProperty miCP;
+
+	// Token: 0x04002AA4 RID: 10916
+	private Color miColorBackup;
+
+	// Token: 0x04002AA5 RID: 10917
+	private SetColorFromLightDistance.State state;
+
+	// Token: 0x04002AA6 RID: 10918
+	private Boy boy;
+
+	// Token: 0x04002AA7 RID: 10919
+	public bool debug;
+
+	// Token: 0x04002AA8 RID: 10920
+	public SignalIn enableSetColor;
+
+	// Token: 0x04002AA9 RID: 10921
+	public SignalIn disableSetColor;
+
+	// Token: 0x02000361 RID: 865
+	private enum State
+	{
+		// Token: 0x04002AAB RID: 10923
+		None,
+		// Token: 0x04002AAC RID: 10924
+		Update
+	}
+}

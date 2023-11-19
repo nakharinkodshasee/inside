@@ -1,0 +1,42 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005E8 RID: 1512
+public class setGravity : MonoBehaviour
+{
+	// Token: 0x0600262B RID: 9771 RVA: 0x00136A8C File Offset: 0x00134C8C
+	public void OnSetLowGravity()
+	{
+		Physics.gravity = new Vector3(0f, this.gravityNew, 0f);
+		this.gravLow = true;
+	}
+
+	// Token: 0x0600262C RID: 9772 RVA: 0x00136AB0 File Offset: 0x00134CB0
+	public void OnSetNormGravity()
+	{
+		Physics.gravity = new Vector3(0f, this.orgGravity, 0f);
+		this.gravLow = false;
+	}
+
+	// Token: 0x0600262D RID: 9773 RVA: 0x00136AD4 File Offset: 0x00134CD4
+	public void OnToggleGravity()
+	{
+		if (this.gravLow)
+		{
+			this.OnSetNormGravity();
+		}
+		else
+		{
+			this.OnSetLowGravity();
+		}
+	}
+
+	// Token: 0x0400457C RID: 17788
+	public float gravityNew = -3f;
+
+	// Token: 0x0400457D RID: 17789
+	private float orgGravity = -9.81f;
+
+	// Token: 0x0400457E RID: 17790
+	private bool gravLow;
+}

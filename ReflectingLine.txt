@@ -1,0 +1,61 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005CE RID: 1486
+public class ReflectingLine : MonoBehaviour
+{
+	// Token: 0x060025B9 RID: 9657 RVA: 0x00133F54 File Offset: 0x00132154
+	private void Start()
+	{
+		this.aimLine = base.GetComponent<LineRenderer>();
+		this.aimLine.SetPosition(0, base.transform.position);
+	}
+
+	// Token: 0x060025BA RID: 9658 RVA: 0x00133F84 File Offset: 0x00132184
+	private void Update()
+	{
+		if (this.aimLine.enabled)
+		{
+			Vector3 forward = base.transform.forward;
+			RaycastHit raycastHit = default(RaycastHit);
+			int num = ~(1 << LayerMask.NameToLayer("Player"));
+			Physics.Raycast(base.transform.position + base.transform.forward, forward, ref raycastHit, 100f, num);
+			if (raycastHit.collider)
+			{
+				if (raycastHit.collider.transform.name == "Reflectable")
+				{
+					Vector3 vector = Vector3.Reflect(forward, raycastHit.normal);
+					this.aimLine.SetPosition(1, raycastHit.point);
+					this.reflectionLine.enabled = true;
+					this.reflectionLine.SetPosition(0, raycastHit.point);
+					RaycastHit raycastHit2 = default(RaycastHit);
+					Physics.Raycast(raycastHit.point, vector, ref raycastHit2, 100f, num);
+					if (raycastHit2.collider)
+					{
+						this.reflectionLine.SetPosition(1, raycastHit2.point);
+					}
+					else
+					{
+						this.reflectionLine.SetPosition(1, raycastHit.point + vector.normalized * 100f);
+					}
+				}
+				else
+				{
+					this.reflectionLine.enabled = false;
+					this.aimLine.SetPosition(1, raycastHit.point);
+				}
+			}
+			else
+			{
+				this.reflectionLine.enabled = false;
+				this.aimLine.SetPosition(1, base.transform.position + base.transform.forward * 100f);
+			}
+		}
+	}
+
+	// Token: 0x040044E0 RID: 17632
+	public LineRenderer reflectionLine;
+
+	// Token: 0x040044E1 RID: 17633
+	private LineRenderer aimLine;
+}

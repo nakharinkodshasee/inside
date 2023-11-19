@@ -1,0 +1,637 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000474 RID: 1140
+public class ScientistWithHook : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06001DF4 RID: 7668 RVA: 0x001014F0 File Offset: 0x000FF6F0
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		int i = 0;
+		int num = this.enableOnCrash.Length;
+		while (i < num)
+		{
+			Renderer[] componentsInChildren = this.enableOnCrash[i].GetComponentsInChildren<Renderer>(true);
+			this.enableOnCrashRenderer.AddRange(componentsInChildren);
+			i++;
+		}
+		int j = 0;
+		int num2 = this.disableOnCrash.Length;
+		while (j < num2)
+		{
+			Renderer[] componentsInChildren2 = this.disableOnCrash[j].GetComponentsInChildren<Renderer>(true);
+			this.disableOnCrashRenderer.AddRange(componentsInChildren2);
+			j++;
+		}
+		int k = 0;
+		int num3 = this.enableOnCrash.Length;
+		while (k < num3)
+		{
+			Light[] componentsInChildren3 = this.enableOnCrash[k].GetComponentsInChildren<Light>(true);
+			this.enableOnCrashLights.AddRange(componentsInChildren3);
+			k++;
+		}
+		int l = 0;
+		int num4 = this.disableOnCrash.Length;
+		while (l < num4)
+		{
+			Light[] componentsInChildren4 = this.disableOnCrash[l].GetComponentsInChildren<Light>(true);
+			this.disableOnCrashLights.AddRange(componentsInChildren4);
+			l++;
+		}
+	}
+
+	// Token: 0x06001DF5 RID: 7669 RVA: 0x00101600 File Offset: 0x000FF800
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		this.pendulCloseToScientist = SignalIn.Create("pendulCloseToScientist", base.gameObject, new Action(this.OnPendulClose));
+		this.pendulNotCloseToScientist = SignalIn.Create("pendulNotCloseToScientist", base.gameObject, new Action(this.OnPendulNotClose));
+		this.wallBreak = SignalIn.Create("wallBreak", base.gameObject, new Action(this.OnWallHasBroke));
+		this.hookAttached = SignalIn.Create("hookAttached", base.gameObject, new Action(this.OnHookAttached));
+		this.loadBroken = SignalIn.Create("loadBroken", base.gameObject, new Action(this.OnLoadBroken));
+		this.attached = SignalOut.Create("attached", base.gameObject);
+		this.broken = SignalOut.Create("broken", base.gameObject);
+		this.animWalkWayBreakState = this.pendulumWalkWay["Break"];
+		this.animCraneBreakState = this.pendulumCrane["Break"];
+		if (this.tryToAttachHook)
+		{
+			this.tryToAttachHook.clip.frameRate = 1.3f;
+		}
+		this.limitInput = base.GetComponent<BoySetInput>();
+		return true;
+	}
+
+	// Token: 0x06001DF6 RID: 7670 RVA: 0x00101748 File Offset: 0x000FF948
+	private void Start()
+	{
+		this.huddleCloseToScientistTrigger.enterTrigger.Register(this, ref this.scientistTriggerEnterHandle);
+		this.huddleCloseToScientistTrigger.exitTrigger.Register(this, ref this.scientistTriggerExitHandle);
+		this.SetSwingState();
+	}
+
+	// Token: 0x06001DF7 RID: 7671 RVA: 0x0010178C File Offset: 0x000FF98C
+	private void SetSwingState()
+	{
+		int i = 0;
+		int count = this.enableOnCrashRenderer.Count;
+		while (i < count)
+		{
+			this.enableOnCrashRenderer[i].enabled = false;
+			i++;
+		}
+		int j = 0;
+		int count2 = this.disableOnCrashRenderer.Count;
+		while (j < count2)
+		{
+			this.disableOnCrashRenderer[j].enabled = true;
+			j++;
+		}
+		int k = 0;
+		int count3 = this.enableOnCrashLights.Count;
+		while (k < count3)
+		{
+			this.enableOnCrashLights[k].enabled = false;
+			k++;
+		}
+		int l = 0;
+		int count4 = this.disableOnCrashLights.Count;
+		while (l < count4)
+		{
+			this.disableOnCrashLights[l].enabled = true;
+			l++;
+		}
+		int m = 0;
+		int num = this.enableOnCrashDelayed.Length;
+		while (m < num)
+		{
+			this.enableOnCrashDelayed[m].SetActive(false);
+			m++;
+		}
+		int n = 0;
+		int num2 = this.disableOnCrashDelayed.Length;
+		while (n < num2)
+		{
+			this.disableOnCrashDelayed[n].SetActive(true);
+			n++;
+		}
+		this.pendulumCrane.Play(this.animCraneBreakState.name);
+		this.animCraneBreakState.speed = 0f;
+		this.state = ScientistWithHook.State.Swing;
+	}
+
+	// Token: 0x06001DF8 RID: 7672 RVA: 0x001018F8 File Offset: 0x000FFAF8
+	private void SwingState()
+	{
+		if (this.huddleProbesClose > 0 && Mathf.Abs(this.pendul.angularVelocity.z) < 0.1f)
+		{
+			this.clingclankAnimTimer += Time.deltaTime;
+			if (this.clingclankAnimTimer > 5f)
+			{
+				this.clingclankAnimTimer = Random.Range(-5f, -10f);
+			}
+		}
+		else
+		{
+			this.clingclankAnimTimer = Mathf.Min(this.clingclankAnimTimer, 0f);
+		}
+		if (this.pendulClose)
+		{
+			float x = this.pendul.GetComponent<Rigidbody>().velocity.x;
+			float magnitude = (this.handPoint.position - this.attachHookPos.position).magnitude;
+			if (this.tryToAttachHook.time > 0.1f && this.tryToAttachHook.time < 0.5f && magnitude < 0.75f && this.tryToAttachHook.speed == 1f)
+			{
+				float num = Mathf.InverseLerp(0f, 0.75f, magnitude);
+				float speed = Mathf.Lerp(1f, 2.5f, num);
+				this.tryToAttachHook.speed = speed;
+				this.SetBlendState();
+			}
+		}
+	}
+
+	// Token: 0x06001DF9 RID: 7673 RVA: 0x00101A50 File Offset: 0x000FFC50
+	private void OnLoadBroken()
+	{
+		this.pendulumCrane.Play("Done");
+		this.pendulumWalkWay.Play("Done");
+		this.pendulumWall.Play("Done");
+		int i = 0;
+		int num = this.enableOnCrashDelayed.Length;
+		while (i < num)
+		{
+			this.enableOnCrashDelayed[i].SetActive(true);
+			i++;
+		}
+		int j = 0;
+		int num2 = this.disableOnCrashDelayed.Length;
+		while (j < num2)
+		{
+			this.disableOnCrashDelayed[j].SetActive(false);
+			j++;
+		}
+	}
+
+	// Token: 0x06001DFA RID: 7674 RVA: 0x00101AE4 File Offset: 0x000FFCE4
+	private void SetBlendState()
+	{
+		HuddleGrabState grabState = ScriptGlobals.huddle.grabState;
+		if (grabState != null && grabState.body == this.pendul)
+		{
+			this.limitInput.activateScript();
+		}
+		this.pendulumCrane.Play("Break");
+		this.animCraneBreakState.speed = 1f;
+		this.pendulumWalkWay.CrossFade(this.animWalkWayBreakState.name);
+		this.pendulumWall.CrossFade("Break");
+		this.wallBreakVFX.Play();
+		this.pendul.isKinematic = true;
+		this.blendTimer = 0f;
+		this.pendulBlendStartPos = this.pendul.position;
+		this.pendulBlendStartRot = this.pendul.rotation;
+		this.state = ScientistWithHook.State.Blend;
+	}
+
+	// Token: 0x06001DFB RID: 7675 RVA: 0x00101BB8 File Offset: 0x000FFDB8
+	private void BlendState()
+	{
+		this.blendTimer += Time.deltaTime;
+		if (this.blendTimer >= this.blendDuration)
+		{
+			this.SetCrashState();
+		}
+		else
+		{
+			float num = this.blendTimer / this.blendDuration;
+			this.pendul.position = Vector3.Lerp(this.pendulBlendStartPos, this.pendulumAnimTarget.position, num);
+			this.pendul.rotation = Quaternion.Lerp(this.pendulBlendStartRot, this.pendulumAnimTarget.rotation, num);
+		}
+	}
+
+	// Token: 0x06001DFC RID: 7676 RVA: 0x00101C48 File Offset: 0x000FFE48
+	private void SetCrashState()
+	{
+		int i = 0;
+		int count = this.enableOnCrashRenderer.Count;
+		while (i < count)
+		{
+			this.enableOnCrashRenderer[i].enabled = true;
+			i++;
+		}
+		int j = 0;
+		int count2 = this.disableOnCrashRenderer.Count;
+		while (j < count2)
+		{
+			this.disableOnCrashRenderer[j].enabled = false;
+			j++;
+		}
+		int k = 0;
+		int count3 = this.enableOnCrashLights.Count;
+		while (k < count3)
+		{
+			this.enableOnCrashLights[k].enabled = true;
+			k++;
+		}
+		int l = 0;
+		int count4 = this.disableOnCrashLights.Count;
+		while (l < count4)
+		{
+			this.disableOnCrashLights[l].enabled = false;
+			l++;
+		}
+		this.broken.Signal();
+		if (this.grabHack)
+		{
+			this.grabHack.SetSecondStage();
+		}
+		this.state = ScientistWithHook.State.Crash;
+	}
+
+	// Token: 0x06001DFD RID: 7677 RVA: 0x00101D50 File Offset: 0x000FFF50
+	private void CrashState()
+	{
+		this.pendul.MovePosition(this.pendulumAnimTarget.position);
+		this.pendul.MoveRotation(this.pendulumAnimTarget.rotation);
+		this.inputTimer += Time.deltaTime;
+		bool flag = false;
+		HuddleGrabState grabState = ScriptGlobals.huddle.grabState;
+		if (grabState.IsGrabbing())
+		{
+			HuddleCloth.ClothBone bone = grabState.grabCollider.bone;
+			float silhouetteMaxDistance = HuddleUtils.GetSilhouetteMaxDistance(ScriptGlobals.huddle, bone);
+			if (silhouetteMaxDistance > 4.5f)
+			{
+				flag = true;
+			}
+		}
+		if (this.timerIndex == 0 && this.inputTimer > this.wallDelay)
+		{
+			int i = 0;
+			int num = this.enableOnCrashDelayed.Length;
+			while (i < num)
+			{
+				this.enableOnCrashDelayed[i].SetActive(true);
+				i++;
+			}
+			int j = 0;
+			int num2 = this.disableOnCrashDelayed.Length;
+			while (j < num2)
+			{
+				this.disableOnCrashDelayed[j].SetActive(false);
+				j++;
+			}
+			this.timerIndex++;
+		}
+		else if (this.timerIndex == 1 && this.inputTimer > this.grabStun)
+		{
+			this.limitInput.deactivateScript();
+			this.timerIndex++;
+		}
+		else if (this.timerIndex == 2 && (this.inputTimer > this.forcedRelease || flag))
+		{
+			this.SetDropState();
+			this.timerIndex++;
+		}
+	}
+
+	// Token: 0x06001DFE RID: 7678 RVA: 0x00101EE0 File Offset: 0x001000E0
+	private void SetDropState()
+	{
+		HuddleGrabState grabState = ScriptGlobals.huddle.grabState;
+		if (grabState != null && grabState.body == this.pendul)
+		{
+			ScriptGlobals.huddle.grabState.DropGrabBody(1f);
+		}
+		this.pendul.gameObject.SetActive(false);
+		this.reallowGrabSet = false;
+		this.state = ScientistWithHook.State.Drop;
+	}
+
+	// Token: 0x06001DFF RID: 7679 RVA: 0x00101F48 File Offset: 0x00100148
+	private void DropState()
+	{
+		if (!this.reallowGrabSet && !(ScriptGlobals.huddle.state is HuddleRagdollState))
+		{
+			this.reallowGrabSet = true;
+		}
+		if (this.pendulumWalkWay.IsPlaying(this.animWalkWayBreakState.name) && this.animWalkWayBreakState.normalizedTime >= 1f)
+		{
+			this.pendulumWalkWay.CrossFade("IdleAfter");
+		}
+	}
+
+	// Token: 0x06001E00 RID: 7680 RVA: 0x00101FBC File Offset: 0x001001BC
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case ScientistWithHook.State.Swing:
+			this.SwingState();
+			break;
+		case ScientistWithHook.State.Blend:
+			this.BlendState();
+			break;
+		case ScientistWithHook.State.Crash:
+			this.CrashState();
+			break;
+		case ScientistWithHook.State.Drop:
+			this.DropState();
+			break;
+		}
+		this.SetAngularDrag();
+	}
+
+	// Token: 0x06001E01 RID: 7681 RVA: 0x00102020 File Offset: 0x00100220
+	private void SetAngularDrag()
+	{
+		Collider collider = null;
+		HuddleGrabState grabState = ScriptGlobals.huddle.grabState;
+		if (grabState != null)
+		{
+			collider = grabState.grabCollider.collider;
+		}
+		if (collider == this.pendul.GetComponent<Collider>())
+		{
+			if (!this.wallHasBroke)
+			{
+				this.pendul.angularDrag = 0f;
+			}
+			else
+			{
+				this.pendul.angularDrag = 1.15f;
+				this.pendul.drag = 0.5f;
+			}
+			this.container1.isKinematic = true;
+			this.container2.isKinematic = true;
+		}
+		else
+		{
+			this.pendul.drag = 0f;
+			this.pendul.angularDrag = 2.5f;
+			this.container1.isKinematic = false;
+			this.container2.isKinematic = false;
+		}
+	}
+
+	// Token: 0x06001E02 RID: 7682 RVA: 0x001020FC File Offset: 0x001002FC
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.huddleCloseToScientistTrigger.enterTrigger)
+		{
+			this.OnHuddleCloseTriggerEnter(collider);
+		}
+		else if (sender == this.huddleCloseToScientistTrigger.exitTrigger)
+		{
+			this.OnHuddleCloseTriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06001E03 RID: 7683 RVA: 0x00102138 File Offset: 0x00100338
+	private void OnHuddleCloseTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<HuddleProbe>())
+		{
+			this.huddleProbesClose++;
+		}
+	}
+
+	// Token: 0x06001E04 RID: 7684 RVA: 0x00102158 File Offset: 0x00100358
+	private void OnHuddleCloseTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<HuddleProbe>())
+		{
+			this.huddleProbesClose--;
+		}
+	}
+
+	// Token: 0x06001E05 RID: 7685 RVA: 0x00102178 File Offset: 0x00100378
+	private void OnPendulClose()
+	{
+		this.tryToAttachHook.speed = 1f;
+		this.pendulClose = true;
+		float x = this.pendul.GetComponent<Rigidbody>().velocity.x;
+	}
+
+	// Token: 0x06001E06 RID: 7686 RVA: 0x001021B8 File Offset: 0x001003B8
+	private void OnPendulNotClose()
+	{
+		this.pendulClose = false;
+	}
+
+	// Token: 0x06001E07 RID: 7687 RVA: 0x001021C4 File Offset: 0x001003C4
+	private void OnHookAttached()
+	{
+		this.SetBlendState();
+	}
+
+	// Token: 0x06001E08 RID: 7688 RVA: 0x001021CC File Offset: 0x001003CC
+	private void OnWallHasBroke()
+	{
+		if (!this.wallHasBroke)
+		{
+			this.wallHasBroke = true;
+		}
+	}
+
+	// Token: 0x04003703 RID: 14083
+	public Rigidbody pendul;
+
+	// Token: 0x04003704 RID: 14084
+	public Rigidbody pendulCabin;
+
+	// Token: 0x04003705 RID: 14085
+	public Transform attachHookPos;
+
+	// Token: 0x04003706 RID: 14086
+	public CollisionEvents huddleCloseToScientistTrigger;
+
+	// Token: 0x04003707 RID: 14087
+	public Transform handPoint;
+
+	// Token: 0x04003708 RID: 14088
+	public Rigidbody container1;
+
+	// Token: 0x04003709 RID: 14089
+	public Rigidbody container2;
+
+	// Token: 0x0400370A RID: 14090
+	public Animation pendulumCrane;
+
+	// Token: 0x0400370B RID: 14091
+	public Animation pendulumWalkWay;
+
+	// Token: 0x0400370C RID: 14092
+	public Animation pendulumWall;
+
+	// Token: 0x0400370D RID: 14093
+	public Animation wallBreakVFX;
+
+	// Token: 0x0400370E RID: 14094
+	public GameObject wallBreakFX;
+
+	// Token: 0x0400370F RID: 14095
+	public Transform pendulumBlendTarget;
+
+	// Token: 0x04003710 RID: 14096
+	public Transform pendulumAnimTarget;
+
+	// Token: 0x04003711 RID: 14097
+	public GameObject[] enableOnCrash;
+
+	// Token: 0x04003712 RID: 14098
+	public GameObject[] disableOnCrash;
+
+	// Token: 0x04003713 RID: 14099
+	public GameObject[] enableOnCrashDelayed;
+
+	// Token: 0x04003714 RID: 14100
+	public GameObject[] disableOnCrashDelayed;
+
+	// Token: 0x04003715 RID: 14101
+	public float wallDelay = 1f;
+
+	// Token: 0x04003716 RID: 14102
+	public float grabStun = 2f;
+
+	// Token: 0x04003717 RID: 14103
+	public float forcedRelease = 3f;
+
+	// Token: 0x04003718 RID: 14104
+	public float blendSpeed = 2f;
+
+	// Token: 0x04003719 RID: 14105
+	public float blendRotateSpeed = 3f;
+
+	// Token: 0x0400371A RID: 14106
+	public float blendDuration = 0.55f;
+
+	// Token: 0x0400371B RID: 14107
+	public HuddlePendulGrabHack grabHack;
+
+	// Token: 0x0400371C RID: 14108
+	private SignalIn pendulCloseToScientist;
+
+	// Token: 0x0400371D RID: 14109
+	private SignalIn pendulNotCloseToScientist;
+
+	// Token: 0x0400371E RID: 14110
+	private SignalIn wallBreak;
+
+	// Token: 0x0400371F RID: 14111
+	private SignalIn hookAttached;
+
+	// Token: 0x04003720 RID: 14112
+	private SignalIn loadBroken;
+
+	// Token: 0x04003721 RID: 14113
+	private SignalOut attached;
+
+	// Token: 0x04003722 RID: 14114
+	private SignalOut broken;
+
+	// Token: 0x04003723 RID: 14115
+	private ScientistWithHook.State state;
+
+	// Token: 0x04003724 RID: 14116
+	private bool jointAttached;
+
+	// Token: 0x04003725 RID: 14117
+	private bool pendulClose;
+
+	// Token: 0x04003726 RID: 14118
+	private bool hookIsAttached;
+
+	// Token: 0x04003727 RID: 14119
+	private bool gravityOnRopeDisabled;
+
+	// Token: 0x04003728 RID: 14120
+	private bool wallHasBroke;
+
+	// Token: 0x04003729 RID: 14121
+	private AnimationState tryToAttachHook;
+
+	// Token: 0x0400372A RID: 14122
+	private AnimationState animWalkWayBreakState;
+
+	// Token: 0x0400372B RID: 14123
+	private AnimationState animCraneBreakState;
+
+	// Token: 0x0400372C RID: 14124
+	private int huddleProbesClose;
+
+	// Token: 0x0400372D RID: 14125
+	private int timerIndex;
+
+	// Token: 0x0400372E RID: 14126
+	private float clingclankAnimTimer;
+
+	// Token: 0x0400372F RID: 14127
+	private float inputTimer;
+
+	// Token: 0x04003730 RID: 14128
+	private float blendTimer;
+
+	// Token: 0x04003731 RID: 14129
+	private BoySetInput limitInput;
+
+	// Token: 0x04003732 RID: 14130
+	private Vector3 pendulBlendStartPos;
+
+	// Token: 0x04003733 RID: 14131
+	private Quaternion pendulBlendStartRot;
+
+	// Token: 0x04003734 RID: 14132
+	private int scientistTriggerEnterHandle = -1;
+
+	// Token: 0x04003735 RID: 14133
+	private int scientistTriggerExitHandle = -1;
+
+	// Token: 0x04003736 RID: 14134
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04003737 RID: 14135
+	[HideInInspector]
+	[SerializeField]
+	private List<Renderer> enableOnCrashRenderer = new List<Renderer>();
+
+	// Token: 0x04003738 RID: 14136
+	[SerializeField]
+	[HideInInspector]
+	private List<Renderer> disableOnCrashRenderer = new List<Renderer>();
+
+	// Token: 0x04003739 RID: 14137
+	[HideInInspector]
+	[SerializeField]
+	private List<Light> enableOnCrashLights = new List<Light>();
+
+	// Token: 0x0400373A RID: 14138
+	[HideInInspector]
+	[SerializeField]
+	private List<Light> disableOnCrashLights = new List<Light>();
+
+	// Token: 0x0400373B RID: 14139
+	private bool reallowGrabSet;
+
+	// Token: 0x02000475 RID: 1141
+	private enum State
+	{
+		// Token: 0x0400373D RID: 14141
+		None,
+		// Token: 0x0400373E RID: 14142
+		Swing,
+		// Token: 0x0400373F RID: 14143
+		Blend,
+		// Token: 0x04003740 RID: 14144
+		Crash,
+		// Token: 0x04003741 RID: 14145
+		Drop
+	}
+}

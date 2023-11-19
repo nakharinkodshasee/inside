@@ -1,0 +1,62 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000359 RID: 857
+[ExecuteInEditMode]
+public class QueueInstance : UmbrellaBehaviour<QueueInstance>
+{
+	// Token: 0x060017A8 RID: 6056 RVA: 0x000CE45C File Offset: 0x000CC65C
+	protected override void OnEnable()
+	{
+		this.enabledLocal = true;
+		if (!this.render)
+		{
+			this.render = base.GetComponent<Renderer>();
+		}
+		base.OnEnable();
+	}
+
+	// Token: 0x060017A9 RID: 6057 RVA: 0x000CE488 File Offset: 0x000CC688
+	protected override void OnDisable()
+	{
+		if (this.preProcess)
+		{
+			return;
+		}
+		this.enabledLocal = false;
+		this.SetOrder(0);
+		base.OnDisable();
+	}
+
+	// Token: 0x060017AA RID: 6058 RVA: 0x000CE4B8 File Offset: 0x000CC6B8
+	public void UmbrellaUpdate()
+	{
+		if (!this.enabledLocal || !base.enabled)
+		{
+			return;
+		}
+		this.SetOrder(this.queueOffs);
+	}
+
+	// Token: 0x060017AB RID: 6059 RVA: 0x000CE4E0 File Offset: 0x000CC6E0
+	public void SetOrder(int order)
+	{
+		if (this.render && this.render.sortingOrder != order)
+		{
+			this.render.sortingOrder = order;
+		}
+	}
+
+	// Token: 0x04002A34 RID: 10804
+	private Renderer render;
+
+	// Token: 0x04002A35 RID: 10805
+	[Range(-50f, 50f)]
+	public int queueOffs;
+
+	// Token: 0x04002A36 RID: 10806
+	public bool preProcess;
+
+	// Token: 0x04002A37 RID: 10807
+	private bool enabledLocal;
+}

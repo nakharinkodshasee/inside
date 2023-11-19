@@ -1,0 +1,70 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000211 RID: 529
+public class Reactor : MonoBehaviour
+{
+	// Token: 0x0600104C RID: 4172 RVA: 0x00099AC4 File Offset: 0x00097CC4
+	private void Start()
+	{
+		this.doomTimer = this.doomTime;
+	}
+
+	// Token: 0x0600104D RID: 4173 RVA: 0x00099AD4 File Offset: 0x00097CD4
+	private void Update()
+	{
+	}
+
+	// Token: 0x0600104E RID: 4174 RVA: 0x00099AD8 File Offset: 0x00097CD8
+	public void OnReactorEnter()
+	{
+		this.reactorsInPlace++;
+		if (this.reactorsInPlace == 1)
+		{
+			this.doomTimer = this.doomTime;
+			this.reactorCounter.GetComponent<TextMesh>().text = "10";
+		}
+	}
+
+	// Token: 0x0600104F RID: 4175 RVA: 0x00099B18 File Offset: 0x00097D18
+	public void OnReactorLeave()
+	{
+		this.reactorsInPlace--;
+	}
+
+	// Token: 0x06001050 RID: 4176 RVA: 0x00099B28 File Offset: 0x00097D28
+	private void FixedUpdate()
+	{
+		if (this.reactorsInPlace < 1)
+		{
+			this.reactorRed.GetComponent<Renderer>().enabled = true;
+			this.reactorCounter.GetComponent<Renderer>().enabled = true;
+			this.doomTimer -= Time.deltaTime * 0.6f;
+			this.reactorCounter.GetComponent<TextMesh>().text = string.Empty + (int)this.doomTimer;
+			if (this.doomTimer <= 0f)
+			{
+				ScriptGlobals.boy.Kill();
+			}
+		}
+		else
+		{
+			this.reactorRed.GetComponent<Renderer>().enabled = false;
+			this.reactorCounter.GetComponent<Renderer>().enabled = false;
+		}
+	}
+
+	// Token: 0x04001D64 RID: 7524
+	public GameObject reactorRed;
+
+	// Token: 0x04001D65 RID: 7525
+	public GameObject reactorCounter;
+
+	// Token: 0x04001D66 RID: 7526
+	public float doomTime = 10f;
+
+	// Token: 0x04001D67 RID: 7527
+	private int reactorsInPlace;
+
+	// Token: 0x04001D68 RID: 7528
+	private float doomTimer;
+}

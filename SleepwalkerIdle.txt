@@ -1,0 +1,40 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200041D RID: 1053
+public class SleepwalkerIdle : MonoBehaviour
+{
+	// Token: 0x06001BA1 RID: 7073 RVA: 0x000F1CD8 File Offset: 0x000EFED8
+	private void Start()
+	{
+		base.GetComponentInChildren<Animation>().Play(this.idleAnim);
+	}
+
+	// Token: 0x06001BA2 RID: 7074 RVA: 0x000F1CEC File Offset: 0x000EFEEC
+	public void Push()
+	{
+		if (!this.pushed)
+		{
+			base.GetComponentInChildren<Animation>().Play(this.pushAnim);
+			this.pushed = true;
+		}
+	}
+
+	// Token: 0x06001BA3 RID: 7075 RVA: 0x000F1D20 File Offset: 0x000EFF20
+	private void FixedUpdate()
+	{
+		if (Mathf.Abs(ScriptGlobals.boy.transform.position.x - base.transform.position.x) < 0.1f)
+		{
+			this.Push();
+		}
+	}
+
+	// Token: 0x04003263 RID: 12899
+	public string idleAnim;
+
+	// Token: 0x04003264 RID: 12900
+	public string pushAnim;
+
+	// Token: 0x04003265 RID: 12901
+	private bool pushed;
+}

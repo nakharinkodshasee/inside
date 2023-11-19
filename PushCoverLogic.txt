@@ -1,0 +1,30 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004EF RID: 1263
+public class PushCoverLogic : MonoBehaviour
+{
+	// Token: 0x06002122 RID: 8482 RVA: 0x00115C7C File Offset: 0x00113E7C
+	private void FixedUpdate()
+	{
+		if (ScriptGlobals.boy && BoyUtils.GetCurrentGrabBody(ScriptGlobals.boy) == this.plateBody)
+		{
+			float num = GameInput.stick.x;
+			if (Mathf.Abs(num) < 0.25f)
+			{
+				num = 0f;
+			}
+			if (Mathf.Abs(num) > 0.75f)
+			{
+				num = Mathf.Sign(num) * 1f;
+			}
+			base.GetComponent<Rigidbody>().AddForce(Vector3.right * num * this.pushScale, 0);
+		}
+	}
+
+	// Token: 0x04003D64 RID: 15716
+	public Rigidbody plateBody;
+
+	// Token: 0x04003D65 RID: 15717
+	public float pushScale = 10f;
+}

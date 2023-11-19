@@ -1,0 +1,28 @@
+// Token: 0x020005B4 RID: 1460
+public class ShadowFishGroup : MonoBehaviour
+{
+	// Token: 0x06002532 RID: 9522 RVA: 0x001314C8 File Offset: 0x0012F6C8
+	private void Start()
+	{
+		for (int i = 0; i < this.noOfFishes; i++)
+		{
+			GameObject gameObject = Object.Instantiate<GameObject>(this.fishPrefab);
+			gameObject.transform.parent = base.transform;
+			gameObject.transform.position = new Vector3(Random.Range(this.bounds.bounds.min.x, this.bounds.bounds.max.x), Random.Range(this.bounds.bounds.min.y, this.bounds.bounds.max.y), Random.Range(this.bounds.bounds.min.z, this.bounds.bounds.max.z));
+			gameObject.GetComponent<ShadowFish>().bounds = this.bounds;
+			gameObject.GetComponent<ShadowFish>().alertRadius = this.alertRadius;
+		}
+	}
+
+	// Token: 0x04004429 RID: 17449
+	public int noOfFishes = 10;
+
+	// Token: 0x0400442A RID: 17450
+	public float alertRadius = 15f;
+
+	// Token: 0x0400442B RID: 17451
+	public BoxCollider bounds;
+
+	// Token: 0x0400442C RID: 17452
+	public GameObject fishPrefab;
+}

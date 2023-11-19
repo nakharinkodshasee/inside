@@ -1,0 +1,18 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000560 RID: 1376
+public class SendOnTriggerEnterToParent : MonoBehaviour
+{
+	// Token: 0x060023C6 RID: 9158 RVA: 0x001296A0 File Offset: 0x001278A0
+	private void OnTriggerEnter(Collider coll)
+	{
+		base.transform.parent.gameObject.SendMessage("OnTriggerEnter", coll);
+	}
+
+	// Token: 0x060023C7 RID: 9159 RVA: 0x001296C8 File Offset: 0x001278C8
+	private void OnTriggerExit(Collider coll)
+	{
+		base.transform.parent.gameObject.SendMessage("OnTriggerExit", coll);
+	}
+}

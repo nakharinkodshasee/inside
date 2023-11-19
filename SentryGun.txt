@@ -1,0 +1,773 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000229 RID: 553
+public class SentryGun : MonoBehaviour, IFastEventExListener<Boy>, IPreAwake
+{
+	// Token: 0x0600111D RID: 4381 RVA: 0x000A1034 File Offset: 0x0009F234
+	public void BoyInSight()
+	{
+		this.boyInSight = true;
+	}
+
+	// Token: 0x0600111E RID: 4382 RVA: 0x000A1040 File Offset: 0x0009F240
+	public void BoyOutOfSight()
+	{
+		this.boyInSight = false;
+	}
+
+	// Token: 0x0600111F RID: 4383 RVA: 0x000A104C File Offset: 0x0009F24C
+	public void WakeUp()
+	{
+		this.gunIsOn.OnEvent(this);
+		this.isAwake = true;
+		this.SetLightIntensity(1f);
+		this.state = SentryGun.State.WakeUp;
+	}
+
+	// Token: 0x06001120 RID: 4384 RVA: 0x000A1074 File Offset: 0x0009F274
+	public void PowerDown()
+	{
+		this.gunIsOff.OnEvent(this);
+		this.isAwake = false;
+		this.SetLightIntensity(0f);
+	}
+
+	// Token: 0x06001121 RID: 4385 RVA: 0x000A1094 File Offset: 0x0009F294
+	private bool DoRotation(float targetAngle)
+	{
+		float num = targetAngle - this.currentAngle;
+		float num2 = this.rotationSpeed * Time.deltaTime;
+		bool result = false;
+		if (num2 >= Mathf.Abs(num))
+		{
+			num2 = num;
+			result = true;
+			if (this.currentRotationSign > 0f)
+			{
+				this.timer = this.endWaitTimeLeft;
+			}
+			else
+			{
+				this.timer = this.endWaitTimeRight;
+			}
+		}
+		this.currentAngle += num2 * Mathf.Sign(num);
+		this.rotationPivot.GetComponent<Rigidbody>().MoveRotation(Quaternion.Euler(0f + this.startWorldRotation.x, this.currentAngle + this.startWorldRotation.y, 0f + this.startWorldRotation.z));
+		return result;
+	}
+
+	// Token: 0x06001122 RID: 4386 RVA: 0x000A1158 File Offset: 0x0009F358
+	private void RotationState()
+	{
+		if (!this.rotationEventSend)
+		{
+			this.rotateStart.OnEvent(this);
+			this.rotationEventSend = true;
+		}
+		float targetAngle = this.currentRotationSign * this.searchAngle * 0.5f;
+		this.timer -= Time.deltaTime;
+		if (this.timer < 0f && this.DoRotation(targetAngle))
+		{
+			this.rotateStop.OnEvent(this);
+			this.rotationEventSend = false;
+			this.state = SentryGun.State.Wait;
+		}
+	}
+
+	// Token: 0x06001123 RID: 4387 RVA: 0x000A11E0 File Offset: 0x0009F3E0
+	public float GetRotationSign()
+	{
+		return this.currentRotationSign;
+	}
+
+	// Token: 0x06001124 RID: 4388 RVA: 0x000A11E8 File Offset: 0x0009F3E8
+	private void WaitState()
+	{
+		this.timer -= Time.deltaTime;
+		if (this.timer <= 0f)
+		{
+			this.state = SentryGun.State.Rotation;
+			this.timer = 0f;
+			this.currentRotationSign *= -1f;
+		}
+	}
+
+	// Token: 0x06001125 RID: 4389 RVA: 0x000A123C File Offset: 0x0009F43C
+	private void SetLightIntensity(float intensity)
+	{
+		for (int i = 0; i < this.lights.Count; i++)
+		{
+			this.lights[i].intensity = this.lightIntensities[i] * intensity;
+		}
+		Vector3 normalized = (ScriptGlobals.camera.transform.position - base.transform.position).normalized;
+		Vector3 vector = -this.rotationPivot.transform.right;
+		float num = Vector3.Dot(normalized, vector);
+		float num2 = Mathf.InverseLerp(0f, 0.66f, Mathf.Abs(num));
+		float num3 = this.lightAngleCurve.Evaluate(num2);
+		if (intensity == 0f)
+		{
+			this.lightSpritesParent.SetActive(false);
+			this.lightEffects.SetActive(false);
+		}
+		else
+		{
+			this.lightSpritesParent.SetActive(true);
+			this.lightEffects.SetActive(true);
+		}
+		this.lightMesh.GetComponent<Renderer>().material.SetFloat("_Illum", intensity * this.lightMeshStartIntensity);
+		if (intensity > 0f)
+		{
+			this.lightBase.GetComponent<Renderer>().enabled = true;
+			this.lightBase.transform.GetChild(0).GetComponent<Renderer>().enabled = true;
+			this.lightBase.GetComponent<Renderer>().material.color = Color.Lerp(Color.black, Color.white, intensity);
+			if (this.lightBase.transform.GetChild(0).GetComponent<Renderer>().material.HasProperty("_TintColor"))
+			{
+				Color color = this.lightBase.transform.GetChild(0).GetComponent<Renderer>().material.GetColor("_TintColor");
+				color.a = intensity;
+				this.lightBase.transform.GetChild(0).GetComponent<Renderer>().material.SetColor("_TintColor", color);
+			}
+		}
+		else
+		{
+			this.lightBase.GetComponent<Renderer>().enabled = false;
+			this.lightBase.transform.GetChild(0).GetComponent<Renderer>().enabled = false;
+		}
+		float num4 = this.BloomAngleCurve.Evaluate(num2);
+		if (num4 > 0.05f)
+		{
+		}
+	}
+
+	// Token: 0x06001126 RID: 4390 RVA: 0x000A1480 File Offset: 0x0009F680
+	private void StartAsAwakeState()
+	{
+		this.wakeUpTimer += Time.deltaTime;
+		if (this.wakeUpTimer > this.moveDelay)
+		{
+			this.state = SentryGun.State.Rotation;
+		}
+	}
+
+	// Token: 0x06001127 RID: 4391 RVA: 0x000A14B8 File Offset: 0x0009F6B8
+	private void WakeUpState()
+	{
+		this.wakeUpTimer += Time.deltaTime;
+		if (this.wakeUpTimer >= this.startUpCurve.keys[this.startUpCurve.length - 1].time && this.wakeUpTimer > this.moveDelay)
+		{
+			this.state = SentryGun.State.Rotation;
+		}
+		this.lightIntensity = this.startUpCurve.Evaluate(this.wakeUpTimer);
+		this.SetLightIntensity(this.lightIntensity);
+	}
+
+	// Token: 0x06001128 RID: 4392 RVA: 0x000A1540 File Offset: 0x0009F740
+	private void KillBoyState()
+	{
+		if (!this.boyThatIsShot.isDead && this.wireGun.DoneShooting())
+		{
+			this.boyThatIsShot.Kill();
+			this.addForceThisFrame = PhysicsUtils.stepCount + 2L;
+			this.killedBoy = true;
+			this.gunHasHitBoy.OnEvent(this);
+			return;
+		}
+		this.mTimeSinceKill += Time.deltaTime;
+		if (this.ragdollActor == null)
+		{
+			this.ragdollActor = base.GetComponentInChildren<RagdollActor>();
+		}
+		this.ragdollActor.angularStrength = this.deadBoyAnimationStrength.Evaluate(this.mTimeSinceKill);
+		if (this.addForceThisFrame == PhysicsUtils.stepCount)
+		{
+			Vector3 vector = this.wireGun.transform.position - this.bodyPartShot.transform.position;
+			this.bodyPartShot.AddForce(-vector.normalized * this.wireImpactForce, 1);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftSpike, 0.3f, 0.3f, 0, 0f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.3f, 0, 0f);
+			this.addForceThisFrame = -1L;
+		}
+		this.mReelInCountDown -= Time.deltaTime;
+		if (this.wireGun.DoneShooting())
+		{
+			if (this.mReelInCountDown < 0f)
+			{
+				this.mReelInTimeRemaining -= Time.deltaTime;
+				if (this.mReelInTimeRemaining > 0f && (this.bodyPartShot.position - base.transform.position).magnitude > this.stopReelingDistance)
+				{
+					this.wireGun.ReelIn();
+					Actor actor = this.boyThatIsShot.visualBoy.actor;
+					this.TurnToLookAt(actor.bones[actor.specificBones.spineB].transform.position);
+					if (!this.reelInEventSend)
+					{
+						this.reelInStart.OnEvent(this);
+						this.rotationEventSend = true;
+					}
+				}
+				else if (this.reelInEventSend)
+				{
+					this.reelInStart.OnEvent(this);
+				}
+			}
+			else
+			{
+				this.wireGun.ExtendRope();
+			}
+		}
+	}
+
+	// Token: 0x06001129 RID: 4393 RVA: 0x000A1790 File Offset: 0x0009F990
+	private void TurnToLookAt(Vector3 aPos)
+	{
+		Vector3 vector = aPos - this.rotationPivot.transform.position;
+		Vector3 eulerAngles = Quaternion.FromToRotation(Vector3.back, base.transform.InverseTransformDirection(vector.normalized)).eulerAngles;
+		if (eulerAngles.y > 180f)
+		{
+			eulerAngles.y -= 360f;
+		}
+		float num = eulerAngles.y - this.currentAngle;
+		this.currentAngle += Mathf.Min(Mathf.Abs(num), this.lookAtBoySpeed * Time.deltaTime) * Mathf.Sign(num);
+		this.rotationPivot.GetComponent<Rigidbody>().MoveRotation(Quaternion.Euler(this.startWorldRotation.x, this.currentAngle + this.startWorldRotation.y, this.startWorldRotation.z));
+		float x = Quaternion.LookRotation((aPos - this.tiltPivot.transform.position).normalized, Vector3.down).eulerAngles.x;
+		float x2 = this.tiltPivot.transform.rotation.eulerAngles.x;
+		float num2 = x - x2;
+		float num3 = Mathf.Min(Mathf.Abs(num2), this.lookAtBoySpeed * Time.deltaTime) * Mathf.Sign(num2);
+		this.tiltPivot.transform.rotation = Quaternion.Euler(Mathf.Clamp(x2 + num3, -this.maxTiltAngle, this.maxTiltAngle), this.tiltPivot.transform.rotation.eulerAngles.y, this.tiltPivot.transform.rotation.eulerAngles.z);
+	}
+
+	// Token: 0x0600112A RID: 4394 RVA: 0x000A1970 File Offset: 0x0009FB70
+	private void UpdateSpotLightColor()
+	{
+	}
+
+	// Token: 0x0600112B RID: 4395 RVA: 0x000A1974 File Offset: 0x0009FB74
+	private string GetRamdomPart()
+	{
+		int num = Random.Range(0, this.bodyParts.Length);
+		return this.bodyParts[num];
+	}
+
+	// Token: 0x0600112C RID: 4396 RVA: 0x000A19A0 File Offset: 0x0009FBA0
+	private void FireWire(Boy boy)
+	{
+		VisualBoy visualBoy = boy.visualBoy;
+		RagdollSkeleton ragdoll = visualBoy.ragdoll;
+		Actor actor = visualBoy.actor;
+		Rigidbody anObject;
+		if (this.hitRandomly && this.bodyParts.Length >= 1)
+		{
+			anObject = ragdoll[actor.GetBone(this.GetRamdomPart())];
+		}
+		else
+		{
+			anObject = ragdoll[actor.specificBones.spineB];
+		}
+		if (this.fxShoot != null)
+		{
+			this.fxShoot.Play();
+		}
+		this.wireGun.ShootAt(anObject, this.targetOffset, 1);
+		this.bodyPartShot = anObject;
+		this.mReelInTimeRemaining = this.reelInTime;
+		this.mReelInCountDown = this.reelInDelay;
+		this.ragdollObject.GetComponent<RagdollActor>().GotFocus(visualBoy.ragdoll);
+		RagdollSkeleton.BodyIndex bodyIndex = ragdoll.begin;
+		while (bodyIndex != ragdoll.end)
+		{
+			Rigidbody rigidbody = ragdoll[bodyIndex];
+			rigidbody.GetComponent<Collider>().material.dynamicFriction = this.deadBoyFriction;
+			rigidbody.drag = this.deadBoyDrag;
+			rigidbody.angularDrag = this.deadBoyAngularDrag;
+			bodyIndex = ++bodyIndex;
+		}
+		ragdoll.SetMass(this.deadBoyMass);
+		ragdoll.GrowArmAngleLimits();
+	}
+
+	// Token: 0x0600112D RID: 4397 RVA: 0x000A1AE0 File Offset: 0x0009FCE0
+	private void UpdateKillDetection()
+	{
+		if (this.shotEventSend)
+		{
+			return;
+		}
+		if (this.visibleBoys.Contains(ScriptGlobals.boy))
+		{
+			if (AlbinoGroupManager.mInstance.GetVeryCloseAlbinos() < 5)
+			{
+				if (ScriptGlobals.boy.isDead)
+				{
+					return;
+				}
+				this.killTimer += Time.deltaTime;
+				if (this.killTimer > 0.1f)
+				{
+					this.FireWire(ScriptGlobals.boy);
+					this.boyThatIsShot = ScriptGlobals.boy;
+					this.state = SentryGun.State.KillBoy;
+					if (!this.shotEventSend)
+					{
+						this.gunHasShot.OnEvent(this);
+						this.shotEventSend = true;
+					}
+					return;
+				}
+			}
+		}
+		else
+		{
+			this.killTimer = 0f;
+		}
+		int i = 0;
+		int count = this.visibleBoys.Count;
+		while (i < count)
+		{
+			Boy boy = this.visibleBoys[i];
+			if (boy != ScriptGlobals.boy)
+			{
+				this.FireWire(boy);
+				this.boyThatIsShot = boy;
+				this.state = SentryGun.State.KillBoy;
+				if (!this.shotEventSend)
+				{
+					this.gunHasShot.OnEvent(this);
+					this.shotEventSend = true;
+				}
+				return;
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x0600112E RID: 4398 RVA: 0x000A1C0C File Offset: 0x0009FE0C
+	private void FixedUpdate()
+	{
+		if (!this.isAwake)
+		{
+			return;
+		}
+		switch (this.state)
+		{
+		case SentryGun.State.WakeUp:
+			this.WakeUpState();
+			break;
+		case SentryGun.State.Wait:
+			this.WaitState();
+			break;
+		case SentryGun.State.Rotation:
+			this.RotationState();
+			break;
+		case SentryGun.State.KillBoy:
+			this.KillBoyState();
+			break;
+		case SentryGun.State.StartAsAwake:
+			this.StartAsAwakeState();
+			break;
+		}
+		if (this.doDetection)
+		{
+			this.UpdateSpotLightColor();
+			this.UpdateKillDetection();
+		}
+	}
+
+	// Token: 0x0600112F RID: 4399 RVA: 0x000A1C9C File Offset: 0x0009FE9C
+	private void EnableDetection()
+	{
+		this.SetDetectionState(true);
+	}
+
+	// Token: 0x06001130 RID: 4400 RVA: 0x000A1CA8 File Offset: 0x0009FEA8
+	private void DisableDetection()
+	{
+		this.SetDetectionState(false);
+	}
+
+	// Token: 0x06001131 RID: 4401 RVA: 0x000A1CB4 File Offset: 0x0009FEB4
+	private void SetDetectionState(bool enabledState)
+	{
+		this.doDetection = enabledState;
+		if (!this.doDetection)
+		{
+			this.killTimer = 0f;
+		}
+		if (enabledState)
+		{
+			this.spotLightDetector.doEnable();
+		}
+		else
+		{
+			this.spotLightDetector.doDisable();
+		}
+	}
+
+	// Token: 0x06001132 RID: 4402 RVA: 0x000A1D00 File Offset: 0x0009FF00
+	public bool PreAwake(int callcount)
+	{
+		SignalIn.Create("doWakeUp", base.gameObject, new Action(this.WakeUp));
+		SignalIn.Create("doPowerDown", base.gameObject, new Action(this.PowerDown));
+		SignalIn.Create("doStartDetection", base.gameObject, new Action(this.EnableDetection));
+		SignalIn.Create("doStopDetection", base.gameObject, new Action(this.DisableDetection));
+		return true;
+	}
+
+	// Token: 0x06001133 RID: 4403 RVA: 0x000A1D84 File Offset: 0x0009FF84
+	private void Start()
+	{
+		this.lightMeshStartIntensity = this.lightMesh.GetComponent<Renderer>().material.GetFloat("_Illum");
+		this.lightMesh.GetComponent<Renderer>().material.SetFloat("_Illum", 0f);
+		foreach (Light light in this.spotLightObject.GetComponentsInChildren<Light>())
+		{
+			this.lights.Add(light);
+			this.lightIntensities.Add(light.intensity);
+		}
+		if (this.pointLightObject)
+		{
+			Light component = this.pointLightObject.GetComponent<Light>();
+			if (component)
+			{
+				this.lights.Add(component);
+				this.lightIntensities.Add(component.intensity);
+			}
+		}
+		this.startWorldRotation = this.rotationPivot.transform.rotation.eulerAngles;
+		this.startWorldTilt = this.tiltPivot.transform.rotation.eulerAngles.x;
+		if (!this.startSearchLeft)
+		{
+			this.currentAngle = -this.searchAngle * 0.5f;
+			this.rotationPivot.transform.rotation = Quaternion.Euler(0f + this.startWorldRotation.x, this.currentAngle + this.startWorldRotation.y, 0f + this.startWorldRotation.z);
+			Vector3 eulerAngles = this.gunRotationPart.transform.rotation.eulerAngles;
+			this.gunRotationPart.transform.rotation = Quaternion.Euler(eulerAngles.x, eulerAngles.y + this.currentAngle, eulerAngles.z);
+		}
+		else
+		{
+			this.currentAngle = this.searchAngle * 0.5f;
+			this.rotationPivot.transform.rotation = Quaternion.Euler(0f + this.startWorldRotation.x, this.currentAngle + this.startWorldRotation.y, 0f + this.startWorldRotation.z);
+			Vector3 eulerAngles2 = this.gunRotationPart.transform.rotation.eulerAngles;
+			this.gunRotationPart.transform.rotation = Quaternion.Euler(eulerAngles2.x, eulerAngles2.y + this.currentAngle, eulerAngles2.z);
+		}
+		this.gunRotationPart.GetComponent<HingeJoint>().connectedBody = this.rotationPivot.GetComponent<Rigidbody>();
+		this.spotLightDetector.boyDetected.Register(this, ref this.boyDetectedHandle);
+		this.spotLightDetector.boyLossOfSight.Register(this, ref this.boyLossOfSightHandle);
+		if (!this.startAwake)
+		{
+			this.isAwake = false;
+			this.SetLightIntensity(0f);
+			this.state = SentryGun.State.WakeUp;
+		}
+		else
+		{
+			this.state = SentryGun.State.StartAsAwake;
+		}
+		if (this.triggerToggleDetection)
+		{
+			this.doDetection = false;
+		}
+	}
+
+	// Token: 0x06001134 RID: 4404 RVA: 0x000A2088 File Offset: 0x000A0288
+	public void OnFastEventEx(FastEventEx<Boy> sender, ref Boy boy)
+	{
+		if (sender == this.spotLightDetector.boyDetected)
+		{
+			this.SentryGun_boyDetected(boy);
+		}
+		else if (sender == this.spotLightDetector.boyLossOfSight)
+		{
+			this.spotLightDetector_boyLossOfSight(boy);
+		}
+	}
+
+	// Token: 0x06001135 RID: 4405 RVA: 0x000A20C4 File Offset: 0x000A02C4
+	private void SentryGun_boyDetected(Boy boy)
+	{
+		this.visibleBoys.Add(boy);
+	}
+
+	// Token: 0x06001136 RID: 4406 RVA: 0x000A20D4 File Offset: 0x000A02D4
+	private void spotLightDetector_boyLossOfSight(Boy boy)
+	{
+		this.visibleBoys.Remove(boy);
+	}
+
+	// Token: 0x04001F1C RID: 7964
+	public GameObject rotationPivot;
+
+	// Token: 0x04001F1D RID: 7965
+	public GameObject tiltPivot;
+
+	// Token: 0x04001F1E RID: 7966
+	public GameObject spotLightObject;
+
+	// Token: 0x04001F1F RID: 7967
+	public SpotLightDetector spotLightDetector;
+
+	// Token: 0x04001F20 RID: 7968
+	public GameObject pointLightObject;
+
+	// Token: 0x04001F21 RID: 7969
+	public GameObject lightBase;
+
+	// Token: 0x04001F22 RID: 7970
+	public GameObject lightMesh;
+
+	// Token: 0x04001F23 RID: 7971
+	public GameObject lightSpritesParent;
+
+	// Token: 0x04001F24 RID: 7972
+	public GameObject lightEffects;
+
+	// Token: 0x04001F25 RID: 7973
+	public GameObject ragdollObject;
+
+	// Token: 0x04001F26 RID: 7974
+	public RopeGun wireGun;
+
+	// Token: 0x04001F27 RID: 7975
+	public ParticleSystem fxShoot;
+
+	// Token: 0x04001F28 RID: 7976
+	public Vector3 targetOffset = Vector3.up * 0.3f;
+
+	// Token: 0x04001F29 RID: 7977
+	public float reelInDelay = 0.2f;
+
+	// Token: 0x04001F2A RID: 7978
+	public float reelInTime = 10f;
+
+	// Token: 0x04001F2B RID: 7979
+	public float stopReelingDistance = 4.5f;
+
+	// Token: 0x04001F2C RID: 7980
+	public float wireImpactForce = 3.5f;
+
+	// Token: 0x04001F2D RID: 7981
+	public float deadBoyFriction = 0.35f;
+
+	// Token: 0x04001F2E RID: 7982
+	public float deadBoyMass = 3f;
+
+	// Token: 0x04001F2F RID: 7983
+	public float deadBoyDrag = 0.1f;
+
+	// Token: 0x04001F30 RID: 7984
+	public float deadBoyAngularDrag = 1.5f;
+
+	// Token: 0x04001F31 RID: 7985
+	public AnimationCurve deadBoyAnimationStrength;
+
+	// Token: 0x04001F32 RID: 7986
+	public GameObject gunRotationPart;
+
+	// Token: 0x04001F33 RID: 7987
+	public float maxTiltAngle = 20f;
+
+	// Token: 0x04001F34 RID: 7988
+	public float lookAtBoySpeed = 35f;
+
+	// Token: 0x04001F35 RID: 7989
+	public float searchAngle = 90f;
+
+	// Token: 0x04001F36 RID: 7990
+	public float endWaitTimeLeft = 1f;
+
+	// Token: 0x04001F37 RID: 7991
+	public float endWaitTimeRight = 1f;
+
+	// Token: 0x04001F38 RID: 7992
+	public float rotationSpeed = 30f;
+
+	// Token: 0x04001F39 RID: 7993
+	public bool startSearchLeft = true;
+
+	// Token: 0x04001F3A RID: 7994
+	public Material lineMaterial;
+
+	// Token: 0x04001F3B RID: 7995
+	public bool startAwake = true;
+
+	// Token: 0x04001F3C RID: 7996
+	public AnimationCurve startUpCurve;
+
+	// Token: 0x04001F3D RID: 7997
+	public float moveDelay;
+
+	// Token: 0x04001F3E RID: 7998
+	public AnimationCurve lightAngleCurve;
+
+	// Token: 0x04001F3F RID: 7999
+	public AnimationCurve BloomAngleCurve;
+
+	// Token: 0x04001F40 RID: 8000
+	public bool triggerToggleDetection;
+
+	// Token: 0x04001F41 RID: 8001
+	public bool hitRandomly;
+
+	// Token: 0x04001F42 RID: 8002
+	public string[] bodyParts;
+
+	// Token: 0x04001F43 RID: 8003
+	public SimpleEvent<SentryGun> gunHasShot = new SimpleEvent<SentryGun>("gunHasShot");
+
+	// Token: 0x04001F44 RID: 8004
+	public SimpleEvent<SentryGun> gunHasHitBoy = new SimpleEvent<SentryGun>("gunHasHitBoy");
+
+	// Token: 0x04001F45 RID: 8005
+	public SimpleEvent<SentryGun> gunIsOn = new SimpleEvent<SentryGun>("gunIsOn");
+
+	// Token: 0x04001F46 RID: 8006
+	public SimpleEvent<SentryGun> gunIsOff = new SimpleEvent<SentryGun>("gunIsOff");
+
+	// Token: 0x04001F47 RID: 8007
+	public SimpleEvent<SentryGun> rotateStart = new SimpleEvent<SentryGun>("rotateStart");
+
+	// Token: 0x04001F48 RID: 8008
+	public SimpleEvent<SentryGun> rotateStop = new SimpleEvent<SentryGun>("rotateStop");
+
+	// Token: 0x04001F49 RID: 8009
+	public SimpleEvent<SentryGun> reelInStart = new SimpleEvent<SentryGun>("reelInStart");
+
+	// Token: 0x04001F4A RID: 8010
+	public SimpleEvent<SentryGun> reelInStop = new SimpleEvent<SentryGun>("reelInStop");
+
+	// Token: 0x04001F4B RID: 8011
+	private SignalIn doWakeUp;
+
+	// Token: 0x04001F4C RID: 8012
+	private SignalIn doPowerDown;
+
+	// Token: 0x04001F4D RID: 8013
+	private SignalIn doStartDetection;
+
+	// Token: 0x04001F4E RID: 8014
+	private SignalIn doStopDetection;
+
+	// Token: 0x04001F4F RID: 8015
+	private SentryGun.State state;
+
+	// Token: 0x04001F50 RID: 8016
+	private bool doDetection;
+
+	// Token: 0x04001F51 RID: 8017
+	private float currentAngle;
+
+	// Token: 0x04001F52 RID: 8018
+	private float currentRotationSign = -1f;
+
+	// Token: 0x04001F53 RID: 8019
+	private float timer;
+
+	// Token: 0x04001F54 RID: 8020
+	private Color spotLightStartColor;
+
+	// Token: 0x04001F55 RID: 8021
+	private List<Light> lights = new List<Light>();
+
+	// Token: 0x04001F56 RID: 8022
+	private List<float> lightIntensities = new List<float>();
+
+	// Token: 0x04001F57 RID: 8023
+	private bool boyInSight;
+
+	// Token: 0x04001F58 RID: 8024
+	private Light spotLight;
+
+	// Token: 0x04001F59 RID: 8025
+	private float spotLightColorFrac;
+
+	// Token: 0x04001F5A RID: 8026
+	private float spotLightStartIntensity;
+
+	// Token: 0x04001F5B RID: 8027
+	private float pointLightStartIntensity;
+
+	// Token: 0x04001F5C RID: 8028
+	private LineRenderer wireLine;
+
+	// Token: 0x04001F5D RID: 8029
+	private bool isAwake = true;
+
+	// Token: 0x04001F5E RID: 8030
+	private bool rotationEventSend;
+
+	// Token: 0x04001F5F RID: 8031
+	private bool reelInEventSend;
+
+	// Token: 0x04001F60 RID: 8032
+	private bool shotEventSend;
+
+	// Token: 0x04001F61 RID: 8033
+	private Vector3 startWorldRotation;
+
+	// Token: 0x04001F62 RID: 8034
+	private float startWorldTilt;
+
+	// Token: 0x04001F63 RID: 8035
+	private float mReelInCountDown;
+
+	// Token: 0x04001F64 RID: 8036
+	private float mReelInTimeRemaining;
+
+	// Token: 0x04001F65 RID: 8037
+	private float mTimeSinceKill;
+
+	// Token: 0x04001F66 RID: 8038
+	private long addForceThisFrame = -1L;
+
+	// Token: 0x04001F67 RID: 8039
+	private int boyDetectedHandle = -1;
+
+	// Token: 0x04001F68 RID: 8040
+	private int boyLossOfSightHandle = -1;
+
+	// Token: 0x04001F69 RID: 8041
+	public RagdollActor ragdollActor;
+
+	// Token: 0x04001F6A RID: 8042
+	private float wakeUpTimer;
+
+	// Token: 0x04001F6B RID: 8043
+	private float lightIntensity;
+
+	// Token: 0x04001F6C RID: 8044
+	private float startBloomThreshold;
+
+	// Token: 0x04001F6D RID: 8045
+	private float killTimer;
+
+	// Token: 0x04001F6E RID: 8046
+	private bool killedBoy;
+
+	// Token: 0x04001F6F RID: 8047
+	private Rigidbody bodyPartShot;
+
+	// Token: 0x04001F70 RID: 8048
+	private Boy boyThatIsShot;
+
+	// Token: 0x04001F71 RID: 8049
+	private float mTilt;
+
+	// Token: 0x04001F72 RID: 8050
+	private float lightMeshStartIntensity;
+
+	// Token: 0x04001F73 RID: 8051
+	private List<Boy> visibleBoys = new List<Boy>();
+
+	// Token: 0x0200022A RID: 554
+	private enum State
+	{
+		// Token: 0x04001F75 RID: 8053
+		None,
+		// Token: 0x04001F76 RID: 8054
+		WakeUp,
+		// Token: 0x04001F77 RID: 8055
+		Wait,
+		// Token: 0x04001F78 RID: 8056
+		Rotation,
+		// Token: 0x04001F79 RID: 8057
+		KillBoy,
+		// Token: 0x04001F7A RID: 8058
+		StartAsAwake
+	}
+}

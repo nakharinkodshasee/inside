@@ -1,0 +1,15 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000613 RID: 1555
+public class SetDebugMixer : MonoBehaviour
+{
+	// Token: 0x0400463F RID: 17983
+	public string soloChannelSubString = "boy foley";
+
+	// Token: 0x04004640 RID: 17984
+	public string muteChannelsSubString = string.Empty;
+
+	// Token: 0x04004641 RID: 17985
+	public bool enabledLoudness = true;
+}

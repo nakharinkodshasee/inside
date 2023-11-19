@@ -1,0 +1,58 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000586 RID: 1414
+[ExecuteInEditMode]
+public class RaycastDebug : MonoBehaviour
+{
+	// Token: 0x06002454 RID: 9300 RVA: 0x0012BC74 File Offset: 0x00129E74
+	private void Update()
+	{
+		BoxCollider component = base.gameObject.GetComponent<BoxCollider>();
+		if (component != null)
+		{
+			Transform transform = base.transform;
+			Vector3 vector = transform.TransformPoint(this.localPos);
+			Vector3 vector2 = transform.TransformDirection(this.localDir.normalized);
+			Ray ray;
+			ray..ctor(vector, vector2);
+			RaycastHit raycastHit;
+			this.hitWorld = Physics.Raycast(ray, ref raycastHit, 1f);
+			this.hitShape = component.Raycast(ray, ref raycastHit, 1f);
+			this.hitValid = (this.hitShape == this.hitWorld);
+			Debug.DrawRay(vector, vector2, (!this.hitValid) ? Color.red : Color.green);
+			if (this.hitShape)
+			{
+				this.surfPoint = raycastHit.point;
+				this.surfNormal = raycastHit.normal;
+				this.surfDistance = raycastHit.distance;
+				Debug.DrawRay(vector, this.surfDistance * vector2, Color.blue);
+				Debug.DrawRay(this.surfPoint, this.surfNormal, Color.magenta);
+			}
+		}
+	}
+
+	// Token: 0x040042A0 RID: 17056
+	public Vector3 localPos = Vector3.up * -0.5f;
+
+	// Token: 0x040042A1 RID: 17057
+	public Vector3 localDir = Vector3.up + Vector3.right;
+
+	// Token: 0x040042A2 RID: 17058
+	public bool hitWorld;
+
+	// Token: 0x040042A3 RID: 17059
+	public bool hitShape;
+
+	// Token: 0x040042A4 RID: 17060
+	public bool hitValid;
+
+	// Token: 0x040042A5 RID: 17061
+	public Vector3 surfPoint;
+
+	// Token: 0x040042A6 RID: 17062
+	public Vector3 surfNormal;
+
+	// Token: 0x040042A7 RID: 17063
+	public float surfDistance;
+}

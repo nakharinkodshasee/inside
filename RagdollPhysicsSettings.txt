@@ -1,0 +1,42 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200025E RID: 606
+public class RagdollPhysicsSettings : MonoBehaviour
+{
+	// Token: 0x060012AC RID: 4780 RVA: 0x000AF8D4 File Offset: 0x000ADAD4
+	private void Start()
+	{
+		Rigidbody[] componentsInChildren = base.transform.GetComponentsInChildren<Rigidbody>();
+		foreach (Rigidbody rigidbody in componentsInChildren)
+		{
+			if (this.specificMaterial != null)
+			{
+				rigidbody.GetComponent<Collider>().material = this.specificMaterial;
+			}
+			else
+			{
+				rigidbody.GetComponent<Collider>().material.dynamicFriction = this.frictionUsedIfNoMaterialSet;
+			}
+			rigidbody.mass = this.totalMass / (float)componentsInChildren.Length;
+			rigidbody.drag = this.drag;
+			rigidbody.angularDrag = this.angularDrag;
+		}
+		base.enabled = false;
+	}
+
+	// Token: 0x0400226A RID: 8810
+	public PhysicMaterial specificMaterial;
+
+	// Token: 0x0400226B RID: 8811
+	public float frictionUsedIfNoMaterialSet;
+
+	// Token: 0x0400226C RID: 8812
+	public float totalMass;
+
+	// Token: 0x0400226D RID: 8813
+	public float drag;
+
+	// Token: 0x0400226E RID: 8814
+	public float angularDrag;
+}

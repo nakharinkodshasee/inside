@@ -1,0 +1,62 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200025F RID: 607
+public class RaycastPosition : MonoBehaviour
+{
+	// Token: 0x060012AE RID: 4782 RVA: 0x000AF988 File Offset: 0x000ADB88
+	private void Start()
+	{
+	}
+
+	// Token: 0x060012AF RID: 4783 RVA: 0x000AF98C File Offset: 0x000ADB8C
+	private void Update()
+	{
+	}
+
+	// Token: 0x060012B0 RID: 4784 RVA: 0x000AF990 File Offset: 0x000ADB90
+	private RaycastHit GetClosestSolidHit(RaycastHit[] hits)
+	{
+		RaycastHit result = default(RaycastHit);
+		float num = float.PositiveInfinity;
+		foreach (RaycastHit raycastHit in hits)
+		{
+			if (!raycastHit.collider.isTrigger && raycastHit.distance < num)
+			{
+				num = raycastHit.distance;
+				result = raycastHit;
+			}
+		}
+		return result;
+	}
+
+	// Token: 0x060012B1 RID: 4785 RVA: 0x000AF9FC File Offset: 0x000ADBFC
+	private void FixedUpdate()
+	{
+		Vector3 vector = this.toPivot.transform.position - this.fromPivot.transform.position;
+		Ray ray;
+		ray..ctor(this.fromPivot.transform.position, vector.normalized);
+		RaycastHit[] hits = Physics.RaycastAll(ray, vector.magnitude);
+		RaycastHit closestValidHit = PhysicsUtils.GetClosestValidHit(hits, LayerMask.NameToLayer(this.rayCollisionGroup), true);
+		if (closestValidHit.point != Vector3.zero)
+		{
+			this.objectToPlace.transform.position = closestValidHit.point;
+		}
+		else
+		{
+			this.objectToPlace.transform.position = this.toPivot.transform.position;
+		}
+	}
+
+	// Token: 0x0400226F RID: 8815
+	public GameObject objectToPlace;
+
+	// Token: 0x04002270 RID: 8816
+	public GameObject fromPivot;
+
+	// Token: 0x04002271 RID: 8817
+	public GameObject toPivot;
+
+	// Token: 0x04002272 RID: 8818
+	public string rayCollisionGroup = "Ungrouped";
+}

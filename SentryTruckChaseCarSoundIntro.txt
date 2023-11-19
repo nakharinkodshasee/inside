@@ -1,0 +1,213 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000454 RID: 1108
+public class SentryTruckChaseCarSoundIntro : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001D30 RID: 7472 RVA: 0x000FC728 File Offset: 0x000FA928
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.soundCar.gameObject, null);
+		this.audioCarStart = new AudioEventSimpleLocal("env_forest_sentryTruckChase_carStart", akGameObj);
+	}
+
+	// Token: 0x06001D31 RID: 7473 RVA: 0x000FC76C File Offset: 0x000FA96C
+	public bool PreAwake(int callcount)
+	{
+		this.startMoving = SignalIn.Create("startMoving", base.gameObject, new Action(this.StartFollow));
+		this.changeToVisualCar = SignalIn.Create("changeToVisualCar", base.gameObject, new Action(this.FollowVisualCar));
+		this.spawnAtSave = SignalIn.Create("spawnAtSave", base.gameObject, new Action(this.DoSpawnAtSave));
+		this.visualCarDisabled = SignalIn.Create("visualCarDisabled", base.gameObject, new Action(this.DoStopCarSound));
+		return true;
+	}
+
+	// Token: 0x06001D32 RID: 7474 RVA: 0x000FC804 File Offset: 0x000FAA04
+	private void Awake()
+	{
+		this.OnPreProcess();
+		this.carDist = (this.carStart.position - this.carEnd.position).magnitude;
+		this.boyDist = (this.boyStart.position - this.boyEnd.position).magnitude;
+	}
+
+	// Token: 0x06001D33 RID: 7475 RVA: 0x000FC86C File Offset: 0x000FAA6C
+	private void StartFollow()
+	{
+		this.audioCarStart.PostFast();
+		this.soundCar.transform.position = this.pointToFollow.position;
+		this.scriptActive = true;
+	}
+
+	// Token: 0x06001D34 RID: 7476 RVA: 0x000FC8A8 File Offset: 0x000FAAA8
+	private void FollowVisualCar()
+	{
+		this.visualCarActive = true;
+	}
+
+	// Token: 0x06001D35 RID: 7477 RVA: 0x000FC8B4 File Offset: 0x000FAAB4
+	private void DoStopCarSound()
+	{
+		this.scriptActive = false;
+	}
+
+	// Token: 0x06001D36 RID: 7478 RVA: 0x000FC8C0 File Offset: 0x000FAAC0
+	private void DoSpawnAtSave()
+	{
+		this.audioCarStart.PostFast();
+		this.UpdatePointToFollowAtSave();
+		this.scriptActive = true;
+	}
+
+	// Token: 0x06001D37 RID: 7479 RVA: 0x000FC8DC File Offset: 0x000FAADC
+	private void UpdatePointToFollowAtSave()
+	{
+		float magnitude = (this.savePoint.position - this.boyEnd.position).magnitude;
+		float num = Mathf.InverseLerp(this.boyDist, 0f, magnitude);
+		Vector3 vector = this.carStart.position - num * this.carDist * (this.carStart.position - this.carEnd.position).normalized;
+		SoundEngine.RTPCs.puzzleTransition.SetFast(num * 100f, AudioKeyObject.AkGameObjs.global, 0f);
+		this.pointToFollow.transform.position = vector + Vector3.one * 0.01f;
+		this.soundCar.transform.position = vector;
+	}
+
+	// Token: 0x06001D38 RID: 7480 RVA: 0x000FC9B4 File Offset: 0x000FABB4
+	private void UpdatePointToFollow()
+	{
+		if (this.visualCarActive)
+		{
+			Vector3 position = this.visualcar.position;
+			if (position.x > this.pointToFollow.position.x)
+			{
+				this.pointToFollow.MovePosition(position);
+			}
+			return;
+		}
+		float magnitude = (ScriptGlobals.boy.pos3 - this.boyEnd.position).magnitude;
+		float num = Mathf.InverseLerp(this.boyDist, 0f, magnitude);
+		Vector3 vector = this.carStart.position - num * this.carDist * (this.carStart.position - this.carEnd.position).normalized;
+		this.cheatRTPC = num * 100f;
+		SoundEngine.RTPCs.puzzleTransition.SetFast(this.cheatRTPC, AudioKeyObject.AkGameObjs.global, 0f);
+		if (vector.x > this.previousPosX)
+		{
+			this.pointToFollow.MovePosition(vector);
+			this.previousPosX = this.pointToFollow.position.x;
+		}
+	}
+
+	// Token: 0x06001D39 RID: 7481 RVA: 0x000FCADC File Offset: 0x000FACDC
+	private void UpdateSmoothPosition()
+	{
+		Vector3 zero = Vector3.zero;
+		zero.x = Mathf.SmoothDamp(this.soundCar.transform.position.x, this.pointToFollow.transform.position.x, ref this.velocity.x, this.smoothTime);
+		zero.y = Mathf.SmoothDamp(this.soundCar.transform.position.y, this.pointToFollow.transform.position.y, ref this.velocity.y, this.smoothTime);
+		zero.z = Mathf.SmoothDamp(this.soundCar.transform.position.z, this.pointToFollow.transform.position.z, ref this.velocity.z, this.smoothTime);
+		this.soundCar.transform.position = zero;
+		Vector3 vector = (this.soundCar.transform.position - this.oldPosition) / Time.deltaTime;
+		this.oldPosition = this.soundCar.transform.position;
+		this.curVel = vector;
+	}
+
+	// Token: 0x06001D3A RID: 7482 RVA: 0x000FCC30 File Offset: 0x000FAE30
+	private void Update()
+	{
+		if (!this.scriptActive)
+		{
+			return;
+		}
+		this.UpdatePointToFollow();
+		float magnitude = (this.soundCar.transform.position - this.pointToFollow.transform.position).magnitude;
+		if (magnitude > 0.1f)
+		{
+			this.UpdateSmoothPosition();
+		}
+	}
+
+	// Token: 0x04003590 RID: 13712
+	public Rigidbody soundCar;
+
+	// Token: 0x04003591 RID: 13713
+	public Rigidbody pointToFollow;
+
+	// Token: 0x04003592 RID: 13714
+	public Transform carStart;
+
+	// Token: 0x04003593 RID: 13715
+	public Transform carEnd;
+
+	// Token: 0x04003594 RID: 13716
+	public Transform boyStart;
+
+	// Token: 0x04003595 RID: 13717
+	public Transform boyEnd;
+
+	// Token: 0x04003596 RID: 13718
+	public float smoothTime = 0.5f;
+
+	// Token: 0x04003597 RID: 13719
+	public Transform savePoint;
+
+	// Token: 0x04003598 RID: 13720
+	public Transform visualcar;
+
+	// Token: 0x04003599 RID: 13721
+	private SignalIn startMoving;
+
+	// Token: 0x0400359A RID: 13722
+	private SignalIn changeToVisualCar;
+
+	// Token: 0x0400359B RID: 13723
+	private SignalIn spawnAtSave;
+
+	// Token: 0x0400359C RID: 13724
+	private SignalIn visualCarDisabled;
+
+	// Token: 0x0400359D RID: 13725
+	private float carDist;
+
+	// Token: 0x0400359E RID: 13726
+	private float boyDist;
+
+	// Token: 0x0400359F RID: 13727
+	private float cheatRTPC;
+
+	// Token: 0x040035A0 RID: 13728
+	private float previousPosX = float.MinValue;
+
+	// Token: 0x040035A1 RID: 13729
+	private float timeToContinue = 3f;
+
+	// Token: 0x040035A2 RID: 13730
+	private float timer;
+
+	// Token: 0x040035A3 RID: 13731
+	private Vector3 newConstVel;
+
+	// Token: 0x040035A4 RID: 13732
+	private Vector3 curVel;
+
+	// Token: 0x040035A5 RID: 13733
+	private Vector3 oldPosition;
+
+	// Token: 0x040035A6 RID: 13734
+	private bool scriptActive;
+
+	// Token: 0x040035A7 RID: 13735
+	private bool visualCarActive;
+
+	// Token: 0x040035A8 RID: 13736
+	private Vector3 velocity = new Vector3(0.5f, 0.5f, 0.5f);
+
+	// Token: 0x040035A9 RID: 13737
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioCarStart;
+
+	// Token: 0x040035AA RID: 13738
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

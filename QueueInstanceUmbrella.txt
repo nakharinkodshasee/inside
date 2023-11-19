@@ -1,0 +1,17 @@
+using System;
+
+// Token: 0x0200035A RID: 858
+public class QueueInstanceUmbrella : Umbrella<QueueInstance>
+{
+	// Token: 0x060017AD RID: 6061 RVA: 0x000CE518 File Offset: 0x000CC718
+	public override void DispatchUpdate()
+	{
+		int num = 0;
+		int size = this.size;
+		while (num != size)
+		{
+			this.targets[num].UmbrellaUpdate();
+			num++;
+		}
+	}
+}

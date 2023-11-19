@@ -1,0 +1,119 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200018A RID: 394
+public class ScreenBloomLightingManager : MonoBehaviour
+{
+}
+
+using System;
+using UnityEngine;
+
+// Token: 0x02000188 RID: 392
+public abstract class ScreenBloomLightSource : MonoBehaviour
+{
+	// Token: 0x06000B77 RID: 2935 RVA: 0x00071408 File Offset: 0x0006F608
+	public float GetCurrentBloomIntensity()
+	{
+		return this.currentBloomScale * this.bloomIntensity;
+	}
+
+	// Token: 0x06000B78 RID: 2936 RVA: 0x00071418 File Offset: 0x0006F618
+	public void TurnOn()
+	{
+		this.isOn = true;
+	}
+
+	// Token: 0x06000B79 RID: 2937 RVA: 0x00071424 File Offset: 0x0006F624
+	public void TurnOff()
+	{
+		this.isOn = false;
+	}
+
+	// Token: 0x06000B7A RID: 2938 RVA: 0x00071430 File Offset: 0x0006F630
+	public virtual void UpdateLocalLightEffects()
+	{
+	}
+
+	// Token: 0x06000B7B RID: 2939 RVA: 0x00071434 File Offset: 0x0006F634
+	private void UpdateCurrentBloomScale()
+	{
+		if (!this.isOn)
+		{
+			this.currentBloomScale = 0f;
+			return;
+		}
+		Vector3 normalized = (ScriptGlobals.camera.transform.position - base.transform.position).normalized;
+		Vector3 forward = base.transform.forward;
+		float num = Vector3.Dot(normalized, forward);
+		float num2 = Mathf.InverseLerp(1f, 0f, num);
+		this.currentAngleDot = num2;
+		float num3 = Mathf.Clamp(this.bloomIntensityCurve.Evaluate(num2), 0f, 1f);
+		if (this.isBlinded && num3 > 0.5f)
+		{
+			num3 = 0f;
+		}
+		float num4 = num3 - this.currentBloomScale;
+		float num5 = this.accelerationUp;
+		if (num4 < 0f)
+		{
+			num5 = this.accelerationDown;
+		}
+		float num6 = num5 * Time.deltaTime;
+		if (num6 > Mathf.Abs(num4))
+		{
+			num6 = Mathf.Abs(num4);
+		}
+		this.currentBloomScale += Mathf.Sign(num4) * num6;
+		this.currentBloomScale = Mathf.Clamp(this.currentBloomScale, 0f, 1f);
+	}
+
+	// Token: 0x06000B7C RID: 2940 RVA: 0x00071564 File Offset: 0x0006F764
+	private void UpdateBlindedFactor()
+	{
+	}
+
+	// Token: 0x06000B7D RID: 2941 RVA: 0x00071568 File Offset: 0x0006F768
+	private void FixedUpdate()
+	{
+		this.UpdateCurrentBloomScale();
+		this.UpdateBlindedFactor();
+		this.UpdateLocalLightEffects();
+	}
+
+	// Token: 0x06000B7E RID: 2942 RVA: 0x0007157C File Offset: 0x0006F77C
+	public virtual void Start()
+	{
+		this.isOn = this.startOn;
+	}
+
+	// Token: 0x040013E4 RID: 5092
+	public AnimationCurve bloomIntensityCurve;
+
+	// Token: 0x040013E5 RID: 5093
+	public float bloomIntensity;
+
+	// Token: 0x040013E6 RID: 5094
+	public float accelerationUp = 6f;
+
+	// Token: 0x040013E7 RID: 5095
+	public float accelerationDown = 3f;
+
+	// Token: 0x040013E8 RID: 5096
+	public bool startOn = true;
+
+	// Token: 0x040013E9 RID: 5097
+	protected float currentBloomScale;
+
+	// Token: 0x040013EA RID: 5098
+	private bool isOn;
+
+	// Token: 0x040013EB RID: 5099
+	private float blindedFactor;
+
+	// Token: 0x040013EC RID: 5100
+	private bool isBlinded;
+
+	// Token: 0x040013ED RID: 5101
+	private float currentAngleDot;
+}

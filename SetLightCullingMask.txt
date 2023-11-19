@@ -1,0 +1,31 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200018B RID: 395
+public class SetLightCullingMask : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000B84 RID: 2948 RVA: 0x000716FC File Offset: 0x0006F8FC
+	public bool PreAwake(int callcount)
+	{
+		this.setCullingMask = SignalIn.Create("setCullingMask", base.gameObject, new Action(this.OnSetCullingMask));
+		return true;
+	}
+
+	// Token: 0x06000B85 RID: 2949 RVA: 0x00071724 File Offset: 0x0006F924
+	public void OnSetCullingMask()
+	{
+		if (this.lightComponent)
+		{
+			this.lightComponent.cullingMask = this.cullingMask;
+		}
+	}
+
+	// Token: 0x040013F1 RID: 5105
+	public Light lightComponent;
+
+	// Token: 0x040013F2 RID: 5106
+	public LayerMask cullingMask;
+
+	// Token: 0x040013F3 RID: 5107
+	private SignalIn setCullingMask;
+}

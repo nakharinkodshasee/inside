@@ -1,0 +1,31 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005D1 RID: 1489
+public class SetRotationFromVelocity : MonoBehaviour
+{
+	// Token: 0x060025C0 RID: 9664 RVA: 0x00134284 File Offset: 0x00132484
+	private void Start()
+	{
+	}
+
+	// Token: 0x060025C1 RID: 9665 RVA: 0x00134288 File Offset: 0x00132488
+	private void FixedUpdate()
+	{
+		float x = this.objectToMonitor.GetComponent<Rigidbody>().velocity.x;
+		float num = this.objectToRotate.transform.rotation.z;
+		num += x * this.multiplier;
+		Quaternion rotation = this.objectToRotate.transform.rotation;
+		rotation.z = num;
+		this.objectToRotate.transform.rotation = rotation;
+	}
+
+	// Token: 0x040044EC RID: 17644
+	public GameObject objectToMonitor;
+
+	// Token: 0x040044ED RID: 17645
+	public GameObject objectToRotate;
+
+	// Token: 0x040044EE RID: 17646
+	public float multiplier;
+}

@@ -1,0 +1,37 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200054B RID: 1355
+public class RandomRotation : MonoBehaviour
+{
+	// Token: 0x06002328 RID: 9000 RVA: 0x00125EAC File Offset: 0x001240AC
+	public static float GetRandomRange(float min, float max)
+	{
+		return min + Random.value * (max - min);
+	}
+
+	// Token: 0x06002329 RID: 9001 RVA: 0x00125EBC File Offset: 0x001240BC
+	private void Start()
+	{
+	}
+
+	// Token: 0x0600232A RID: 9002 RVA: 0x00125EC0 File Offset: 0x001240C0
+	private void Update()
+	{
+		Vector3 vector;
+		vector..ctor(1f, 0f, 0f);
+		float num = (float)(Time.timeDbl * (double)this.speed % 360.0);
+		Quaternion rotation = Quaternion.AngleAxis(num, vector);
+		base.transform.rotation = rotation;
+		float randomRange = RandomRotation.GetRandomRange(1f, 3f);
+	}
+
+	// Token: 0x040041C2 RID: 16834
+	public float speed = 1f;
+
+	// Token: 0x040041C3 RID: 16835
+	public float jitter = 1f;
+
+	// Token: 0x040041C4 RID: 16836
+	public AnimationCurve animCurv;
+}

@@ -1,0 +1,98 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200028D RID: 653
+public class SetAnimTimeOnEnable : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060013E5 RID: 5093 RVA: 0x000B9698 File Offset: 0x000B7898
+	public bool PreAwake(int callcount)
+	{
+		this.doActivate = SignalIn.Create("doActivate", base.gameObject, delegate
+		{
+			this.isActivated = true;
+		});
+		this.doDeactivate = SignalIn.Create("doDeactivate", base.gameObject, delegate
+		{
+			this.isActivated = false;
+		});
+		this.activateAndSetTime = SignalIn.Create("activateAndSetTime", base.gameObject, new Action(this.SetActiveAndTime));
+		return true;
+	}
+
+	// Token: 0x060013E6 RID: 5094 RVA: 0x000B970C File Offset: 0x000B790C
+	private void Awake()
+	{
+		if (this.startActive)
+		{
+			this.isActivated = true;
+		}
+	}
+
+	// Token: 0x060013E7 RID: 5095 RVA: 0x000B9720 File Offset: 0x000B7920
+	private void OnEnable()
+	{
+		this.DoSetAnimTime();
+	}
+
+	// Token: 0x060013E8 RID: 5096 RVA: 0x000B9728 File Offset: 0x000B7928
+	private void SetActiveAndTime()
+	{
+		this.isActivated = true;
+		this.DoSetAnimTime();
+	}
+
+	// Token: 0x060013E9 RID: 5097 RVA: 0x000B9738 File Offset: 0x000B7938
+	private void DoSetAnimTime()
+	{
+		if (this.isActivated && this.objectWithAnim)
+		{
+			AnimationState animationState = this.objectWithAnim[this.animName];
+			if (animationState)
+			{
+				if (animationState == null)
+				{
+					return;
+				}
+				this.objectWithAnim.Play(this.animName);
+				if (this.normalized)
+				{
+					animationState.normalizedTime = this.time;
+				}
+				else
+				{
+					animationState.time = this.time;
+				}
+			}
+		}
+	}
+
+	// Token: 0x04002464 RID: 9316
+	public Animation objectWithAnim;
+
+	// Token: 0x04002465 RID: 9317
+	public string animName = "set this!";
+
+	// Token: 0x04002466 RID: 9318
+	public float time = 1f;
+
+	// Token: 0x04002467 RID: 9319
+	public bool normalized = true;
+
+	// Token: 0x04002468 RID: 9320
+	public bool startActive;
+
+	// Token: 0x04002469 RID: 9321
+	private bool isActivated;
+
+	// Token: 0x0400246A RID: 9322
+	private SignalIn doActivate;
+
+	// Token: 0x0400246B RID: 9323
+	private SignalIn doDeactivate;
+
+	// Token: 0x0400246C RID: 9324
+	private SignalIn activateAndSetTime;
+
+	// Token: 0x0400246D RID: 9325
+	private int framesSinceEnabled;
+}

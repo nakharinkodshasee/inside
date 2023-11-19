@@ -1,0 +1,42 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000189 RID: 393
+public class ScreenBloomLightSourceStandard : ScreenBloomLightSource
+{
+	// Token: 0x06000B80 RID: 2944 RVA: 0x000715AC File Offset: 0x0006F7AC
+	public override void Start()
+	{
+		foreach (Renderer item in this.spritesParent.GetComponentsInChildren<Renderer>())
+		{
+			this.sprites.Add(item);
+		}
+		foreach (Renderer renderer in this.sprites)
+		{
+			this.spriteStartOpacities.Add(renderer.material.GetColor("_TintColor").a);
+		}
+		base.Start();
+	}
+
+	// Token: 0x06000B81 RID: 2945 RVA: 0x00071668 File Offset: 0x0006F868
+	public override void UpdateLocalLightEffects()
+	{
+		for (int i = 0; i < this.sprites.Count; i++)
+		{
+			Color color = this.sprites[i].material.GetColor("_TintColor");
+			color.a = this.spriteStartOpacities[i] * this.currentBloomScale;
+			this.sprites[i].material.SetColor("_TintColor", color);
+		}
+		base.UpdateLocalLightEffects();
+	}
+
+	// Token: 0x040013EE RID: 5102
+	public GameObject spritesParent;
+
+	// Token: 0x040013EF RID: 5103
+	private List<Renderer> sprites = new List<Renderer>();
+
+	// Token: 0x040013F0 RID: 5104
+	private List<float> spriteStartOpacities = new List<float>();
+}

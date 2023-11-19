@@ -1,0 +1,154 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000140 RID: 320
+public class RotateForever : UmbrellaBehaviour<RotateForever>, IPreAwake
+{
+	// Token: 0x060009C7 RID: 2503 RVA: 0x0006282C File Offset: 0x00060A2C
+	public bool PreAwake(int callcount)
+	{
+		this.startRotation = SignalIn.Create("startRotation", base.gameObject, new Action(this.OnStartRotation));
+		this.stopRotation = SignalIn.Create("stopRotation", base.gameObject, new Action(this.OnStopRotation));
+		this.changeDirection = SignalIn.Create("changeDirection", base.gameObject, new Action(this.OnChangeRotationSign));
+		this.changeToPosDir = SignalIn.Create("changeToPosDir", base.gameObject, new Action(this.OnChangeToPosDir));
+		this.changeToNegDir = SignalIn.Create("changeToNegDir", base.gameObject, new Action(this.OnChangeToNegDir));
+		return true;
+	}
+
+	// Token: 0x060009C8 RID: 2504 RVA: 0x000628E4 File Offset: 0x00060AE4
+	private void Start()
+	{
+		if (this.autoStart)
+		{
+			this.started = true;
+		}
+	}
+
+	// Token: 0x060009C9 RID: 2505 RVA: 0x000628F8 File Offset: 0x00060AF8
+	private void OnStartRotation()
+	{
+		this.started = true;
+	}
+
+	// Token: 0x060009CA RID: 2506 RVA: 0x00062904 File Offset: 0x00060B04
+	private void OnStopRotation()
+	{
+		this.started = false;
+	}
+
+	// Token: 0x060009CB RID: 2507 RVA: 0x00062910 File Offset: 0x00060B10
+	private void OnChangeRotationSign()
+	{
+		this.rotationSign = -this.rotationSign;
+	}
+
+	// Token: 0x060009CC RID: 2508 RVA: 0x00062920 File Offset: 0x00060B20
+	private void OnChangeToPosDir()
+	{
+		this.rotationSign = 1f;
+	}
+
+	// Token: 0x060009CD RID: 2509 RVA: 0x00062930 File Offset: 0x00060B30
+	private void OnChangeToNegDir()
+	{
+		this.rotationSign = -1f;
+	}
+
+	// Token: 0x060009CE RID: 2510 RVA: 0x00062940 File Offset: 0x00060B40
+	public void UmbrellaFixedUpdate()
+	{
+		if (this.started)
+		{
+			if (base.GetComponent<Rigidbody>())
+			{
+				Quaternion quaternion = base.transform.rotation;
+				if (!this.useWorldSpace)
+				{
+					quaternion = base.transform.localRotation;
+				}
+				Vector3 eulerAngles = quaternion.eulerAngles;
+				if (this.rotateAroundX)
+				{
+					eulerAngles.x -= this.rotationSpeed * 180f * Time.deltaTime * this.rotationSign;
+				}
+				if (this.rotateAroundY)
+				{
+					eulerAngles.y -= this.rotationSpeed * 180f * Time.deltaTime * this.rotationSign;
+				}
+				if (this.rotateAroundZ)
+				{
+					eulerAngles.z -= this.rotationSpeed * 180f * Time.deltaTime * this.rotationSign;
+				}
+				quaternion = Quaternion.Euler(eulerAngles);
+				if (!this.useWorldSpace)
+				{
+					Quaternion rotation = base.transform.parent.transform.rotation;
+					base.GetComponent<Rigidbody>().MoveRotation(rotation * quaternion);
+				}
+				else
+				{
+					base.GetComponent<Rigidbody>().MoveRotation(quaternion);
+				}
+			}
+			else
+			{
+				Space space = 0;
+				if (!this.useWorldSpace)
+				{
+					space = 1;
+				}
+				if (this.rotateAroundX)
+				{
+					base.transform.Rotate(Vector3.right, this.rotationSpeed * 180f * Time.deltaTime * this.rotationSign, space);
+				}
+				if (this.rotateAroundY)
+				{
+					base.transform.Rotate(Vector3.up, this.rotationSpeed * 180f * Time.deltaTime * this.rotationSign, space);
+				}
+				if (this.rotateAroundZ)
+				{
+					base.transform.Rotate(Vector3.back, this.rotationSpeed * 180f * Time.deltaTime * this.rotationSign, space);
+				}
+			}
+		}
+	}
+
+	// Token: 0x040010C0 RID: 4288
+	public bool autoStart = true;
+
+	// Token: 0x040010C1 RID: 4289
+	public float rotationSpeed = 1f;
+
+	// Token: 0x040010C2 RID: 4290
+	public bool rotateAroundX;
+
+	// Token: 0x040010C3 RID: 4291
+	public bool rotateAroundY;
+
+	// Token: 0x040010C4 RID: 4292
+	public bool rotateAroundZ = true;
+
+	// Token: 0x040010C5 RID: 4293
+	public bool useWorldSpace = true;
+
+	// Token: 0x040010C6 RID: 4294
+	private SignalIn startRotation;
+
+	// Token: 0x040010C7 RID: 4295
+	private SignalIn stopRotation;
+
+	// Token: 0x040010C8 RID: 4296
+	private SignalIn changeDirection;
+
+	// Token: 0x040010C9 RID: 4297
+	private SignalIn changeToPosDir;
+
+	// Token: 0x040010CA RID: 4298
+	private SignalIn changeToNegDir;
+
+	// Token: 0x040010CB RID: 4299
+	private bool started;
+
+	// Token: 0x040010CC RID: 4300
+	private float rotationSign = 1f;
+}

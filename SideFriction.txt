@@ -1,0 +1,21 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200054C RID: 1356
+public class SideFriction : MonoBehaviour
+{
+	// Token: 0x0600232C RID: 9004 RVA: 0x00125F34 File Offset: 0x00124134
+	private void FixedUpdate()
+	{
+		Vector3 up = base.transform.up;
+		Vector3 velocity = base.GetComponent<Rigidbody>().velocity;
+		Vector3 vector = Vector3.Dot(velocity, up) * up;
+		Vector3 vector2 = velocity - vector;
+		float num = 1f / (1f + Time.fixedDeltaTime * this.friction);
+		Vector3 vector3 = -vector2 * (1f - num) * base.GetComponent<Rigidbody>().mass;
+		base.GetComponent<Rigidbody>().AddForce(vector3, 1);
+	}
+
+	// Token: 0x040041C5 RID: 16837
+	public float friction = 1000f;
+}

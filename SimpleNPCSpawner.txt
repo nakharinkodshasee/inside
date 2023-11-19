@@ -1,0 +1,628 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x020000CE RID: 206
+public class SimpleNPCSpawner : MonoBehaviour, IRoundRobinInitializationable, IPreAwake
+{
+	// Token: 0x0600066E RID: 1646 RVA: 0x00049030 File Offset: 0x00047230
+	public bool PreAwake(int callcount)
+	{
+		this.runAway = SignalIn.Create("runAway", base.gameObject, new Action(this.OnRunAway));
+		return true;
+	}
+
+	// Token: 0x0600066F RID: 1647 RVA: 0x00049058 File Offset: 0x00047258
+	private void Awake()
+	{
+		this.timeSliceStart = !GameManager.IsLoading();
+	}
+
+	// Token: 0x06000670 RID: 1648 RVA: 0x00049068 File Offset: 0x00047268
+	private void Start()
+	{
+		this.initialized = false;
+		if (this.timeSliceStart)
+		{
+			AlbinoGroupManager.mInstance.TimeSliceInitialization(this);
+		}
+		else
+		{
+			this.Init();
+		}
+	}
+
+	// Token: 0x06000671 RID: 1649 RVA: 0x000490A0 File Offset: 0x000472A0
+	private void OnDestroy()
+	{
+		if (!this.initialized)
+		{
+			AlbinoGroupManager.mInstance.RemoveTimeSliceInitialization(this);
+		}
+	}
+
+	// Token: 0x06000672 RID: 1650 RVA: 0x000490B8 File Offset: 0x000472B8
+	public void Init()
+	{
+		if (this.modelPrefab != null)
+		{
+			Stopwatch stopwatch = new Stopwatch();
+			stopwatch.Start();
+			GameObject gameObject = new GameObject("AnimControlledCharacter");
+			gameObject.transform.parent = base.transform;
+			gameObject.transform.localPosition = Vector3.zero;
+			gameObject.transform.localEulerAngles = Vector3.zero;
+			gameObject.SetActive(false);
+			this.animChar = gameObject.AddComponent<AnimcontrolledCharacter>();
+			this.animChar.autoCreateBlendStates = false;
+			this.animChar.dbName = this.modelPrefab.name;
+			this.animChar.defaultAnimation = "none";
+			this.animChar.animCharPrefab = this.modelPrefab;
+			Vector2 zero = Vector2.zero;
+			switch (this.textureOffset % 4)
+			{
+			case 1:
+				zero.x = 0.5f;
+				break;
+			case 2:
+				zero.y = 0.5f;
+				break;
+			case 3:
+				zero.x = 0.5f;
+				zero.y = 0.5f;
+				break;
+			}
+			this.animChar.textureOffset = zero;
+			stopwatch.Stop();
+			this.animChar.Init();
+			gameObject.SetActive(true);
+			stopwatch.Start();
+			SkinnedMeshRenderer componentInChildren = gameObject.GetComponentInChildren<SkinnedMeshRenderer>();
+			if (componentInChildren)
+			{
+				if (this.modelPrefab.name.Contains("Scientist"))
+				{
+					componentInChildren.sharedMaterial = this.defaultOfficeDudeMaterial;
+				}
+				else
+				{
+					componentInChildren.sharedMaterial = this.defaultOfficeDudeMaterial;
+				}
+				componentInChildren.material.mainTextureOffset = zero;
+			}
+			ABDefinition abdefinition = this.animChar.OnTheFlyCreateDef(this.defaultAnim);
+			this.transitionDef = this.animChar.OnTheFlyCreateDef(this.panicTransitionAnim);
+			this.runDef = this.animChar.OnTheFlyCreateDef(this.runCycle);
+			this.headBulgeDef = this.animChar.OnTheFlyCreateDef(this.headExplodeAnim);
+			this.endPositionHeadExplodeDef = this.animChar.OnTheFlyCreateDef(this.endPositionHeadExplodeAnim);
+			this.endPositionDef = this.animChar.OnTheFlyCreateDef(this.endPositionAnim);
+			this.endPositionTransitionDef = this.animChar.OnTheFlyCreateDef(this.endPositionTransitionAnim);
+			int i = 0;
+			int count = this.animsToMakeStatic.Count;
+			while (i < count)
+			{
+				this.animChar.OnTheFlyCreateDef(this.animsToMakeStatic[i]);
+				i++;
+			}
+			AnimationBlendHelper blendHelper = this.animChar.GetBlendHelper();
+			abdefinition.speedScale = this.speedFactor;
+			this.animChar.ForceToAnimation(abdefinition, false, Vector3.zero, Vector3.zero, -1f, 0f, false);
+			if (this.transitionDef != null)
+			{
+				this.transitionDef.speedScale = this.speedFactor;
+			}
+			if (this.runDef != null)
+			{
+				this.runDef.speedScale = this.speedFactor;
+				if (this.runToPoint != null)
+				{
+					this.runDef.alignmentRotateSpeed = 3f;
+				}
+			}
+			if (this.runToPoint != null)
+			{
+				if (this.headBulgeDef != null)
+				{
+					this.headBulgeDef.alignmentRotateSpeed = 3f;
+				}
+				if (this.endPositionHeadExplodeDef != null)
+				{
+					this.endPositionHeadExplodeDef.alignmentRotateSpeed = 3f;
+				}
+				if (this.endPositionDef != null && this.endPositionTransitionDef == null)
+				{
+					this.endPositionDef.isStatic = true;
+					this.endPositionDef.staticTopLayer = true;
+				}
+				if (this.endPositionTransitionDef != null)
+				{
+					this.endPositionTransitionDef.isStatic = true;
+					this.endPositionTransitionDef.staticTopLayer = true;
+				}
+			}
+			int j = 0;
+			int count2 = this.animsToMakeStatic.Count;
+			while (j < count2)
+			{
+				ABDefinition definition = blendHelper.GetDefinition(this.animsToMakeStatic[j], true);
+				if (definition != null)
+				{
+					definition.isStatic = true;
+					definition.staticTopLayer = true;
+				}
+				j++;
+			}
+			if ((this.headBulgeDef != null || this.endPositionHeadExplodeDef != null) && this.headExplodeFX != null)
+			{
+				if (this.headExplodeFX.transform.parent == null)
+				{
+					this.headExplodeFX = Object.Instantiate<GameObject>(this.headExplodeFX);
+					this.headExplodeFX.transform.parent = base.transform;
+					this.headExplodeFX.transform.localPosition = vector3f.zero;
+					this.headExplodeFX.transform.localRotation = Quaternion.Euler(vector3f.zero);
+				}
+				this.bloodParticles = this.headExplodeFX.GetComponentInChildren<ParticleSystem>();
+				GameObject gameObject2 = this.animChar.FindHeadBone();
+				this.bloodParticles.transform.parent = gameObject2.transform.parent;
+				this.bloodParticles.transform.localPosition = Vector3.zero;
+				this.bloodParticles.transform.localRotation = Quaternion.Euler(Vector3.zero);
+				this.bloodParticles.gameObject.SetActive(false);
+				this.particleGroundCollider = this.headExplodeFX.transform.FindChild("FX_Collider");
+			}
+			if (this.animChar.animChar.GetComponent<Animation>() != null)
+			{
+				this.animChar.animChar.GetComponent<Animation>().cullingType = 0;
+			}
+			this.initialized = true;
+			stopwatch.Stop();
+		}
+	}
+
+	// Token: 0x06000673 RID: 1651 RVA: 0x00049634 File Offset: 0x00047834
+	private void OnRunAway()
+	{
+		if (this.npcMode == SimpleNPCSpawner.NPCMode.Idle)
+		{
+			if (this.transitionDef != null)
+			{
+				this.npcMode = SimpleNPCSpawner.NPCMode.TransitionToRun;
+				this.animChar.ForceToAnimation(this.transitionDef, false, Vector3.zero, Vector3.zero, -1f, 0f, false);
+			}
+			else if (this.runDef != null)
+			{
+				this.npcMode = SimpleNPCSpawner.NPCMode.TransitionToRun;
+				this.animChar.ForceToAnimation(this.runDef, false, Vector3.zero, Vector3.zero, -1f, 0f, false);
+			}
+		}
+	}
+
+	// Token: 0x06000674 RID: 1652 RVA: 0x000496C4 File Offset: 0x000478C4
+	private bool DoPossibleHeadExplode()
+	{
+		float x = ScriptGlobals.mainCharacter.pos3.x;
+		ABDefinition abdefinition = (this.npcMode == SimpleNPCSpawner.NPCMode.Done) ? this.endPositionHeadExplodeDef : this.headBulgeDef;
+		if (abdefinition != null && Mathf.Abs(x - this.animChar.transform.position.x) < this.headExplodeDistance)
+		{
+			this.animChar.ForceToAnimation(abdefinition, false, Vector3.zero, Vector3.zero, 0.4f, 0f, false);
+			if (this.npcMode != SimpleNPCSpawner.NPCMode.RunToPoint && this.npcMode != SimpleNPCSpawner.NPCMode.Done)
+			{
+				this.animChar.FollowWaypoint(this.runToPoint);
+			}
+			this.npcMode = SimpleNPCSpawner.NPCMode.HeadBulge;
+			return true;
+		}
+		return false;
+	}
+
+	// Token: 0x06000675 RID: 1653 RVA: 0x00049788 File Offset: 0x00047988
+	private void Update()
+	{
+		if (!this.initialized)
+		{
+			return;
+		}
+		switch (this.npcMode)
+		{
+		case SimpleNPCSpawner.NPCMode.Idle:
+			if (this.autoScareDist != 0f)
+			{
+				float x = ScriptGlobals.mainCharacter.pos3.x;
+				float num = x;
+				if (this.autoScareDist > 0f)
+				{
+					float x2 = ScriptGlobals.mainCharacter.velocity3.x;
+					num = x + x2 * this.transitionDef.animLength - Mathf.Sign(x2) * this.autoScareTransitionMovement;
+				}
+				if (Mathf.Abs(num - this.animChar.transform.position.x) < Mathf.Abs(this.autoScareDist))
+				{
+					this.OnRunAway();
+				}
+			}
+			break;
+		case SimpleNPCSpawner.NPCMode.TransitionToRun:
+		{
+			ABHelperData latestAnimData = this.animChar.GetBlendHelper().GetLatestAnimData();
+			if (latestAnimData.normalizedAnimPos > this.runTransitionTime && !this.DoPossibleHeadExplode())
+			{
+				this.animChar.ForceToAnimation(this.runDef, false, Vector3.zero, Vector3.zero, 0.4f * (1f / this.speedFactor), this.runCycleStartTime, false);
+				this.npcMode = SimpleNPCSpawner.NPCMode.RunToPoint;
+				this.animChar.FollowWaypoint(this.runToPoint);
+			}
+			break;
+		}
+		case SimpleNPCSpawner.NPCMode.RunToPoint:
+			if ((!this.allowHeadExplodWhileFleeing || !this.DoPossibleHeadExplode()) && this.runToPoint != null)
+			{
+				BaseWaypoint baseWaypoint = null;
+				GameObject currentWaypoint = this.animChar.GetCurrentWaypoint();
+				if (currentWaypoint != null)
+				{
+					baseWaypoint = currentWaypoint.GetComponent<BaseWaypoint>();
+				}
+				if (baseWaypoint == null)
+				{
+					if (currentWaypoint == null && this.endPositionDef != null)
+					{
+						currentWaypoint = this.lastWayPoint;
+					}
+					if (currentWaypoint != null)
+					{
+						float num2 = Mathf.Abs(currentWaypoint.transform.InverseTransformPoint(this.animChar.transform.position).z / currentWaypoint.transform.lossyScale.z);
+						if (num2 < this.endPosDist)
+						{
+							Vector3 position = currentWaypoint.transform.position;
+							position.y = this.animChar.transform.position.y;
+							ABDefinition def = (this.endPositionTransitionDef == null) ? this.endPositionDef : this.endPositionTransitionDef;
+							this.animChar.ForceToAnimation(def, true, position, currentWaypoint.transform.eulerAngles, 0.4f, 0f, false);
+							this.animChar.FollowWaypoint(null);
+							this.npcMode = SimpleNPCSpawner.NPCMode.Done;
+						}
+					}
+				}
+				this.lastWayPoint = currentWaypoint;
+			}
+			break;
+		case SimpleNPCSpawner.NPCMode.HeadBulge:
+		{
+			float num3 = this.headExplodeAnimTime;
+			AnimationBlendHelper blendHelper = this.animChar.GetBlendHelper();
+			ABDefinition topDefinition = blendHelper.GetTopDefinition();
+			if (topDefinition == this.endPositionHeadExplodeDef)
+			{
+				num3 = this.endPostitionHeadExplodeAnimTime;
+			}
+			float animPos = this.animChar.GetBlendHelper().GetAnimPos();
+			if (animPos > num3)
+			{
+				if (this.headlessMesh != null)
+				{
+					SkinnedMeshRenderer componentInChildren = this.animChar.animChar.GetComponentInChildren<SkinnedMeshRenderer>();
+					componentInChildren.sharedMesh = this.headlessMesh;
+					if (this.particleGroundCollider)
+					{
+						this.particleGroundCollider.transform.position = this.animChar.transform.position;
+					}
+					if (this.bloodParticles)
+					{
+						this.bloodParticles.gameObject.SetActive(true);
+					}
+				}
+				this.npcMode = SimpleNPCSpawner.NPCMode.Done;
+			}
+			break;
+		}
+		case SimpleNPCSpawner.NPCMode.Done:
+		{
+			AnimationBlendHelper blendHelper2 = this.animChar.GetBlendHelper();
+			ABDefinition topDefinition2 = blendHelper2.GetTopDefinition();
+			if (topDefinition2 == this.endPositionTransitionDef)
+			{
+				float normalizedAnimPos = blendHelper2.GetLatestAnimData().normalizedAnimPos;
+				if (blendHelper2.GetLatestAnimData().normalizedAnimPos > 0.95f)
+				{
+					this.animChar.ForceToAnimation(this.endPositionDef, false, Vector3.zero, Vector3.zero, 0.4f, 0f, false);
+				}
+				else if (this.transitionToEndEarlyKillPos < normalizedAnimPos)
+				{
+					this.DoPossibleHeadExplode();
+				}
+			}
+			else if (topDefinition2 == this.endPositionDef)
+			{
+				this.DoPossibleHeadExplode();
+			}
+			break;
+		}
+		}
+	}
+
+	// Token: 0x06000676 RID: 1654 RVA: 0x00049BD8 File Offset: 0x00047DD8
+	private void FindAllPrefabBones()
+	{
+		if (this.modelPrefab != null && this.modelPrefab != this.lastTestObject)
+		{
+			Transform transform = this.modelPrefab.transform.Find("bones/Logic/Root/SpineA/SpineB/SpineC");
+			this.neckBone = transform.Find("Neck");
+			this.headBone = this.neckBone.Find("Head");
+			this.leftShoulderBone = transform.Find("LeftClavicle/LeftArm");
+			this.leftElbowBone = this.leftShoulderBone.Find("LeftElbow");
+			this.leftHandBone = this.leftElbowBone.Find("LeftWrist/LeftHand");
+			this.rightShoulderBone = transform.Find("RightClavicle/RightArm");
+			this.rightElbowBone = this.rightShoulderBone.Find("RightElbow");
+			this.rightHandBone = this.rightElbowBone.Find("RightWrist/RightHand");
+			this.leftHipBone = this.modelPrefab.transform.Find("bones/Logic/Root/LeftHip");
+			this.leftKneeBone = this.leftHipBone.Find("LeftKnee");
+			this.leftAnkleBone = this.leftKneeBone.Find("LeftAnkle");
+			this.rightHipBone = this.modelPrefab.transform.Find("bones/Logic/Root/RightHip");
+			this.rightKneeBone = this.rightHipBone.Find("RightKnee");
+			this.rightAnkleBone = this.rightKneeBone.Find("RightAnkle");
+		}
+		this.lastTestObject = this.modelPrefab;
+	}
+
+	// Token: 0x06000677 RID: 1655 RVA: 0x00049D60 File Offset: 0x00047F60
+	private Vector3 GetBoneWorldPos(Transform bone, Vector3 prefabGround)
+	{
+		return base.transform.TransformPoint(bone.position - prefabGround);
+	}
+
+	// Token: 0x06000678 RID: 1656 RVA: 0x00049D7C File Offset: 0x00047F7C
+	private void DrawPoseFromPrefab()
+	{
+		this.FindAllPrefabBones();
+		Vector3 position = this.modelPrefab.transform.position;
+		Vector3 position2 = base.transform.position;
+		if (this.headBone != null)
+		{
+			Vector3 vector = base.transform.TransformPoint(this.headBone.TransformPoint(Vector3.up * 0.1f) - position);
+			Vector3 boneWorldPos = this.GetBoneWorldPos(this.neckBone, position);
+			Vector3 boneWorldPos2 = this.GetBoneWorldPos(this.leftShoulderBone, position);
+			Vector3 boneWorldPos3 = this.GetBoneWorldPos(this.leftElbowBone, position);
+			Vector3 boneWorldPos4 = this.GetBoneWorldPos(this.leftHandBone, position);
+			Vector3 boneWorldPos5 = this.GetBoneWorldPos(this.rightShoulderBone, position);
+			Vector3 boneWorldPos6 = this.GetBoneWorldPos(this.rightElbowBone, position);
+			Vector3 boneWorldPos7 = this.GetBoneWorldPos(this.rightHandBone, position);
+			Vector3 boneWorldPos8 = this.GetBoneWorldPos(this.leftHipBone, position);
+			Vector3 boneWorldPos9 = this.GetBoneWorldPos(this.leftKneeBone, position);
+			Vector3 boneWorldPos10 = this.GetBoneWorldPos(this.leftAnkleBone, position);
+			Vector3 boneWorldPos11 = this.GetBoneWorldPos(this.rightHipBone, position);
+			Vector3 boneWorldPos12 = this.GetBoneWorldPos(this.rightKneeBone, position);
+			Vector3 boneWorldPos13 = this.GetBoneWorldPos(this.rightAnkleBone, position);
+			Gizmos.DrawWireSphere(vector, 0.15f);
+			Gizmos.DrawLine(boneWorldPos, boneWorldPos2);
+			Gizmos.DrawLine(boneWorldPos2, boneWorldPos3);
+			Gizmos.DrawLine(boneWorldPos3, boneWorldPos4);
+			Gizmos.DrawLine(boneWorldPos, boneWorldPos5);
+			Gizmos.DrawLine(boneWorldPos5, boneWorldPos6);
+			Gizmos.DrawLine(boneWorldPos6, boneWorldPos7);
+			Vector3 vector2 = (boneWorldPos8 + boneWorldPos11) * 0.5f;
+			Gizmos.DrawLine(boneWorldPos, vector2);
+			Gizmos.DrawLine(boneWorldPos8, boneWorldPos11);
+			Gizmos.DrawLine(boneWorldPos8, boneWorldPos9);
+			Gizmos.DrawLine(boneWorldPos9, boneWorldPos10);
+			Gizmos.DrawLine(boneWorldPos11, boneWorldPos12);
+			Gizmos.DrawLine(boneWorldPos12, boneWorldPos13);
+			Gizmos.DrawCube(position2, new Vector3(1f, 0f, 1f));
+		}
+	}
+
+	// Token: 0x06000679 RID: 1657 RVA: 0x00049F50 File Offset: 0x00048150
+	private void DrawMan(Vector3 pos, float height)
+	{
+		Gizmos.DrawLine(pos + Vector3.left * 0.2f, pos + Vector3.up * height * 0.5f);
+		Gizmos.DrawLine(pos + Vector3.right * 0.2f, pos + Vector3.up * height * 0.5f);
+		Gizmos.DrawLine(pos + Vector3.up * height * 0.5f, pos + Vector3.up * (height - 0.3f));
+		Gizmos.DrawLine(pos + Vector3.up * (height - 0.35f), pos + Vector3.up * height * 0.45f + Vector3.left * 0.3f);
+		Gizmos.DrawLine(pos + Vector3.up * (height - 0.35f), pos + Vector3.up * height * 0.45f + Vector3.right * 0.3f);
+		Gizmos.DrawWireSphere(pos + Vector3.up * (height - 0.15f), 0.15f);
+		Gizmos.DrawCube(pos, new Vector3(1f, 0f, 1f));
+	}
+
+	// Token: 0x0600067A RID: 1658 RVA: 0x0004A0D0 File Offset: 0x000482D0
+	private void OnDrawGizmos()
+	{
+		if (EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay) && !Application.isPlaying)
+		{
+			Vector3 position = base.transform.position;
+			bool flag = true;
+			bool flag2 = true;
+			if (flag2)
+			{
+				if (!flag)
+				{
+					Gizmos.color = new Color(1f, 0f, 0f, 0.5f);
+				}
+				else
+				{
+					Gizmos.color = new Color(1f, 0.7f, 0.7f, 0.5f);
+				}
+				this.DrawMan(position, 1.94f);
+			}
+		}
+	}
+
+	// Token: 0x04000AEA RID: 2794
+	public GameObject modelPrefab;
+
+	// Token: 0x04000AEB RID: 2795
+	public Mesh headlessMesh;
+
+	// Token: 0x04000AEC RID: 2796
+	public GameObject headExplodeFX;
+
+	// Token: 0x04000AED RID: 2797
+	public float speedFactor = 1f;
+
+	// Token: 0x04000AEE RID: 2798
+	public string defaultAnim = "Gen_IdleA";
+
+	// Token: 0x04000AEF RID: 2799
+	public string panicTransitionAnim = "Gen_ShockFwA";
+
+	// Token: 0x04000AF0 RID: 2800
+	public string runCycle = "Gen_RunScaredA";
+
+	// Token: 0x04000AF1 RID: 2801
+	public string endPositionTransitionAnim = string.Empty;
+
+	// Token: 0x04000AF2 RID: 2802
+	public string endPositionAnim = "Gen_HideAgainstWallA";
+
+	// Token: 0x04000AF3 RID: 2803
+	public float endPosDist = 1f;
+
+	// Token: 0x04000AF4 RID: 2804
+	public float runTransitionTime = 0.92f;
+
+	// Token: 0x04000AF5 RID: 2805
+	public float runCycleStartTime = 0.8f;
+
+	// Token: 0x04000AF6 RID: 2806
+	public GameObject runToPoint;
+
+	// Token: 0x04000AF7 RID: 2807
+	public int textureOffset;
+
+	// Token: 0x04000AF8 RID: 2808
+	public List<string> animsToMakeStatic = new List<string>();
+
+	// Token: 0x04000AF9 RID: 2809
+	public Material defaultOfficeDudeMaterial;
+
+	// Token: 0x04000AFA RID: 2810
+	public Material defaultScientistMaterial;
+
+	// Token: 0x04000AFB RID: 2811
+	public string headExplodeAnim = "Gen_HeadBulgeA";
+
+	// Token: 0x04000AFC RID: 2812
+	public float headExplodeAnimTime = 0.56f;
+
+	// Token: 0x04000AFD RID: 2813
+	public string endPositionHeadExplodeAnim = string.Empty;
+
+	// Token: 0x04000AFE RID: 2814
+	public float endPostitionHeadExplodeAnimTime;
+
+	// Token: 0x04000AFF RID: 2815
+	public float transitionToEndEarlyKillPos = 1f;
+
+	// Token: 0x04000B00 RID: 2816
+	public bool allowHeadExplodWhileFleeing;
+
+	// Token: 0x04000B01 RID: 2817
+	public float headExplodeDistance = 5f;
+
+	// Token: 0x04000B02 RID: 2818
+	public float autoScareDist = 3.5f;
+
+	// Token: 0x04000B03 RID: 2819
+	public float autoScareTransitionMovement;
+
+	// Token: 0x04000B04 RID: 2820
+	private SignalIn runAway;
+
+	// Token: 0x04000B05 RID: 2821
+	private ABDefinition transitionDef;
+
+	// Token: 0x04000B06 RID: 2822
+	private ABDefinition runDef;
+
+	// Token: 0x04000B07 RID: 2823
+	private ABDefinition headBulgeDef;
+
+	// Token: 0x04000B08 RID: 2824
+	private ABDefinition endPositionHeadExplodeDef;
+
+	// Token: 0x04000B09 RID: 2825
+	private ABDefinition endPositionTransitionDef;
+
+	// Token: 0x04000B0A RID: 2826
+	private ABDefinition endPositionDef;
+
+	// Token: 0x04000B0B RID: 2827
+	private AnimcontrolledCharacter animChar;
+
+	// Token: 0x04000B0C RID: 2828
+	private ParticleSystem bloodParticles;
+
+	// Token: 0x04000B0D RID: 2829
+	private Transform particleGroundCollider;
+
+	// Token: 0x04000B0E RID: 2830
+	private bool initialized;
+
+	// Token: 0x04000B0F RID: 2831
+	private bool timeSliceStart;
+
+	// Token: 0x04000B10 RID: 2832
+	private SimpleNPCSpawner.NPCMode npcMode;
+
+	// Token: 0x04000B11 RID: 2833
+	private bool transitionToRun;
+
+	// Token: 0x04000B12 RID: 2834
+	private GameObject lastWayPoint;
+
+	// Token: 0x04000B13 RID: 2835
+	private Transform headBone;
+
+	// Token: 0x04000B14 RID: 2836
+	private Transform neckBone;
+
+	// Token: 0x04000B15 RID: 2837
+	private Transform leftShoulderBone;
+
+	// Token: 0x04000B16 RID: 2838
+	private Transform leftElbowBone;
+
+	// Token: 0x04000B17 RID: 2839
+	private Transform leftHandBone;
+
+	// Token: 0x04000B18 RID: 2840
+	private Transform rightShoulderBone;
+
+	// Token: 0x04000B19 RID: 2841
+	private Transform rightElbowBone;
+
+	// Token: 0x04000B1A RID: 2842
+	private Transform rightHandBone;
+
+	// Token: 0x04000B1B RID: 2843
+	private Transform leftHipBone;
+
+	// Token: 0x04000B1C RID: 2844
+	private Transform leftKneeBone;
+
+	// Token: 0x04000B1D RID: 2845
+	private Transform leftAnkleBone;
+
+	// Token: 0x04000B1E RID: 2846
+	private Transform rightHipBone;
+
+	// Token: 0x04000B1F RID: 2847
+	private Transform rightKneeBone;
+
+	// Token: 0x04000B20 RID: 2848
+	private Transform rightAnkleBone;
+
+	// Token: 0x04000B21 RID: 2849
+	private GameObject lastTestObject;
+
+	// Token: 0x020000CF RID: 207
+	private enum NPCMode
+	{
+		// Token: 0x04000B23 RID: 2851
+		Idle,
+		// Token: 0x04000B24 RID: 2852
+		TransitionToRun,
+		// Token: 0x04000B25 RID: 2853
+		RunToPoint,
+		// Token: 0x04000B26 RID: 2854
+		HeadBulge,
+		// Token: 0x04000B27 RID: 2855
+		Done
+	}
+}

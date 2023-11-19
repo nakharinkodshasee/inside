@@ -1,0 +1,56 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000358 RID: 856
+[ExecuteInEditMode]
+public class QueueBase : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060017A3 RID: 6051 RVA: 0x000CE3C0 File Offset: 0x000CC5C0
+	public bool PreAwake(int callCount)
+	{
+		if (!this.render)
+		{
+			this.render = base.GetComponent<Renderer>();
+		}
+		this.preAwoken = true;
+		return true;
+	}
+
+	// Token: 0x060017A4 RID: 6052 RVA: 0x000CE3F4 File Offset: 0x000CC5F4
+	protected virtual void OnEnable()
+	{
+		this.enabledLocal = true;
+		if (!this.preAwoken)
+		{
+			this.PreAwake(0);
+		}
+	}
+
+	// Token: 0x060017A5 RID: 6053 RVA: 0x000CE410 File Offset: 0x000CC610
+	protected virtual void OnDisable()
+	{
+		this.enabledLocal = false;
+	}
+
+	// Token: 0x060017A6 RID: 6054 RVA: 0x000CE41C File Offset: 0x000CC61C
+	public virtual void SetOrder(int order)
+	{
+		if (!this.enabledLocal)
+		{
+			return;
+		}
+		if (this.render)
+		{
+			this.render.sortingOrder = order;
+		}
+	}
+
+	// Token: 0x04002A31 RID: 10801
+	private Renderer render;
+
+	// Token: 0x04002A32 RID: 10802
+	private bool enabledLocal;
+
+	// Token: 0x04002A33 RID: 10803
+	private bool preAwoken;
+}

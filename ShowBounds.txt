@@ -1,0 +1,29 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005D7 RID: 1495
+public class ShowBounds : MonoBehaviour
+{
+	// Token: 0x060025E0 RID: 9696 RVA: 0x00134FC4 File Offset: 0x001331C4
+	private void Update()
+	{
+		string text = string.Concat(new object[]
+		{
+			" - Bounds: X: ",
+			base.GetComponent<Collider>().bounds.max.x,
+			", Y: ",
+			base.GetComponent<Collider>().bounds.max.y,
+			", Z: ",
+			base.GetComponent<Collider>().bounds.max.z
+		});
+		string text2 = string.Concat(new object[]
+		{
+			" - Extents: X: ",
+			base.GetComponent<Collider>().bounds.extents.x,
+			", Y: ",
+			base.GetComponent<Collider>().bounds.extents.y,
+			", Z: ",
+			base.GetComponent<Collider>().bounds.extents.z
+		});
+	}
+}

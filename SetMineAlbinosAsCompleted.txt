@@ -1,0 +1,50 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020004F0 RID: 1264
+public class SetMineAlbinosAsCompleted : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002124 RID: 8484 RVA: 0x00115D20 File Offset: 0x00113F20
+	public bool PreAwake(int callcount)
+	{
+		this.setAlbinosCompleted = SignalIn.Create("setAlbinosCompleted", base.gameObject, new Action(this.DoSetCompleted));
+		return true;
+	}
+
+	// Token: 0x06002125 RID: 8485 RVA: 0x00115D48 File Offset: 0x00113F48
+	private void DoSetCompleted()
+	{
+		this.HandleAlbinos();
+	}
+
+	// Token: 0x06002126 RID: 8486 RVA: 0x00115D50 File Offset: 0x00113F50
+	private void HandleAlbinos()
+	{
+		if (!this.hasBeenSet)
+		{
+			foreach (AlbinoSpawner albinoSpawner in this.albinoSpawners)
+			{
+				albinoSpawner.OnUnspawn();
+				albinoSpawner.OnSpawnAlbino();
+			}
+		}
+		AlbinoGroupManager.mInstance.MarkAllAlbinosAsComplete(0, 17);
+		this.hasBeenSet = true;
+	}
+
+	// Token: 0x04003D66 RID: 15718
+	public List<AlbinoSpawner> albinoSpawners;
+
+	// Token: 0x04003D67 RID: 15719
+	private SignalIn setAlbinosCompleted;
+
+	// Token: 0x04003D68 RID: 15720
+	private bool allSubscenesLoaded;
+
+	// Token: 0x04003D69 RID: 15721
+	private bool setCompleted;
+
+	// Token: 0x04003D6A RID: 15722
+	private bool hasBeenSet;
+}

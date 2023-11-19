@@ -1,0 +1,210 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020000E6 RID: 230
+public class SleepWalkerCollection : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000730 RID: 1840 RVA: 0x00050C54 File Offset: 0x0004EE54
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		int i = 0;
+		int childCount = base.transform.childCount;
+		while (i < childCount)
+		{
+			GameObject gameObject = base.transform.GetChild(i).gameObject;
+			SleepWalker componentInChildren = gameObject.GetComponentInChildren<SleepWalker>();
+			componentInChildren.Initialize();
+			this.sleepwalkers.Add(componentInChildren);
+			i++;
+		}
+	}
+
+	// Token: 0x06000731 RID: 1841 RVA: 0x00050CC0 File Offset: 0x0004EEC0
+	public bool PreAwake(int callcount)
+	{
+		this.onJumpTurnAroundSoundQueue = SignalIn.Create("onJumpTurnAroundSoundQueue", base.gameObject, new Action(this.JumpTurnAroundSoundQueue));
+		this.startWalking = SignalIn.Create("startWalking", base.gameObject, new Action(this.OnStartWalking));
+		this.stopWalking = SignalIn.Create("stopWalking", base.gameObject, new Action(this.OnStopWalking));
+		this.loadTerminated = SignalIn.Create("loadTerminated", base.gameObject, new Action(this.OnLoadTerminated));
+		this.saveStateLoaded = SignalIn.Create("saveStateLoaded", base.gameObject, new Action(this.OnSaveStateLoaded));
+		this.rotateAfterPosX = this.rotateAfterPosition.position.x;
+		return true;
+	}
+
+	// Token: 0x06000732 RID: 1842 RVA: 0x00050D94 File Offset: 0x0004EF94
+	public void HasBeenMoved()
+	{
+		int i = 0;
+		int count = this.sleepwalkers.Count;
+		while (i < count)
+		{
+			this.sleepwalkers[i].UpdateParentPosition();
+			i++;
+		}
+	}
+
+	// Token: 0x06000733 RID: 1843 RVA: 0x00050DD0 File Offset: 0x0004EFD0
+	private void OnStartWalking()
+	{
+		int i = 0;
+		int count = this.sleepwalkers.Count;
+		while (i < count)
+		{
+			SleepWalker sleepWalker = this.sleepwalkers[i];
+			sleepWalker.StartWalking();
+			i++;
+		}
+	}
+
+	// Token: 0x06000734 RID: 1844 RVA: 0x00050E10 File Offset: 0x0004F010
+	private void OnStopWalking()
+	{
+		int i = 0;
+		int count = this.sleepwalkers.Count;
+		while (i < count)
+		{
+			SleepWalker sleepWalker = this.sleepwalkers[i];
+			sleepWalker.Stop();
+			i++;
+		}
+	}
+
+	// Token: 0x06000735 RID: 1845 RVA: 0x00050E50 File Offset: 0x0004F050
+	private void OnLoadTerminated()
+	{
+		int i = 0;
+		int count = this.sleepwalkers.Count;
+		while (i < count)
+		{
+			SleepWalker sleepWalker = this.sleepwalkers[i];
+			sleepWalker.LoadTerminated();
+			i++;
+		}
+	}
+
+	// Token: 0x06000736 RID: 1846 RVA: 0x00050E90 File Offset: 0x0004F090
+	private void OnSaveStateLoaded()
+	{
+		int i = 0;
+		int count = this.sleepwalkers.Count;
+		while (i < count)
+		{
+			SleepWalker sleepWalker = this.sleepwalkers[i];
+			sleepWalker.SaveStateLoaded();
+			i++;
+		}
+	}
+
+	// Token: 0x06000737 RID: 1847 RVA: 0x00050ED0 File Offset: 0x0004F0D0
+	public void JumpTurnAroundSoundQueue()
+	{
+		int i = 0;
+		int count = this.sleepwalkers.Count;
+		while (i < count)
+		{
+			SleepWalker sleepWalker = this.sleepwalkers[i];
+			sleepWalker.JumpTurnAroundQueue();
+			i++;
+		}
+	}
+
+	// Token: 0x17000029 RID: 41
+	// (get) Token: 0x06000738 RID: 1848 RVA: 0x00050F10 File Offset: 0x0004F110
+	// (set) Token: 0x06000739 RID: 1849 RVA: 0x00050F18 File Offset: 0x0004F118
+	public int NoOfTwitchesThisWalk
+	{
+		get
+		{
+			return this.noOfTwitchesThisWalk;
+		}
+		set
+		{
+			this.noOfTwitchesThisWalk = value;
+		}
+	}
+
+	// Token: 0x0600073A RID: 1850 RVA: 0x00050F24 File Offset: 0x0004F124
+	public Vector3 GetBoyPos()
+	{
+		Boy boy = ScriptGlobals.boy;
+		if (boy.isDead)
+		{
+			if (!this.boyRootBone)
+			{
+				VisualBoy visualBoy = boy.visualBoy;
+				this.boyRootBone = visualBoy.actor.bones[visualBoy.actor.GetBone("Root")].transform;
+			}
+			return this.boyRootBone.position;
+		}
+		return boy.pos3;
+	}
+
+	// Token: 0x04000C7B RID: 3195
+	public float walkSpeed;
+
+	// Token: 0x04000C7C RID: 3196
+	public LineupCommandZone jumpZone;
+
+	// Token: 0x04000C7D RID: 3197
+	public LineupCommandZone turnAroundZone;
+
+	// Token: 0x04000C7E RID: 3198
+	public GameObject runStartLine;
+
+	// Token: 0x04000C7F RID: 3199
+	public Transform rotateAfterPosition;
+
+	// Token: 0x04000C80 RID: 3200
+	public float rotateSpeed = 0.5f;
+
+	// Token: 0x04000C81 RID: 3201
+	[HideInInspector]
+	public float rotateAfterPosX;
+
+	// Token: 0x04000C82 RID: 3202
+	private bool cheated;
+
+	// Token: 0x04000C83 RID: 3203
+	private bool invokeDelayedStart;
+
+	// Token: 0x04000C84 RID: 3204
+	private bool delayedStartHasBeenInvoked;
+
+	// Token: 0x04000C85 RID: 3205
+	private int noOfTwitchesThisWalk;
+
+	// Token: 0x04000C86 RID: 3206
+	private Transform boyRootBone;
+
+	// Token: 0x04000C87 RID: 3207
+	private SignalIn onJumpTurnAroundSoundQueue;
+
+	// Token: 0x04000C88 RID: 3208
+	private SignalIn startWalking;
+
+	// Token: 0x04000C89 RID: 3209
+	private SignalIn stopWalking;
+
+	// Token: 0x04000C8A RID: 3210
+	private SignalIn loadTerminated;
+
+	// Token: 0x04000C8B RID: 3211
+	private SignalIn saveStateLoaded;
+
+	// Token: 0x04000C8C RID: 3212
+	[SerializeField]
+	[HideInInspector]
+	private List<SleepWalker> sleepwalkers = new List<SleepWalker>();
+
+	// Token: 0x04000C8D RID: 3213
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

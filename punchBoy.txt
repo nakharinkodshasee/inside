@@ -1,0 +1,159 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020005E4 RID: 1508
+public class punchBoy : MonoBehaviour
+{
+	// Token: 0x06002619 RID: 9753 RVA: 0x001362C4 File Offset: 0x001344C4
+	private void Start()
+	{
+		this.boyJumpDamping = ScriptGlobals.boy.properties.jump.damping;
+		this.customInput = base.gameObject.GetComponent<CustomBoyInput>();
+		if (this.customInput)
+		{
+			this.customInput.SetJump(false);
+		}
+	}
+
+	// Token: 0x0600261A RID: 9754 RVA: 0x00136318 File Offset: 0x00134518
+	public void punch()
+	{
+		if (!(ScriptGlobals.boy.state is BoyJumpState))
+		{
+			if (this.boyInsideTrigger)
+			{
+				ScriptGlobals.boy.input = this.customInput;
+				Debug.Log("ScriptGlobals.boy.input.jump = " + ScriptGlobals.boy.input.jump);
+				ScriptGlobals.boy.properties.jump.damping = new vector2fClass(new vector2f(0f, 0f));
+				this.boyLostSrufaceConnection = true;
+				this.addForceToBoy();
+			}
+			foreach (punchableOcbject punchableOcbject in this.bodiesToPunch)
+			{
+				float num = Mathf.Abs(punchableOcbject.GetComponent<Rigidbody>().velocity.y);
+				if (num < 0.15f)
+				{
+					Vector3 vector = Vector3.up * this.upForce;
+					punchableOcbject.GetComponent<Rigidbody>().AddForce(vector, 1);
+					Debug.Log("forceToAdd: " + vector);
+				}
+			}
+		}
+	}
+
+	// Token: 0x0600261B RID: 9755 RVA: 0x0013645C File Offset: 0x0013465C
+	private void addForceToBoy()
+	{
+		ScriptGlobals.boy.AddVelocity(vector2f.up * this.upForce, this.ground, 1f);
+	}
+
+	// Token: 0x0600261C RID: 9756 RVA: 0x00136484 File Offset: 0x00134684
+	private void OnTriggerEnter(Collider collider)
+	{
+		punchableOcbject component = collider.gameObject.GetComponent<punchableOcbject>();
+		if (component)
+		{
+			this.bodiesToPunch.Add(component);
+		}
+		if (collider.attachedRigidbody && collider.attachedRigidbody.gameObject == ScriptGlobals.boy.gameObject)
+		{
+			this.boyInsideTrigger = true;
+		}
+	}
+
+	// Token: 0x0600261D RID: 9757 RVA: 0x001364EC File Offset: 0x001346EC
+	public void OnTriggerStay(Collider collider)
+	{
+		punchableOcbject component = collider.gameObject.GetComponent<punchableOcbject>();
+		if (component)
+		{
+			this.bodiesToPunch.Add(component);
+		}
+		if (collider.attachedRigidbody && collider.attachedRigidbody.gameObject == ScriptGlobals.boy.gameObject)
+		{
+			this.boyInsideTrigger = true;
+		}
+	}
+
+	// Token: 0x0600261E RID: 9758 RVA: 0x00136554 File Offset: 0x00134754
+	private void FixedUpdate()
+	{
+		Vector2 stick = default(Vector2);
+		stick.x = ScriptGlobals.boy.input.stick.x;
+		stick.y = ScriptGlobals.boy.input.stick.y;
+		this.customInput.SetStick(stick);
+		if (this.boyLostSrufaceConnection)
+		{
+			this.timeToWaitWithDamping -= Time.deltaTime;
+			if (this.timeToWaitWithDamping <= 0f && ScriptGlobals.boy.status.groundCollider != null)
+			{
+				ScriptGlobals.boy.properties.jump.damping = this.boyJumpDamping;
+				this.boyLostSrufaceConnection = false;
+				this.timeToWaitWithDamping = 0.5f;
+				ScriptGlobals.boy.input = null;
+			}
+		}
+		if (!this.waitForPunch)
+		{
+			this.timer += Time.deltaTime;
+			if (this.timer >= this.timeBetween - 4f)
+			{
+				if (this.floor)
+				{
+					this.floor.GetComponent<Renderer>().material.color = (((int)(this.mTimer * 5f * (this.mTimer / 4f)) % 2 != 0) ? Color.white : Color.red);
+				}
+				this.mTimer += Time.deltaTime;
+			}
+			if (this.timer >= this.timeBetween)
+			{
+				Debug.Log("TEST");
+				this.punch();
+				this.mTimer = 0f;
+				this.floor.GetComponent<Renderer>().material.color = Color.white;
+				this.timer = 0f;
+			}
+		}
+		this.bodiesToPunch.Clear();
+		this.boyInsideTrigger = false;
+	}
+
+	// Token: 0x04004562 RID: 17762
+	public Rigidbody ground;
+
+	// Token: 0x04004563 RID: 17763
+	public float upForce;
+
+	// Token: 0x04004564 RID: 17764
+	private List<punchableOcbject> bodiesToPunch = new List<punchableOcbject>();
+
+	// Token: 0x04004565 RID: 17765
+	public float timeBetween;
+
+	// Token: 0x04004566 RID: 17766
+	public GameObject floor;
+
+	// Token: 0x04004567 RID: 17767
+	public bool waitForPunch;
+
+	// Token: 0x04004568 RID: 17768
+	private float timer;
+
+	// Token: 0x04004569 RID: 17769
+	private vector2fClass boyJumpDamping;
+
+	// Token: 0x0400456A RID: 17770
+	private bool boyLostSrufaceConnection;
+
+	// Token: 0x0400456B RID: 17771
+	private float timeToWaitWithDamping = 0.5f;
+
+	// Token: 0x0400456C RID: 17772
+	private float mTimer;
+
+	// Token: 0x0400456D RID: 17773
+	private bool boyInsideTrigger = true;
+
+	// Token: 0x0400456E RID: 17774
+	private CustomBoyInput customInput;
+}

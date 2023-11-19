@@ -1,0 +1,120 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000142 RID: 322
+public class SinusRotater : UmbrellaBehaviour<SinusRotater>
+{
+	// Token: 0x060009D2 RID: 2514 RVA: 0x00062B74 File Offset: 0x00060D74
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.renderers = base.GetComponentsInChildren<Renderer>();
+		this.initialLocalRotation = base.transform.localRotation;
+	}
+
+	// Token: 0x060009D3 RID: 2515 RVA: 0x00062BB4 File Offset: 0x00060DB4
+	private bool CheckVisible()
+	{
+		if (base.enabled)
+		{
+			return true;
+		}
+		int num = 0;
+		int num2 = this.renderers.Length;
+		while (num != num2)
+		{
+			if (this.renderers[num].isVisible)
+			{
+				return true;
+			}
+			num++;
+		}
+		return false;
+	}
+
+	// Token: 0x060009D4 RID: 2516 RVA: 0x00062C00 File Offset: 0x00060E00
+	private float GetAngle(float time, float amp, float loop_time, float phase)
+	{
+		if (loop_time <= 0.0001f)
+		{
+			return 0f;
+		}
+		float num = (time / loop_time + phase) * 3.1415927f * 2f;
+		return 0.5f * amp * Mathf.Sin(num);
+	}
+
+	// Token: 0x060009D5 RID: 2517 RVA: 0x00062C40 File Offset: 0x00060E40
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.timer = Random.value * 100f;
+		this.isVisibleTimer = 0f;
+	}
+
+	// Token: 0x060009D6 RID: 2518 RVA: 0x00062C70 File Offset: 0x00060E70
+	public void UmbrellaUpdate()
+	{
+		float deltaTime = Time.deltaTime;
+		this.isVisibleTimer -= deltaTime;
+		if (this.isVisibleTimer < 0f)
+		{
+			this.isVisibleTimer = Random.Range(0.9f, 1.1f);
+			this.isVisible = this.CheckVisible();
+		}
+		if (this.isVisible)
+		{
+			this.timer += deltaTime;
+			float angle = this.GetAngle(this.timer, this.amplitude1, this.loopTime1, this.phase1);
+			float angle2 = this.GetAngle(this.timer, this.amplitude2, this.loopTime2, this.phase2);
+			Quaternion quaternion = QuaternionFast.RotationInZ(0.017453292f * (angle + angle2));
+			base.transform.localRotation = quaternion * this.initialLocalRotation;
+		}
+	}
+
+	// Token: 0x040010CD RID: 4301
+	public float amplitude1;
+
+	// Token: 0x040010CE RID: 4302
+	public float loopTime1;
+
+	// Token: 0x040010CF RID: 4303
+	public float phase1;
+
+	// Token: 0x040010D0 RID: 4304
+	public float amplitude2;
+
+	// Token: 0x040010D1 RID: 4305
+	public float loopTime2;
+
+	// Token: 0x040010D2 RID: 4306
+	public float phase2;
+
+	// Token: 0x040010D3 RID: 4307
+	private float timer;
+
+	// Token: 0x040010D4 RID: 4308
+	private bool isVisible = true;
+
+	// Token: 0x040010D5 RID: 4309
+	private float isVisibleTimer;
+
+	// Token: 0x040010D6 RID: 4310
+	[HideInInspector]
+	[SerializeField]
+	private Quaternion initialLocalRotation;
+
+	// Token: 0x040010D7 RID: 4311
+	[HideInInspector]
+	[SerializeField]
+	private Renderer[] renderers;
+
+	// Token: 0x040010D8 RID: 4312
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

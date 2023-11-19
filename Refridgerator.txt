@@ -1,0 +1,86 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000453 RID: 1107
+public class Refridgerator : MonoBehaviour, IFastEventExListener<ImpactEffect>, IPreAwake
+{
+	// Token: 0x06001D29 RID: 7465 RVA: 0x000FC4F8 File Offset: 0x000FA6F8
+	public bool PreAwake(int callcount)
+	{
+		this.disable = SignalIn.Create("disable", base.gameObject, new Action(this.FallenDown));
+		return true;
+	}
+
+	// Token: 0x06001D2A RID: 7466 RVA: 0x000FC520 File Offset: 0x000FA720
+	private void Start()
+	{
+		this.fridgeRigidbody = base.GetComponent<Rigidbody>();
+		this.collisionAnalyzer = base.GetComponent<CollisionAnalyzer>();
+		this.collisionAnalyzer.GetAggregator().RegisterImpactEvent(this, ref this.impactEffectHandle);
+	}
+
+	// Token: 0x06001D2B RID: 7467 RVA: 0x000FC55C File Offset: 0x000FA75C
+	private void OnDestroy()
+	{
+		this.collisionAnalyzer.GetAggregator().UnregisterImpactEvent(ref this.impactEffectHandle);
+	}
+
+	// Token: 0x06001D2C RID: 7468 RVA: 0x000FC574 File Offset: 0x000FA774
+	private void FixedUpdate()
+	{
+		if (this.rotateModeEnabled && BoyUtils.GetCurrentGrabBody(ScriptGlobals.boy) == this.fridgeRigidbody)
+		{
+			float x = ScriptGlobals.boy.input.stick.x;
+			if (x > 0f)
+			{
+				this.fridgeRigidbody.AddForce(x * this.forceFactor, 0f, 0f);
+			}
+		}
+	}
+
+	// Token: 0x06001D2D RID: 7469 RVA: 0x000FC5E8 File Offset: 0x000FA7E8
+	private void FallenDown()
+	{
+		Object.Destroy(base.gameObject.GetComponent<HingeJoint>());
+		this.rotateModeEnabled = false;
+		this.fridgeRigidbody.constraints = 0;
+		this.fridgeRigidbody.constraints |= 8;
+		this.fridgeRigidbody.constraints |= 64;
+		this.fridgeRigidbody.mass = 0.75f;
+		this.fridgeRigidbody.angularDrag = 0.2f;
+	}
+
+	// Token: 0x06001D2E RID: 7470 RVA: 0x000FC660 File Offset: 0x000FA860
+	public void OnFastEventEx(FastEventEx<ImpactEffect> sender, ref ImpactEffect arg)
+	{
+		if (this.rumble && arg.impactForce > 2f)
+		{
+			if (!(ScriptGlobals.boy.state is BoyJumpState))
+			{
+				RumbleManager.instance.AddOneTimeEffectFalloff(RumbleEffect.RumbleEffects.Spike, 0.35f, 0.2f, 0f, 1f, 3f, base.transform, default(Vector3));
+			}
+			this.rumble = false;
+		}
+	}
+
+	// Token: 0x04003589 RID: 13705
+	public float forceFactor = 3f;
+
+	// Token: 0x0400358A RID: 13706
+	private SignalIn disable;
+
+	// Token: 0x0400358B RID: 13707
+	private bool rotateModeEnabled = true;
+
+	// Token: 0x0400358C RID: 13708
+	private Rigidbody fridgeRigidbody;
+
+	// Token: 0x0400358D RID: 13709
+	private CollisionAnalyzer collisionAnalyzer;
+
+	// Token: 0x0400358E RID: 13710
+	private bool rumble = true;
+
+	// Token: 0x0400358F RID: 13711
+	private int impactEffectHandle = -1;
+}

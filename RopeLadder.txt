@@ -1,0 +1,289 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200049E RID: 1182
+public class RopeLadder : Device, IPreAwake
+{
+	// Token: 0x06001EEF RID: 7919 RVA: 0x00108C84 File Offset: 0x00106E84
+	public bool PreAwake(int callcount)
+	{
+		this.boyJumpedRight = SignalOut.Create("boyJumpedRight", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001EF0 RID: 7920 RVA: 0x00108CA0 File Offset: 0x00106EA0
+	protected override void Start()
+	{
+		base.Start();
+		this.boyGrabbing = ScriptGlobals.boy;
+		this.animClimpUpLength = this.animClimbUp.numFrames / this.animClimbUp.defaultfps;
+		this.ladderPosY = this.ladderPos.position.y;
+		this.SetIdleState(null);
+	}
+
+	// Token: 0x06001EF1 RID: 7921 RVA: 0x00108CFC File Offset: 0x00106EFC
+	private void SetIdleState(AnimClipNode animTransition = null)
+	{
+		if (animTransition != null)
+		{
+			EffectMaterial.Material material = this.effectMaterial;
+			BoyUtils.StartCustomAnim(this.boyGrabbing, animTransition, null, 0f, Boy.AffectMode.Default, material);
+		}
+		if (this.boyGrabbing.visualBoy.additiveAnim == this.animClimbAdditive)
+		{
+			this.boyGrabbing.visualBoy.additiveAnim = null;
+		}
+		this.state = RopeLadder.State.Idle;
+	}
+
+	// Token: 0x06001EF2 RID: 7922 RVA: 0x00108D68 File Offset: 0x00106F68
+	private void IdleState()
+	{
+		int i = 0;
+		int count = this.boysInside.Count;
+		while (i < count)
+		{
+			Boy boy = this.boysInside[i];
+			if (boy.status.groundCollider)
+			{
+				this.platformCollider.isTrigger = false;
+			}
+			VisualBoyCustomAnim visualBoyCustomAnim = boy.visualBoy.state as VisualBoyCustomAnim;
+			if (visualBoyCustomAnim != null && (visualBoyCustomAnim.anim == this.animGrabRope || visualBoyCustomAnim.anim == this.animGoToStand))
+			{
+				return;
+			}
+			float y = boy.pos.y;
+			float y2 = this.boyGrabbing.input.stick.y;
+			if (y > this.ladderPosY)
+			{
+				if (y2 < -this.requiredInputY && boy.status.groundCollider)
+				{
+					this.SetClimbState(this.animDownOntoLadder, this.animClimpUpLength, this.steps.Length - 1);
+				}
+			}
+			else if (y2 > this.requiredInputY && boy.state is BoyRopeState)
+			{
+				this.SetClimbState(this.animGrabLadder, 0f, 0);
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06001EF3 RID: 7923 RVA: 0x00108EB8 File Offset: 0x001070B8
+	private void SetClimbState(AnimClipNode animTransition, float startTime, int stepIndex)
+	{
+		this.platformCollider.isTrigger = true;
+		this.currentStepIndex = stepIndex;
+		this.currentStep = this.steps[this.currentStepIndex];
+		this.currentClimbTimer = startTime;
+		EffectMaterial.Material material = this.effectMaterial;
+		BoyUtils.StartCustomAnim(this.boyGrabbing, animTransition, null, 0f, Boy.AffectMode.Default, material);
+		this.boyGrabbing.visualBoy.additiveAnim = this.animClimbAdditive;
+		this.state = RopeLadder.State.Climb;
+	}
+
+	// Token: 0x06001EF4 RID: 7924 RVA: 0x00108F2C File Offset: 0x0010712C
+	private void ClimbState()
+	{
+		if (this.boyGrabbing.isDead)
+		{
+			this.Release();
+			this.platformCollider.isTrigger = false;
+			return;
+		}
+		float num = this.GetInputDir();
+		bool jump = this.boyGrabbing.input.jump;
+		if (jump && !this.previousJump && Mathf.Abs(this.boyGrabbing.input.stick.x) > 0.5f)
+		{
+			BoyJumpState externalState = new BoyJumpState(this.boyGrabbing, BoyJumpState.State.JumpForward, null);
+			this.boyGrabbing.SpawnExternalState(externalState, Boy.AffectMode.Default);
+			if (this.boyGrabbing.input.stick.x > 0f)
+			{
+				this.boyJumpedRight.Signal();
+			}
+			this.SetIdleState(null);
+			return;
+		}
+		VisualBoyCustomAnim visualBoyCustomAnim = this.boyGrabbing.visualBoy.state as VisualBoyCustomAnim;
+		if (visualBoyCustomAnim.anim == this.animGrabLadder)
+		{
+			float frame = this.animGrabLadder.frame;
+			if (frame <= this.reverseUnstun)
+			{
+				num = Mathf.Max(num, 0f);
+			}
+			if (frame <= this.grabUnstun)
+			{
+				num = Mathf.Min(num, 0f);
+			}
+			else if (num == 1f || frame >= this.animGrabLadder.numFrames)
+			{
+				EffectMaterial.Material material = this.effectMaterial;
+				BoyUtils.StartCustomAnim(this.boyGrabbing, this.animClimbUp, null, 0f, Boy.AffectMode.Default, material);
+			}
+		}
+		else if (visualBoyCustomAnim.anim == this.animDownOntoLadder)
+		{
+			float frame2 = this.animDownOntoLadder.frame;
+			if (frame2 <= this.downOntoLadderUnstun)
+			{
+				num = 0f;
+			}
+			else if (num == -1f || frame2 >= this.animDownOntoLadder.numFrames)
+			{
+				if (this.focusArg == null)
+				{
+					this.focusArg = new AnimClipNode.GotFocusArg(AnimClipNode.LoopingMode.FrozenEnding, this.animClimbUp.numFrames);
+				}
+				EffectMaterial.Material material = this.effectMaterial;
+				BoyUtils.StartCustomAnim(this.boyGrabbing, this.animClimbUp, this.focusArg, 0f, Boy.AffectMode.Default, material);
+			}
+		}
+		this.currentStep = this.steps[this.currentStepIndex];
+		float num2 = Mathf.Sign(this.currentStep - this.currentClimbTimer);
+		float num3 = this.currentClimbTimer + num2 * Time.deltaTime;
+		if (num3 * num2 > this.currentStep * num2)
+		{
+			num3 = this.currentStep;
+		}
+		if (num != 0f && (this.currentClimbTimer == this.currentStep || num != num2))
+		{
+			int num4 = this.currentStepIndex + (int)num;
+			if (num4 >= 0 && num4 < this.steps.Length)
+			{
+				this.currentStepIndex = num4;
+				num3 = this.currentClimbTimer + num2 * Time.deltaTime;
+			}
+		}
+		this.currentClimbTimer = num3;
+		float num5 = this.currentClimbTimer * this.animClimbUp.defaultfps;
+		num5 = Mathf.Clamp(num5, 0f, this.animClimbUp.numFrames);
+		this.animClimbUp.frame = num5;
+		if (this.currentClimbTimer == 0f && num == -1f)
+		{
+			this.SetIdleState(this.animGrabRope);
+		}
+		if (this.currentClimbTimer >= this.animClimpUpLength && num == 1f)
+		{
+			this.platformCollider.isTrigger = false;
+			this.SetIdleState(this.animGoToStand);
+		}
+		this.previousJump = jump;
+	}
+
+	// Token: 0x06001EF5 RID: 7925 RVA: 0x001092AC File Offset: 0x001074AC
+	private float GetInputDir()
+	{
+		vector2f stick = this.boyGrabbing.input.stick;
+		if (stick.y < -this.requiredInputY)
+		{
+			return -1f;
+		}
+		if (stick.y > this.requiredInputY || (stick.magnitude > 0.4f && stick.y > -0.35f && stick.x < 0f))
+		{
+			return 1f;
+		}
+		return 0f;
+	}
+
+	// Token: 0x06001EF6 RID: 7926 RVA: 0x00109334 File Offset: 0x00107534
+	private void Release()
+	{
+		BoyUtils.ClearState(this.boyGrabbing, -1f);
+		this.SetIdleState(null);
+	}
+
+	// Token: 0x06001EF7 RID: 7927 RVA: 0x00109350 File Offset: 0x00107550
+	private void FixedUpdate()
+	{
+		if (this.state == RopeLadder.State.Idle)
+		{
+			this.IdleState();
+		}
+		else if (this.state == RopeLadder.State.Climb)
+		{
+			this.ClimbState();
+		}
+	}
+
+	// Token: 0x04003944 RID: 14660
+	public AnimClipNode animDownOntoLadder;
+
+	// Token: 0x04003945 RID: 14661
+	public AnimClipNode animClimbUp;
+
+	// Token: 0x04003946 RID: 14662
+	public AnimClipNode animGoToStand;
+
+	// Token: 0x04003947 RID: 14663
+	public AnimClipNode animGrabLadder;
+
+	// Token: 0x04003948 RID: 14664
+	public AnimClipNode animGrabRope;
+
+	// Token: 0x04003949 RID: 14665
+	public AnimClipNode animClimbAdditive;
+
+	// Token: 0x0400394A RID: 14666
+	public Collider platformCollider;
+
+	// Token: 0x0400394B RID: 14667
+	public Transform ladderPos;
+
+	// Token: 0x0400394C RID: 14668
+	public float[] steps;
+
+	// Token: 0x0400394D RID: 14669
+	public float grabUnstun = 40f;
+
+	// Token: 0x0400394E RID: 14670
+	public float reverseUnstun = 11f;
+
+	// Token: 0x0400394F RID: 14671
+	public float downOntoLadderUnstun = 10f;
+
+	// Token: 0x04003950 RID: 14672
+	private RopeLadder.State state;
+
+	// Token: 0x04003951 RID: 14673
+	private int currentStepIndex;
+
+	// Token: 0x04003952 RID: 14674
+	private float currentStep;
+
+	// Token: 0x04003953 RID: 14675
+	private float currentClimbTimer;
+
+	// Token: 0x04003954 RID: 14676
+	private float animClimpUpLength;
+
+	// Token: 0x04003955 RID: 14677
+	private float ladderPosY;
+
+	// Token: 0x04003956 RID: 14678
+	private float requiredInputY = 0.6f;
+
+	// Token: 0x04003957 RID: 14679
+	private AnimClipNode.GotFocusArg focusArg;
+
+	// Token: 0x04003958 RID: 14680
+	private bool previousJump;
+
+	// Token: 0x04003959 RID: 14681
+	private SignalOut boyJumpedRight;
+
+	// Token: 0x0400395A RID: 14682
+	private EffectMaterial.Material effectMaterial = EffectMaterial.Material.Ladder_metal;
+
+	// Token: 0x0200049F RID: 1183
+	private enum State
+	{
+		// Token: 0x0400395C RID: 14684
+		None,
+		// Token: 0x0400395D RID: 14685
+		Idle,
+		// Token: 0x0400395E RID: 14686
+		Climb
+	}
+}

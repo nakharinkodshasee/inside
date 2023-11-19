@@ -1,0 +1,30 @@
+using System;
+using Playdead.CrossSceneReference;
+using UnityEngine;
+
+// Token: 0x02000572 RID: 1394
+[ExecuteInEditMode]
+public class ReferenceToAnotherScene : MonoBehaviour
+{
+	// Token: 0x06002421 RID: 9249 RVA: 0x0012B174 File Offset: 0x00129374
+	private void Update()
+	{
+		if (this.referenceToOthers != null)
+		{
+			foreach (BehaviourReference behaviourReference in this.referenceToOthers)
+			{
+				if (behaviourReference != null)
+				{
+					Transform componentOnReference = behaviourReference.GetComponentOnReference<Transform>();
+					if (componentOnReference)
+					{
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x04004274 RID: 17012
+	[BehaviourReferenceGUI]
+	public BehaviourReference[] referenceToOthers;
+}

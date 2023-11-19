@@ -1,0 +1,17 @@
+using System;
+
+// Token: 0x02000144 RID: 324
+public class SinusRotaterUmbrella : Umbrella<SinusRotater>
+{
+	// Token: 0x060009D9 RID: 2521 RVA: 0x00062D50 File Offset: 0x00060F50
+	public override void DispatchUpdate()
+	{
+		int num = 0;
+		int size = this.size;
+		while (num != size)
+		{
+			this.targets[num].UmbrellaUpdate();
+			num++;
+		}
+	}
+}

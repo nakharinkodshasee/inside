@@ -1,0 +1,66 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200022B RID: 555
+public class SentryGunAimAndShoot : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001138 RID: 4408 RVA: 0x000A20F8 File Offset: 0x000A02F8
+	public bool PreAwake(int callcount)
+	{
+		SignalIn.Create("aimAndShoot", base.gameObject, new Action(this.OnAimAndShoot));
+		this.shoot = SignalOut.Create("shoot", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001139 RID: 4409 RVA: 0x000A213C File Offset: 0x000A033C
+	private void OnAimAndShoot()
+	{
+		this.aiming = true;
+	}
+
+	// Token: 0x0600113A RID: 4410 RVA: 0x000A2148 File Offset: 0x000A0348
+	private void LateUpdate()
+	{
+		if (this.aiming)
+		{
+			if (!this.hasShot)
+			{
+				this.aimFraction = Mathf.Min(this.aimFraction + Time.deltaTime * this.rotateFactor, 1f);
+				Vector3 pos = ScriptGlobals.boy.pos3;
+				Vector3 position = this.gunHead.transform.position;
+				Vector3 normalized = (pos - position).normalized;
+				this.wantedRot = Quaternion.LookRotation(normalized, Vector3.up);
+				if (this.aimFraction > 0.999f)
+				{
+					this.shoot.Signal();
+					this.hasShot = true;
+				}
+			}
+			this.gunHead.transform.rotation = Quaternion.Slerp(this.gunHead.transform.rotation, this.wantedRot, MathUtils.SmoothFraction(this.aimFraction));
+		}
+	}
+
+	// Token: 0x04001F7B RID: 8059
+	public GameObject gunHead;
+
+	// Token: 0x04001F7C RID: 8060
+	public float rotateFactor = 1f;
+
+	// Token: 0x04001F7D RID: 8061
+	private SignalIn aimAndShoot;
+
+	// Token: 0x04001F7E RID: 8062
+	private SignalOut shoot;
+
+	// Token: 0x04001F7F RID: 8063
+	private bool aiming;
+
+	// Token: 0x04001F80 RID: 8064
+	private bool hasShot;
+
+	// Token: 0x04001F81 RID: 8065
+	private Quaternion wantedRot;
+
+	// Token: 0x04001F82 RID: 8066
+	private float aimFraction;
+}

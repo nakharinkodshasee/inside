@@ -1,0 +1,193 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001E8 RID: 488
+public class RotationLever : BoyInput
+{
+	// Token: 0x17000057 RID: 87
+	// (get) Token: 0x06000EB2 RID: 3762 RVA: 0x0008B7E4 File Offset: 0x000899E4
+	public override bool jump
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x17000058 RID: 88
+	// (get) Token: 0x06000EB3 RID: 3763 RVA: 0x0008B7E8 File Offset: 0x000899E8
+	public override bool action
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x17000059 RID: 89
+	// (get) Token: 0x06000EB4 RID: 3764 RVA: 0x0008B7EC File Offset: 0x000899EC
+	public override bool grab
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x1700005A RID: 90
+	// (get) Token: 0x06000EB5 RID: 3765 RVA: 0x0008B7F0 File Offset: 0x000899F0
+	public override vector2f stick
+	{
+		get
+		{
+			return vector2f.zero;
+		}
+	}
+
+	// Token: 0x06000EB6 RID: 3766 RVA: 0x0008B7F8 File Offset: 0x000899F8
+	private void Start()
+	{
+		if (this.startState == RotationLever.StartState.left)
+		{
+			this.rotationFraction = 0f;
+		}
+		else if (this.startState == RotationLever.StartState.right)
+		{
+			this.rotationFraction = 1f;
+		}
+		else
+		{
+			this.rotationFraction = 0.5f;
+		}
+	}
+
+	// Token: 0x06000EB7 RID: 3767 RVA: 0x0008B848 File Offset: 0x00089A48
+	private void Update()
+	{
+	}
+
+	// Token: 0x06000EB8 RID: 3768 RVA: 0x0008B84C File Offset: 0x00089A4C
+	private void UpdateBoyGrabState()
+	{
+		if (!this.boyGrab)
+		{
+			if (this.playerProbesInside > 0 && GameInput.rawAction)
+			{
+				this.boyGrab = true;
+				ScriptGlobals.boy.input = this;
+			}
+		}
+		else if (this.playerProbesInside == 0 || !GameInput.rawAction)
+		{
+			this.boyGrab = false;
+			ScriptGlobals.boy.input = null;
+		}
+	}
+
+	// Token: 0x06000EB9 RID: 3769 RVA: 0x0008B8B8 File Offset: 0x00089AB8
+	private void UpdateRotationLever()
+	{
+		vector2f a = GameInput.stick;
+		if (this.invertDirection)
+		{
+			a *= -1f;
+		}
+		if (Mathf.Abs(a.x) > 0.25f)
+		{
+			float num;
+			if (Mathf.Sign(a.x) > 0f)
+			{
+				num = 1f;
+			}
+			else
+			{
+				num = 0f;
+			}
+			float num2 = num - this.rotationFraction;
+			float num3 = 1f / this.timeToRotateEntirely * Time.deltaTime * Mathf.Abs(a.x);
+			if (num3 > Mathf.Abs(num2))
+			{
+				num3 = Mathf.Abs(num2);
+			}
+			this.rotationFraction += Mathf.Sign(num2) * num3;
+		}
+	}
+
+	// Token: 0x06000EBA RID: 3770 RVA: 0x0008B970 File Offset: 0x00089B70
+	private void DrawDebug()
+	{
+		float num = -9.424778f;
+		float num2 = Mathf.LerpAngle(0f, 1f, this.rotationFraction);
+		Vector2 vector = -new Vector2(Mathf.Cos(num2 * num), Mathf.Sin(num2 * num)) * 0.5f;
+		Color color = Color.Lerp(Color.green, Color.red, this.rotationFraction);
+	}
+
+	// Token: 0x06000EBB RID: 3771 RVA: 0x0008B9D4 File Offset: 0x00089BD4
+	private void SetFSMValue()
+	{
+		PlayMakerFSM component = base.GetComponent<PlayMakerFSM>();
+		if (component)
+		{
+			component.Fsm.GetFsmFloat("_RotationValue").Value = this.rotationFraction;
+		}
+	}
+
+	// Token: 0x06000EBC RID: 3772 RVA: 0x0008BA10 File Offset: 0x00089C10
+	private void FixedUpdate()
+	{
+		this.UpdateBoyGrabState();
+		if (this.boyGrab)
+		{
+			this.UpdateRotationLever();
+		}
+		this.SetFSMValue();
+		this.DrawDebug();
+	}
+
+	// Token: 0x06000EBD RID: 3773 RVA: 0x0008BA38 File Offset: 0x00089C38
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.attachedRigidbody && coll.attachedRigidbody.GetComponent<Boy>())
+		{
+			this.playerProbesInside++;
+		}
+	}
+
+	// Token: 0x06000EBE RID: 3774 RVA: 0x0008BA78 File Offset: 0x00089C78
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.attachedRigidbody && coll.attachedRigidbody.GetComponent<Boy>())
+		{
+			this.playerProbesInside--;
+		}
+	}
+
+	// Token: 0x04001A72 RID: 6770
+	public RotationLever.StartState startState;
+
+	// Token: 0x04001A73 RID: 6771
+	public float timeToRotateEntirely = 3f;
+
+	// Token: 0x04001A74 RID: 6772
+	public bool invertDirection;
+
+	// Token: 0x04001A75 RID: 6773
+	private float rotationFraction;
+
+	// Token: 0x04001A76 RID: 6774
+	private int playerProbesInside;
+
+	// Token: 0x04001A77 RID: 6775
+	private bool boyGrab;
+
+	// Token: 0x020001E9 RID: 489
+	public enum StartState
+	{
+		// Token: 0x04001A79 RID: 6777
+		left,
+		// Token: 0x04001A7A RID: 6778
+		right,
+		// Token: 0x04001A7B RID: 6779
+		center
+	}
+}

@@ -1,0 +1,17 @@
+using System;
+
+// Token: 0x02000121 RID: 289
+public class RandomAnimationUmbrella : Umbrella<RandomAnimation>
+{
+	// Token: 0x060008B7 RID: 2231 RVA: 0x0005C5E8 File Offset: 0x0005A7E8
+	public override void DispatchUpdate()
+	{
+		int num = 0;
+		int size = this.size;
+		while (num != size)
+		{
+			this.targets[num].UmbrellaUpdate();
+			num++;
+		}
+	}
+}

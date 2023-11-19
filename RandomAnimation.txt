@@ -1,0 +1,116 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200011F RID: 287
+public class RandomAnimation : UmbrellaBehaviour<RandomAnimation>, IPreAwake
+{
+	// Token: 0x060008B1 RID: 2225 RVA: 0x0005C3F0 File Offset: 0x0005A5F0
+	public bool PreAwake(int callcount)
+	{
+		if (!this.anim)
+		{
+			return true;
+		}
+		this.animCachedStates = new FastList<RandomAnimation.AnimCachedState>(0, FastListExpandMode.Exponential, 100);
+		int i = 0;
+		int num = this.animList.Length;
+		while (i < num)
+		{
+			string name = this.animList[i].name;
+			AnimationState animationState = this.anim[name];
+			if (animationState)
+			{
+				animationState.speed = Random.Range(this.minSpeed, this.maxSpeed);
+				RandomAnimation.AnimCachedState v = new RandomAnimation.AnimCachedState(this.anim[name], name);
+				this.animCachedStates.Add(v);
+			}
+			i++;
+		}
+		return true;
+	}
+
+	// Token: 0x060008B2 RID: 2226 RVA: 0x0005C498 File Offset: 0x0005A698
+	private void Start()
+	{
+		if (this.animCachedStates.size < 1)
+		{
+			return;
+		}
+		this.PlayAnim();
+		float time = Random.value * this.currentState.length;
+		this.currentState.time = time;
+		this.currentEndTimer = time;
+	}
+
+	// Token: 0x060008B3 RID: 2227 RVA: 0x0005C4E4 File Offset: 0x0005A6E4
+	public void UmbrellaUpdate()
+	{
+		if (!this.currentState || this.animCachedStates.size <= 1)
+		{
+			return;
+		}
+		if (this.currentEndTimer > 0f && this.currentState.enabled)
+		{
+			this.currentEndTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.PlayAnim();
+		}
+	}
+
+	// Token: 0x060008B4 RID: 2228 RVA: 0x0005C550 File Offset: 0x0005A750
+	private void PlayAnim()
+	{
+		int num = Random.Range(0, this.animCachedStates.size);
+		if (num != this.currentIndex)
+		{
+			RandomAnimation.AnimCachedState animCachedState = this.animCachedStates.raw[num];
+			this.anim.CrossFade(animCachedState.name);
+			this.currentState = animCachedState.animState;
+			this.currentIndex = num;
+		}
+		this.currentEndTimer = this.currentState.length - 0.3f;
+	}
+
+	// Token: 0x04000EBF RID: 3775
+	public Animation anim;
+
+	// Token: 0x04000EC0 RID: 3776
+	public AnimationClip[] animList;
+
+	// Token: 0x04000EC1 RID: 3777
+	public float minSpeed = 0.9f;
+
+	// Token: 0x04000EC2 RID: 3778
+	public float maxSpeed = 1.1f;
+
+	// Token: 0x04000EC3 RID: 3779
+	private FastList<RandomAnimation.AnimCachedState> animCachedStates;
+
+	// Token: 0x04000EC4 RID: 3780
+	private AnimationState currentState;
+
+	// Token: 0x04000EC5 RID: 3781
+	private float currentEndTimer;
+
+	// Token: 0x04000EC6 RID: 3782
+	private int currentIndex = -1;
+
+	// Token: 0x02000120 RID: 288
+	private struct AnimCachedState
+	{
+		// Token: 0x060008B5 RID: 2229 RVA: 0x0005C5D0 File Offset: 0x0005A7D0
+		public AnimCachedState(AnimationState state, string name)
+		{
+			this.animState = state;
+			this.name = name;
+		}
+
+		// Token: 0x04000EC7 RID: 3783
+		public AnimationState animState;
+
+		// Token: 0x04000EC8 RID: 3784
+		public string name;
+	}
+}

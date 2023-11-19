@@ -1,0 +1,81 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004F3 RID: 1267
+public class ShieldMusicRotaterDynamic : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002130 RID: 8496 RVA: 0x00116110 File Offset: 0x00114310
+	public bool PreAwake(int callcount)
+	{
+		this.startRotator = SignalIn.Create("startRotator", base.gameObject, delegate
+		{
+			this.rotaterStarted = true;
+		});
+		this.stopRotater = SignalIn.Create("stopRotater", base.gameObject, delegate
+		{
+			this.rotaterStarted = false;
+		});
+		this.setRotaterLeft = SignalIn.Create("setRotaterLeft", base.gameObject, new Action(this.SetRotatorLeft));
+		return true;
+	}
+
+	// Token: 0x06002131 RID: 8497 RVA: 0x00116184 File Offset: 0x00114384
+	private void Update()
+	{
+		float musicPosition_s = PersistentBehaviour<GlobalAudio>.instance.music.GetMusicPosition_s();
+		if (Mathf.Abs(this.previousMusicPos - musicPosition_s) > 3f)
+		{
+			this.secondHalfRotationActive = !this.secondHalfRotationActive;
+		}
+		float num = musicPosition_s;
+		if (this.secondHalfRotationActive)
+		{
+			num += 6f;
+		}
+		if (this.rotaterStarted)
+		{
+			float num2 = (num - this.delay) % 12f;
+			float num3 = num2 / 12f;
+			Vector3 eulerAngles = base.transform.rotation.eulerAngles;
+			eulerAngles.z = -num3 * 360f + 90f;
+			base.transform.rotation = Quaternion.Euler(eulerAngles);
+		}
+		else
+		{
+			float num4 = musicPosition_s - this.previousMusicPos;
+			if (Mathf.Abs(this.previousMusicPos - musicPosition_s) > 3f)
+			{
+				num4 = musicPosition_s + 6f - this.previousMusicPos;
+			}
+			this.delay += num4;
+		}
+		this.previousMusicPos = musicPosition_s;
+	}
+
+	// Token: 0x06002132 RID: 8498 RVA: 0x00116288 File Offset: 0x00114488
+	private void SetRotatorLeft()
+	{
+		this.delay = 3.3f;
+	}
+
+	// Token: 0x04003D8B RID: 15755
+	private float previousMusicPos;
+
+	// Token: 0x04003D8C RID: 15756
+	private bool secondHalfRotationActive;
+
+	// Token: 0x04003D8D RID: 15757
+	private SignalIn startRotator;
+
+	// Token: 0x04003D8E RID: 15758
+	private SignalIn stopRotater;
+
+	// Token: 0x04003D8F RID: 15759
+	private SignalIn setRotaterLeft;
+
+	// Token: 0x04003D90 RID: 15760
+	private bool rotaterStarted = true;
+
+	// Token: 0x04003D91 RID: 15761
+	private float delay = 0.5f;
+}

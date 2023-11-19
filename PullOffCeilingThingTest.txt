@@ -1,0 +1,127 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000473 RID: 1139
+public class PullOffCeilingThingTest : DefaultBoyInput, IPreAwake
+{
+	// Token: 0x1700008A RID: 138
+	// (get) Token: 0x06001DEE RID: 7662 RVA: 0x00101180 File Offset: 0x000FF380
+	public override bool grab
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x1700008B RID: 139
+	// (get) Token: 0x06001DEF RID: 7663 RVA: 0x00101184 File Offset: 0x000FF384
+	public override bool rawAction
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x1700008C RID: 140
+	// (get) Token: 0x06001DF0 RID: 7664 RVA: 0x00101188 File Offset: 0x000FF388
+	public override bool action
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x06001DF1 RID: 7665 RVA: 0x0010118C File Offset: 0x000FF38C
+	public bool PreAwake(int callcount)
+	{
+		this.rippedOff = SignalOut.Create("rippedOff", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001DF2 RID: 7666 RVA: 0x001011A8 File Offset: 0x000FF3A8
+	private void FixedUpdate()
+	{
+		if (!ScriptGlobals.huddle.isCharacterActive)
+		{
+			if (this.pullBlock.gameObject.activeSelf)
+			{
+				this.pullBlock.gameObject.SetActive(false);
+			}
+			return;
+		}
+		if (this.addForceNextFrame)
+		{
+			this.addForceNextFrame = false;
+			base.GetComponent<Rigidbody>().AddForce(Vector3.right * 500f + Vector3.forward * 400f);
+			HuddleUtils.SpawnFallState(ScriptGlobals.huddle, 1f, 1f);
+			ScriptGlobals.huddle.AddImpulse(Vector3.right * 2.5f, ScriptGlobals.huddle.pos + Vector3.up * 0.5f);
+		}
+		if (this.done)
+		{
+			this.letGoTimer += Time.deltaTime;
+			if (this.letGoTimer > 0.5f && this.letGoTimer < 0.7f && ScriptGlobals.huddle.input != this)
+			{
+				ScriptGlobals.huddle.input = this;
+			}
+			else if (this.letGoTimer > 1.5f && ScriptGlobals.huddle.input == this)
+			{
+				ScriptGlobals.huddle.input = null;
+				base.GetComponent<Rigidbody>().gameObject.AddComponent<HuddleNoGrab>();
+			}
+			return;
+		}
+		if (ScriptGlobals.huddle.grabState.body == base.GetComponent<Rigidbody>() && ScriptGlobals.huddle.input.stick.x > 0.6f)
+		{
+			this.frac = Mathf.Min(1f, this.frac + Time.deltaTime * 0.6f);
+			this.ripOffTimer += Time.deltaTime;
+		}
+		else
+		{
+			this.frac = Mathf.Max(0f, this.frac - Time.deltaTime);
+			if (this.ripOffTimer > 2.25f)
+			{
+				this.ripOffTimer = 2.25f;
+			}
+		}
+		this.pullBlock.transform.position = Vector3.Lerp(this.pullBlockLeft.transform.position, this.pullBlockRight.transform.position, this.frac);
+		if (this.ripOffTimer > 3f)
+		{
+			this.done = true;
+			this.addForceNextFrame = true;
+			base.GetComponent<Rigidbody>().GetComponent<HingeJoint>().breakForce = 0f;
+			this.pullBlock.gameObject.SetActive(false);
+			base.GetComponent<Rigidbody>().constraints = 0;
+			this.rippedOff.Signal();
+		}
+	}
+
+	// Token: 0x040036FA RID: 14074
+	public Transform pullBlock;
+
+	// Token: 0x040036FB RID: 14075
+	public Transform pullBlockLeft;
+
+	// Token: 0x040036FC RID: 14076
+	public Transform pullBlockRight;
+
+	// Token: 0x040036FD RID: 14077
+	private SignalOut rippedOff;
+
+	// Token: 0x040036FE RID: 14078
+	private float frac;
+
+	// Token: 0x040036FF RID: 14079
+	private float ripOffTimer;
+
+	// Token: 0x04003700 RID: 14080
+	private bool done;
+
+	// Token: 0x04003701 RID: 14081
+	private bool addForceNextFrame;
+
+	// Token: 0x04003702 RID: 14082
+	private float letGoTimer;
+}

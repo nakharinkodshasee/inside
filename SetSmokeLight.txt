@@ -1,0 +1,47 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000363 RID: 867
+public class SetSmokeLight : MonoBehaviour
+{
+	// Token: 0x060017D6 RID: 6102 RVA: 0x000D02A0 File Offset: 0x000CE4A0
+	private void OnEnable()
+	{
+		this.l = base.GetComponent<Light>();
+		this.lum = new float[this.smokeLigths.Length];
+		for (int i = 0; i < this.smokeLigths.Length; i++)
+		{
+			this.lum[i] = this.smokeLigths[i].color.grayscale;
+		}
+	}
+
+	// Token: 0x060017D7 RID: 6103 RVA: 0x000D0300 File Offset: 0x000CE500
+	private void OnDisable()
+	{
+		for (int i = 0; i < this.smokeLigths.Length; i++)
+		{
+			this.smokeLigths[i].color = Color.black;
+		}
+	}
+
+	// Token: 0x060017D8 RID: 6104 RVA: 0x000D0338 File Offset: 0x000CE538
+	private void LateUpdate()
+	{
+		for (int i = 0; i < this.smokeLigths.Length; i++)
+		{
+			this.smokeLigths[i].color = ((!this.l.enabled) ? Color.black : (this.l.color * this.l.intensity * this.multiplier));
+		}
+	}
+
+	// Token: 0x04002AB6 RID: 10934
+	public float multiplier = 1f;
+
+	// Token: 0x04002AB7 RID: 10935
+	public SmokeLight[] smokeLigths;
+
+	// Token: 0x04002AB8 RID: 10936
+	private float[] lum;
+
+	// Token: 0x04002AB9 RID: 10937
+	private Light l;
+}

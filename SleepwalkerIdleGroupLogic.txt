@@ -1,0 +1,27 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200041E RID: 1054
+public class SleepwalkerIdleGroupLogic : MonoBehaviour
+{
+	// Token: 0x06001BA5 RID: 7077 RVA: 0x000F1D84 File Offset: 0x000EFF84
+	private void Start()
+	{
+		foreach (SleepWalker item in this.group.GetComponentsInChildren<SleepWalker>())
+		{
+			this.sleepWalkers.Add(item);
+		}
+	}
+
+	// Token: 0x06001BA6 RID: 7078 RVA: 0x000F1DC4 File Offset: 0x000EFFC4
+	private void FixedUpdate()
+	{
+	}
+
+	// Token: 0x04003266 RID: 12902
+	public GameObject group;
+
+	// Token: 0x04003267 RID: 12903
+	private List<SleepWalker> sleepWalkers = new List<SleepWalker>();
+}

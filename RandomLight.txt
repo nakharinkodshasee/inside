@@ -1,0 +1,84 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000549 RID: 1353
+public class RandomLight : MonoBehaviour
+{
+	// Token: 0x0600231F RID: 8991 RVA: 0x00125A64 File Offset: 0x00123C64
+	public static float GetRandomRange(float min, float max)
+	{
+		return min + Random.value * (max - min);
+	}
+
+	// Token: 0x06002320 RID: 8992 RVA: 0x00125A74 File Offset: 0x00123C74
+	private void Start()
+	{
+		this.startPos = base.transform.localPosition;
+		this.startIntensity = base.GetComponent<Light>().intensity;
+		this.rndUp = RandomLight.GetRandomRange(10f, 20f);
+		this.rndRight = RandomLight.GetRandomRange(10f, 20f);
+		this.rndForward = RandomLight.GetRandomRange(10f, 20f);
+		this.colorStart = base.GetComponent<Light>().color;
+	}
+
+	// Token: 0x06002321 RID: 8993 RVA: 0x00125AF4 File Offset: 0x00123CF4
+	private void Update()
+	{
+		Vector3 vector = Vector3.up * ((float)Math.Sin(Time.timeDbl * (double)this.speed * (double)this.rndUp) - 0.5f);
+		Vector3 vector2 = Vector3.right * ((float)Math.Sin(Time.timeDbl * (double)this.speed * (double)this.rndRight) - 0.5f);
+		Vector3 vector3 = Vector3.forward * ((float)Math.Sin(Time.timeDbl * (double)this.speed * (double)this.rndForward) - 0.5f);
+		base.transform.localPosition = this.startPos + (vector + vector2 + vector3) * this.jitter;
+		float num = (float)(Time.timeDbl * 0.5 % 1.0);
+		float num2 = this.animCurv.Evaluate(num);
+		base.GetComponent<Light>().intensity = this.startIntensity + num2;
+		float num3 = this.colorCurvR.Evaluate(num);
+		float num4 = this.colorCurvG.Evaluate(num);
+		float num5 = this.colorCurvB.Evaluate(num);
+		base.GetComponent<Light>().color = new Color(this.colorStart.r + num3, this.colorStart.g + num4, this.colorStart.b + num5);
+	}
+
+	// Token: 0x040041A7 RID: 16807
+	public float speed = 1f;
+
+	// Token: 0x040041A8 RID: 16808
+	public float jitter = 1f;
+
+	// Token: 0x040041A9 RID: 16809
+	private float startIntensity;
+
+	// Token: 0x040041AA RID: 16810
+	public AnimationCurve animCurv;
+
+	// Token: 0x040041AB RID: 16811
+	public float intensityNoiseSpd = 1f;
+
+	// Token: 0x040041AC RID: 16812
+	public float intensityNoiseMult = 1f;
+
+	// Token: 0x040041AD RID: 16813
+	public AnimationCurve colorCurvR;
+
+	// Token: 0x040041AE RID: 16814
+	public AnimationCurve colorCurvG;
+
+	// Token: 0x040041AF RID: 16815
+	public AnimationCurve colorCurvB;
+
+	// Token: 0x040041B0 RID: 16816
+	private Color colorStart;
+
+	// Token: 0x040041B1 RID: 16817
+	private Vector3 startPos;
+
+	// Token: 0x040041B2 RID: 16818
+	private float rndUp;
+
+	// Token: 0x040041B3 RID: 16819
+	private float rndRight;
+
+	// Token: 0x040041B4 RID: 16820
+	private float rndForward;
+
+	// Token: 0x040041B5 RID: 16821
+	private float timerRnd = 2f;
+}

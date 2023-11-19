@@ -1,0 +1,42 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005CD RID: 1485
+public class RayCastTest : MonoBehaviour
+{
+	// Token: 0x060025B5 RID: 9653 RVA: 0x00133E78 File Offset: 0x00132078
+	private void Start()
+	{
+		this.hitPos = new Vector3(10f, 10f, 0f);
+	}
+
+	// Token: 0x060025B6 RID: 9654 RVA: 0x00133E94 File Offset: 0x00132094
+	private void FixedUpdate()
+	{
+		RaycastHit raycastHit;
+		if (PDPhysics.Raycast(base.transform.position, Vector3.down, out raycastHit, base.gameObject))
+		{
+			this.hitPos = raycastHit.point;
+			Debug.Log(base.transform.name + " hits: " + raycastHit.transform.name);
+		}
+		else
+		{
+			Vector3 position = base.transform.position;
+			position.y = -100f;
+			this.hitPos = position;
+		}
+	}
+
+	// Token: 0x060025B7 RID: 9655 RVA: 0x00133F1C File Offset: 0x0013211C
+	private void OnDrawGizmosSelected()
+	{
+		Gizmos.color = Color.green;
+		Gizmos.DrawLine(base.transform.position, this.hitPos);
+	}
+
+	// Token: 0x040044DE RID: 17630
+	public Color color;
+
+	// Token: 0x040044DF RID: 17631
+	private Vector3 hitPos;
+}

@@ -1,0 +1,650 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000E4 RID: 228
+public class SleepWalker : UmbrellaBehaviour<SleepWalker>, IPreAwake
+{
+	// Token: 0x06000714 RID: 1812 RVA: 0x0004FE68 File Offset: 0x0004E068
+	public bool PreAwake(int callcount)
+	{
+		this.doFallDown = SignalIn.Create("doFallDown", base.gameObject, new Action(this.FallDown));
+		this.anim[this.walkAnim].speed *= this.walkSpeedScale;
+		this.anim.wrapMode = 2;
+		if (this.jumpAnim != string.Empty)
+		{
+			this.anim[this.jumpAnim].wrapMode = 1;
+		}
+		if (this.turnAroundAnim != string.Empty)
+		{
+			this.anim[this.turnAroundAnim].wrapMode = 1;
+		}
+		if (this.fallDownAnim != string.Empty)
+		{
+			this.anim[this.fallDownAnim].wrapMode = 1;
+		}
+		if (this.twitchAnim != string.Empty)
+		{
+			this.anim[this.twitchAnim].wrapMode = 1;
+		}
+		if (this.state == SleepWalker.State.None)
+		{
+			this.state = SleepWalker.State.Idle;
+		}
+		return true;
+	}
+
+	// Token: 0x06000715 RID: 1813 RVA: 0x0004FF8C File Offset: 0x0004E18C
+	protected override void OnEnable()
+	{
+		if (this.anim && this.idleAnim != string.Empty)
+		{
+			this.anim.Play(this.idleAnim);
+		}
+		base.OnEnable();
+	}
+
+	// Token: 0x06000716 RID: 1814 RVA: 0x0004FFCC File Offset: 0x0004E1CC
+	public void Initialize()
+	{
+		this.anim = base.GetComponentInChildren<Animation>();
+		this.sleepWalkerTransform = base.transform;
+		this.sleepWalkerRigidbody = base.GetComponent<Rigidbody>();
+		this.localPosOffset = -this.sleepWalkerTransform.parent.position;
+		if (this.sleepWalkerCollection)
+		{
+			this.collectionExist = true;
+		}
+		if (this.sleepWalkerRigidbody)
+		{
+			this.rigidbodyExist = true;
+		}
+		for (int i = 0; i < base.transform.childCount; i++)
+		{
+			Transform child = base.transform.GetChild(i);
+			if (child.GetComponent<Animation>() != null)
+			{
+				this.animationCharacter = child;
+			}
+		}
+	}
+
+	// Token: 0x06000717 RID: 1815 RVA: 0x00050088 File Offset: 0x0004E288
+	public void FallDown()
+	{
+		this.anim.Stop();
+		this.fellDown = true;
+		this.anim.CrossFade(this.fallDownAnim, 0.1f);
+	}
+
+	// Token: 0x06000718 RID: 1816 RVA: 0x000500C0 File Offset: 0x0004E2C0
+	public void SaveStateLoaded()
+	{
+		this.lineUpStarted = true;
+		if (this.loadCompletePos && this.sleepWalkerTransform.position.x > this.sleepWalkerCollection.rotateAfterPosX)
+		{
+			this.sleepWalkerTransform.position = this.loadCompletePos.position;
+			this.sleepWalkerTransform.rotation = this.loadCompletePos.rotation;
+			this.cachedPos = this.loadCompletePos.position;
+			this.walkDirection = this.sleepWalkerTransform.forward;
+		}
+		this.localPosOffset = -this.sleepWalkerTransform.parent.position;
+	}
+
+	// Token: 0x06000719 RID: 1817 RVA: 0x00050170 File Offset: 0x0004E370
+	public void LoadTerminated()
+	{
+		if (this.sleepWalkerTransform.position.x > this.sleepWalkerCollection.rotateAfterPosX)
+		{
+			if (this.loadCompletePos)
+			{
+				this.sleepWalkerTransform.position = this.loadCompletePos.position;
+				this.sleepWalkerTransform.rotation = this.loadCompletePos.rotation;
+				this.cachedPos = this.loadCompletePos.position;
+				this.walkDirection = this.sleepWalkerTransform.forward;
+			}
+			else
+			{
+				base.gameObject.SetActive(false);
+			}
+		}
+		this.localPosOffset = -this.sleepWalkerTransform.parent.position;
+	}
+
+	// Token: 0x0600071A RID: 1818 RVA: 0x0005022C File Offset: 0x0004E42C
+	public void StartWalking()
+	{
+		if (this.running)
+		{
+			return;
+		}
+		this.sleepWalkerCollection.NoOfTwitchesThisWalk = 0;
+		this.lineUpStarted = true;
+		this.delay = this.walkDelay + Random.Range(0f, this.walkDelayRandomAdd);
+		if (!this.pushed)
+		{
+			this.state = SleepWalker.State.Walk;
+		}
+		this.jumpActive = false;
+		this.turnAroundActive = false;
+		this.jumpTurnAroundSoundQueueReached = false;
+		this.walkSoundActive = true;
+	}
+
+	// Token: 0x0600071B RID: 1819 RVA: 0x000502A4 File Offset: 0x0004E4A4
+	public void Stop()
+	{
+		if (this.running)
+		{
+			return;
+		}
+		if (!this.pushed)
+		{
+			this.state = SleepWalker.State.Idle;
+		}
+		this.walkSoundActive = false;
+		this.delay = this.walkDelay + Random.Range(0f, this.walkDelayRandomAdd);
+	}
+
+	// Token: 0x0600071C RID: 1820 RVA: 0x000502F4 File Offset: 0x0004E4F4
+	public void UpdateParentPosition()
+	{
+		this.localPosOffset = -this.sleepWalkerTransform.parent.position;
+	}
+
+	// Token: 0x0600071D RID: 1821 RVA: 0x00050314 File Offset: 0x0004E514
+	private void Move(float dt)
+	{
+		Vector3 vector = this.cachedPos;
+		if (this.sleepWalkerCollection)
+		{
+			this.EndRotation(dt);
+			float num = dt * this.sleepWalkerCollection.walkSpeed * this.walkSpeedScale;
+			vector.x += this.walkDirection.x * num;
+			vector.y += this.walkDirection.y * num;
+			vector.z += this.walkDirection.z * num;
+		}
+		this.cachedPos = vector;
+		if (this.rigidbodyExist)
+		{
+			this.sleepWalkerRigidbody.MovePosition(vector);
+		}
+		else
+		{
+			vector.x += this.localPosOffset.x;
+			vector.y += this.localPosOffset.y;
+			vector.z += this.localPosOffset.z;
+			this.sleepWalkerTransform.localPosition = vector;
+			this.animationCharacter.SetLocalPositionNoNotify(Vector3Fast.zero);
+		}
+	}
+
+	// Token: 0x0600071E RID: 1822 RVA: 0x00050430 File Offset: 0x0004E630
+	public void Jump()
+	{
+		this.anim.CrossFade(this.jumpAnim, 0.1f);
+		this.jumpTime = 1.5f;
+		this.jumpTurnAroundSoundQueueReached = false;
+		this.jumpActive = true;
+	}
+
+	// Token: 0x0600071F RID: 1823 RVA: 0x00050464 File Offset: 0x0004E664
+	public void JumpTurnAroundQueue()
+	{
+		if (!this.jumpActive && !this.turnAroundActive)
+		{
+			this.jumpTurnAroundSoundQueueReached = true;
+			this.jumpTime = Random.Range(0f, 0.15f);
+			this.turnAroundTime = Random.Range(0f, 0.15f);
+		}
+	}
+
+	// Token: 0x06000720 RID: 1824 RVA: 0x000504B8 File Offset: 0x0004E6B8
+	private void UpdateJumpZone()
+	{
+		if (this.jumpTurnAroundSoundQueueReached)
+		{
+			this.jumpTime -= Time.deltaTime;
+			if (this.jumpTime <= 0f)
+			{
+				this.Jump();
+			}
+		}
+		if (this.jumpActive)
+		{
+			this.jumpTime -= Time.deltaTime;
+			if (this.jumpTime <= 0f)
+			{
+				this.anim.Blend(this.idleAnim, 1f, 0.25f);
+			}
+		}
+	}
+
+	// Token: 0x06000721 RID: 1825 RVA: 0x00050540 File Offset: 0x0004E740
+	private void TurnAround()
+	{
+		this.anim.CrossFade(this.turnAroundAnim, 0.1f);
+		this.turnAroundTime = 2f;
+		this.jumpTurnAroundSoundQueueReached = false;
+		this.turnAroundActive = true;
+	}
+
+	// Token: 0x06000722 RID: 1826 RVA: 0x00050574 File Offset: 0x0004E774
+	private void EndRotation(float dt)
+	{
+		if (this.cachedPos.x > this.sleepWalkerCollection.rotateAfterPosX && this.walkDirection.z < 1f)
+		{
+			this.walkDirection.z = this.walkDirection.z + this.sleepWalkerCollection.rotateSpeed * dt;
+			this.walkDirection.x = 1f - this.walkDirection.z;
+			this.sleepWalkerTransform.LookAt(this.cachedPos + this.walkDirection);
+		}
+	}
+
+	// Token: 0x06000723 RID: 1827 RVA: 0x00050608 File Offset: 0x0004E808
+	private void UpdateTurnAroundZone()
+	{
+		if (this.jumpTurnAroundSoundQueueReached)
+		{
+			this.turnAroundTime -= Time.deltaTime;
+			if (this.turnAroundTime <= 0f)
+			{
+				this.TurnAround();
+			}
+		}
+		if (this.turnAroundActive)
+		{
+			this.turnAroundTime -= Time.deltaTime;
+			if (this.turnAroundTime <= 0f)
+			{
+				this.anim.Blend(this.idleAnim, 1f, 0.25f);
+			}
+		}
+	}
+
+	// Token: 0x17000028 RID: 40
+	// (get) Token: 0x06000724 RID: 1828 RVA: 0x00050690 File Offset: 0x0004E890
+	public bool IsTwitching
+	{
+		get
+		{
+			return this.doingTwitch;
+		}
+	}
+
+	// Token: 0x06000725 RID: 1829 RVA: 0x00050698 File Offset: 0x0004E898
+	private void DisableLOGIC()
+	{
+		this.logicDisabled = true;
+	}
+
+	// Token: 0x06000726 RID: 1830 RVA: 0x000506A4 File Offset: 0x0004E8A4
+	private void DoTwitch()
+	{
+		if (this.logicDisabled)
+		{
+			return;
+		}
+		this.twitchDelay = Random.Range(0.5f, 2.5f);
+		this.sleepWalkerCollection.NoOfTwitchesThisWalk++;
+		this.twitchCooldown = 8f;
+	}
+
+	// Token: 0x06000727 RID: 1831 RVA: 0x000506F0 File Offset: 0x0004E8F0
+	private void IdleState()
+	{
+		if (this.pushed)
+		{
+			return;
+		}
+		float deltaTime = Time.deltaTime;
+		if (this.walking)
+		{
+			this.Move(deltaTime);
+		}
+		if (this.delay > 0f)
+		{
+			this.delay -= deltaTime;
+			return;
+		}
+		if (this.walking)
+		{
+			this.anim.CrossFade(this.idleAnim, 0.25f);
+			this.walking = false;
+			if (!this.sleepWalkerCollection.jumpZone.IsInsideZone(this.sleepWalkerTransform) && !this.sleepWalkerCollection.turnAroundZone.IsInsideZone(this.sleepWalkerTransform) && this.sleepWalkerCollection.NoOfTwitchesThisWalk < 4 && this.twitchCooldown < 0f && Random.Range(0f, 1f) > 0.6f)
+			{
+				this.DoTwitch();
+			}
+		}
+		if (this.sleepWalkerCollection)
+		{
+			if (this.sleepWalkerCollection.jumpZone.IsInsideZone(this.sleepWalkerTransform))
+			{
+				this.UpdateJumpZone();
+			}
+			else if (this.sleepWalkerCollection.turnAroundZone.IsInsideZone(this.sleepWalkerTransform))
+			{
+				this.UpdateTurnAroundZone();
+			}
+		}
+		this.twitchCooldown -= deltaTime;
+		if (this.twitchDelay > 0f)
+		{
+			this.twitchDelay -= deltaTime;
+			if (this.twitchDelay < 0f)
+			{
+				this.anim.CrossFade(this.twitchAnim, 0.25f);
+				this.doingTwitch = true;
+				this.twitchTime = 1.25f;
+			}
+		}
+		if (this.doingTwitch)
+		{
+			this.twitchTime -= deltaTime;
+			if (this.twitchTime < 0f)
+			{
+				this.anim.CrossFade(this.idleAnim, 0.5f);
+				this.doingTwitch = false;
+			}
+		}
+	}
+
+	// Token: 0x06000728 RID: 1832 RVA: 0x000508E0 File Offset: 0x0004EAE0
+	private void WalkState()
+	{
+		float deltaTime = Time.deltaTime;
+		if (this.pushed)
+		{
+			return;
+		}
+		if (this.walking)
+		{
+			this.Move(deltaTime);
+		}
+		if (this.delay > 0f)
+		{
+			this.delay -= deltaTime;
+			return;
+		}
+		if (!this.walking)
+		{
+			this.anim.CrossFade(this.walkAnim, 0.25f);
+			this.walking = true;
+		}
+	}
+
+	// Token: 0x06000729 RID: 1833 RVA: 0x00050958 File Offset: 0x0004EB58
+	public void BoyRan()
+	{
+		if (!this.running)
+		{
+			this.boyRan = true;
+		}
+	}
+
+	// Token: 0x0600072A RID: 1834 RVA: 0x0005096C File Offset: 0x0004EB6C
+	private void PushedState()
+	{
+		this.pushedTimer += Time.deltaTime;
+		if (this.pushedTimer < 0.75f)
+		{
+			Vector3 position = this.sleepWalkerTransform.position;
+			position.x += 1f * Time.deltaTime;
+			this.cachedPos = position;
+			this.sleepWalkerTransform.position = position;
+		}
+		if (this.pushedTimer >= 1.25f)
+		{
+			if (!this.walkSoundActive)
+			{
+				if (this.pushedTimer >= 7f)
+				{
+					this.anim.CrossFade(this.idleAnim, 2f);
+					this.state = SleepWalker.State.Idle;
+					this.pushed = false;
+				}
+			}
+			else
+			{
+				this.anim.CrossFade(this.walkAnim, 0.25f);
+				this.state = SleepWalker.State.Walk;
+				this.pushed = false;
+			}
+		}
+	}
+
+	// Token: 0x0600072B RID: 1835 RVA: 0x00050A4C File Offset: 0x0004EC4C
+	private void TestForPush()
+	{
+		Vector3 boyPos = this.sleepWalkerCollection.GetBoyPos();
+		Vector3 vector = this.cachedPos;
+		Vector3 vector2 = boyPos;
+		vector2.x -= vector.x;
+		vector2.y -= vector.y;
+		vector2.z -= vector.z;
+		if (FastMath.Abs(vector2.x) < 0.4f && FastMath.Abs(vector2.y) < 1.7f && FastMath.Abs(vector2.z) < 0.4f)
+		{
+			this.PlayPush();
+		}
+	}
+
+	// Token: 0x0600072C RID: 1836 RVA: 0x00050AF8 File Offset: 0x0004ECF8
+	public void PlayIdle()
+	{
+		this.anim.Blend(this.idleAnim, 1f, 0.25f);
+	}
+
+	// Token: 0x0600072D RID: 1837 RVA: 0x00050B18 File Offset: 0x0004ED18
+	public void PlayPush()
+	{
+		if (this.fellDown)
+		{
+			return;
+		}
+		if (!this.haveBeenPushedOnce && this.pushAnim != string.Empty && (!this.jumpActive || this.jumpTime <= 0f))
+		{
+			this.anim.CrossFade(this.pushAnim, 0.25f);
+			this.pushed = true;
+			this.haveBeenPushedOnce = true;
+			this.state = SleepWalker.State.Pushed;
+		}
+	}
+
+	// Token: 0x0600072E RID: 1838 RVA: 0x00050B98 File Offset: 0x0004ED98
+	public void UmbrellaFixedUpdate()
+	{
+		if (this.fellDown || this.logicDisabled)
+		{
+			return;
+		}
+		if (this.firstUpdate)
+		{
+			this.firstUpdate = false;
+			this.cachedPos = this.sleepWalkerTransform.position;
+		}
+		if (this.lineUpStarted)
+		{
+			this.TestForPush();
+		}
+		switch (this.state)
+		{
+		case SleepWalker.State.Idle:
+			this.IdleState();
+			break;
+		case SleepWalker.State.Walk:
+			this.WalkState();
+			break;
+		case SleepWalker.State.Pushed:
+			this.PushedState();
+			break;
+		}
+	}
+
+	// Token: 0x04000C47 RID: 3143
+	public SleepWalkerCollection sleepWalkerCollection;
+
+	// Token: 0x04000C48 RID: 3144
+	public string walkAnim;
+
+	// Token: 0x04000C49 RID: 3145
+	public string idleAnim;
+
+	// Token: 0x04000C4A RID: 3146
+	public string jumpAnim;
+
+	// Token: 0x04000C4B RID: 3147
+	public string twitchAnim;
+
+	// Token: 0x04000C4C RID: 3148
+	public string pushAnim;
+
+	// Token: 0x04000C4D RID: 3149
+	public string turnAroundAnim;
+
+	// Token: 0x04000C4E RID: 3150
+	public string fallDownAnim;
+
+	// Token: 0x04000C4F RID: 3151
+	public float walkSpeedScale;
+
+	// Token: 0x04000C50 RID: 3152
+	public float walkDelay;
+
+	// Token: 0x04000C51 RID: 3153
+	public float walkDelayRandomAdd = 0.15f;
+
+	// Token: 0x04000C52 RID: 3154
+	public Vector3 walkDirection = Vector3.right;
+
+	// Token: 0x04000C53 RID: 3155
+	public Transform loadCompletePos;
+
+	// Token: 0x04000C54 RID: 3156
+	private SleepWalker.State state;
+
+	// Token: 0x04000C55 RID: 3157
+	private bool walking;
+
+	// Token: 0x04000C56 RID: 3158
+	private float lineupLength;
+
+	// Token: 0x04000C57 RID: 3159
+	private Vector3 startLinePos;
+
+	// Token: 0x04000C58 RID: 3160
+	private bool fellDown;
+
+	// Token: 0x04000C59 RID: 3161
+	private bool pushed;
+
+	// Token: 0x04000C5A RID: 3162
+	private bool lineUpStarted;
+
+	// Token: 0x04000C5B RID: 3163
+	private float delay;
+
+	// Token: 0x04000C5C RID: 3164
+	private bool firstUpdate = true;
+
+	// Token: 0x04000C5D RID: 3165
+	private SignalIn doFallDown;
+
+	// Token: 0x04000C5E RID: 3166
+	[HideInInspector]
+	[SerializeField]
+	private Vector3 cachedPos = Vector3Fast.zero;
+
+	// Token: 0x04000C5F RID: 3167
+	[SerializeField]
+	[HideInInspector]
+	private bool rigidbodyExist;
+
+	// Token: 0x04000C60 RID: 3168
+	[HideInInspector]
+	[SerializeField]
+	private bool collectionExist;
+
+	// Token: 0x04000C61 RID: 3169
+	[SerializeField]
+	[HideInInspector]
+	private Transform animationCharacter;
+
+	// Token: 0x04000C62 RID: 3170
+	[HideInInspector]
+	[SerializeField]
+	private Transform sleepWalkerTransform;
+
+	// Token: 0x04000C63 RID: 3171
+	[HideInInspector]
+	[SerializeField]
+	private Rigidbody sleepWalkerRigidbody;
+
+	// Token: 0x04000C64 RID: 3172
+	[SerializeField]
+	[HideInInspector]
+	private Animation anim;
+
+	// Token: 0x04000C65 RID: 3173
+	[SerializeField]
+	[HideInInspector]
+	private Vector3 localPosOffset = Vector3Fast.zero;
+
+	// Token: 0x04000C66 RID: 3174
+	private bool walkSoundActive;
+
+	// Token: 0x04000C67 RID: 3175
+	private bool teleportBackOnNextMove;
+
+	// Token: 0x04000C68 RID: 3176
+	private bool jumpTurnAroundSoundQueueReached;
+
+	// Token: 0x04000C69 RID: 3177
+	private bool jumpActive;
+
+	// Token: 0x04000C6A RID: 3178
+	private float jumpTime = 1f;
+
+	// Token: 0x04000C6B RID: 3179
+	private bool turnAroundActive;
+
+	// Token: 0x04000C6C RID: 3180
+	private float turnAroundTime = 1f;
+
+	// Token: 0x04000C6D RID: 3181
+	private float twitchDelay = -1f;
+
+	// Token: 0x04000C6E RID: 3182
+	private bool doingTwitch;
+
+	// Token: 0x04000C6F RID: 3183
+	private float twitchTime = 1f;
+
+	// Token: 0x04000C70 RID: 3184
+	private float twitchCooldown;
+
+	// Token: 0x04000C71 RID: 3185
+	private bool logicDisabled;
+
+	// Token: 0x04000C72 RID: 3186
+	private bool running;
+
+	// Token: 0x04000C73 RID: 3187
+	private bool boyRan;
+
+	// Token: 0x04000C74 RID: 3188
+	private float pushedTimer;
+
+	// Token: 0x04000C75 RID: 3189
+	private bool haveBeenPushedOnce;
+
+	// Token: 0x020000E5 RID: 229
+	public enum State
+	{
+		// Token: 0x04000C77 RID: 3191
+		None,
+		// Token: 0x04000C78 RID: 3192
+		Idle,
+		// Token: 0x04000C79 RID: 3193
+		Walk,
+		// Token: 0x04000C7A RID: 3194
+		Pushed
+	}
+}

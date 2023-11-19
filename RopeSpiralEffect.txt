@@ -1,0 +1,329 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000216 RID: 534
+public class RopeSpiralEffect : MonoBehaviour
+{
+	// Token: 0x0600106E RID: 4206 RVA: 0x0009B4F4 File Offset: 0x000996F4
+	[LateProcessBuild(0)]
+	public void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		for (int i = 0; i < this.nrOfSegments; i++)
+		{
+			if (i > this.mSegments.Count - 1)
+			{
+				RopeSpiralEffect.SpringSegment springSegment = new RopeSpiralEffect.SpringSegment(Object.Instantiate<GameObject>(this.spiralPrefab), base.transform);
+				springSegment.position = (float)i / (float)this.nrOfSegments * 13f;
+				this.mSegments.Add(springSegment);
+			}
+		}
+	}
+
+	// Token: 0x0600106F RID: 4207 RVA: 0x0009B578 File Offset: 0x00099778
+	private void Awake()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x06001070 RID: 4208 RVA: 0x0009B580 File Offset: 0x00099780
+	private void DoTheUpdate(float deltaTime)
+	{
+		this.RecreateSpiral(deltaTime);
+		for (int i = 0; i < this.mSegments.Count; i++)
+		{
+			Vector3 toNext = Vector3.zero;
+			if (i < this.mSegments.Count - 1)
+			{
+				toNext = this.mSegments[i + 1].segment.transform.position - this.mSegments[i].segment.transform.position;
+			}
+			else
+			{
+				toNext = this.mWirePoints[this.mWirePoints.Count - 1] - this.mSegments[i].segment.transform.position;
+			}
+			this.ApplyGravity(this.mSegments[i], toNext);
+		}
+	}
+
+	// Token: 0x06001071 RID: 4209 RVA: 0x0009B658 File Offset: 0x00099858
+	private void Update()
+	{
+		if (this.mWirePoints == null || this.mWirePoints.Count == 0)
+		{
+			return;
+		}
+		if (Time.deltaTime == 0f)
+		{
+			return;
+		}
+		this.DoTheUpdate(0.015f);
+	}
+
+	// Token: 0x06001072 RID: 4210 RVA: 0x0009B694 File Offset: 0x00099894
+	private void UpdateVisuals()
+	{
+		for (int i = 0; i < this.mSegments.Count; i++)
+		{
+			Vector3 position = this.EvaluatePositionFromDistance(this.mSegments[i].position);
+			this.mSegments[i].segment.transform.position = position;
+		}
+		for (int j = 0; j < this.mSegments.Count; j++)
+		{
+			Vector3 toNext = Vector3.zero;
+			if (j < this.mSegments.Count - 1)
+			{
+				toNext = this.mSegments[j + 1].segment.transform.position - this.mSegments[j].segment.transform.position;
+			}
+			else
+			{
+				toNext = this.mWirePoints[this.mWirePoints.Count - 1] - this.mSegments[j].segment.transform.position;
+			}
+			this.UpdateVisualsForSegment(this.mSegments[j], toNext);
+		}
+	}
+
+	// Token: 0x06001073 RID: 4211 RVA: 0x0009B7B8 File Offset: 0x000999B8
+	private void UpdateVisualsForSegment(RopeSpiralEffect.SpringSegment segment, Vector3 toNext)
+	{
+		if (toNext == Vector3.zero)
+		{
+			toNext = (this.mWirePoints[this.mWirePoints.Count - 1] - this.mWirePoints[0]).normalized;
+		}
+		if (Mathf.Abs(Vector3.Dot(toNext, Vector3.right)) < 0.98f && toNext != Vector3.zero)
+		{
+			Vector3 vector = Vector3.Cross(toNext, Vector3.right);
+			segment.segment.transform.rotation = Quaternion.LookRotation(vector, toNext);
+		}
+		Vector3 localScale = segment.segment.transform.localScale;
+		localScale.y = toNext.magnitude;
+		localScale.x = (localScale.z = this.radius * 2f);
+		segment.segment.transform.localScale = localScale;
+	}
+
+	// Token: 0x06001074 RID: 4212 RVA: 0x0009B8A4 File Offset: 0x00099AA4
+	private void ApplyGravity(RopeSpiralEffect.SpringSegment segment, Vector3 toNext)
+	{
+		if (Time.fixedDeltaTime > 0f)
+		{
+			float num = Vector3.Dot(Vector3.down, toNext.normalized);
+			segment.velocity += this.gravityEffect * num * Time.deltaTime / Time.fixedDeltaTime;
+		}
+	}
+
+	// Token: 0x06001075 RID: 4213 RVA: 0x0009B8F4 File Offset: 0x00099AF4
+	private void RecreateSpiral(float deltaTime)
+	{
+		if (this.mWirePoints == null || this.mWirePoints.Count < 2)
+		{
+			return;
+		}
+		this.actualFrames++;
+		if (this.actualFrames <= 2)
+		{
+			return;
+		}
+		float totalLengthOfRope = this.GetTotalLengthOfRope();
+		if (totalLengthOfRope < 1E-45f)
+		{
+			return;
+		}
+		for (int i = 0; i < this.nrOfSegments; i++)
+		{
+			RopeSpiralEffect.SpringSegment aSpringSegment = this.mSegments[i];
+			this.HandleSpringBehaviour(aSpringSegment, i, totalLengthOfRope, deltaTime);
+		}
+		float num = -this.minimumDistanceBetweenSegments;
+		for (int j = 0; j < this.mSegments.Count; j++)
+		{
+			this.HandleVelocity(ref num, totalLengthOfRope, j, deltaTime);
+		}
+	}
+
+	// Token: 0x06001076 RID: 4214 RVA: 0x0009B9B0 File Offset: 0x00099BB0
+	private void HandleVelocity(ref float lastPos, float totalLength, int index, float deltaTime)
+	{
+		RopeSpiralEffect.SpringSegment springSegment = this.mSegments[index];
+		float num = (index >= this.mSegments.Count - 1) ? totalLength : this.mSegments[index + 1].position;
+		float num2 = lastPos + this.minimumDistanceBetweenSegments;
+		float num3 = num - this.minimumDistanceBetweenSegments;
+		springSegment.position += springSegment.velocity * deltaTime;
+		if (num3 > num2)
+		{
+			springSegment.position = Mathf.Clamp(springSegment.position, num2, num3);
+		}
+		else
+		{
+			this.CapPositionsAtMax(index, num);
+		}
+		lastPos = springSegment.position;
+	}
+
+	// Token: 0x06001077 RID: 4215 RVA: 0x0009BA50 File Offset: 0x00099C50
+	private void CapPositionsAtMax(int index, float aPrevPos)
+	{
+		if (index < 0 || this.mSegments[index].position <= aPrevPos - this.minimumDistanceBetweenSegments)
+		{
+			return;
+		}
+		this.mSegments[index].position = Mathf.Max(aPrevPos - this.minimumDistanceBetweenSegments, 0f);
+		this.CapPositionsAtMax(index - 1, this.mSegments[index].position);
+	}
+
+	// Token: 0x06001078 RID: 4216 RVA: 0x0009BAC0 File Offset: 0x00099CC0
+	private float GetTotalLengthOfRope()
+	{
+		float num = 0f;
+		for (int i = 0; i < this.mWirePoints.Count - 1; i++)
+		{
+			num += (this.mWirePoints[i] - this.mWirePoints[i + 1]).magnitude;
+		}
+		return num;
+	}
+
+	// Token: 0x06001079 RID: 4217 RVA: 0x0009BB1C File Offset: 0x00099D1C
+	private void HandleSpringBehaviour(RopeSpiralEffect.SpringSegment aSpringSegment, int anIndex, float aTotalLength, float deltaTime)
+	{
+		if (anIndex == 0)
+		{
+			aSpringSegment.position = 0f;
+			aSpringSegment.velocity = 0f;
+		}
+		else
+		{
+			float num = (anIndex >= this.mSegments.Count - 1) ? aTotalLength : this.mSegments[anIndex + 1].position;
+			aSpringSegment.velocity += this.GetSpringForceFromBothNeigbours(anIndex, aTotalLength) * deltaTime;
+		}
+	}
+
+	// Token: 0x0600107A RID: 4218 RVA: 0x0009BB90 File Offset: 0x00099D90
+	private float GetSpringForceFromBothNeigbours(int aSpringIndex, float aTotalLength)
+	{
+		RopeSpiralEffect.SpringSegment springSegment = this.mSegments[aSpringIndex];
+		float num = this.HookesLawVelocity(springSegment.position, this.mSegments[aSpringIndex - 1].position, springSegment.velocity, this.mSegments[aSpringIndex - 1].velocity);
+		float aTargetPosition = (aSpringIndex >= this.mSegments.Count - 1) ? aTotalLength : this.mSegments[aSpringIndex + 1].position;
+		float aTargetVelocity = (aSpringIndex >= this.mSegments.Count - 1) ? 0f : this.mSegments[aSpringIndex + 1].velocity;
+		return num + this.HookesLawVelocity(springSegment.position, aTargetPosition, springSegment.velocity, aTargetVelocity);
+	}
+
+	// Token: 0x0600107B RID: 4219 RVA: 0x0009BC5C File Offset: 0x00099E5C
+	private float HookesLawVelocity(float aSelfPosition, float aTargetPosition, float aSelfVelocity, float aTargetVelocity)
+	{
+		return -this.springStrength * (aSelfPosition - aTargetPosition) - this.springDamping * (aSelfVelocity - aTargetVelocity);
+	}
+
+	// Token: 0x0600107C RID: 4220 RVA: 0x0009BC78 File Offset: 0x00099E78
+	private Vector3 EvaluatePositionFromDistance(float aDistance)
+	{
+		float num = aDistance;
+		for (int i = 0; i < this.mWirePoints.Count - 1; i++)
+		{
+			Vector3 vector = this.mWirePoints[i + 1] - this.mWirePoints[i];
+			if (vector.magnitude > num)
+			{
+				return this.mWirePoints[i] + vector.normalized * num;
+			}
+			num -= vector.magnitude;
+		}
+		return this.mWirePoints[this.mWirePoints.Count - 1];
+	}
+
+	// Token: 0x0600107D RID: 4221 RVA: 0x0009BD14 File Offset: 0x00099F14
+	public void SetPoints(FastList<GameObject> aRope)
+	{
+		this.mWirePoints.Clear();
+		for (int i = 0; i < aRope.Count; i++)
+		{
+			this.mWirePoints.Add(aRope[i].transform.position);
+		}
+		this.UpdateVisuals();
+	}
+
+	// Token: 0x0600107E RID: 4222 RVA: 0x0009BD68 File Offset: 0x00099F68
+	public void AddVelocityOnAllSegments(float aVelocity)
+	{
+		int i = 0;
+		int count = this.mSegments.Count;
+		while (i < count)
+		{
+			this.mSegments[i].velocity += aVelocity;
+			i++;
+		}
+	}
+
+	// Token: 0x0600107F RID: 4223 RVA: 0x0009BDAC File Offset: 0x00099FAC
+	public void AddVelocityToBeginning(float aVelocity)
+	{
+		this.mSegments[1].velocity += aVelocity;
+	}
+
+	// Token: 0x06001080 RID: 4224 RVA: 0x0009BDC8 File Offset: 0x00099FC8
+	public void AddVelocityToEnd(float aVelocity)
+	{
+		this.mSegments[this.mSegments.Count - 1].velocity += aVelocity;
+	}
+
+	// Token: 0x04001DAF RID: 7599
+	public GameObject spiralPrefab;
+
+	// Token: 0x04001DB0 RID: 7600
+	public int nrOfSegments = 10;
+
+	// Token: 0x04001DB1 RID: 7601
+	public float radius = 0.5f;
+
+	// Token: 0x04001DB2 RID: 7602
+	public float minimumDistanceBetweenSegments = 0.01f;
+
+	// Token: 0x04001DB3 RID: 7603
+	public float springDamping = 10f;
+
+	// Token: 0x04001DB4 RID: 7604
+	public float springStrength = 100f;
+
+	// Token: 0x04001DB5 RID: 7605
+	public float gravityEffect = 0.2f;
+
+	// Token: 0x04001DB6 RID: 7606
+	private FastList<Vector3> mWirePoints = new FastList<Vector3>(100, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04001DB7 RID: 7607
+	[HideInInspector]
+	[SerializeField]
+	private List<RopeSpiralEffect.SpringSegment> mSegments = new List<RopeSpiralEffect.SpringSegment>();
+
+	// Token: 0x04001DB8 RID: 7608
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04001DB9 RID: 7609
+	private int actualFrames;
+
+	// Token: 0x02000217 RID: 535
+	[Serializable]
+	private class SpringSegment
+	{
+		// Token: 0x06001081 RID: 4225 RVA: 0x0009BDF0 File Offset: 0x00099FF0
+		public SpringSegment(GameObject aSegmentObject, Transform parent)
+		{
+			aSegmentObject.transform.parent = parent;
+			this.segment = aSegmentObject;
+			this.velocity = 0f;
+			this.position = 0f;
+		}
+
+		// Token: 0x04001DBA RID: 7610
+		public GameObject segment;
+
+		// Token: 0x04001DBB RID: 7611
+		public float velocity;
+
+		// Token: 0x04001DBC RID: 7612
+		public float position;
+	}
+}

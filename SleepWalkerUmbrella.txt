@@ -1,0 +1,17 @@
+using System;
+
+// Token: 0x020000EB RID: 235
+public class SleepWalkerUmbrella : Umbrella<SleepWalker>
+{
+	// Token: 0x06000757 RID: 1879 RVA: 0x0005207C File Offset: 0x0005027C
+	public override void DispatchFixedUpdate()
+	{
+		int num = 0;
+		int size = this.size;
+		while (num != size)
+		{
+			this.targets[num].UmbrellaFixedUpdate();
+			num++;
+		}
+	}
+}
