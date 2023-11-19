@@ -1,0 +1,526 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200026B RID: 619
+public class WaterSplashHuddle : MonoBehaviour
+{
+	// Token: 0x06001311 RID: 4881 RVA: 0x000B3A00 File Offset: 0x000B1C00
+	public void Init(GameObject w, WaterQueueMaster wQM)
+	{
+		this.particles = base.GetComponentsInChildren<ParticleSystem>(true);
+		this.accelFilter = new AttackReleaseFilter(this.attackAccel, this.releaseAccel);
+		this.water = w.transform;
+		this.cruise.Init();
+		this.run.Init();
+		this.impactUnder.Init();
+		if (this.walk != null && this.walk.Length != 0)
+		{
+			for (int i = 0; i < this.walk.Length; i++)
+			{
+				this.walk[i].Init();
+			}
+		}
+		if (this.swim != null && this.swim.Length != 0)
+		{
+			for (int j = 0; j < this.swim.Length; j++)
+			{
+				this.swim[j].Init();
+			}
+		}
+	}
+
+	// Token: 0x06001312 RID: 4882 RVA: 0x000B3ADC File Offset: 0x000B1CDC
+	public void Setup(Huddle h, GameObject w, Color splashColor, WaterQueueMaster wQM = null)
+	{
+		this.huddle = h;
+		HuddleLegControl[] componentsInChildren = this.huddle.visualHuddle.legs.GetComponentsInChildren<HuddleLegControl>(true);
+		this.feet = new Transform[componentsInChildren.Length];
+		this.knees = new Transform[componentsInChildren.Length];
+		this.hips = new Transform[componentsInChildren.Length];
+		for (int i = 0; i < componentsInChildren.Length; i++)
+		{
+			this.feet[i] = componentsInChildren[i].footBone;
+			this.knees[i] = componentsInChildren[i].hipBone;
+			this.hips[i] = componentsInChildren[i].hipMountBone;
+		}
+		this.waterLegs = new Transform[this.huddle.visualHuddle.waterLegs.swimLegs.Count];
+		for (int j = 0; j < this.waterLegs.Length; j++)
+		{
+			this.waterLegs[j] = this.huddle.visualHuddle.waterLegs.swimLegs[j].wrist.transform;
+		}
+		this.legPosOld = new float[6];
+		this.waterLegSpeed = new float[5];
+		this.waterLegPosOld = new Vector2[5];
+		this.bounds = new Vector3[4];
+		this.UpdateBones();
+		this.SetSplashColor(splashColor);
+		if (wQM)
+		{
+			for (int k = 0; k < this.particles.Length; k++)
+			{
+				WaterToShader component = this.particles[k].GetComponent<WaterToShader>();
+				if (component)
+				{
+					component.SetWaterQueueMaster(wQM);
+					component.Setup();
+					component.RefreshSurface(false);
+				}
+			}
+		}
+		float y = this.water.InverseTransformPoint(this.huddle.pos3).y;
+		float num = -this.huddle.velocity3.y;
+		if (num > 3.5f && y > 0.5f)
+		{
+			this.SetImpact();
+		}
+		if (this.waves && wQM.reflectionAboveOutside)
+		{
+			if (wQM.reflectionAboveOutside)
+			{
+				PDPlanarReflection component2 = wQM.reflectionAboveOutside.GetComponent<PDPlanarReflection>();
+				if (component2)
+				{
+					component2.SubscribeToReflectionTexture(this.waves.GetComponent<MaterialInstance>());
+					this.waves.Play();
+				}
+				else
+				{
+					this.waves.gameObject.SetActive(false);
+				}
+			}
+			else
+			{
+				this.waves.gameObject.SetActive(false);
+			}
+		}
+		if (this.huddle.isSwimming)
+		{
+			this.SetSwimState();
+		}
+		else
+		{
+			this.SetWalkState();
+		}
+	}
+
+	// Token: 0x06001313 RID: 4883 RVA: 0x000B3D84 File Offset: 0x000B1F84
+	private void FixedUpdate()
+	{
+		if (!this.huddle.isStatusStep)
+		{
+			return;
+		}
+		this.huddleSpeed = ((!this.huddle.isSwimming) ? Mathf.Abs(this.huddle.velocity.x) : this.huddle.velocity.magnitude);
+		this.huddleAccel = this.accelFilter.Filter(Mathf.Clamp01(Mathf.Abs(this.huddleSpeed - this.huddleSpeedOld) * this.accelMad.x - this.accelMad.y));
+		this.huddleSpeedOld = this.huddleSpeed;
+		if (this.state == WaterSplashHuddle.State.Swim)
+		{
+			for (int i = 0; i < 5; i++)
+			{
+				this.waterLegSpeed[i] = (this.waterLegs[i].position - this.waterLegPosOld[i] - this.huddle.velocity).magnitude;
+				this.waterLegPosOld[i] = this.waterLegs[i].position;
+			}
+		}
+	}
+
+	// Token: 0x06001314 RID: 4884 RVA: 0x000B3EC4 File Offset: 0x000B20C4
+	private void Update()
+	{
+		this.waterHeight = this.water.localScale.y * 0.5f + this.water.position.y;
+		base.transform.position = new Vector3(this.huddle.pos3.x, this.waterHeight, this.huddle.pos3.z);
+		this.UpdateBones();
+		Vector2 vector = new Vector2(this.bounds[0].x - this.bounds[1].x, this.bounds[2].y - this.bounds[3].y) * 0.5f + new Vector2(0.5f, 0.5f);
+		this.scale = vector.x * Mathf.Pow(Mathf.Clamp01(1f - Mathf.Pow(Mathf.Abs(this.huddle.pos.y - this.waterHeight) / vector.y, this.huddleFatness)), 1f / this.huddleFatness);
+		switch (this.state)
+		{
+		case WaterSplashHuddle.State.Walk:
+			this.WalkState();
+			break;
+		case WaterSplashHuddle.State.Swim:
+			this.SwimState();
+			break;
+		case WaterSplashHuddle.State.End:
+			this.EndState();
+			break;
+		}
+		if (this.impactState == WaterSplashHuddle.StateImpact.Impact)
+		{
+			this.ImpactState();
+		}
+	}
+
+	// Token: 0x06001315 RID: 4885 RVA: 0x000B4064 File Offset: 0x000B2264
+	private void SetWalkState()
+	{
+		if (this.swim != null && this.swim.Length == 5)
+		{
+			for (int i = 0; i < this.swim.Length; i++)
+			{
+				this.swim[i].Stop();
+			}
+		}
+		if (this.walk != null && this.walk.Length == 6)
+		{
+			for (int j = 0; j < this.walk.Length; j++)
+			{
+				this.walk[j].Play();
+			}
+		}
+		this.diveTime = 0f;
+		this.state = WaterSplashHuddle.State.Walk;
+	}
+
+	// Token: 0x06001316 RID: 4886 RVA: 0x000B4104 File Offset: 0x000B2304
+	private void SetSwimState()
+	{
+		if (this.walk != null && this.walk.Length == 6)
+		{
+			for (int i = 0; i < this.walk.Length; i++)
+			{
+				this.walk[i].Stop();
+			}
+		}
+		this.run.Stop();
+		this.cruise.Play();
+		if (this.swim != null && this.swim.Length == 5)
+		{
+			for (int j = 0; j < this.swim.Length; j++)
+			{
+				this.swim[j].Play();
+			}
+		}
+		this.state = WaterSplashHuddle.State.Swim;
+	}
+
+	// Token: 0x06001317 RID: 4887 RVA: 0x000B41AC File Offset: 0x000B23AC
+	private void SetImpact()
+	{
+		this.impactUnder.Play();
+		this.endTimerImpact = 5f;
+		this.impactState = WaterSplashHuddle.StateImpact.Impact;
+	}
+
+	// Token: 0x06001318 RID: 4888 RVA: 0x000B41CC File Offset: 0x000B23CC
+	private void WalkState()
+	{
+		if (Mathf.Abs(this.huddle.velocity.x) > 4f)
+		{
+			this.cruise.Stop();
+			this.run.Play();
+			this.BodySplash(this.run);
+		}
+		else
+		{
+			this.cruise.Play();
+			this.run.Stop();
+			this.BodySplash(this.cruise);
+		}
+		if (this.walk != null && this.walk.Length == 6)
+		{
+			for (int i = 0; i < this.walk.Length; i++)
+			{
+				float num = this.knees[i].position.y - this.waterHeight;
+				Vector2 vector = (num <= 0f) ? this.hips[i].position : this.feet[i].position;
+				float num2 = Mathf.Abs(num / (this.knees[i].position.y - vector.y));
+				float num3 = Mathf.Lerp(this.knees[i].position.x, vector.x, Mathf.Clamp01(num2));
+				float num4 = (num3 - this.legPosOld[i]) / Mathf.Max(0.001f, Time.deltaTime);
+				this.walk[i].transform.position = new Vector3(num3 + num4 * 0.05f, this.waterHeight, this.knees[i].position.z);
+				this.walk[i].Emission((num2 >= 1f) ? 0f : Mathf.Abs(num4 * 0.5f));
+				this.walk[i].ShrinkFade(this.huddleAccel);
+				this.legPosOld[i] = num3;
+			}
+		}
+		if (this.waves)
+		{
+			this.waves.emissionRate = this.huddleSpeed * 4f - 1f;
+			this.waves.transform.position = new Vector3(this.huddle.pos.x + this.huddle.velocity.x * 0.05f, this.waterHeight, this.huddle.pos.z);
+		}
+		if (this.huddle.isSwimming)
+		{
+			this.SetSwimState();
+		}
+	}
+
+	// Token: 0x06001319 RID: 4889 RVA: 0x000B4460 File Offset: 0x000B2660
+	private void SwimState()
+	{
+		this.BodySplash(this.cruise);
+		if (this.diveTime > 1f)
+		{
+			for (int i = 0; i < this.swim.Length; i++)
+			{
+				this.swim[i].Stop();
+			}
+		}
+		else
+		{
+			for (int j = 0; j < this.swim.Length; j++)
+			{
+				this.swim[j].Play();
+			}
+		}
+		float num = Mathf.Clamp01(1f - this.diveTime);
+		if (this.swim != null && this.swim.Length == 5)
+		{
+			for (int k = 0; k < this.swim.Length; k++)
+			{
+				this.swim[k].transform.position = this.waterLegs[k].position;
+				this.swim[k].transform.rotation = this.waterLegs[k].rotation;
+				this.swim[k].ShrinkFade(this.huddleAccel * num);
+				this.swim[k].Emission(this.waterLegSpeed[k] - 2f);
+			}
+		}
+		if (this.waves)
+		{
+			this.waves.emissionRate = this.huddleSpeed * 4f - 1f - Mathf.Max(0f, (this.waterHeight - this.huddle.pos.y) * 4f);
+			this.waves.transform.position = new Vector3(this.huddle.pos.x + this.huddle.velocity.x * 0.05f, this.waterHeight, this.huddle.pos.z);
+		}
+		this.diveTime += Time.deltaTime / 30f;
+		if (!this.huddle.isSwimming)
+		{
+			this.SetWalkState();
+		}
+	}
+
+	// Token: 0x0600131A RID: 4890 RVA: 0x000B4674 File Offset: 0x000B2874
+	private void BodySplash(WaterSplashBoy.ScalableParticles ps)
+	{
+		if (!ps)
+		{
+			return;
+		}
+		float num = this.huddleSpeed * 0.25f - 0.25f;
+		ps.transform.localScale = new Vector3(this.scale, this.scale, this.scale);
+		ps.transform.localEulerAngles = new Vector3(270f, 0f, (this.huddle.velocity.x >= 0f) ? 180f : 0f);
+		ps.ShrinkFade(num * this.huddleAccel);
+		ps.Emission(num * this.scale);
+	}
+
+	// Token: 0x0600131B RID: 4891 RVA: 0x000B4724 File Offset: 0x000B2924
+	private void ImpactState()
+	{
+		this.impactUnder.transform.position = this.huddle.pos3;
+		if (this.endTimerImpact > 0f)
+		{
+			this.endTimerImpact -= Time.deltaTime * Time.timeScale;
+		}
+		else
+		{
+			this.impactState = WaterSplashHuddle.StateImpact.None;
+		}
+	}
+
+	// Token: 0x0600131C RID: 4892 RVA: 0x000B4780 File Offset: 0x000B2980
+	private void SetEndState()
+	{
+		this.endTimer = 16f;
+		this.state = WaterSplashHuddle.State.End;
+	}
+
+	// Token: 0x0600131D RID: 4893 RVA: 0x000B4794 File Offset: 0x000B2994
+	private void EndState()
+	{
+		if (this.endTimer > 0f)
+		{
+			this.endTimer -= Time.deltaTime * Time.timeScale;
+		}
+		else
+		{
+			base.gameObject.SetActive(false);
+		}
+	}
+
+	// Token: 0x0600131E RID: 4894 RVA: 0x000B47D0 File Offset: 0x000B29D0
+	public void SetSplashColor(Color splashColor)
+	{
+		if (this.currentSplashColor != null && splashColor == this.currentSplashColor.Value)
+		{
+			return;
+		}
+		int i = 0;
+		int num = this.particles.Length;
+		while (i < num)
+		{
+			if (this.particles[i])
+			{
+				MaterialInstance component = this.particles[i].GetComponent<MaterialInstance>();
+				if (component)
+				{
+					MaterialInstance.ColorProperty colorProperty = component.GetColorProperty("_TintColor");
+					if (colorProperty == null)
+					{
+						colorProperty = component.GetColorProperty("_MainCol");
+					}
+					if (colorProperty == null)
+					{
+						colorProperty = component.GetColorProperty("_Color");
+					}
+					if (colorProperty != null)
+					{
+						float a = component.GetColorValue(colorProperty).a;
+						splashColor.a = a;
+						component.SetColorProperty(colorProperty, splashColor);
+					}
+				}
+			}
+			i++;
+		}
+		this.currentSplashColor = new Color?(splashColor);
+	}
+
+	// Token: 0x0600131F RID: 4895 RVA: 0x000B48C0 File Offset: 0x000B2AC0
+	private void UpdateBones()
+	{
+		this.bounds[0] = this.huddle.cloth.absoluteRightmostBone.pos;
+		this.bounds[1] = this.huddle.cloth.absoluteLeftmostBone.pos;
+		this.bounds[2] = this.huddle.cloth.absoluteTopBone.pos;
+		this.bounds[3] = this.huddle.cloth.absoluteBottomBone.pos;
+	}
+
+	// Token: 0x06001320 RID: 4896 RVA: 0x000B4968 File Offset: 0x000B2B68
+	public void Remove()
+	{
+		if (this.state != WaterSplashHuddle.State.None && this.state != WaterSplashHuddle.State.End)
+		{
+			this.impactState = WaterSplashHuddle.StateImpact.None;
+			for (int i = 0; i < this.particles.Length; i++)
+			{
+				this.particles[i].Stop();
+			}
+			this.SetEndState();
+		}
+	}
+
+	// Token: 0x0400232B RID: 9003
+	public WaterSplashBoy.ScalableParticles impactUnder;
+
+	// Token: 0x0400232C RID: 9004
+	public WaterSplashBoy.ScalableParticles cruise;
+
+	// Token: 0x0400232D RID: 9005
+	public WaterSplashBoy.ScalableParticles run;
+
+	// Token: 0x0400232E RID: 9006
+	public WaterSplashBoy.ScalableParticles[] walk;
+
+	// Token: 0x0400232F RID: 9007
+	public WaterSplashBoy.ScalableParticles[] swim;
+
+	// Token: 0x04002330 RID: 9008
+	public ParticleSystem waves;
+
+	// Token: 0x04002331 RID: 9009
+	[Range(0f, 8f)]
+	public int attackAccel;
+
+	// Token: 0x04002332 RID: 9010
+	[Range(0f, 512f)]
+	public int releaseAccel;
+
+	// Token: 0x04002333 RID: 9011
+	[Range(2f, 4f)]
+	public float huddleFatness = 3f;
+
+	// Token: 0x04002334 RID: 9012
+	private float[] legPosOld;
+
+	// Token: 0x04002335 RID: 9013
+	private float[] waterLegSpeed;
+
+	// Token: 0x04002336 RID: 9014
+	private Vector2[] waterLegPosOld;
+
+	// Token: 0x04002337 RID: 9015
+	private Transform[] feet;
+
+	// Token: 0x04002338 RID: 9016
+	private Transform[] knees;
+
+	// Token: 0x04002339 RID: 9017
+	private Transform[] hips;
+
+	// Token: 0x0400233A RID: 9018
+	private Transform[] waterLegs;
+
+	// Token: 0x0400233B RID: 9019
+	private Vector3[] bounds;
+
+	// Token: 0x0400233C RID: 9020
+	private float scale;
+
+	// Token: 0x0400233D RID: 9021
+	private float huddleSpeed;
+
+	// Token: 0x0400233E RID: 9022
+	private float huddleSpeedOld;
+
+	// Token: 0x0400233F RID: 9023
+	private float huddleAccel;
+
+	// Token: 0x04002340 RID: 9024
+	private WaterSplashHuddle.State state;
+
+	// Token: 0x04002341 RID: 9025
+	private WaterSplashHuddle.StateImpact impactState;
+
+	// Token: 0x04002342 RID: 9026
+	private Huddle huddle;
+
+	// Token: 0x04002343 RID: 9027
+	private float waterHeight;
+
+	// Token: 0x04002344 RID: 9028
+	private float endTimer;
+
+	// Token: 0x04002345 RID: 9029
+	private float endTimerImpact;
+
+	// Token: 0x04002346 RID: 9030
+	private float diveTime = 1f;
+
+	// Token: 0x04002347 RID: 9031
+	private Color? currentSplashColor;
+
+	// Token: 0x04002348 RID: 9032
+	private Vector2 huddleVelOld;
+
+	// Token: 0x04002349 RID: 9033
+	private Vector2 accelMad = new Vector2(16f, 1f);
+
+	// Token: 0x0400234A RID: 9034
+	[SerializeField]
+	[HideInInspector]
+	private Transform water;
+
+	// Token: 0x0400234B RID: 9035
+	[HideInInspector]
+	[SerializeField]
+	private AttackReleaseFilter accelFilter;
+
+	// Token: 0x0400234C RID: 9036
+	[SerializeField]
+	[HideInInspector]
+	protected ParticleSystem[] particles;
+
+	// Token: 0x0200026C RID: 620
+	private enum State
+	{
+		// Token: 0x0400234E RID: 9038
+		None,
+		// Token: 0x0400234F RID: 9039
+		Walk,
+		// Token: 0x04002350 RID: 9040
+		Swim,
+		// Token: 0x04002351 RID: 9041
+		End
+	}
+
+	// Token: 0x0200026D RID: 621
+	private enum StateImpact
+	{
+		// Token: 0x04002353 RID: 9043
+		None,
+		// Token: 0x04002354 RID: 9044
+		Impact
+	}
+}

@@ -1,0 +1,283 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004B1 RID: 1201
+public class WaterOnCeilingWaterController2 : MonoBehaviour
+{
+	// Token: 0x06001F79 RID: 8057 RVA: 0x0010CCBC File Offset: 0x0010AEBC
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.audioObject, this);
+		this.audioWaterChangeToUp = new AudioEventSimpleLocal("amb_evt_lab_cargoHall_water_waterChangeToUp", akGameObj);
+		this.audioWaterStartUp = new AudioEventSimpleLocal("amb_evt_lab_cargoHall_water_waterStartUp", akGameObj);
+		this.audioWaterStopUp = new AudioEventSimpleLocal("amb_evt_lab_cargoHall_water_waterStopUp", akGameObj);
+		this.audioWaterAllUp = new AudioEventSimpleLocal("amb_evt_lab_cargoHall_water_waterAllUp", akGameObj);
+		this.audioWaterChangeToDown = new AudioEventSimpleLocal("amb_evt_lab_cargoHall_water_waterChangeToDown", akGameObj);
+		this.audioWaterStartDown = new AudioEventSimpleLocal("amb_evt_lab_cargoHall_water_waterStartDown", akGameObj);
+		this.audioWaterStopDown = new AudioEventSimpleLocal("amb_evt_lab_cargoHall_water_waterStopDown", akGameObj);
+		this.audioWaterAllDown = new AudioEventSimpleLocal("amb_evt_lab_cargoHall_water_waterAllDown", akGameObj);
+	}
+
+	// Token: 0x06001F7A RID: 8058 RVA: 0x0010CD74 File Offset: 0x0010AF74
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.waterMaxVolume = this.CalculateVolume(this.waterMaxHeight);
+		this.waterMinVolume = this.CalculateVolume(this.waterMinHeight);
+		this.SetIdleState();
+	}
+
+	// Token: 0x06001F7B RID: 8059 RVA: 0x0010CDB4 File Offset: 0x0010AFB4
+	private void SetIdleState()
+	{
+		this.state = WaterOnCeilingWaterController2.State.Idle;
+	}
+
+	// Token: 0x06001F7C RID: 8060 RVA: 0x0010CDC0 File Offset: 0x0010AFC0
+	private void IdleState()
+	{
+		if (this.target < 0f)
+		{
+			this.SetMoveDownState();
+		}
+		else if (this.target > 0f)
+		{
+			this.SetMoveUpState();
+		}
+	}
+
+	// Token: 0x06001F7D RID: 8061 RVA: 0x0010CDF4 File Offset: 0x0010AFF4
+	private void SetMoveUpState()
+	{
+		if (this.state == WaterOnCeilingWaterController2.State.MoveDown)
+		{
+			this.audioWaterChangeToUp.PostFast();
+		}
+		else
+		{
+			this.audioWaterStartUp.PostFast();
+		}
+		this.state = WaterOnCeilingWaterController2.State.MoveUp;
+	}
+
+	// Token: 0x06001F7E RID: 8062 RVA: 0x0010CE34 File Offset: 0x0010B034
+	private void MoveUpState()
+	{
+		if (this.target == 0f)
+		{
+			this.audioWaterStopUp.PostFast();
+			this.SetIdleState();
+			return;
+		}
+		if (this.target < 0f)
+		{
+			this.SetMoveDownState();
+			return;
+		}
+		if (this.waterVolume.Volume > this.waterMinVolume)
+		{
+			float num = -this.CalculateVolume(this.target * this.speed * Time.deltaTime);
+			float num2 = this.waterVolume.Volume + num;
+			if (num2 < this.waterMinVolume)
+			{
+				num = this.waterMinVolume - this.waterVolume.Volume;
+				this.audioWaterAllUp.PostFast();
+			}
+			this.waterVolume.AddVolume(num);
+		}
+	}
+
+	// Token: 0x06001F7F RID: 8063 RVA: 0x0010CEF4 File Offset: 0x0010B0F4
+	private void SetMoveDownState()
+	{
+		if (this.state == WaterOnCeilingWaterController2.State.MoveUp)
+		{
+			this.audioWaterChangeToDown.PostFast();
+		}
+		else
+		{
+			this.audioWaterStartDown.PostFast();
+		}
+		this.state = WaterOnCeilingWaterController2.State.MoveDown;
+	}
+
+	// Token: 0x06001F80 RID: 8064 RVA: 0x0010CF34 File Offset: 0x0010B134
+	private void MoveDownState()
+	{
+		if (this.target == 0f)
+		{
+			this.audioWaterStopDown.PostFast();
+			this.SetIdleState();
+			return;
+		}
+		if (this.target > 0f)
+		{
+			this.SetMoveUpState();
+			return;
+		}
+		if (this.waterVolume.Volume < this.waterMaxVolume)
+		{
+			float num = -this.CalculateVolume(this.target * this.speed * Time.deltaTime);
+			float num2 = this.waterVolume.Volume + num;
+			if (num2 > this.waterMaxVolume)
+			{
+				num = this.waterMaxVolume - this.waterVolume.Volume;
+				this.audioWaterAllDown.PostFast();
+			}
+			int i = 0;
+			int num3 = this.waterDoors.Length;
+			while (i < num3)
+			{
+				if (!this.waterDoors[i].AddingWaterAllowed(this.waterVolume))
+				{
+					num = 0f;
+					break;
+				}
+				i++;
+			}
+			this.waterVolume.AddVolume(num);
+		}
+	}
+
+	// Token: 0x06001F81 RID: 8065 RVA: 0x0010D030 File Offset: 0x0010B230
+	private void Update()
+	{
+		if (this.state != WaterOnCeilingWaterController2.State.None)
+		{
+			float output = this.leverAnalogWater.GetOutput();
+			float num = this.blendInFactor;
+			bool flag = output == 0f;
+			if (output == 0f || (this.target != 0f && output * this.target < 0f))
+			{
+				num = this.blendOutFactor;
+			}
+			float num2 = Mathf.Min(num * Time.deltaTime, 1f);
+			this.target += (output - this.target) * num2;
+			if (flag && Mathf.Abs(this.target) < 0.04f)
+			{
+				this.target = 0f;
+			}
+			switch (this.state)
+			{
+			case WaterOnCeilingWaterController2.State.Idle:
+				this.IdleState();
+				break;
+			case WaterOnCeilingWaterController2.State.MoveDown:
+				this.MoveDownState();
+				break;
+			case WaterOnCeilingWaterController2.State.MoveUp:
+				this.MoveUpState();
+				break;
+			}
+		}
+	}
+
+	// Token: 0x06001F82 RID: 8066 RVA: 0x0010D12C File Offset: 0x0010B32C
+	private float CalculateVolume(float amountHeight)
+	{
+		return amountHeight * this.waterVolume.transform.localScale.x * this.waterVolume.transform.localScale.z;
+	}
+
+	// Token: 0x04003A55 RID: 14933
+	public FluidVolume waterVolume;
+
+	// Token: 0x04003A56 RID: 14934
+	public LeverAnalogWater leverAnalogWater;
+
+	// Token: 0x04003A57 RID: 14935
+	public float speed = 1f;
+
+	// Token: 0x04003A58 RID: 14936
+	public float waterMaxHeight;
+
+	// Token: 0x04003A59 RID: 14937
+	public float waterMinHeight;
+
+	// Token: 0x04003A5A RID: 14938
+	public GameObject audioObject;
+
+	// Token: 0x04003A5B RID: 14939
+	public WaterDoor[] waterDoors;
+
+	// Token: 0x04003A5C RID: 14940
+	public float blendInFactor = 3f;
+
+	// Token: 0x04003A5D RID: 14941
+	public float blendOutFactor = 9f;
+
+	// Token: 0x04003A5E RID: 14942
+	private WaterOnCeilingWaterController2.State state;
+
+	// Token: 0x04003A5F RID: 14943
+	private float waterMaxVolume;
+
+	// Token: 0x04003A60 RID: 14944
+	private float waterMinVolume;
+
+	// Token: 0x04003A61 RID: 14945
+	private float target;
+
+	// Token: 0x04003A62 RID: 14946
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioWaterChangeToUp;
+
+	// Token: 0x04003A63 RID: 14947
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioWaterStartUp;
+
+	// Token: 0x04003A64 RID: 14948
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioWaterStopUp;
+
+	// Token: 0x04003A65 RID: 14949
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioWaterAllUp;
+
+	// Token: 0x04003A66 RID: 14950
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioWaterChangeToDown;
+
+	// Token: 0x04003A67 RID: 14951
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioWaterStartDown;
+
+	// Token: 0x04003A68 RID: 14952
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioWaterStopDown;
+
+	// Token: 0x04003A69 RID: 14953
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioWaterAllDown;
+
+	// Token: 0x04003A6A RID: 14954
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x020004B2 RID: 1202
+	private enum State
+	{
+		// Token: 0x04003A6C RID: 14956
+		None,
+		// Token: 0x04003A6D RID: 14957
+		Idle,
+		// Token: 0x04003A6E RID: 14958
+		MoveDown,
+		// Token: 0x04003A6F RID: 14959
+		MoveUp
+	}
+}

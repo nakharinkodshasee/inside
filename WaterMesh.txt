@@ -1,0 +1,80 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000374 RID: 884
+[ExecuteInEditMode]
+public class WaterMesh : MonoBehaviour
+{
+	// Token: 0x06001823 RID: 6179 RVA: 0x000D2B50 File Offset: 0x000D0D50
+	private void Awake()
+	{
+		this.wqm = base.GetComponent<WaterQueueMaster>();
+		this.meshFilters = new MeshFilter[]
+		{
+			this.wqm.fogOutside.GetComponent<MeshFilter>(),
+			this.wqm.fogInside.GetComponent<MeshFilter>(),
+			this.wqm.refractionOutside.GetComponent<MeshFilter>(),
+			this.wqm.refractionInside.GetComponent<MeshFilter>()
+		};
+		this.mesh = this.meshFilters[0].sharedMesh;
+		this.meshOld = this.mesh;
+		this.rotation = (int)((this.meshFilters[0].transform.localEulerAngles.z / 360f - Mathf.Floor(this.meshFilters[0].transform.localEulerAngles.z / 360f)) * 4f);
+		this.rotationOld = this.rotation;
+	}
+
+	// Token: 0x06001824 RID: 6180 RVA: 0x000D2C40 File Offset: 0x000D0E40
+	public void UpdateMesh(Mesh newMesh, int newRotation)
+	{
+		this.mesh = newMesh;
+		this.rotation = newRotation;
+		if (this.mesh != this.meshOld && this.mesh)
+		{
+			for (int i = 0; i < this.meshFilters.Length; i++)
+			{
+				this.meshFilters[i].sharedMesh = this.mesh;
+			}
+			this.Scale();
+			this.meshOld = this.mesh;
+		}
+		if (this.rotation != this.rotationOld)
+		{
+			Quaternion quaternion = base.transform.rotation * Quaternion.Euler(new Vector3(0f, 0f, (float)(this.rotation * 90)));
+			for (int j = 0; j < this.meshFilters.Length; j++)
+			{
+				this.meshFilters[j].transform.rotation = quaternion;
+			}
+			this.Scale();
+			this.rotationOld = this.rotation;
+		}
+	}
+
+	// Token: 0x06001825 RID: 6181 RVA: 0x000D2D40 File Offset: 0x000D0F40
+	private void Scale()
+	{
+		Vector3 localScale;
+		localScale..ctor(1f / this.mesh.bounds.size.x, 1f / this.mesh.bounds.size.y, 1f / this.mesh.bounds.size.z);
+		for (int i = 0; i < this.meshFilters.Length; i++)
+		{
+			this.meshFilters[i].transform.localScale = localScale;
+		}
+	}
+
+	// Token: 0x04002B4B RID: 11083
+	public Mesh mesh;
+
+	// Token: 0x04002B4C RID: 11084
+	[Range(0f, 3f)]
+	public int rotation;
+
+	// Token: 0x04002B4D RID: 11085
+	private Mesh meshOld;
+
+	// Token: 0x04002B4E RID: 11086
+	private int rotationOld;
+
+	// Token: 0x04002B4F RID: 11087
+	private WaterQueueMaster wqm;
+
+	// Token: 0x04002B50 RID: 11088
+	private MeshFilter[] meshFilters = new MeshFilter[4];
+}

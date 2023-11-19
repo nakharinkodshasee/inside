@@ -1,0 +1,37 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000377 RID: 887
+[ExecuteInEditMode]
+public class WaterQueueEdge : QueueBase, IFastEventListener
+{
+	// Token: 0x06001828 RID: 6184 RVA: 0x000D2E00 File Offset: 0x000D1000
+	protected override void OnEnable()
+	{
+		base.OnEnable();
+		WaterCameraRendering.UpdateTransparentWaterQueues.Register(this, ref this.updateHandle);
+	}
+
+	// Token: 0x06001829 RID: 6185 RVA: 0x000D2E1C File Offset: 0x000D101C
+	protected override void OnDisable()
+	{
+		base.OnDisable();
+		this.SetOrder(0);
+		WaterCameraRendering.UpdateTransparentWaterQueues.Unregister(ref this.updateHandle);
+	}
+
+	// Token: 0x0600182A RID: 6186 RVA: 0x000D2E3C File Offset: 0x000D103C
+	public void OnFastEvent(FastEvent sender)
+	{
+		if (this.server)
+		{
+			this.SetOrder(this.server.sortingOrder - 1);
+		}
+	}
+
+	// Token: 0x04002B5F RID: 11103
+	public Renderer server;
+
+	// Token: 0x04002B60 RID: 11104
+	private int updateHandle = -1;
+}

@@ -1,0 +1,201 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000E1 RID: 225
+public class WormIdle : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000705 RID: 1797 RVA: 0x0004F9E8 File Offset: 0x0004DBE8
+	public bool PreAwake(int callcount)
+	{
+		this.animSpeed = Random.Range(this.minAnimSpeed, this.maxAnimSpeed);
+		for (int i = 0; i < this.animIdles.Length; i++)
+		{
+			this.anim[this.animIdles[i].name].speed = this.animSpeed;
+		}
+		this.anim[this.animRetract.name].speed = this.animSpeed;
+		this.anim[this.animRetractIdle.name].speed = this.animSpeed;
+		this.anim[this.animRetractReturn.name].speed = this.animSpeed;
+		this.minIdleTime *= this.animSpeed;
+		this.maxIdleTime *= this.animSpeed;
+		return true;
+	}
+
+	// Token: 0x06000706 RID: 1798 RVA: 0x0004FAD4 File Offset: 0x0004DCD4
+	private void Start()
+	{
+		this.SetRandomState();
+	}
+
+	// Token: 0x06000707 RID: 1799 RVA: 0x0004FADC File Offset: 0x0004DCDC
+	private void SetRandomState()
+	{
+		int num = this.animIdles.Length;
+		int num2 = Random.Range(0, num + 1);
+		if (num2 == this.previousIndex)
+		{
+			if (num2 >= num)
+			{
+				num2 = 0;
+			}
+			else
+			{
+				num2++;
+			}
+		}
+		this.previousIndex = num2;
+		if (num2 >= num)
+		{
+			this.SetRetractState();
+		}
+		else
+		{
+			this.SetIdleState(num2);
+		}
+	}
+
+	// Token: 0x06000708 RID: 1800 RVA: 0x0004FB3C File Offset: 0x0004DD3C
+	private void SetIdleState(int index)
+	{
+		this.anim.CrossFade(this.animIdles[index].name, 0.5f);
+		this.timer = Random.Range(this.minIdleTime, this.maxIdleTime);
+		this.state = WormIdle.State.Idle;
+	}
+
+	// Token: 0x06000709 RID: 1801 RVA: 0x0004FB7C File Offset: 0x0004DD7C
+	private void IdleState()
+	{
+		this.timer -= Time.deltaTime;
+		if (this.timer <= 0f)
+		{
+			this.SetRandomState();
+		}
+	}
+
+	// Token: 0x0600070A RID: 1802 RVA: 0x0004FBB4 File Offset: 0x0004DDB4
+	private void SetRetractState()
+	{
+		this.anim.CrossFade(this.animRetract.name, 0.5f);
+		this.timer = this.animRetract.length * this.animSpeed - 0.5f;
+		this.state = WormIdle.State.Retract;
+	}
+
+	// Token: 0x0600070B RID: 1803 RVA: 0x0004FC04 File Offset: 0x0004DE04
+	private void RetractState()
+	{
+		this.timer -= Time.deltaTime;
+		if (this.timer <= 0f)
+		{
+			this.SetRetractIdleState();
+		}
+	}
+
+	// Token: 0x0600070C RID: 1804 RVA: 0x0004FC3C File Offset: 0x0004DE3C
+	private void SetRetractIdleState()
+	{
+		this.anim.CrossFade(this.animRetractIdle.name, 0.5f);
+		this.timer = Random.Range(this.minIdleTime, this.maxIdleTime);
+		this.state = WormIdle.State.RetractIdle;
+	}
+
+	// Token: 0x0600070D RID: 1805 RVA: 0x0004FC78 File Offset: 0x0004DE78
+	private void RetractIdleState()
+	{
+		this.timer -= Time.deltaTime;
+		if (this.timer <= 0f)
+		{
+			this.SetRetractReturnState();
+		}
+	}
+
+	// Token: 0x0600070E RID: 1806 RVA: 0x0004FCB0 File Offset: 0x0004DEB0
+	private void SetRetractReturnState()
+	{
+		this.anim.CrossFade(this.animRetractReturn.name, 0.5f);
+		this.timer = this.animRetractReturn.length * this.animSpeed - 0.5f;
+		this.state = WormIdle.State.RetractReturn;
+	}
+
+	// Token: 0x0600070F RID: 1807 RVA: 0x0004FD00 File Offset: 0x0004DF00
+	private void RetractReturnState()
+	{
+		this.timer -= Time.deltaTime;
+		if (this.timer <= 0f)
+		{
+			this.SetRandomState();
+		}
+	}
+
+	// Token: 0x06000710 RID: 1808 RVA: 0x0004FD38 File Offset: 0x0004DF38
+	private void Update()
+	{
+		switch (this.state)
+		{
+		case WormIdle.State.Idle:
+			this.IdleState();
+			break;
+		case WormIdle.State.Retract:
+			this.RetractState();
+			break;
+		case WormIdle.State.RetractIdle:
+			this.RetractIdleState();
+			break;
+		case WormIdle.State.RetractReturn:
+			this.RetractReturnState();
+			break;
+		}
+	}
+
+	// Token: 0x04000C30 RID: 3120
+	public Animation anim;
+
+	// Token: 0x04000C31 RID: 3121
+	public AnimationClip[] animIdles;
+
+	// Token: 0x04000C32 RID: 3122
+	public AnimationClip animRetract;
+
+	// Token: 0x04000C33 RID: 3123
+	public AnimationClip animRetractIdle;
+
+	// Token: 0x04000C34 RID: 3124
+	public AnimationClip animRetractReturn;
+
+	// Token: 0x04000C35 RID: 3125
+	public float minIdleTime = 2f;
+
+	// Token: 0x04000C36 RID: 3126
+	public float maxIdleTime = 5f;
+
+	// Token: 0x04000C37 RID: 3127
+	public float minAnimSpeed = 0.9f;
+
+	// Token: 0x04000C38 RID: 3128
+	public float maxAnimSpeed = 1.1f;
+
+	// Token: 0x04000C39 RID: 3129
+	private WormIdle.State state;
+
+	// Token: 0x04000C3A RID: 3130
+	private float timer;
+
+	// Token: 0x04000C3B RID: 3131
+	private float animSpeed;
+
+	// Token: 0x04000C3C RID: 3132
+	private int previousIndex;
+
+	// Token: 0x020000E2 RID: 226
+	private enum State
+	{
+		// Token: 0x04000C3E RID: 3134
+		None,
+		// Token: 0x04000C3F RID: 3135
+		Idle,
+		// Token: 0x04000C40 RID: 3136
+		Retract,
+		// Token: 0x04000C41 RID: 3137
+		RetractIdle,
+		// Token: 0x04000C42 RID: 3138
+		RetractReturn
+	}
+}

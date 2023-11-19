@@ -1,0 +1,65 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200051D RID: 1309
+public class WaterGuardStorageGuardLogic : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600222B RID: 8747 RVA: 0x0011E138 File Offset: 0x0011C338
+	public bool PreAwake(int callcount)
+	{
+		this.startPatrol = SignalIn.Create("startPatrol", base.gameObject, new Action(this.OnStartPatrol));
+		this.alertGuard = SignalIn.Create("alertGuard", base.gameObject, new Action(this.OnAlertGuard));
+		this.loadDisabled = SignalIn.Create("loadDisabled", base.gameObject, new Action(this.OnLoadDisabled));
+		this.reachTarget = SignalIn.Create("reachTarget", base.gameObject, new Action(this.OnReachTarget));
+		this.closeThingy = SignalOut.Create("closeThingy", base.gameObject);
+		this.shootBoy = SignalOut.Create("shootBoy", base.gameObject);
+		this.closeDoor = SignalOut.Create("closeDoor", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x0600222C RID: 8748 RVA: 0x0011E210 File Offset: 0x0011C410
+	private void OnStartPatrol()
+	{
+	}
+
+	// Token: 0x0600222D RID: 8749 RVA: 0x0011E214 File Offset: 0x0011C414
+	private void OnAlertGuard()
+	{
+	}
+
+	// Token: 0x0600222E RID: 8750 RVA: 0x0011E218 File Offset: 0x0011C418
+	private void OnLoadDisabled()
+	{
+	}
+
+	// Token: 0x0600222F RID: 8751 RVA: 0x0011E21C File Offset: 0x0011C41C
+	private void OnReachTarget()
+	{
+	}
+
+	// Token: 0x06002230 RID: 8752 RVA: 0x0011E220 File Offset: 0x0011C420
+	private void Update()
+	{
+	}
+
+	// Token: 0x04003FCB RID: 16331
+	private SignalIn startPatrol;
+
+	// Token: 0x04003FCC RID: 16332
+	private SignalIn alertGuard;
+
+	// Token: 0x04003FCD RID: 16333
+	private SignalIn loadDisabled;
+
+	// Token: 0x04003FCE RID: 16334
+	private SignalIn reachTarget;
+
+	// Token: 0x04003FCF RID: 16335
+	private SignalOut closeThingy;
+
+	// Token: 0x04003FD0 RID: 16336
+	private SignalOut shootBoy;
+
+	// Token: 0x04003FD1 RID: 16337
+	private SignalOut closeDoor;
+}

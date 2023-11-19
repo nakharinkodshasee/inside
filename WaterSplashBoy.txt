@@ -1,0 +1,1097 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000266 RID: 614
+public class WaterSplashBoy : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060012DA RID: 4826 RVA: 0x000B1104 File Offset: 0x000AF304
+	public void Init(GameObject w, bool upsideDown, Color splashColor)
+	{
+		this.hips = new int[2];
+		this.knees = new int[2];
+		this.limbs = new int[4];
+		this.partSys = base.GetComponentsInChildren<ParticleSystem>();
+		this.accelFilter = new AttackReleaseFilter(this.attack, this.release);
+		this.waterToShaderList = base.GetComponentsInChildren<WaterToShader>(true);
+		this.water = w.transform;
+		WaterTriggerLogic[] componentsInChildren = this.water.GetComponentsInChildren<WaterTriggerLogic>(true);
+		if (componentsInChildren != null && componentsInChildren.Length == 2)
+		{
+			if (componentsInChildren[0].waterTriggerLogicType == WaterTriggerLogic.WaterTriggerLogicType.TopSurfaceLogic)
+			{
+				this.surfTop = componentsInChildren[0].gameObject;
+				this.surfBottom = componentsInChildren[1].gameObject;
+			}
+			else
+			{
+				this.surfTop = componentsInChildren[1].gameObject;
+				this.surfBottom = componentsInChildren[0].gameObject;
+			}
+		}
+		WaterQueueMaster component = w.GetComponent<WaterQueueMaster>();
+		if (component)
+		{
+			int i = 0;
+			int num = this.waterToShaderList.Length;
+			while (i < num)
+			{
+				this.waterToShaderList[i].SetWaterQueueMaster(component);
+				i++;
+			}
+		}
+		this.boyWater = this.water.GetComponent<BoyWater>();
+		this.impactOver.Init();
+		this.impactUnder.Init();
+		this.impactUnderUpsideDown.Init();
+		this.swimFeet.Init();
+		this.swimHead.Init();
+		if (this.walk != null && this.walk.Length == 2)
+		{
+			for (int j = 0; j < 2; j++)
+			{
+				this.walk[j].Init();
+			}
+		}
+		if (this.bubbles != null && this.bubbles.Length == 4)
+		{
+			for (int k = 0; k < 4; k++)
+			{
+				this.bubbles[k].Init();
+			}
+		}
+		this.upsideDown = upsideDown;
+		if (this.waves)
+		{
+			if (w.transform.up.y < 0f)
+			{
+				upsideDown = !upsideDown;
+			}
+			PDPlanarReflection[] componentsInChildren2 = ((!upsideDown) ? this.surfTop : this.surfBottom).GetComponentsInChildren<PDPlanarReflection>(true);
+			if (componentsInChildren2 != null && componentsInChildren2.Length > 0 && componentsInChildren2[0])
+			{
+				componentsInChildren2[0].SubscribeToReflectionTexture(this.waves.GetComponent<MaterialInstance>());
+			}
+		}
+		this.SetSplashColor(splashColor);
+	}
+
+	// Token: 0x060012DB RID: 4827 RVA: 0x000B1368 File Offset: 0x000AF568
+	public bool PreAwake(int callcount)
+	{
+		this.rippleListProp = new MaterialInstance.VectorProperty[this.rippleList.Length];
+		WaterQueueMaster component = base.transform.parent.GetComponent<WaterQueueMaster>();
+		int i = 0;
+		int num = this.waterToShaderList.Length;
+		while (i < num)
+		{
+			WaterToShader waterToShader = this.waterToShaderList[i];
+			waterToShader.SetWaterQueueMaster(component);
+			waterToShader.Setup();
+			waterToShader.RefreshSurface(this.upsideDown);
+			i++;
+		}
+		int j = 0;
+		int num2 = this.rippleList.Length;
+		while (j < num2)
+		{
+			MaterialInstance materialInstance = this.rippleList[j];
+			if (materialInstance)
+			{
+				this.rippleListProp[j] = materialInstance.GetOrAddVectorProperty("_LockPos");
+			}
+			j++;
+		}
+		return true;
+	}
+
+	// Token: 0x060012DC RID: 4828 RVA: 0x000B1424 File Offset: 0x000AF624
+	public virtual void Setup(Boy b, GameObject w2, WaterQueueMaster wQM = null)
+	{
+		if (this.impactUnder)
+		{
+			this.impactUnder.transform.localPosition = Vector3Fast.zero;
+		}
+		if (this.impactUnderUpsideDown)
+		{
+			this.impactUnderUpsideDown.transform.localPosition = Vector3Fast.zero;
+		}
+		this.diveTime = 1f;
+		this.diveDelay = true;
+		this.removeDelay = 0f;
+		this.endTimerImpact = 0f;
+		int i = 0;
+		int num = this.partSys.Length;
+		while (i < num)
+		{
+			ParticleSystem particleSystem = this.partSys[i];
+			particleSystem.ClearPosition();
+			i++;
+		}
+		this.boy = b;
+		this.cachedRagdoll = this.boy.visualBoy.ragdoll;
+		SpecificBones specificBones = this.boy.visualBoy.actor.specificBones;
+		this.knees[0] = specificBones.knees[0];
+		this.knees[1] = specificBones.knees[1];
+		this.hips[0] = specificBones.hips[0];
+		this.hips[1] = specificBones.hips[1];
+		this.limbs[0] = specificBones.elbows[0];
+		this.limbs[1] = specificBones.elbows[1];
+		this.limbs[2] = this.knees[0];
+		this.limbs[3] = this.knees[1];
+		this.head = specificBones.head;
+		this.reletiveWaterHeight = this.water.InverseTransformPoint(this.boy.pos3).y;
+		this.surface = (Mathf.Abs(this.reletiveWaterHeight) > 0.5f);
+		if (this.surfTop && this.surfBottom)
+		{
+			this.surface &= ((this.reletiveWaterHeight >= 0f) ? this.surfTop.activeInHierarchy : this.surfBottom.activeInHierarchy);
+		}
+		this.UpsideDownCheck();
+		base.transform.rotation = Quaternion.Euler(0f, 0f, (!this.upsideDown) ? 0f : 180f);
+		if (this.waves)
+		{
+			this.waves.transform.localScale = new Vector3(1f, 1f, (!this.upsideDown) ? 1f : -1f);
+			this.waves.Play(false);
+		}
+		if (!this.surface)
+		{
+			this.SetDiveState();
+			return;
+		}
+		float num2 = (!this.upsideDown) ? (this.boy.velocity.magnitude * 0.5f - 1.5f) : 0.5f;
+		if (num2 > 0f)
+		{
+			num2 = Mathf.Clamp01(Mathf.Sqrt(num2));
+			if (this.boyWater.GetDepth(Vector3.up, this.boy.pos3, 2f) < 1.5f)
+			{
+				this.SetImpactOver(num2);
+			}
+			else if (!this.upsideDown || !(this.boy.state is BoyCustomAnimState))
+			{
+				this.impactOver.Play(num2);
+				this.SetImpactUnder(num2);
+			}
+		}
+		if (this.boy.state is BoySwimState || this.boy.state is BoyCustomAnimState)
+		{
+			this.SetSwimState();
+		}
+		else
+		{
+			this.SetWalkState();
+		}
+	}
+
+	// Token: 0x060012DD RID: 4829 RVA: 0x000B17EC File Offset: 0x000AF9EC
+	protected virtual void FixedUpdate()
+	{
+		if (this.state == WaterSplashBoy.State.End)
+		{
+			return;
+		}
+		this.boySpeed = this.boy.velocity.magnitude;
+		this.boyAccel = this.accelFilter.Filter(Mathf.Clamp01(Mathf.Abs(this.boySpeed - this.boySpeedOld) * 10f));
+		this.boySpeedOld = this.boySpeed;
+		if (this.boy && !this.boy.isCharacterActive)
+		{
+			this.Remove();
+		}
+	}
+
+	// Token: 0x060012DE RID: 4830 RVA: 0x000B1880 File Offset: 0x000AFA80
+	protected virtual void Update()
+	{
+		this.waterHeight = this.water.localScale.y * ((!this.upsideDown) ? 0.5f : -0.5f) + this.water.position.y;
+		this.SetRippleHeight();
+		if (this.boy == null || this.boy.specialBoyMode == Boy.SpecialBoyMode.InsideSub)
+		{
+			if (this.state != WaterSplashBoy.State.End)
+			{
+				this.SetEndState();
+			}
+			return;
+		}
+		if (this.state != WaterSplashBoy.State.End)
+		{
+			if (this.UpsideDownCheck())
+			{
+				base.transform.rotation = Quaternion.Euler(0f, 0f, (!this.upsideDown) ? 0f : 180f);
+			}
+			this.reletiveWaterHeight = this.water.InverseTransformPoint(this.boy.pos3).y;
+			if (this.surfTop && this.surfBottom)
+			{
+				this.surface = ((this.reletiveWaterHeight >= 0f) ? this.surfTop.activeInHierarchy : this.surfBottom.activeInHierarchy);
+			}
+			else
+			{
+				this.surface = true;
+			}
+			Vector3 pos = this.boy.pos3;
+			pos.y = this.waterHeight;
+			base.transform.position = pos;
+		}
+		if (this.state != WaterSplashBoy.State.None)
+		{
+			switch (this.state)
+			{
+			case WaterSplashBoy.State.Walk:
+				this.WalkState();
+				break;
+			case WaterSplashBoy.State.Swim:
+				this.SwimState();
+				break;
+			case WaterSplashBoy.State.Dive:
+				this.DiveState();
+				break;
+			case WaterSplashBoy.State.End:
+				this.EndState();
+				break;
+			}
+		}
+		else if (!(this.boy.state is BoySwimState))
+		{
+			this.SetWalkState();
+		}
+		else if (this.CheckUnderwater())
+		{
+			this.SetDiveState();
+		}
+		else
+		{
+			this.SetSwimState();
+		}
+		this.UpdateImpactState();
+	}
+
+	// Token: 0x060012DF RID: 4831 RVA: 0x000B1AA8 File Offset: 0x000AFCA8
+	private void UpdateImpactState()
+	{
+		if (this.impactState == WaterSplashBoy.ImpactState.ImpactOver)
+		{
+			this.ImpactOverState();
+		}
+		else if (this.impactState == WaterSplashBoy.ImpactState.ImpactUnder)
+		{
+			this.ImpactUnderState();
+		}
+	}
+
+	// Token: 0x060012E0 RID: 4832 RVA: 0x000B1AD4 File Offset: 0x000AFCD4
+	protected virtual void SetWalkState()
+	{
+		if (this.walk == null || this.walk.Length != 2 || !this.walk[0] || !this.walk[1])
+		{
+			this.state = WaterSplashBoy.State.None;
+			return;
+		}
+		this.WalkState();
+		this.swimHead.Stop();
+		if (this.bubbles != null)
+		{
+			for (int i = 0; i < this.bubbles.Length; i++)
+			{
+				this.bubbles[i].Stop();
+			}
+		}
+		for (int j = 0; j < 2; j++)
+		{
+			this.walk[j].Play();
+		}
+		this.diveTime = 0f;
+		this.state = WaterSplashBoy.State.Walk;
+	}
+
+	// Token: 0x060012E1 RID: 4833 RVA: 0x000B1B9C File Offset: 0x000AFD9C
+	private void SetSwimState()
+	{
+		if (!this.swimFeet)
+		{
+			this.state = WaterSplashBoy.State.None;
+			return;
+		}
+		this.SwimState();
+		if (this.walk != null)
+		{
+			int i = 0;
+			int num = this.walk.Length;
+			while (i < num)
+			{
+				this.walk[i].Stop();
+				i++;
+			}
+		}
+		if (this.bubbles != null)
+		{
+			int j = 0;
+			int num2 = this.bubbles.Length;
+			while (j < num2)
+			{
+				this.bubbles[j].Stop();
+				j++;
+			}
+		}
+		this.swimHead.Play();
+		this.diveTime = 0f;
+		this.state = WaterSplashBoy.State.Swim;
+	}
+
+	// Token: 0x060012E2 RID: 4834 RVA: 0x000B1C4C File Offset: 0x000AFE4C
+	private void SetDiveState()
+	{
+		if (this.bubbles == null || this.bubbles.Length != 4 || !this.bubbles[0] || !this.bubbles[1] || !this.bubbles[2] || !this.bubbles[3])
+		{
+			this.state = WaterSplashBoy.State.None;
+			return;
+		}
+		this.DiveState();
+		if (this.walk != null)
+		{
+			for (int i = 0; i < this.walk.Length; i++)
+			{
+				this.walk[i].Stop();
+			}
+		}
+		this.swimHead.Stop();
+		if (this.bubbles != null)
+		{
+			for (int j = 0; j < this.bubbles.Length; j++)
+			{
+				this.bubbles[j].Reset();
+			}
+		}
+		this.diveDelay = true;
+		this.state = WaterSplashBoy.State.Dive;
+	}
+
+	// Token: 0x060012E3 RID: 4835 RVA: 0x000B1D44 File Offset: 0x000AFF44
+	protected virtual void SetImpactOver(float speed)
+	{
+		if (!this.impactOver)
+		{
+			this.impactState = WaterSplashBoy.ImpactState.None;
+			return;
+		}
+		this.impactOver.transform.position = base.transform.position;
+		this.impactOver.Play(speed);
+		this.endTimerImpact = this.impactOver.particle.duration;
+		this.impactState = WaterSplashBoy.ImpactState.ImpactOver;
+		this.UpdateImpactState();
+	}
+
+	// Token: 0x060012E4 RID: 4836 RVA: 0x000B1DB4 File Offset: 0x000AFFB4
+	private void SetImpactUnder(float speed)
+	{
+		if (this.upsideDown && this.boy.state is BoyCustomAnimState)
+		{
+			this.impactState = WaterSplashBoy.ImpactState.None;
+			return;
+		}
+		this.impactUnderTemp = ((!this.upsideDown) ? this.impactUnder : this.impactUnderUpsideDown);
+		if (!this.impactUnderTemp)
+		{
+			this.impactState = WaterSplashBoy.ImpactState.None;
+			return;
+		}
+		this.impactUnderTemp.transform.position = base.transform.position;
+		this.impactUnderTemp.Play(speed);
+		this.endTimerImpact = this.impactUnderTemp.particle.duration;
+		this.impactState = WaterSplashBoy.ImpactState.ImpactUnder;
+		this.UpdateImpactState();
+	}
+
+	// Token: 0x060012E5 RID: 4837 RVA: 0x000B1E70 File Offset: 0x000B0070
+	protected virtual void WalkState()
+	{
+		int[] array = (this.boyWater.GetDepth(Vector3.up, this.boy.pos3, 2f) <= 0.6f) ? this.knees : this.hips;
+		for (int i = 0; i < 2; i++)
+		{
+			WaterSplashBoy.ScalableParticles scalableParticles = this.walk[i];
+			scalableParticles.transform.position = this.WaterPos(array[i]);
+			scalableParticles.ShrinkFade(this.boyAccel);
+			scalableParticles.Emission(Mathf.Abs(this.cachedRagdoll.GetBoneVelocity(array[i]).x) * 0.5f - 0.05f);
+		}
+		if (this.waves)
+		{
+			this.waves.startLifetime = Mathf.Clamp(5f / this.boySpeed, 2.5f, 5f);
+			this.waves.startColor = new Color(1f, Random.value, 1f - Mathf.Sqrt(Mathf.Clamp01(1f - this.boySpeed / 2f)), 1f);
+			this.waves.emissionRate = this.boySpeed * 5f;
+			this.waves.transform.position = this.WaterPos(this.head);
+		}
+		if (!this.surface)
+		{
+			this.SetDiveState();
+		}
+		if (this.boy.state is BoySwimState || this.boy.state is BoyCustomAnimState)
+		{
+			this.SetSwimState();
+		}
+	}
+
+	// Token: 0x060012E6 RID: 4838 RVA: 0x000B200C File Offset: 0x000B020C
+	private void SwimState()
+	{
+		for (int i = 0; i < 2; i++)
+		{
+			Rigidbody boneRigidBody = this.cachedRagdoll.GetBoneRigidBody(this.knees[i]);
+			Vector3 pos = boneRigidBody.position + boneRigidBody.transform.up * 0.3f;
+			bool flag = pos.y - this.waterHeight > 0f;
+			if (flag != this.aboveOld[i])
+			{
+				this.swimFeet.transform.position = this.WaterPos(this.knees[i], pos);
+				this.swimFeet.Play(this.boyAccel);
+			}
+			this.aboveOld[i] = flag;
+		}
+		this.swimHead.transform.position = this.WaterPos(this.head);
+		this.swimHead.ShrinkFade(this.boyAccel);
+		this.swimHead.Emission(Mathf.Abs(this.cachedRagdoll.GetBoneVelocity(this.head).x) - 0.3f);
+		if (this.waves)
+		{
+			this.waves.startLifetime = Mathf.Clamp(5f / this.boySpeed, 2.5f, 5f);
+			this.waves.startColor = new Color(1f, Random.value, 1f - Mathf.Sqrt(Mathf.Clamp01(1f - this.boySpeed / 2f)), 1f);
+			this.waves.emissionRate = this.boySpeed * 5f;
+			this.waves.transform.position = this.WaterPos(this.head);
+		}
+		if (!(this.boy.state is BoySwimState) && !(this.boy.state is BoyCustomAnimState) && this.surface)
+		{
+			this.SetWalkState();
+		}
+		else if (this.CheckUnderwater() || !this.surface)
+		{
+			this.SetDiveState();
+		}
+	}
+
+	// Token: 0x060012E7 RID: 4839 RVA: 0x000B2220 File Offset: 0x000B0420
+	private void DiveState()
+	{
+		if (this.bubbles != null && !this.diveDelay)
+		{
+			if (this.diveTime > 1f)
+			{
+				for (int i = 0; i < this.bubbles.Length; i++)
+				{
+					this.bubbles[i].Stop();
+				}
+			}
+			else
+			{
+				for (int j = 0; j < this.bubbles.Length; j++)
+				{
+					this.bubbles[j].Play();
+				}
+			}
+		}
+		float num = Mathf.Clamp01(1f - this.diveTime);
+		int k = 0;
+		int num2 = this.limbs.Length;
+		while (k < num2)
+		{
+			WaterSplashBoy.ScalableParticles scalableParticles = this.bubbles[k];
+			Rigidbody boneRigidBody = this.cachedRagdoll.GetBoneRigidBody(this.limbs[k]);
+			scalableParticles.ShrinkFade(this.boyAccel * num);
+			scalableParticles.transform.position = boneRigidBody.worldCenterOfMass;
+			scalableParticles.transform.rotation = boneRigidBody.rotation;
+			k++;
+		}
+		if (this.waves)
+		{
+			if (this.upsideDown)
+			{
+				this.waves.startLifetime = 2.5f;
+				float num3 = (this.boySpeed + this.waterHeight - this.boy.pos3.y) * 4f;
+				this.waves.startColor = new Color(1f, Random.value, 1f, 1f);
+				this.waves.emissionRate = ((num3 <= 4f) ? 0f : num3);
+				this.waves.transform.position = this.WaterPos(this.head);
+			}
+			else
+			{
+				this.waves.emissionRate = 0f;
+			}
+		}
+		this.diveDelay = false;
+		this.diveTime += Time.deltaTime / 10f;
+		if (!this.CheckUnderwater() && this.surface)
+		{
+			this.SetSwimState();
+		}
+	}
+
+	// Token: 0x060012E8 RID: 4840 RVA: 0x000B2430 File Offset: 0x000B0630
+	protected virtual void ImpactOverState()
+	{
+		Vector3 position = base.transform.position;
+		position.x += Mathf.Clamp(this.boy.velocity.x * 0.2f, -0.28f, 0.28f);
+		this.impactOver.transform.position = position;
+		if (this.endTimerImpact > 0f)
+		{
+			this.endTimerImpact -= Time.deltaTime;
+		}
+		else
+		{
+			this.impactOver.Stop();
+			this.impactState = WaterSplashBoy.ImpactState.None;
+		}
+	}
+
+	// Token: 0x060012E9 RID: 4841 RVA: 0x000B24CC File Offset: 0x000B06CC
+	private void ImpactUnderState()
+	{
+		Vector3 pos = this.boy.pos3;
+		pos.y -= Mathf.Clamp(this.boy.velocity.y * -0.05f, 0f, 0.5f);
+		this.impactUnderTemp.transform.position = pos;
+		this.impactUnderTemp.transform.rotation = this.boy.transform.rotation;
+		if (this.endTimerImpact > 0f)
+		{
+			this.endTimerImpact -= Time.deltaTime;
+		}
+		else
+		{
+			this.impactUnderTemp.Stop();
+			this.impactState = WaterSplashBoy.ImpactState.None;
+		}
+	}
+
+	// Token: 0x060012EA RID: 4842 RVA: 0x000B2588 File Offset: 0x000B0788
+	private void SetEndState()
+	{
+		if (this.removeDelay <= 0f)
+		{
+			this.StopParticles();
+		}
+		this.state = WaterSplashBoy.State.End;
+	}
+
+	// Token: 0x060012EB RID: 4843 RVA: 0x000B25A8 File Offset: 0x000B07A8
+	private void EndState()
+	{
+		if (this.removeDelay > 0f)
+		{
+			this.removeDelay -= Time.deltaTime;
+			if (this.removeDelay <= 0f)
+			{
+				this.StopParticles();
+			}
+		}
+	}
+
+	// Token: 0x060012EC RID: 4844 RVA: 0x000B25F0 File Offset: 0x000B07F0
+	private void StopParticles()
+	{
+		int i = 0;
+		int num = this.partSys.Length;
+		while (i < num)
+		{
+			this.partSys[i].Stop(false);
+			i++;
+		}
+	}
+
+	// Token: 0x060012ED RID: 4845 RVA: 0x000B2628 File Offset: 0x000B0828
+	private Vector3 WaterPos(int body)
+	{
+		Rigidbody boneRigidBody = this.cachedRagdoll.GetBoneRigidBody(body);
+		Vector3 boneVelocity = this.cachedRagdoll.GetBoneVelocity(body);
+		return new Vector3(boneRigidBody.worldCenterOfMass.x + boneVelocity.x * 0.05f, (this.boyWater.type != BoyWater.Type.Mud) ? this.waterHeight : (this.waterHeight + 0.01f), boneRigidBody.worldCenterOfMass.z);
+	}
+
+	// Token: 0x060012EE RID: 4846 RVA: 0x000B26A8 File Offset: 0x000B08A8
+	private Vector3 WaterPos(int body, Vector3 pos)
+	{
+		Vector3 boneVelocity = this.cachedRagdoll.GetBoneVelocity(body);
+		return new Vector3(pos.x + boneVelocity.x * 0.05f, (this.boyWater.type != BoyWater.Type.Mud) ? this.waterHeight : (this.waterHeight + 0.01f), pos.z);
+	}
+
+	// Token: 0x060012EF RID: 4847 RVA: 0x000B270C File Offset: 0x000B090C
+	private bool CheckUnderwater()
+	{
+		return this.upsideDown || this.cachedRagdoll.GetBonePos(this.head).y + 0.2f < this.waterHeight;
+	}
+
+	// Token: 0x060012F0 RID: 4848 RVA: 0x000B2750 File Offset: 0x000B0950
+	private bool UpsideDownCheck()
+	{
+		bool flag = false;
+		if (this.surfTop != null && this.surfBottom != null)
+		{
+			flag = ((!this.surfTop.activeInHierarchy || !this.surfBottom.activeInHierarchy) ? this.surfBottom.activeInHierarchy : (this.boy.pos.y < this.water.position.y));
+		}
+		if (Vector3.Dot(this.water.up, Vector3.up) < 0f)
+		{
+			flag = !flag;
+		}
+		if (flag != this.upsideDown)
+		{
+			this.upsideDown = flag;
+			return true;
+		}
+		return false;
+	}
+
+	// Token: 0x060012F1 RID: 4849 RVA: 0x000B2814 File Offset: 0x000B0A14
+	private void SetRippleHeight()
+	{
+		int i = 0;
+		int num = this.rippleList.Length;
+		while (i < num)
+		{
+			if (this.rippleList[i])
+			{
+				this.rippleList[i].SetVectorProperty(this.rippleListProp[i], new Vector2(this.waterHeight, 1f));
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x060012F2 RID: 4850 RVA: 0x000B2878 File Offset: 0x000B0A78
+	public void SetSplashColor(Color splashColor)
+	{
+		for (int i = 0; i < this.partSys.Length; i++)
+		{
+			ParticleSystem particleSystem = this.partSys[i];
+			if (particleSystem)
+			{
+				MaterialInstance component = particleSystem.GetComponent<MaterialInstance>();
+				if (component)
+				{
+					MaterialInstance.ColorProperty colorProperty = component.GetColorProperty("_TintColor");
+					if (colorProperty == null)
+					{
+						colorProperty = component.GetColorProperty("_MainCol");
+					}
+					if (colorProperty == null)
+					{
+						colorProperty = component.GetColorProperty("_Color");
+					}
+					if (colorProperty != null)
+					{
+						splashColor.a = component.GetColorValue(colorProperty).a;
+						component.SetColorProperty(colorProperty, splashColor);
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x060012F3 RID: 4851 RVA: 0x000B2928 File Offset: 0x000B0B28
+	public void BottomExit()
+	{
+		if (this.surface)
+		{
+			this.impactOver.Reset();
+			this.SetImpactOver(1f);
+			this.removeDelay = 0.5f;
+		}
+		else
+		{
+			this.removeDelay = 0f;
+		}
+	}
+
+	// Token: 0x060012F4 RID: 4852 RVA: 0x000B2974 File Offset: 0x000B0B74
+	public WaterSplashBoy.State GetState()
+	{
+		return this.state;
+	}
+
+	// Token: 0x060012F5 RID: 4853 RVA: 0x000B297C File Offset: 0x000B0B7C
+	public Boy GetBoy()
+	{
+		return this.boy;
+	}
+
+	// Token: 0x060012F6 RID: 4854 RVA: 0x000B2984 File Offset: 0x000B0B84
+	public void Remove()
+	{
+		this.impactState = WaterSplashBoy.ImpactState.None;
+		this.SetEndState();
+	}
+
+	// Token: 0x040022CF RID: 8911
+	public WaterSplashBoy.ScalableParticles impactOver;
+
+	// Token: 0x040022D0 RID: 8912
+	public WaterSplashBoy.ScalableParticles impactUnder;
+
+	// Token: 0x040022D1 RID: 8913
+	public WaterSplashBoy.ScalableParticles impactUnderUpsideDown;
+
+	// Token: 0x040022D2 RID: 8914
+	public WaterSplashBoy.ScalableParticles[] walk;
+
+	// Token: 0x040022D3 RID: 8915
+	public WaterSplashBoy.ScalableParticles swimFeet;
+
+	// Token: 0x040022D4 RID: 8916
+	public WaterSplashBoy.ScalableParticles swimHead;
+
+	// Token: 0x040022D5 RID: 8917
+	public WaterSplashBoy.ScalableParticles[] bubbles;
+
+	// Token: 0x040022D6 RID: 8918
+	public ParticleSystem waves;
+
+	// Token: 0x040022D7 RID: 8919
+	[Range(0f, 8f)]
+	public int attack;
+
+	// Token: 0x040022D8 RID: 8920
+	[Range(0f, 512f)]
+	public int release;
+
+	// Token: 0x040022D9 RID: 8921
+	public MaterialInstance[] rippleList;
+
+	// Token: 0x040022DA RID: 8922
+	private MaterialInstance.VectorProperty[] rippleListProp;
+
+	// Token: 0x040022DB RID: 8923
+	public AnimClipNode animDrowning;
+
+	// Token: 0x040022DC RID: 8924
+	public AnimClipNode animWarning;
+
+	// Token: 0x040022DD RID: 8925
+	private Boy boy;
+
+	// Token: 0x040022DE RID: 8926
+	private int head;
+
+	// Token: 0x040022DF RID: 8927
+	private bool[] aboveOld = new bool[2];
+
+	// Token: 0x040022E0 RID: 8928
+	private WaterSplashBoy.State state;
+
+	// Token: 0x040022E1 RID: 8929
+	private WaterSplashBoy.ImpactState impactState;
+
+	// Token: 0x040022E2 RID: 8930
+	private float boyAccel;
+
+	// Token: 0x040022E3 RID: 8931
+	private float boySpeed;
+
+	// Token: 0x040022E4 RID: 8932
+	private float boySpeedOld;
+
+	// Token: 0x040022E5 RID: 8933
+	private float waterHeight;
+
+	// Token: 0x040022E6 RID: 8934
+	private float reletiveWaterHeight;
+
+	// Token: 0x040022E7 RID: 8935
+	[SerializeField]
+	private bool upsideDown;
+
+	// Token: 0x040022E8 RID: 8936
+	private bool surface;
+
+	// Token: 0x040022E9 RID: 8937
+	private float endTimerImpact;
+
+	// Token: 0x040022EA RID: 8938
+	private float diveTime = 1f;
+
+	// Token: 0x040022EB RID: 8939
+	private float removeDelay;
+
+	// Token: 0x040022EC RID: 8940
+	private bool diveDelay = true;
+
+	// Token: 0x040022ED RID: 8941
+	public GameObject surfTop;
+
+	// Token: 0x040022EE RID: 8942
+	public GameObject surfBottom;
+
+	// Token: 0x040022EF RID: 8943
+	private WaterSplashBoy.ScalableParticles impactUnderTemp;
+
+	// Token: 0x040022F0 RID: 8944
+	[HideInInspector]
+	[SerializeField]
+	private BoyWater boyWater;
+
+	// Token: 0x040022F1 RID: 8945
+	[SerializeField]
+	[HideInInspector]
+	private Transform water;
+
+	// Token: 0x040022F2 RID: 8946
+	[SerializeField]
+	[HideInInspector]
+	private AttackReleaseFilter accelFilter;
+
+	// Token: 0x040022F3 RID: 8947
+	[SerializeField]
+	[HideInInspector]
+	private WaterToShader[] waterToShaderList;
+
+	// Token: 0x040022F4 RID: 8948
+	[HideInInspector]
+	[SerializeField]
+	private ParticleSystem[] partSys;
+
+	// Token: 0x040022F5 RID: 8949
+	[HideInInspector]
+	[SerializeField]
+	private int[] hips;
+
+	// Token: 0x040022F6 RID: 8950
+	[SerializeField]
+	[HideInInspector]
+	private int[] knees;
+
+	// Token: 0x040022F7 RID: 8951
+	[SerializeField]
+	[HideInInspector]
+	private int[] limbs;
+
+	// Token: 0x040022F8 RID: 8952
+	private RagdollSkeleton cachedRagdoll;
+
+	// Token: 0x02000267 RID: 615
+	[Serializable]
+	public class ScalableParticles
+	{
+		// Token: 0x060012F8 RID: 4856 RVA: 0x000B29A8 File Offset: 0x000B0BA8
+		public void Init()
+		{
+			if (!this.particle)
+			{
+				return;
+			}
+			this.transform = this.particle.GetComponent<Transform>();
+			this.doShrink = (this.shrink > 0.01f);
+			this.doFade = (this.fade > 0.01f);
+			this.children = this.particle.GetComponentsInChildren<ParticleSystem>(true);
+			this.emitOrg = new float[this.children.Length];
+			this.isRipple = new bool[this.children.Length];
+			if (this.doShrink)
+			{
+				this.scaleOrg = new float[this.children.Length * 3];
+			}
+			if (this.doFade)
+			{
+				this.alphaOrg = new float[this.children.Length];
+			}
+			for (int i = 0; i < this.children.Length; i++)
+			{
+				this.emitOrg[i] = this.children[i].emissionRate;
+				this.isRipple[i] = (this.children[i].GetComponent<ParticleSystemRenderer>().renderMode == 2);
+				if (this.doShrink)
+				{
+					this.scaleOrg[i * 3] = this.children[i].startSize;
+					this.scaleOrg[i * 3 + 1] = this.children[i].startSpeed;
+					this.scaleOrg[i * 3 + 2] = this.children[i].startLifetime;
+				}
+				if (this.doFade)
+				{
+					this.alphaOrg[i] = this.children[i].startColor.a;
+				}
+			}
+		}
+
+		// Token: 0x060012F9 RID: 4857 RVA: 0x000B2B3C File Offset: 0x000B0D3C
+		public void ShrinkFade(float scaleFade)
+		{
+			if (!this.doShrink && !this.doFade)
+			{
+				return;
+			}
+			if (this.doShrink)
+			{
+				this.shrinkCurrent = scaleFade * this.shrink - this.shrink + 1f;
+			}
+			if (this.doFade)
+			{
+				this.fadeCurrent = scaleFade * this.fade - this.fade + 1f;
+			}
+			int i = 0;
+			int num = this.children.Length;
+			while (i < num)
+			{
+				ParticleSystem particleSystem = this.children[i];
+				if (this.doShrink)
+				{
+					particleSystem.startSize = this.scaleOrg[i * 3] * this.shrinkCurrent;
+					float num2 = Mathf.Sqrt(this.shrinkCurrent);
+					particleSystem.startSpeed = this.scaleOrg[i * 3 + 1] * num2;
+					particleSystem.startLifetime = this.scaleOrg[i * 3 + 2] * num2;
+				}
+				if (this.doFade)
+				{
+					particleSystem.startColor = particleSystem.startColor.Alpha(this.alphaOrg[i] * this.fadeCurrent);
+				}
+				i++;
+			}
+		}
+
+		// Token: 0x060012FA RID: 4858 RVA: 0x000B2C54 File Offset: 0x000B0E54
+		public void Emission(float emit)
+		{
+			this.emitCurrent = Mathf.Clamp01(emit);
+			int i = 0;
+			int num = this.children.Length;
+			while (i < num)
+			{
+				float num2 = this.emitOrg[i];
+				this.children[i].emissionRate = ((!this.isRipple[i]) ? (num2 * this.emitCurrent) : Mathf.Max(num2 * this.emitCurrent, this.minimumRipples));
+				i++;
+			}
+		}
+
+		// Token: 0x060012FB RID: 4859 RVA: 0x000B2CCC File Offset: 0x000B0ECC
+		public void Play(float scaleFade)
+		{
+			this.ShrinkFade(scaleFade);
+			this.Play();
+		}
+
+		// Token: 0x060012FC RID: 4860 RVA: 0x000B2CDC File Offset: 0x000B0EDC
+		public void Play()
+		{
+			if (this.children != null)
+			{
+				int i = 0;
+				int num = this.children.Length;
+				while (i < num)
+				{
+					this.children[i].Play(false);
+					i++;
+				}
+			}
+		}
+
+		// Token: 0x060012FD RID: 4861 RVA: 0x000B2D20 File Offset: 0x000B0F20
+		public void Stop()
+		{
+			if (this.children != null)
+			{
+				int i = 0;
+				int num = this.children.Length;
+				while (i < num)
+				{
+					this.children[i].Stop(false);
+					i++;
+				}
+			}
+		}
+
+		// Token: 0x060012FE RID: 4862 RVA: 0x000B2D64 File Offset: 0x000B0F64
+		public void Reset()
+		{
+			if (this.children != null)
+			{
+				int i = 0;
+				int num = this.children.Length;
+				while (i < num)
+				{
+					this.children[i].Simulate(0f, false, true);
+					i++;
+				}
+			}
+		}
+
+		// Token: 0x060012FF RID: 4863 RVA: 0x000B2DAC File Offset: 0x000B0FAC
+		public static implicit operator bool(WaterSplashBoy.ScalableParticles exists)
+		{
+			return exists.particle != null;
+		}
+
+		// Token: 0x040022F9 RID: 8953
+		[Range(0f, 1f)]
+		public float shrink;
+
+		// Token: 0x040022FA RID: 8954
+		[Range(0f, 1f)]
+		public float fade;
+
+		// Token: 0x040022FB RID: 8955
+		public float minimumRipples = 1.5f;
+
+		// Token: 0x040022FC RID: 8956
+		public ParticleSystem particle;
+
+		// Token: 0x040022FD RID: 8957
+		[HideInInspector]
+		public Transform transform;
+
+		// Token: 0x040022FE RID: 8958
+		[HideInInspector]
+		[SerializeField]
+		private bool doShrink;
+
+		// Token: 0x040022FF RID: 8959
+		[SerializeField]
+		[HideInInspector]
+		private bool doFade;
+
+		// Token: 0x04002300 RID: 8960
+		[HideInInspector]
+		[SerializeField]
+		private float shrinkCurrent;
+
+		// Token: 0x04002301 RID: 8961
+		[SerializeField]
+		[HideInInspector]
+		private float fadeCurrent;
+
+		// Token: 0x04002302 RID: 8962
+		[HideInInspector]
+		[SerializeField]
+		private float emitCurrent;
+
+		// Token: 0x04002303 RID: 8963
+		[HideInInspector]
+		[SerializeField]
+		private ParticleSystem[] children;
+
+		// Token: 0x04002304 RID: 8964
+		[SerializeField]
+		[HideInInspector]
+		private float[] scaleOrg;
+
+		// Token: 0x04002305 RID: 8965
+		[SerializeField]
+		[HideInInspector]
+		private float[] emitOrg;
+
+		// Token: 0x04002306 RID: 8966
+		[SerializeField]
+		[HideInInspector]
+		private float[] alphaOrg;
+
+		// Token: 0x04002307 RID: 8967
+		[SerializeField]
+		[HideInInspector]
+		private bool[] isRipple;
+	}
+
+	// Token: 0x02000268 RID: 616
+	public enum State
+	{
+		// Token: 0x04002309 RID: 8969
+		None,
+		// Token: 0x0400230A RID: 8970
+		Walk,
+		// Token: 0x0400230B RID: 8971
+		Swim,
+		// Token: 0x0400230C RID: 8972
+		Dive,
+		// Token: 0x0400230D RID: 8973
+		End
+	}
+
+	// Token: 0x02000269 RID: 617
+	private enum ImpactState
+	{
+		// Token: 0x0400230F RID: 8975
+		None,
+		// Token: 0x04002310 RID: 8976
+		ImpactOver,
+		// Token: 0x04002311 RID: 8977
+		ImpactUnder
+	}
+}

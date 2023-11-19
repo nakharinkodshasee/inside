@@ -1,0 +1,119 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000370 RID: 880
+[ExecuteInEditMode]
+public class WaterDust : MonoBehaviour, IFastEventExListener<WaterCameraRendering.EdgeAction>
+{
+	// Token: 0x0600180F RID: 6159 RVA: 0x000D20A0 File Offset: 0x000D02A0
+	private void OnEnable()
+	{
+		WaterCameraRendering.TranslateWaterEdge.Register(this, ref this.translateDustHandle);
+		this.dustObject.gameObject.SetActive(true);
+		this.colProp = this.dustObject.GetOrAddColorProperty("_MainColor");
+		this.scaleProp = this.dustObject.GetOrAddFloatProperty("_Size");
+		this.speedProp = this.dustObject.GetOrAddFloatProperty("_Speed");
+		this.stretchProp = this.dustObject.GetOrAddVectorProperty("_Stretch");
+		this.offsetProp = this.dustObject.GetOrAddVectorProperty("_Offset");
+		this.lastTime = Time.realtimeSinceStartup;
+		this.curOffset = Vector3.zero;
+		this.curSpeed = 0f;
+	}
+
+	// Token: 0x06001810 RID: 6160 RVA: 0x000D2160 File Offset: 0x000D0360
+	private void OnDisable()
+	{
+		WaterCameraRendering.TranslateWaterEdge.Unregister(ref this.translateDustHandle);
+		if (this.dustObject)
+		{
+			this.dustObject.gameObject.SetActive(false);
+		}
+	}
+
+	// Token: 0x06001811 RID: 6161 RVA: 0x000D2194 File Offset: 0x000D0394
+	public void OnFastEventEx(FastEventEx<WaterCameraRendering.EdgeAction> sender, ref WaterCameraRendering.EdgeAction edgeAction)
+	{
+		if (!this.dustObject || !base.enabled)
+		{
+			return;
+		}
+		if (!this.keepStatic)
+		{
+			this.dustObject.transform.parent.localScale = new Vector3(1f / base.transform.localScale.x, 1f / base.transform.localScale.y, 1f / base.transform.localScale.z);
+			float num = Mathf.Tan(Camera.current.fieldOfView * 0.017453292f * 0.5f) * (this.distance + 2f);
+			this.dustObject.transform.localScale = new Vector3(num * Camera.current.aspect, num, this.distance);
+			this.dustObject.transform.rotation = Quaternion.identity;
+			Vector2 vector = base.transform.localScale * 0.5f - this.dustObject.transform.localScale * 0.5f;
+			Vector3 position = Camera.current.transform.position + Camera.current.transform.forward * this.distance * 0.5f;
+			position.x = Mathf.Clamp(position.x, base.transform.position.x - vector.x, base.transform.position.x + vector.x);
+			position.y = Mathf.Clamp(position.y, base.transform.position.y - vector.y, base.transform.position.y + vector.y);
+			this.dustObject.transform.position = position;
+		}
+		float num2 = (!Application.isPlaying) ? (Time.realtimeSinceStartup - this.lastTime) : Time.deltaTime;
+		this.curOffset += this.stream * num2;
+		this.curSpeed += this.turbulence * num2;
+		this.lastTime = Time.realtimeSinceStartup;
+		Vector2 vector2 = Camera.current.velocity * 0.5f;
+		vector2 -= new Vector2(Vector3.Dot(this.stream, Camera.current.worldToCameraMatrix.GetRow(0)), Vector3.Dot(this.stream, Camera.current.worldToCameraMatrix.GetRow(1))) * 0.1f;
+		vector2.y *= Camera.current.aspect;
+		float magnitude = vector2.magnitude;
+		Vector3 vector3 = Vector2.Lerp(-Vector2.right, vector2, Mathf.Clamp01(magnitude)).normalized;
+		vector3.z = Mathf.Max(0f, magnitude - 1f) * 0.05f / this.size;
+		this.dustObject.SetColorProperty(this.colProp, this.color);
+		this.dustObject.SetFloatProperty(this.scaleProp, this.size);
+		this.dustObject.SetFloatProperty(this.speedProp, this.curSpeed);
+		this.dustObject.SetVectorProperty(this.stretchProp, vector3);
+		this.dustObject.SetVectorProperty(this.offsetProp, this.curOffset);
+	}
+
+	// Token: 0x04002B27 RID: 11047
+	public MaterialInstance dustObject;
+
+	// Token: 0x04002B28 RID: 11048
+	[Range(4f, 16f)]
+	public float distance;
+
+	// Token: 0x04002B29 RID: 11049
+	[Range(0.0025f, 0.015f)]
+	public float size;
+
+	// Token: 0x04002B2A RID: 11050
+	[Range(0f, 0.5f)]
+	public float turbulence;
+
+	// Token: 0x04002B2B RID: 11051
+	public Color color;
+
+	// Token: 0x04002B2C RID: 11052
+	public Vector3 stream;
+
+	// Token: 0x04002B2D RID: 11053
+	public bool keepStatic;
+
+	// Token: 0x04002B2E RID: 11054
+	private MaterialInstance.ColorProperty colProp;
+
+	// Token: 0x04002B2F RID: 11055
+	private MaterialInstance.FloatProperty scaleProp;
+
+	// Token: 0x04002B30 RID: 11056
+	private MaterialInstance.FloatProperty speedProp;
+
+	// Token: 0x04002B31 RID: 11057
+	private MaterialInstance.VectorProperty stretchProp;
+
+	// Token: 0x04002B32 RID: 11058
+	private MaterialInstance.VectorProperty offsetProp;
+
+	// Token: 0x04002B33 RID: 11059
+	private float lastTime;
+
+	// Token: 0x04002B34 RID: 11060
+	private float curSpeed;
+
+	// Token: 0x04002B35 RID: 11061
+	private Vector3 curOffset;
+
+	// Token: 0x04002B36 RID: 11062
+	private int translateDustHandle = -1;
+}

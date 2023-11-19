@@ -1,0 +1,44 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000DB RID: 219
+public class WaterGirlNarrowTrigger : MonoBehaviour
+{
+	// Token: 0x060006D8 RID: 1752 RVA: 0x0004D63C File Offset: 0x0004B83C
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.attachedRigidbody && coll.attachedRigidbody.GetComponent<WaterGirlSubmarineTest>())
+		{
+			this.insideTriggerCount++;
+			if (this.insideTriggerCount == 1)
+			{
+				this.girl.SetNarrowLimits(this.up.position, this.down.position, this);
+			}
+		}
+	}
+
+	// Token: 0x060006D9 RID: 1753 RVA: 0x0004D6AC File Offset: 0x0004B8AC
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.attachedRigidbody && coll.attachedRigidbody.GetComponent<WaterGirlSubmarineTest>())
+		{
+			this.insideTriggerCount--;
+			if (this.insideTriggerCount == 0)
+			{
+				this.girl.ClearNarrowLimits();
+			}
+		}
+	}
+
+	// Token: 0x04000BDB RID: 3035
+	public WaterGirlSubmarineTest girl;
+
+	// Token: 0x04000BDC RID: 3036
+	public Transform up;
+
+	// Token: 0x04000BDD RID: 3037
+	public Transform down;
+
+	// Token: 0x04000BDE RID: 3038
+	private int insideTriggerCount;
+}

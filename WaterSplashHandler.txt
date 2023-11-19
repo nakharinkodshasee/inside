@@ -1,0 +1,478 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200026A RID: 618
+public class WaterSplashHandler : MonoBehaviour, IFastEventExListener<GameManager.Load>, IFastEventExListener<Collider>
+{
+	// Token: 0x06001301 RID: 4865 RVA: 0x000B2DDC File Offset: 0x000B0FDC
+	[EarlyProcessBuild(0)]
+	[ContextMenu("PreProcessTest")]
+	private void OnPreProcess()
+	{
+		if (!base.enabled)
+		{
+			PDUtilities.Destroy(this);
+			return;
+		}
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (!this.trigger)
+		{
+			this.trigger = base.gameObject.GetComponent<CollisionEvents>();
+		}
+		this.waterQueueMaster = base.GetComponent<WaterQueueMaster>();
+		if (this.waterSplashBoy)
+		{
+			GameObject gameObject = Object.Instantiate<GameObject>(this.waterSplashBoy);
+			gameObject.transform.parent = base.transform;
+			WaterSplashBoy component = gameObject.GetComponent<WaterSplashBoy>();
+			component.Init(base.gameObject, this.upsideDown, this.splashColor);
+			gameObject.SetActive(false);
+			this.boyWaterSplash = component;
+		}
+		if (this.waterSplashMindhatReceiver)
+		{
+			GameObject gameObject2 = Object.Instantiate(this.waterSplashMindhatReceiver, base.transform.position, Quaternion.identity) as GameObject;
+			gameObject2.transform.parent = base.transform;
+			WaterSplashBoy component2 = gameObject2.GetComponent<WaterSplashBoy>();
+			component2.Init(base.gameObject, this.upsideDown, this.splashColor);
+			gameObject2.SetActive(false);
+			this.mindhatReceiverWaterSplash = component2;
+		}
+		if (this.waterSplashHulv)
+		{
+			GameObject gameObject3 = Object.Instantiate(this.waterSplashHulv, base.transform.position, Quaternion.identity) as GameObject;
+			gameObject3.transform.parent = base.transform;
+			WaterSplashHulv component3 = gameObject3.GetComponent<WaterSplashHulv>();
+			component3.Init(base.gameObject, this.waterQueueMaster);
+			gameObject3.SetActive(false);
+			this.hulvWaterSplash = component3;
+		}
+		if (this.waterSplashSubmarine)
+		{
+			GameObject gameObject4 = Object.Instantiate(this.waterSplashSubmarine, base.transform.position, Quaternion.identity) as GameObject;
+			gameObject4.transform.parent = base.transform;
+			WaterSplashSubmarine component4 = gameObject4.GetComponent<WaterSplashSubmarine>();
+			component4.Init(base.gameObject, this.waterQueueMaster);
+			gameObject4.SetActive(false);
+			this.submarineWaterSplash = component4;
+		}
+		if (this.waterSplashHuddle)
+		{
+			GameObject gameObject5 = Object.Instantiate(this.waterSplashHuddle, base.transform.position, Quaternion.identity) as GameObject;
+			gameObject5.transform.parent = base.transform;
+			WaterSplashHuddle component5 = gameObject5.GetComponent<WaterSplashHuddle>();
+			component5.Init(base.gameObject, this.waterQueueMaster);
+			gameObject5.SetActive(false);
+			this.huddleWaterSplash = component5;
+		}
+	}
+
+	// Token: 0x06001302 RID: 4866 RVA: 0x000B3054 File Offset: 0x000B1254
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.trigger.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.trigger.exitTrigger.Register(this, ref this.triggerExitHandle);
+		GameManager.prepareLoad.Register(this, ref this.prepareLoadHandle);
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x06001303 RID: 4867 RVA: 0x000B30B4 File Offset: 0x000B12B4
+	private void OnDestroy()
+	{
+		GameManager.prepareLoad.Unregister(ref this.prepareLoadHandle);
+	}
+
+	// Token: 0x06001304 RID: 4868 RVA: 0x000B30C8 File Offset: 0x000B12C8
+	public void OnFastEventEx(FastEventEx<GameManager.Load> sender, ref GameManager.Load arg)
+	{
+		if (sender != GameManager.prepareLoad)
+		{
+			return;
+		}
+		if (this.boyWaterSplash)
+		{
+			this.boyWaterSplash.Remove();
+		}
+		if (this.mindhatReceiverWaterSplash)
+		{
+			this.mindhatReceiverWaterSplash.Remove();
+		}
+		if (this.hulvWaterSplash)
+		{
+			this.hulvWaterSplash.Remove();
+		}
+		if (this.huddleWaterSplash)
+		{
+			this.huddleWaterSplash.Remove();
+		}
+		if (this.submarineWaterSplash)
+		{
+			this.submarineWaterSplash.Remove();
+		}
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x06001305 RID: 4869 RVA: 0x000B3174 File Offset: 0x000B1374
+	private void FixedUpdate()
+	{
+		if (this.splashDeadzone > 0f)
+		{
+			this.splashDeadzone -= Time.deltaTime;
+		}
+		if (this.huddleWaterSplash && !ScriptGlobals.huddle.isCharacterActive)
+		{
+			this.huddleWaterSplash.Remove();
+		}
+		BoyRopeState state = this.boy.state as BoyRopeState;
+		if (state)
+		{
+			if (Mathf.Abs(base.transform.position.x - this.boy.pos.x) > base.transform.localScale.x / 2f)
+			{
+				return;
+			}
+			if (!this.leftAnkle)
+			{
+				this.leftAnkle = this.boy.visualBoy.actor.bones[this.boy.visualBoy.actor.GetBone("LeftBall")].transform;
+			}
+			if (!this.rightAnkle)
+			{
+				this.rightAnkle = this.boy.visualBoy.actor.bones[this.boy.visualBoy.actor.GetBone("RightBall")].transform;
+			}
+			float num = Mathf.Min(this.leftAnkle.position.y, this.rightAnkle.position.y) - 0.1f;
+			float waterSurface = this.GetWaterSurface();
+			bool flag = num <= waterSurface;
+			if (flag != this.previousRopeSplash)
+			{
+				if (flag)
+				{
+					this.BoyEnterTrigger(this.boy, this.boyWaterSplash);
+				}
+				else
+				{
+					this.BoyExitTrigger(this.boy, this.boyWaterSplash);
+				}
+				this.previousRopeSplash = flag;
+			}
+		}
+		if (this.useBoyHeadPos)
+		{
+			if (!this.boyHead)
+			{
+				this.boyHead = this.boy.visualBoy.actor.bones[this.boy.visualBoy.actor.GetBone("Head")].transform;
+			}
+			float num2 = base.transform.position.y - base.transform.localScale.y / 2f;
+			bool flag2 = this.boyHead.position.y + 0.2f > num2;
+			WaterSplashBoy.State state2 = this.boyWaterSplash.GetState();
+			if (state2 == WaterSplashBoy.State.End || state2 == WaterSplashBoy.State.None)
+			{
+				if (flag2)
+				{
+					this.BoyEnterTrigger(ScriptGlobals.boy, this.boyWaterSplash);
+				}
+			}
+			else if (!flag2)
+			{
+				this.BoyExitTrigger(ScriptGlobals.boy, this.boyWaterSplash);
+			}
+		}
+	}
+
+	// Token: 0x06001306 RID: 4870 RVA: 0x000B3464 File Offset: 0x000B1664
+	private float GetWaterSurface()
+	{
+		return base.transform.position.y + base.transform.localScale.y / 2f;
+	}
+
+	// Token: 0x06001307 RID: 4871 RVA: 0x000B34A0 File Offset: 0x000B16A0
+	private bool CheckWaterExit(Boy boy)
+	{
+		BoyCustomAnimState boyCustomAnimState = boy.state as BoyCustomAnimState;
+		if (boyCustomAnimState != null)
+		{
+			VisualBoySwim visualBoySwim = boy.visualBoy.GetChildNodeByIndex(VisualBoyNode.TypeIndex.VisualBoySwim) as VisualBoySwim;
+			if (visualBoySwim != null && (boyCustomAnimState.anim == visualBoySwim.undersideExitFW || boyCustomAnimState.anim == visualBoySwim.undersideExitStraight))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x06001308 RID: 4872 RVA: 0x000B3510 File Offset: 0x000B1710
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.trigger.enterTrigger)
+		{
+			this.TriggerEnter(collider);
+		}
+		else if (sender == this.trigger.exitTrigger)
+		{
+			this.TriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06001309 RID: 4873 RVA: 0x000B354C File Offset: 0x000B174C
+	private void TriggerEnter(Collider c)
+	{
+		if (!this.useBoyHeadPos && this.boyWaterSplash)
+		{
+			BoyProbe component = c.GetComponent<BoyProbe>();
+			if (component)
+			{
+				this.BoyEnterTrigger(component.boy, this.boyWaterSplash);
+				return;
+			}
+		}
+		if (this.huddleWaterSplash)
+		{
+			HuddleProbeScaler component2 = c.GetComponent<HuddleProbeScaler>();
+			if (component2)
+			{
+				this.HuddleEnterTrigger();
+				return;
+			}
+		}
+		if (this.hulvWaterSplash)
+		{
+			HulvProbe component3 = c.GetComponent<HulvProbe>();
+			if (component3)
+			{
+				this.HulvEnterTrigger(component3);
+				return;
+			}
+		}
+		if (this.submarineWaterSplash)
+		{
+			Submarine component4 = c.GetComponent<Submarine>();
+			if (component4)
+			{
+				this.SubmarineEnterTrigger(component4);
+				return;
+			}
+		}
+		if (this.mindhatReceiverWaterSplash)
+		{
+			MindHatReceiverProbe component5 = c.GetComponent<MindHatReceiverProbe>();
+			if (component5)
+			{
+				this.BoyEnterTrigger(component5.boy, this.mindhatReceiverWaterSplash);
+				return;
+			}
+		}
+	}
+
+	// Token: 0x0600130A RID: 4874 RVA: 0x000B3650 File Offset: 0x000B1850
+	private void TriggerExit(Collider c)
+	{
+		if (this.boyWaterSplash)
+		{
+			BoyProbe component = c.GetComponent<BoyProbe>();
+			if (component)
+			{
+				this.BoyExitTrigger(component.boy, this.boyWaterSplash);
+				return;
+			}
+		}
+		if (this.waterSplashHuddle)
+		{
+			HuddleProbeScaler component2 = c.GetComponent<HuddleProbeScaler>();
+			if (component2)
+			{
+				this.huddleWaterSplash.Remove();
+				return;
+			}
+		}
+		if (this.waterSplashHulv)
+		{
+			HulvProbe component3 = c.GetComponent<HulvProbe>();
+			if (component3)
+			{
+				this.hulvWaterSplash.Remove();
+				return;
+			}
+		}
+		if (this.waterSplashSubmarine)
+		{
+			Submarine component4 = c.GetComponent<Submarine>();
+			if (component4)
+			{
+				this.submarineWaterSplash.Remove();
+				return;
+			}
+		}
+		if (this.mindhatReceiverWaterSplash)
+		{
+			MindHatReceiverProbe component5 = c.GetComponent<MindHatReceiverProbe>();
+			if (component5)
+			{
+				this.BoyExitTrigger(component5.boy, this.mindhatReceiverWaterSplash);
+				return;
+			}
+		}
+	}
+
+	// Token: 0x0600130B RID: 4875 RVA: 0x000B3754 File Offset: 0x000B1954
+	private void BoyExitTrigger(Boy boy, WaterSplashBoy splash)
+	{
+		if (splash)
+		{
+			if (this.CheckWaterExit(boy) && this.splashDeadzone <= 0f)
+			{
+				this.splashDeadzone = 0.5f;
+				splash.BottomExit();
+			}
+			splash.Remove();
+		}
+	}
+
+	// Token: 0x0600130C RID: 4876 RVA: 0x000B37A0 File Offset: 0x000B19A0
+	private void BoyEnterTrigger(Boy boy, WaterSplashBoy splash)
+	{
+		if (!splash || boy.specialBoyMode == Boy.SpecialBoyMode.InsideSub)
+		{
+			return;
+		}
+		if (this.CheckWaterExit(boy))
+		{
+			return;
+		}
+		Vector3 position = boy.transform.position;
+		bool flag = position.y < base.transform.position.y;
+		position.y = (flag ? (base.transform.position.y - base.transform.localScale.y / 2f) : this.GetWaterSurface());
+		Vector3 zero = Vector3.zero;
+		if (flag)
+		{
+			zero.z = 180f;
+		}
+		splash.transform.position = position;
+		splash.transform.rotation = Quaternion.Euler(zero);
+		splash.gameObject.SetActive(true);
+		splash.Setup(boy, base.gameObject, this.waterQueueMaster);
+	}
+
+	// Token: 0x0600130D RID: 4877 RVA: 0x000B3898 File Offset: 0x000B1A98
+	private void HuddleEnterTrigger()
+	{
+		Huddle huddle = ScriptGlobals.huddle;
+		Vector3 pos = huddle.pos3;
+		pos.y = this.GetWaterSurface();
+		this.huddleWaterSplash.transform.position = pos;
+		this.huddleWaterSplash.gameObject.SetActive(true);
+		this.huddleWaterSplash.Setup(huddle, base.gameObject, this.splashColor, this.waterQueueMaster);
+	}
+
+	// Token: 0x0600130E RID: 4878 RVA: 0x000B3900 File Offset: 0x000B1B00
+	private void HulvEnterTrigger(HulvProbe hulvProbe)
+	{
+		Hulv hulv = hulvProbe.hulv;
+		Vector3 position = hulv.transform.position;
+		position.y = this.GetWaterSurface();
+		this.hulvWaterSplash.transform.position = position;
+		this.hulvWaterSplash.gameObject.SetActive(true);
+		this.hulvWaterSplash.Setup(hulv, base.gameObject, this.splashColor, this.waterQueueMaster);
+	}
+
+	// Token: 0x0600130F RID: 4879 RVA: 0x000B3970 File Offset: 0x000B1B70
+	private void SubmarineEnterTrigger(Submarine submarine)
+	{
+		Vector3 pos = submarine.pos3;
+		pos.y = this.GetWaterSurface();
+		this.submarineWaterSplash.transform.position = pos;
+		this.submarineWaterSplash.gameObject.SetActive(true);
+		this.submarineWaterSplash.Setup(submarine, this.splashColor, this.waterQueueMaster);
+	}
+
+	// Token: 0x04002312 RID: 8978
+	public CollisionEvents trigger;
+
+	// Token: 0x04002313 RID: 8979
+	public GameObject waterSplashBoy;
+
+	// Token: 0x04002314 RID: 8980
+	public GameObject waterSplashHuddle;
+
+	// Token: 0x04002315 RID: 8981
+	public GameObject waterSplashHulv;
+
+	// Token: 0x04002316 RID: 8982
+	public GameObject waterSplashSubmarine;
+
+	// Token: 0x04002317 RID: 8983
+	public GameObject waterSplashMindhatReceiver;
+
+	// Token: 0x04002318 RID: 8984
+	public Color splashColor;
+
+	// Token: 0x04002319 RID: 8985
+	public bool upsideDown;
+
+	// Token: 0x0400231A RID: 8986
+	public bool useBoyHeadPos;
+
+	// Token: 0x0400231B RID: 8987
+	private Transform leftAnkle;
+
+	// Token: 0x0400231C RID: 8988
+	private Transform rightAnkle;
+
+	// Token: 0x0400231D RID: 8989
+	private Boy boy;
+
+	// Token: 0x0400231E RID: 8990
+	private bool previousRopeSplash;
+
+	// Token: 0x0400231F RID: 8991
+	private int prepareLoadHandle = -1;
+
+	// Token: 0x04002320 RID: 8992
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04002321 RID: 8993
+	private int triggerExitHandle = -1;
+
+	// Token: 0x04002322 RID: 8994
+	private Transform boyHead;
+
+	// Token: 0x04002323 RID: 8995
+	[HideInInspector]
+	[SerializeField]
+	private WaterSplashHuddle huddleWaterSplash;
+
+	// Token: 0x04002324 RID: 8996
+	[HideInInspector]
+	[SerializeField]
+	private WaterSplashSubmarine submarineWaterSplash;
+
+	// Token: 0x04002325 RID: 8997
+	[SerializeField]
+	[HideInInspector]
+	private WaterSplashHulv hulvWaterSplash;
+
+	// Token: 0x04002326 RID: 8998
+	[SerializeField]
+	[HideInInspector]
+	private WaterSplashBoy boyWaterSplash;
+
+	// Token: 0x04002327 RID: 8999
+	[HideInInspector]
+	[SerializeField]
+	private WaterSplashBoy mindhatReceiverWaterSplash;
+
+	// Token: 0x04002328 RID: 9000
+	[HideInInspector]
+	[SerializeField]
+	private WaterQueueMaster waterQueueMaster;
+
+	// Token: 0x04002329 RID: 9001
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x0400232A RID: 9002
+	private float splashDeadzone;
+}

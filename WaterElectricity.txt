@@ -1,0 +1,90 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000265 RID: 613
+public class WaterElectricity : MonoBehaviour
+{
+	// Token: 0x060012D2 RID: 4818 RVA: 0x000B0EFC File Offset: 0x000AF0FC
+	private void Start()
+	{
+		this.startColor = base.GetComponent<Renderer>().material.color;
+		this.sparkColor = Color.Lerp(this.startColor, Color.white, 0.4f);
+		if (this.autoStart)
+		{
+			this.TurnOn();
+		}
+	}
+
+	// Token: 0x060012D3 RID: 4819 RVA: 0x000B0F4C File Offset: 0x000AF14C
+	public void TurnOn()
+	{
+		this.isOn = true;
+	}
+
+	// Token: 0x060012D4 RID: 4820 RVA: 0x000B0F58 File Offset: 0x000AF158
+	public void TurnOff()
+	{
+		this.isOn = false;
+	}
+
+	// Token: 0x060012D5 RID: 4821 RVA: 0x000B0F64 File Offset: 0x000AF164
+	private void Update()
+	{
+		this.spark -= Time.deltaTime * 6f;
+		if (this.isOn && this.spark <= -0.5f)
+		{
+			this.spark = 0.3f + Random.Range(0f, 1f);
+		}
+		Color color = Color.Lerp(this.startColor, this.sparkColor, Mathf.Clamp(this.spark, 0f, 1f));
+		base.GetComponent<Renderer>().material.color = color;
+		if (this.isOn && this.boyTouchWater)
+		{
+			ScriptGlobals.boy.Kill();
+		}
+	}
+
+	// Token: 0x060012D6 RID: 4822 RVA: 0x000B1018 File Offset: 0x000AF218
+	private void FixedUpdate()
+	{
+		if (this.boyTouchWater && this.isOn)
+		{
+			ScriptGlobals.boy.Kill();
+		}
+	}
+
+	// Token: 0x060012D7 RID: 4823 RVA: 0x000B1048 File Offset: 0x000AF248
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.attachedRigidbody && coll.attachedRigidbody.gameObject == ScriptGlobals.boy.gameObject)
+		{
+			this.boyTouchWater = true;
+		}
+	}
+
+	// Token: 0x060012D8 RID: 4824 RVA: 0x000B108C File Offset: 0x000AF28C
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.attachedRigidbody && coll.attachedRigidbody.gameObject == ScriptGlobals.boy.gameObject)
+		{
+			this.boyTouchWater = false;
+		}
+	}
+
+	// Token: 0x040022C9 RID: 8905
+	public bool autoStart;
+
+	// Token: 0x040022CA RID: 8906
+	private bool boyTouchWater;
+
+	// Token: 0x040022CB RID: 8907
+	private bool isOn;
+
+	// Token: 0x040022CC RID: 8908
+	private Color startColor;
+
+	// Token: 0x040022CD RID: 8909
+	private Color sparkColor;
+
+	// Token: 0x040022CE RID: 8910
+	private float spark;
+}

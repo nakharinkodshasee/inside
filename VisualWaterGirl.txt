@@ -1,0 +1,545 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x020000D4 RID: 212
+public class VisualWaterGirl : AnimcontrolledCharacterBase, IPreAwake
+{
+	// Token: 0x06000699 RID: 1689 RVA: 0x0004AE30 File Offset: 0x00049030
+	[ContextMenu("PreProcessTest")]
+	[LateProcessBuild(0)]
+	public override void OnPreProcess()
+	{
+		if (!this.preprocessed)
+		{
+			base.OnPreProcess();
+			SkinnedMeshRenderer[] componentsInChildren = this.animChar.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+			foreach (SkinnedMeshRenderer skinnedMeshRenderer in componentsInChildren)
+			{
+				if (skinnedMeshRenderer.name.CompareTo("mesh") == 0)
+				{
+					skinnedMeshRenderer.sharedMaterial = this.waterChildMaterial;
+				}
+				else
+				{
+					skinnedMeshRenderer.sharedMaterial = this.waterChildClothMaterial;
+				}
+			}
+			if (this.waterGirl != null)
+			{
+				this.waterGirlRigidBody = this.waterGirl.GetComponent<Rigidbody>();
+			}
+			Transform transform = this.animChar.transform.Find("bones/SpineA");
+			Transform transform2 = transform.Find("SpineB");
+			this.headBone = transform2.Find("Neck/Head");
+			Transform transform3 = transform.Find("LegR/KneeR/drv_footR");
+			this.waterGirl.SetAnkleBone(transform3.transform);
+			if (this.testObjectToAttachToSpineA != null)
+			{
+				this.testObjectToAttachToSpineA.transform.parent = transform;
+				this.testObjectToAttachToSpineA.transform.localPosition = this.attachLocalOffset;
+				this.testObjectToAttachToSpineA.transform.localEulerAngles = Vector3.zero;
+				Hair component = this.testObjectToAttachToSpineA.GetComponent<Hair>();
+				if (component != null)
+				{
+					component.forceToward = true;
+					component.forceTowardLocalPosition = Vector3.down * 0.5f;
+				}
+			}
+			this.manacle.transform.parent = transform3.transform;
+			this.manacle.transform.localPosition = new Vector3(0f, -0.01f, 0.07f);
+			this.manacle.transform.localEulerAngles = new Vector3(287f, 0f, 0f);
+			if (this.hairPrefab != null)
+			{
+				GameObject gameObject = Object.Instantiate<GameObject>(this.hairPrefab);
+				gameObject.transform.parent = this.headBone;
+				gameObject.transform.localPosition = Vector3.zero;
+				gameObject.transform.localEulerAngles = new Vector3(-90f, 0f, 0f);
+				LineRenderer[] componentsInChildren2 = gameObject.transform.GetComponentsInChildren<LineRenderer>(true);
+				foreach (LineRenderer lineRenderer in componentsInChildren2)
+				{
+					lineRenderer.sharedMaterial = this.hairMaterial;
+				}
+				this.hairs = gameObject.transform.GetComponentsInChildren<Hair>(true);
+				foreach (Hair hair in this.hairs)
+				{
+					hair.hairLength *= this.hairLengthScale;
+					hair.hairWidthBottom *= this.hairBottomWidthScale;
+					hair.hairWidthTop *= this.hairTopWidthScale;
+					MaterialInstance materialInstance = hair.HairRenderer.gameObject.AddComponent<MaterialInstance>();
+					MaterialInstance.FloatProperty orAddFloatProperty = materialInstance.GetOrAddFloatProperty("_hairID");
+					materialInstance.SetFloatProperty(orAddFloatProperty, (float)this.hairInstanceID);
+					this.hairInstanceID = (this.hairInstanceID + 1) % 4;
+					this.wavyHairMats.Add(materialInstance);
+					MaterialInstance.FloatProperty orAddFloatProperty2 = materialInstance.GetOrAddFloatProperty("_HairFrq");
+					float floatValue = materialInstance.GetFloatValue(orAddFloatProperty2);
+					this.wavyHairFrequency.Add(floatValue);
+					MaterialInstance.FloatProperty orAddFloatProperty3 = materialInstance.GetOrAddFloatProperty("_HairAmp");
+					float floatValue2 = materialInstance.GetFloatValue(orAddFloatProperty3);
+					this.wavyHairAmp.Add(floatValue2);
+					materialInstance.SetFloatProperty(orAddFloatProperty2, floatValue * 0.25f);
+					hair.UpdateHairSetting(false);
+				}
+			}
+			int l = 0;
+			int count = this.wires.Count;
+			while (l < count)
+			{
+				Hair hair2 = this.wires[l];
+				MaterialInstance materialInstance2 = hair2.gameObject.GetComponentsInChildren<MaterialInstance>(true).FirstOrDefault<MaterialInstance>();
+				if (materialInstance2 != null)
+				{
+					this.wavyHairMats.Add(materialInstance2);
+					MaterialInstance.FloatProperty orAddFloatProperty4 = materialInstance2.GetOrAddFloatProperty("_HairFrq");
+					float floatValue3 = materialInstance2.GetFloatValue(orAddFloatProperty4);
+					this.wavyHairFrequency.Add(floatValue3);
+					MaterialInstance.FloatProperty orAddFloatProperty5 = materialInstance2.GetOrAddFloatProperty("_HairAmp");
+					float floatValue4 = materialInstance2.GetFloatValue(orAddFloatProperty5);
+					this.wavyHairAmp.Add(floatValue4);
+					materialInstance2.SetFloatProperty(orAddFloatProperty4, floatValue3 * 0.25f);
+				}
+				l++;
+			}
+			this.animChar.transform.localScale = this.animChar.transform.localScale * this.sizeScale;
+			this.preprocessed = true;
+		}
+	}
+
+	// Token: 0x0600069A RID: 1690 RVA: 0x0004B2C0 File Offset: 0x000494C0
+	public bool PreAwake(int callcount)
+	{
+		if (!this.initialized)
+		{
+			this.Init();
+		}
+		this.initialTwitch = SignalIn.Create("initialTwitch", base.gameObject, new Action(this.OnInitialTwitch));
+		return true;
+	}
+
+	// Token: 0x0600069B RID: 1691 RVA: 0x0004B304 File Offset: 0x00049504
+	private void Awake()
+	{
+		if (this.stopModeVisualization)
+		{
+			this.stopModeVisualization.SetActive(false);
+		}
+	}
+
+	// Token: 0x0600069C RID: 1692 RVA: 0x0004B324 File Offset: 0x00049524
+	public override void Init()
+	{
+		this.OnPreProcess();
+		Stopwatch stopwatch = new Stopwatch();
+		stopwatch.Start();
+		base.Init();
+		this.twitchDef = this.blendHelper.GetDefinition("IdleTwitch", true);
+		if (!this.fakeGirl)
+		{
+			this.alertDef = this.blendHelper.GetDefinition("WaterWakeUp", true);
+			this.idleDef = this.blendHelper.GetDefinition("Idle", true);
+			if (this.idleDef != null)
+			{
+				AnimcontrolStateInfo state = this.transitionManager.GetState(this.idleDef);
+				this.blendHelper.TransitToBlendDefinition(this.idleDef, state.transitIntoTime, 0f);
+			}
+		}
+		int i = 0;
+		int count = this.wavyHairMats.Count;
+		while (i < count)
+		{
+			MaterialInstance materialInstance = this.wavyHairMats[i];
+			MaterialInstance.FloatProperty orAddFloatProperty = materialInstance.GetOrAddFloatProperty("_HairFrq");
+			this.wavyHairProps.Add(orAddFloatProperty);
+			MaterialInstance.FloatProperty orAddFloatProperty2 = materialInstance.GetOrAddFloatProperty("_HairAmp");
+			this.wavyHairAmpProps.Add(orAddFloatProperty2);
+			i++;
+		}
+		stopwatch.Stop();
+	}
+
+	// Token: 0x0600069D RID: 1693 RVA: 0x0004B43C File Offset: 0x0004963C
+	public void OnInitialTwitch()
+	{
+		if (!this.initialTwitchPlayed)
+		{
+			this.initialTwitchPlayed = true;
+			if (this.twitchDef != null)
+			{
+				this.blendHelper.TransitToBlendDefinition(this.twitchDef, 0.3f, 0f);
+			}
+		}
+	}
+
+	// Token: 0x0600069E RID: 1694 RVA: 0x0004B484 File Offset: 0x00049684
+	private void SetBlendParameters()
+	{
+		if (this.waterGirlRigidBody == null)
+		{
+			return;
+		}
+		float magnitude = this.waterGirlRigidBody.velocity.magnitude;
+		if (this.waterGirl.IsWakingUp() || this.waterGirl.IsBoyCaught())
+		{
+			this.blendHelper.SetBlendParameter(8, 0f);
+		}
+		else
+		{
+			this.blendHelper.SetBlendParameter(8, magnitude);
+		}
+		if (this.waterGirl != null && this.waterGirl.IsBoyTarget())
+		{
+			float value = Mathf.Clamp(magnitude * 0.4f, 0.01f, 1f);
+			this.blendHelper.SetBlendParameter(1, value);
+		}
+		else
+		{
+			this.blendHelper.SetBlendParameter(1, 0f);
+		}
+	}
+
+	// Token: 0x0600069F RID: 1695 RVA: 0x0004B558 File Offset: 0x00049758
+	private void UpdateClothWobble(float deltaTime)
+	{
+		for (int i = 0; i < this.clothBoneList.Count; i++)
+		{
+			this.clothBoneList[i].UpdatePositioning(deltaTime);
+		}
+	}
+
+	// Token: 0x060006A0 RID: 1696 RVA: 0x0004B594 File Offset: 0x00049794
+	private void SetNewWaterTop(float top)
+	{
+		foreach (Hair hair in this.hairs)
+		{
+			hair.useYClamp = true;
+			hair.yClamp = top;
+		}
+		foreach (Hair hair2 in this.wires)
+		{
+			hair2.useYClamp = true;
+			hair2.yClamp = top;
+		}
+		this.storedWaterTop = top;
+	}
+
+	// Token: 0x060006A1 RID: 1697 RVA: 0x0004B638 File Offset: 0x00049838
+	private void Update()
+	{
+		if (this.waterGirlRigidBody == null)
+		{
+			ABHelperData abhelperData = this.blendHelper.UpdateAnimationBlends(Time.deltaTime);
+			return;
+		}
+		float deltaTime = Time.deltaTime;
+		if (deltaTime > 0f)
+		{
+			if (this.waterGirl.IsBoyTarget() && this.awakeTimer < 1f)
+			{
+				this.awakeTimer = Mathf.Min(this.awakeTimer + deltaTime, 1f);
+				float num = 1f - MathUtils.SmoothFraction(this.awakeTimer * 2f);
+				int i = 0;
+				int count = this.wavyHairMats.Count;
+				while (i < count)
+				{
+					MaterialInstance materialInstance = this.wavyHairMats[i];
+					float num2 = this.wavyHairAmp[i];
+					materialInstance.SetFloatProperty(this.wavyHairAmpProps[i], num * num2);
+					if (this.awakeTimer >= 0.5f)
+					{
+						materialInstance = this.wavyHairMats[i];
+						float value = this.wavyHairFrequency[i];
+						materialInstance.SetFloatProperty(this.wavyHairProps[i], value);
+					}
+					i++;
+				}
+			}
+			if (this.waterGirl.GetWaterTop() != this.storedWaterTop)
+			{
+				this.SetNewWaterTop(this.waterGirl.GetWaterTop());
+			}
+			ABDefinition topDefinition = this.blendHelper.GetTopDefinition();
+			if (this.waterGirl.IsWakingUp() && !this.waterGirl.IsBoyCaught())
+			{
+				if (topDefinition != this.alertDef)
+				{
+					if (!this.hasBeenAlerted)
+					{
+						this.hasBeenAlerted = true;
+						AnimcontrolStateInfo state = this.transitionManager.GetState(this.alertDef);
+						this.blendHelper.TransitToBlendDefinition(this.alertDef, state.transitIntoTime, 0f);
+						topDefinition = this.alertDef;
+					}
+					else
+					{
+						this.waterGirl.StopWakeupSequence();
+					}
+				}
+			}
+			else if (this.waterGirl.IsBoyCaught())
+			{
+				if (!this.boyCaught)
+				{
+					AnimClipNode animClipNode = this.killBoyFeet;
+					string text = "KillBoyFeet";
+					Actor actor = ScriptGlobals.boy.visualBoy.actor;
+					Transform transform = actor.bones[actor.specificBones.ankles[1]].transform;
+					float magnitude = (transform.position - base.transform.position).magnitude;
+					Transform transform2 = actor.bones[actor.specificBones.head].transform;
+					float magnitude2 = (transform2.position - base.transform.position).magnitude;
+					if (Mathf.Abs(magnitude2 - magnitude) < 0.5f)
+					{
+						Vector3 vector = transform2.position - transform.position;
+						if (base.transform.InverseTransformDirection(vector).x > 0f)
+						{
+							animClipNode = this.killBoyBackFlipped;
+							text = "KillBoyBackFlipped";
+						}
+						else
+						{
+							animClipNode = this.killBoyBack;
+							text = "KillBoyBack";
+						}
+					}
+					else if (magnitude2 < magnitude)
+					{
+						animClipNode = this.killBoyHands;
+						text = "KillBoyHands";
+					}
+					animClipNode.transform.parent = this.animChar.transform;
+					animClipNode.transform.localPosition = Vector3.zero;
+					animClipNode.transform.localEulerAngles = Vector3.zero;
+					this.KillBoy();
+					BoyUtils.StartCustomAnim(ScriptGlobals.boy, animClipNode, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+					this.boyCaught = true;
+					ABDefinition abdefinition = this.blendHelper.GetDefinition(text, true);
+					if (abdefinition == null)
+					{
+						abdefinition = base.OnTheFlyCreateDef(text);
+					}
+					this.blendHelper.TransitToBlendDefinition(abdefinition, 0.2f, 0f);
+				}
+				else
+				{
+					Vector3 localEulerAngles = base.transform.localEulerAngles;
+					localEulerAngles.y += Time.deltaTime * 10f;
+					base.transform.localEulerAngles = localEulerAngles;
+				}
+			}
+			this.SetBlendParameters();
+			this.blendHelper.SetBlendParameter(4, this.blendHelper.GetAnimPos());
+			ABHelperData abhelperData2 = this.blendHelper.UpdateAnimationBlends(deltaTime);
+			this.blendHelper.SetBlendParameter(4, abhelperData2.normalizedAnimPos);
+			if (this.transitionManager != null)
+			{
+				topDefinition = this.blendHelper.GetTopDefinition();
+				AnimcontrolStateInfo.TransitionData newDef = this.transitionManager.TestTransitions(topDefinition, this.blendHelper);
+				base.DoTransition(newDef, topDefinition, abhelperData2.normalizedAnimPos);
+			}
+		}
+	}
+
+	// Token: 0x060006A2 RID: 1698 RVA: 0x0004BAC4 File Offset: 0x00049CC4
+	private void KillBoy()
+	{
+		if (!this.waterGirl.pullBoyDownToAbyss)
+		{
+			ScriptGlobals.boy.Kill();
+		}
+	}
+
+	// Token: 0x04000B53 RID: 2899
+	public float sizeScale = 1f;
+
+	// Token: 0x04000B54 RID: 2900
+	public WaterGirl waterGirl;
+
+	// Token: 0x04000B55 RID: 2901
+	public GameObject hairPrefab;
+
+	// Token: 0x04000B56 RID: 2902
+	public Material waterChildMaterial;
+
+	// Token: 0x04000B57 RID: 2903
+	public Material waterChildClothMaterial;
+
+	// Token: 0x04000B58 RID: 2904
+	public Material hairMaterial;
+
+	// Token: 0x04000B59 RID: 2905
+	public AnimClipNode killBoyHands;
+
+	// Token: 0x04000B5A RID: 2906
+	public AnimClipNode killBoyBack;
+
+	// Token: 0x04000B5B RID: 2907
+	public AnimClipNode killBoyFeet;
+
+	// Token: 0x04000B5C RID: 2908
+	public AnimClipNode killBoyBackFlipped;
+
+	// Token: 0x04000B5D RID: 2909
+	public GameObject stopModeVisualization;
+
+	// Token: 0x04000B5E RID: 2910
+	public float hairLengthScale = 2.2f;
+
+	// Token: 0x04000B5F RID: 2911
+	public float hairBottomWidthScale = 1.3f;
+
+	// Token: 0x04000B60 RID: 2912
+	public float hairTopWidthScale = 2f;
+
+	// Token: 0x04000B61 RID: 2913
+	public GameObject manacle;
+
+	// Token: 0x04000B62 RID: 2914
+	public GameObject testObjectToAttachToSpineA;
+
+	// Token: 0x04000B63 RID: 2915
+	public Vector3 attachLocalOffset;
+
+	// Token: 0x04000B64 RID: 2916
+	public bool fakeGirl;
+
+	// Token: 0x04000B65 RID: 2917
+	public List<Hair> wires = new List<Hair>();
+
+	// Token: 0x04000B66 RID: 2918
+	private SignalIn initialTwitch;
+
+	// Token: 0x04000B67 RID: 2919
+	[SerializeField]
+	private Rigidbody waterGirlRigidBody;
+
+	// Token: 0x04000B68 RID: 2920
+	private ABDefinition idleDef;
+
+	// Token: 0x04000B69 RID: 2921
+	private ABDefinition alertDef;
+
+	// Token: 0x04000B6A RID: 2922
+	[SerializeField]
+	private Transform headBone;
+
+	// Token: 0x04000B6B RID: 2923
+	[SerializeField]
+	private Hair[] hairs;
+
+	// Token: 0x04000B6C RID: 2924
+	private float storedWaterTop = -100000f;
+
+	// Token: 0x04000B6D RID: 2925
+	[SerializeField]
+	private List<MaterialInstance> wavyHairMats = new List<MaterialInstance>();
+
+	// Token: 0x04000B6E RID: 2926
+	[SerializeField]
+	private List<float> wavyHairFrequency = new List<float>();
+
+	// Token: 0x04000B6F RID: 2927
+	private List<MaterialInstance.FloatProperty> wavyHairProps = new List<MaterialInstance.FloatProperty>();
+
+	// Token: 0x04000B70 RID: 2928
+	[SerializeField]
+	private List<float> wavyHairAmp = new List<float>();
+
+	// Token: 0x04000B71 RID: 2929
+	private List<MaterialInstance.FloatProperty> wavyHairAmpProps = new List<MaterialInstance.FloatProperty>();
+
+	// Token: 0x04000B72 RID: 2930
+	private static long stopWatchTime;
+
+	// Token: 0x04000B73 RID: 2931
+	[SerializeField]
+	private bool preprocessed;
+
+	// Token: 0x04000B74 RID: 2932
+	private bool isReady;
+
+	// Token: 0x04000B75 RID: 2933
+	private List<VisualWaterGirl.AnimatedClothBone> clothBoneList = new List<VisualWaterGirl.AnimatedClothBone>();
+
+	// Token: 0x04000B76 RID: 2934
+	private ABDefinition twitchDef;
+
+	// Token: 0x04000B77 RID: 2935
+	private int hairInstanceID;
+
+	// Token: 0x04000B78 RID: 2936
+	private bool initialTwitchPlayed;
+
+	// Token: 0x04000B79 RID: 2937
+	private bool boyCaught;
+
+	// Token: 0x04000B7A RID: 2938
+	private bool pullFromRope;
+
+	// Token: 0x04000B7B RID: 2939
+	private bool hasBeenAlerted;
+
+	// Token: 0x04000B7C RID: 2940
+	private float pullExtraDownTime = 0.3f;
+
+	// Token: 0x04000B7D RID: 2941
+	private float awakeTimer;
+
+	// Token: 0x020000D5 RID: 213
+	private class AnimatedClothBone
+	{
+		// Token: 0x060006A3 RID: 1699 RVA: 0x0004BAE0 File Offset: 0x00049CE0
+		public AnimatedClothBone(Transform bone)
+		{
+			this.boneToUse = bone;
+			this.xTimeFactor = Random.Range(1f, 3f);
+			this.yTimeFactor = Random.Range(1f, 3f);
+		}
+
+		// Token: 0x060006A4 RID: 1700 RVA: 0x0004BB30 File Offset: 0x00049D30
+		public void UpdatePositioning(float deltaTime)
+		{
+			this.clothBoneOffsetTimerX += deltaTime * this.xTimeFactor;
+			this.clothBoneOffsetTimerY += deltaTime * this.yTimeFactor;
+			if (this.rotational)
+			{
+				this.boneToUse.localEulerAngles = new Vector3(Mathf.Sin(this.clothBoneOffsetTimerX) * this.scale, 0f, Mathf.Sin(this.clothBoneOffsetTimerY) * this.scale);
+			}
+			if (this.inheritLocalPos != null)
+			{
+				Vector3 vector = this.inheritLocalPos.TransformDirection(this.inheritLocalPos.localPosition);
+				Vector3 localPosition = this.boneToUse.InverseTransformDirection(vector);
+				this.boneToUse.localPosition = localPosition;
+			}
+			else
+			{
+				this.boneToUse.localPosition = new Vector3(Mathf.Sin(this.clothBoneOffsetTimerX) * this.scale, Mathf.Sin(this.clothBoneOffsetTimerY) * this.scale, 0f);
+			}
+		}
+
+		// Token: 0x04000B7E RID: 2942
+		private float clothBoneOffsetTimerX;
+
+		// Token: 0x04000B7F RID: 2943
+		private float clothBoneOffsetTimerY;
+
+		// Token: 0x04000B80 RID: 2944
+		private float xTimeFactor;
+
+		// Token: 0x04000B81 RID: 2945
+		private float yTimeFactor;
+
+		// Token: 0x04000B82 RID: 2946
+		public float scale = 0.015f;
+
+		// Token: 0x04000B83 RID: 2947
+		private Transform boneToUse;
+
+		// Token: 0x04000B84 RID: 2948
+		public bool rotational;
+
+		// Token: 0x04000B85 RID: 2949
+		public Transform inheritLocalPos;
+	}
+}

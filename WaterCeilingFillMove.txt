@@ -1,0 +1,30 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004A7 RID: 1191
+public class WaterCeilingFillMove : MonoBehaviour
+{
+	// Token: 0x06001F2B RID: 7979 RVA: 0x0010AC24 File Offset: 0x00108E24
+	private void Start()
+	{
+		this.startPos = base.transform.position;
+		this.startHeight = this.water.transform.localScale.y;
+	}
+
+	// Token: 0x06001F2C RID: 7980 RVA: 0x0010AC60 File Offset: 0x00108E60
+	private void FixedUpdate()
+	{
+		float y = this.water.transform.localScale.y;
+		float num = y / this.startHeight - 1f;
+		base.transform.position = this.startPos + Vector3.down * num * 2f;
+	}
+
+	// Token: 0x040039CD RID: 14797
+	public FluidVolume water;
+
+	// Token: 0x040039CE RID: 14798
+	private Vector3 startPos;
+
+	// Token: 0x040039CF RID: 14799
+	private float startHeight;
+}

@@ -1,0 +1,36 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005EE RID: 1518
+public class velocityDifference : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002648 RID: 9800 RVA: 0x00137454 File Offset: 0x00135654
+	public bool PreAwake(int callcount)
+	{
+		this.diffBigEnough = SignalOut.Create("diffBigEnough", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06002649 RID: 9801 RVA: 0x00137470 File Offset: 0x00135670
+	private void FixedUpdate()
+	{
+		float magnitude = base.GetComponent<Rigidbody>().velocity.magnitude;
+		if (this.oldVel > this.neededVel && this.oldVel - magnitude > this.diffNecesary)
+		{
+			this.diffBigEnough.Signal();
+		}
+		this.oldVel = magnitude;
+	}
+
+	// Token: 0x040045A5 RID: 17829
+	public float diffNecesary;
+
+	// Token: 0x040045A6 RID: 17830
+	public float neededVel;
+
+	// Token: 0x040045A7 RID: 17831
+	private float oldVel;
+
+	// Token: 0x040045A8 RID: 17832
+	private SignalOut diffBigEnough;
+}

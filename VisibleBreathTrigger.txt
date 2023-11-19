@@ -1,0 +1,59 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003A0 RID: 928
+public class VisibleBreathTrigger : MonoBehaviour
+{
+	// Token: 0x060018EB RID: 6379 RVA: 0x000D74C0 File Offset: 0x000D56C0
+	private void OnDestroy()
+	{
+		this.triggerExit();
+	}
+
+	// Token: 0x060018EC RID: 6380 RVA: 0x000D74C8 File Offset: 0x000D56C8
+	private void triggerEnter()
+	{
+		VisibleBreathManager.AddTrigger(this);
+	}
+
+	// Token: 0x060018ED RID: 6381 RVA: 0x000D74D0 File Offset: 0x000D56D0
+	private void triggerExit()
+	{
+		VisibleBreathManager.RemoveTrigger(this);
+	}
+
+	// Token: 0x060018EE RID: 6382 RVA: 0x000D74D8 File Offset: 0x000D56D8
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.noOfCharacterProbesInside++;
+			if (this.noOfCharacterProbesInside == 1)
+			{
+				this.triggerEnter();
+			}
+		}
+	}
+
+	// Token: 0x060018EF RID: 6383 RVA: 0x000D7518 File Offset: 0x000D5718
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.noOfCharacterProbesInside--;
+			if (this.noOfCharacterProbesInside == 0)
+			{
+				this.triggerExit();
+			}
+		}
+	}
+
+	// Token: 0x04002CC4 RID: 11460
+	public Color breathColorOverride = Color.white;
+
+	// Token: 0x04002CC5 RID: 11461
+	public bool killVisibleBreath;
+
+	// Token: 0x04002CC6 RID: 11462
+	private int noOfCharacterProbesInside;
+}

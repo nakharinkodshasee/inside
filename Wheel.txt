@@ -1,0 +1,73 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003CC RID: 972
+public class Wheel : MonoBehaviour
+{
+	// Token: 0x17000080 RID: 128
+	// (get) Token: 0x06001A22 RID: 6690 RVA: 0x000E425C File Offset: 0x000E245C
+	public float RotationSpeed
+	{
+		get
+		{
+			return base.GetComponent<HingeJoint>().velocity;
+		}
+	}
+
+	// Token: 0x06001A23 RID: 6691 RVA: 0x000E426C File Offset: 0x000E246C
+	private void Start()
+	{
+		if (base.GetComponent<CapsuleCollider>() == null || base.GetComponent<HingeJoint>() == null)
+		{
+		}
+		Vector3 vector = base.transform.TransformDirection(base.GetComponent<HingeJoint>().axis);
+		if (this.visualObject != null)
+		{
+			this.mVisualSpinAxis = this.visualObject.transform.InverseTransformDirection(vector);
+		}
+	}
+
+	// Token: 0x06001A24 RID: 6692 RVA: 0x000E42DC File Offset: 0x000E24DC
+	private void FixedUpdate()
+	{
+		base.GetComponent<Rigidbody>().AddRelativeTorque(base.GetComponent<HingeJoint>().axis * this.motorTorque * Time.deltaTime);
+		float num = 38f * this.slope;
+		float num2 = base.GetComponent<HingeJoint>().velocity;
+		num2 += num;
+		float num3 = Mathf.Min(this.brakeTorque * Time.deltaTime, Mathf.Abs(num2)) * -Mathf.Sign(num2);
+		base.GetComponent<Rigidbody>().AddRelativeTorque(base.GetComponent<HingeJoint>().axis * num3);
+	}
+
+	// Token: 0x06001A25 RID: 6693 RVA: 0x000E4370 File Offset: 0x000E2570
+	private void Update()
+	{
+		if (this.visualObject != null)
+		{
+			this.visualObject.transform.rotation *= Quaternion.Euler(this.mVisualSpinAxis * base.GetComponent<HingeJoint>().velocity * Time.deltaTime);
+		}
+	}
+
+	// Token: 0x06001A26 RID: 6694 RVA: 0x000E43D0 File Offset: 0x000E25D0
+	public float GetSpeed()
+	{
+		return Mathf.Abs(base.GetComponent<HingeJoint>().velocity) / 360f * base.GetComponent<CapsuleCollider>().radius * 2f * 3.1415927f;
+	}
+
+	// Token: 0x04002EFC RID: 12028
+	public GameObject visualObject;
+
+	// Token: 0x04002EFD RID: 12029
+	[NonSerialized]
+	public float motorTorque;
+
+	// Token: 0x04002EFE RID: 12030
+	[NonSerialized]
+	public float brakeTorque;
+
+	// Token: 0x04002EFF RID: 12031
+	[NonSerialized]
+	public float slope;
+
+	// Token: 0x04002F00 RID: 12032
+	private Vector3 mVisualSpinAxis;
+}

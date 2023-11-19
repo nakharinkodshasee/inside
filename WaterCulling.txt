@@ -1,0 +1,130 @@
+using System;
+using Playdead.CrossSceneReference;
+using UnityEngine;
+
+// Token: 0x0200036D RID: 877
+[ExecuteInEditMode]
+public class WaterCulling : MonoBehaviour
+{
+	// Token: 0x06001806 RID: 6150 RVA: 0x000D1E7C File Offset: 0x000D007C
+	private void OnEnable()
+	{
+		for (int i = 0; i < this.cases.Length; i++)
+		{
+			this.cases[i].CompLoaded();
+		}
+		this.waterMesh = base.GetComponent<WaterMesh>();
+		this.waterMesh.enabled = true;
+	}
+
+	// Token: 0x06001807 RID: 6151 RVA: 0x000D1EC8 File Offset: 0x000D00C8
+	private void Start()
+	{
+		for (int i = 0; i < this.neighbours.Length; i++)
+		{
+			this.neighbours[i].HasCulled();
+		}
+		this.Switch();
+	}
+
+	// Token: 0x06001808 RID: 6152 RVA: 0x000D1F04 File Offset: 0x000D0104
+	private void Update()
+	{
+		bool flag = false;
+		for (int i = 0; i < this.neighbours.Length; i++)
+		{
+			flag |= this.neighbours[i].HasCulled();
+		}
+		if (flag)
+		{
+			this.Switch();
+		}
+	}
+
+	// Token: 0x06001809 RID: 6153 RVA: 0x000D1F48 File Offset: 0x000D0148
+	private void Switch()
+	{
+		int num = 0;
+		for (int i = 0; i < this.neighbours.Length; i++)
+		{
+			if (this.neighbours[i].loaded)
+			{
+				num |= (int)Mathf.Pow(2f, (float)i);
+			}
+		}
+		for (int j = 0; j < this.cases.Length; j++)
+		{
+			if (num == this.cases[j].loadedComp)
+			{
+				this.waterMesh.UpdateMesh(this.cases[j].mesh, this.cases[j].rotation);
+				break;
+			}
+		}
+	}
+
+	// Token: 0x04002B1D RID: 11037
+	public WaterCulling.WaterNeighbour[] neighbours;
+
+	// Token: 0x04002B1E RID: 11038
+	public WaterCulling.WaterCullCase[] cases;
+
+	// Token: 0x04002B1F RID: 11039
+	private WaterMesh waterMesh;
+
+	// Token: 0x0200036E RID: 878
+	[Serializable]
+	public class WaterNeighbour
+	{
+		// Token: 0x0600180B RID: 6155 RVA: 0x000D1FF0 File Offset: 0x000D01F0
+		public bool HasCulled()
+		{
+			this.loaded = (this.referable.GetComponentOnReference<Transform>() != null);
+			bool result = this.loaded != this.lastLoaded;
+			this.lastLoaded = this.loaded;
+			return result;
+		}
+
+		// Token: 0x04002B20 RID: 11040
+		[BehaviourReferenceGUI]
+		public BehaviourReference referable;
+
+		// Token: 0x04002B21 RID: 11041
+		[HideInInspector]
+		public bool loaded;
+
+		// Token: 0x04002B22 RID: 11042
+		private bool lastLoaded;
+	}
+
+	// Token: 0x0200036F RID: 879
+	[Serializable]
+	public class WaterCullCase
+	{
+		// Token: 0x0600180D RID: 6157 RVA: 0x000D203C File Offset: 0x000D023C
+		public void CompLoaded()
+		{
+			this.loadedComp = 0;
+			for (int i = 0; i < this.loaded.Length; i++)
+			{
+				if (this.loaded[i])
+				{
+					this.loadedComp |= (int)Mathf.Pow(2f, (float)i);
+				}
+			}
+		}
+
+		// Token: 0x04002B23 RID: 11043
+		public bool[] loaded;
+
+		// Token: 0x04002B24 RID: 11044
+		public Mesh mesh;
+
+		// Token: 0x04002B25 RID: 11045
+		[Range(0f, 3f)]
+		public int rotation;
+
+		// Token: 0x04002B26 RID: 11046
+		[HideInInspector]
+		public int loadedComp;
+	}
+}

@@ -1,0 +1,95 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000068 RID: 104
+public class Vent : MonoBehaviour
+{
+	// Token: 0x06000364 RID: 868 RVA: 0x00026828 File Offset: 0x00024A28
+	private void Start()
+	{
+		this.dir = this.directionObject.transform.position - this.ventBase.transform.position;
+		this.dir.Normalize();
+	}
+
+	// Token: 0x06000365 RID: 869 RVA: 0x0002686C File Offset: 0x00024A6C
+	public void OnStop()
+	{
+		this.started = false;
+	}
+
+	// Token: 0x06000366 RID: 870 RVA: 0x00026878 File Offset: 0x00024A78
+	public void OnStart()
+	{
+		this.started = true;
+	}
+
+	// Token: 0x06000367 RID: 871 RVA: 0x00026884 File Offset: 0x00024A84
+	public bool IsBlowBlocked(Chicken chicken)
+	{
+		Ray ray;
+		ray..ctor(chicken.transform.position, -this.dir);
+		int num = 1 << LayerMask.NameToLayer("Ungrouped");
+		RaycastHit raycastHit;
+		Physics.Raycast(ray, ref raycastHit, 10f, num);
+		return raycastHit.collider && raycastHit.collider.gameObject == this.ventBase;
+	}
+
+	// Token: 0x06000368 RID: 872 RVA: 0x00026900 File Offset: 0x00024B00
+	private void FixedUpdate()
+	{
+		if (!this.started)
+		{
+			return;
+		}
+		this.dir = this.directionObject.transform.position - this.ventBase.transform.position;
+		this.dir.Normalize();
+		foreach (Chicken chicken in this.chickensInZone)
+		{
+			if (this.IsBlowBlocked(chicken))
+			{
+				chicken.GetComponent<Rigidbody>().AddForce(this.dir * this.force * this.forceScale, 1);
+				chicken.SetDisableMovementTimer(0.1f);
+			}
+		}
+	}
+
+	// Token: 0x06000369 RID: 873 RVA: 0x000269E0 File Offset: 0x00024BE0
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<Chicken>())
+		{
+			this.chickensInZone.Add(coll.GetComponent<Chicken>());
+		}
+	}
+
+	// Token: 0x0600036A RID: 874 RVA: 0x00026A04 File Offset: 0x00024C04
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<Chicken>())
+		{
+			this.chickensInZone.Remove(coll.GetComponent<Chicken>());
+		}
+	}
+
+	// Token: 0x0400058D RID: 1421
+	public GameObject directionObject;
+
+	// Token: 0x0400058E RID: 1422
+	public GameObject ventBase;
+
+	// Token: 0x0400058F RID: 1423
+	public float forceScale = 1f;
+
+	// Token: 0x04000590 RID: 1424
+	private float force = 5E-05f;
+
+	// Token: 0x04000591 RID: 1425
+	private List<Chicken> chickensInZone = new List<Chicken>();
+
+	// Token: 0x04000592 RID: 1426
+	private Vector3 dir;
+
+	// Token: 0x04000593 RID: 1427
+	private bool started = true;
+}

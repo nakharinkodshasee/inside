@@ -1,0 +1,203 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000541 RID: 1345
+public class WaterHeightShadowDetection : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002300 RID: 8960 RVA: 0x00124CB4 File Offset: 0x00122EB4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioShadowReveal = new AudioEventSimpleLocal("env_sewer_submarineAndWaterHeight_shadowReveal", akGameObj);
+	}
+
+	// Token: 0x06002301 RID: 8961 RVA: 0x00124CF4 File Offset: 0x00122EF4
+	public bool PreAwake(int callcount)
+	{
+		this.doActivate = SignalIn.Create("doActivate", base.gameObject, delegate
+		{
+			this.scriptActive = true;
+		});
+		this.doDeactivate = SignalIn.Create("doDeactivate", base.gameObject, delegate
+		{
+			this.scriptActive = false;
+		});
+		this.shadowDetected = SignalOut.Create("shadowDetected", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06002302 RID: 8962 RVA: 0x00124D5C File Offset: 0x00122F5C
+	private void Start()
+	{
+		this.OnPreProcess();
+		GameObject gameObject = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine).gameObject;
+		this.spot = gameObject.GetComponent<Submarine>().spotlight;
+		this.spotAngle = this.spot.spotAngle;
+		this.boyInSubScript = gameObject.GetComponent<SubmarineBoyInteraction>();
+	}
+
+	// Token: 0x06002303 RID: 8963 RVA: 0x00124DB0 File Offset: 0x00122FB0
+	private void Update()
+	{
+		this.boyOutsideSubmarine = !this.boyInSubScript.GetBoyIsInsideSubmarine();
+		if (this.scriptActive && this.boyOutsideSubmarine)
+		{
+			bool flag = this.IsBoyInsideSpotAngle() && this.IsLightHittingAWall() && this.IsBoyBetweenLightAndWall();
+			if (!this.isCoolingDown && flag && !this.eventWasSent)
+			{
+				this.audioShadowReveal.PostFast();
+				this.eventWasSent = true;
+				this.shadowDetected.Signal();
+			}
+			else if (this.isCoolingDown && flag)
+			{
+				this.timer = this.eventCoolDown;
+			}
+			if (this.boyDidCastShadowLastFrame && !flag)
+			{
+				this.isCoolingDown = true;
+				this.timer = this.eventCoolDown;
+			}
+			this.boyDidCastShadowLastFrame = flag;
+		}
+		if (this.isCoolingDown)
+		{
+			this.timer -= Time.deltaTime;
+			if (this.timer <= 0f)
+			{
+				this.isCoolingDown = false;
+				this.eventWasSent = false;
+			}
+		}
+	}
+
+	// Token: 0x06002304 RID: 8964 RVA: 0x00124ECC File Offset: 0x001230CC
+	private bool IsBoyBetweenLightAndWall()
+	{
+		this.distToBoy = (ScriptGlobals.boy.pos3 - this.spot.transform.position).magnitude;
+		return this.distToBoy < this.distToWall;
+	}
+
+	// Token: 0x06002305 RID: 8965 RVA: 0x00124F1C File Offset: 0x0012311C
+	private bool IsLightHittingAWall()
+	{
+		for (int i = 0; i < this.corners.Count; i++)
+		{
+			Vector2 vector = this.spot.transform.position;
+			Vector2 vector2 = vector + this.spot.transform.forward * this.spot.range * 0.95f;
+			Vector2 vector3;
+			Vector2 vector4;
+			if (i == this.corners.Count - 1)
+			{
+				vector3 = this.corners[0].position;
+				vector4 = this.corners[i].position;
+			}
+			else
+			{
+				vector3 = this.corners[i].position;
+				vector4 = this.corners[i + 1].position;
+			}
+			bool flag = MathUtils.LineLine(ref vector, ref vector2, ref vector3, ref vector4, ref this.hitPos);
+			if (flag)
+			{
+				this.distToWall = (this.hitPos - this.spot.transform.position).magnitude;
+				if (this.distToWall <= this.spot.range * 0.95f)
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x06002306 RID: 8966 RVA: 0x00125080 File Offset: 0x00123280
+	private bool IsBoyInsideSpotAngle()
+	{
+		this.dirToBoy = (ScriptGlobals.boy.pos3 - this.spot.transform.position).normalized;
+		this.dotProduct = Vector3.Dot(this.dirToBoy, this.spot.transform.forward);
+		return this.dotProduct < 1f && this.dotProduct > 0.97f && this.distToBoy <= this.spot.range * 0.95f;
+	}
+
+	// Token: 0x04004155 RID: 16725
+	public Light spot;
+
+	// Token: 0x04004156 RID: 16726
+	public List<Transform> corners;
+
+	// Token: 0x04004157 RID: 16727
+	public float eventCoolDown = 20f;
+
+	// Token: 0x04004158 RID: 16728
+	private SignalIn doActivate;
+
+	// Token: 0x04004159 RID: 16729
+	private SignalIn doDeactivate;
+
+	// Token: 0x0400415A RID: 16730
+	private SignalOut shadowDetected;
+
+	// Token: 0x0400415B RID: 16731
+	private List<Vector3> wallLines;
+
+	// Token: 0x0400415C RID: 16732
+	private float spotAngle;
+
+	// Token: 0x0400415D RID: 16733
+	private Vector3 topVect;
+
+	// Token: 0x0400415E RID: 16734
+	private Vector3 bottomVect;
+
+	// Token: 0x0400415F RID: 16735
+	private Vector3 dirToBoy;
+
+	// Token: 0x04004160 RID: 16736
+	private float dotProduct;
+
+	// Token: 0x04004161 RID: 16737
+	private float distToBoy;
+
+	// Token: 0x04004162 RID: 16738
+	private Vector2 hitPos = Vector2.zero;
+
+	// Token: 0x04004163 RID: 16739
+	private float distToWall;
+
+	// Token: 0x04004164 RID: 16740
+	private bool scriptActive;
+
+	// Token: 0x04004165 RID: 16741
+	private bool boyOutsideSubmarine;
+
+	// Token: 0x04004166 RID: 16742
+	private bool isCoolingDown;
+
+	// Token: 0x04004167 RID: 16743
+	private float timer;
+
+	// Token: 0x04004168 RID: 16744
+	private bool eventWasSent;
+
+	// Token: 0x04004169 RID: 16745
+	private bool boyDidCastShadowLastFrame;
+
+	// Token: 0x0400416A RID: 16746
+	private SubmarineBoyInteraction boyInSubScript;
+
+	// Token: 0x0400416B RID: 16747
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioShadowReveal;
+
+	// Token: 0x0400416C RID: 16748
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

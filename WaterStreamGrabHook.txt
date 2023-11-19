@@ -1,0 +1,437 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000273 RID: 627
+public class WaterStreamGrabHook : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001347 RID: 4935 RVA: 0x000B5A30 File Offset: 0x000B3C30
+	public bool PreAwake(int callcount)
+	{
+		this.hatchOpened = SignalIn.Create("hatchOpened", base.gameObject, new Action(this.OnHatchOpened));
+		this.startGrab = SignalOut.Create("startGrab", base.gameObject);
+		this.endGrab = SignalOut.Create("endGrab", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001348 RID: 4936 RVA: 0x000B5A8C File Offset: 0x000B3C8C
+	private void Start()
+	{
+		this.animationContainer = this.SwimGrabFlushAbove_Flush.transform.parent.gameObject.transform;
+		this.boy = ScriptGlobals.boy;
+		this.SetNotGrabbedState(false);
+	}
+
+	// Token: 0x06001349 RID: 4937 RVA: 0x000B5ACC File Offset: 0x000B3CCC
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyInside = true;
+		}
+	}
+
+	// Token: 0x0600134A RID: 4938 RVA: 0x000B5AE8 File Offset: 0x000B3CE8
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyInside = false;
+			this.distToHand = float.MaxValue;
+		}
+	}
+
+	// Token: 0x0600134B RID: 4939 RVA: 0x000B5B18 File Offset: 0x000B3D18
+	private void OnHatchOpened()
+	{
+		if (this.state == WaterStreamGrabHook.State.Grabbed && !this.hatchOpen)
+		{
+			this.setPlayAnimOnBoy(this.SwimGrabWhileFlushA);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.3f, 0.2f, 0, 1.1f);
+			this.hatchOpen = true;
+		}
+	}
+
+	// Token: 0x0600134C RID: 4940 RVA: 0x000B5B6C File Offset: 0x000B3D6C
+	private void setPlayAnimOnBoy(AnimClipNode animOwner)
+	{
+		this.currentAnim = animOwner;
+		BoyUtils.StartCustomAnim(this.boy, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+	}
+
+	// Token: 0x0600134D RID: 4941 RVA: 0x000B5B9C File Offset: 0x000B3D9C
+	private void SetOrient(bool immediateZ = false)
+	{
+		float num = 0f;
+		if (this.curAngle > 90f)
+		{
+			num = 180f;
+		}
+		if (immediateZ)
+		{
+			this.rotationalAngle = num;
+		}
+		else
+		{
+			this.rotationalAngle += (num - this.rotationalAngle) * Time.deltaTime * 3f;
+		}
+		Quaternion rotation = base.transform.rotation * Quaternion.Euler(this.curAngle, 0f, 0f) * Quaternion.Euler(0f, 0f, this.rotationalAngle);
+		this.animationContainer.transform.rotation = rotation;
+	}
+
+	// Token: 0x0600134E RID: 4942 RVA: 0x000B5C4C File Offset: 0x000B3E4C
+	private void SetGrabbedState()
+	{
+		Vector3 vector = MathUtils.v3(this.boy.capsuleUp, 0f);
+		Vector3 vector2 = -vector;
+		if (Vector3.Dot(vector, base.transform.up) > 0f)
+		{
+			vector2 = this.boy.pos3 - base.transform.position;
+			vector2.z = 0f;
+		}
+		this.curAngle = Vector3.Angle(vector2, base.transform.forward);
+		this.SetOrient(true);
+		if (this.flushScript.streamMode == StreamMode.FullOff)
+		{
+			this.setPlayAnimOnBoy(this.SwimGrabFlushAbove);
+		}
+		else
+		{
+			this.stickVelocity = -this.maxFlushSpeed * 0.5f;
+			if (this.curAngle <= 90f)
+			{
+				this.setPlayAnimOnBoy(this.SwimGrabWhileFlushBackward);
+			}
+			else
+			{
+				this.setPlayAnimOnBoy(this.SwimGrabWhileFlushA);
+			}
+		}
+		this.factor = 1f;
+		this.startGrab.Signal();
+		this.state = WaterStreamGrabHook.State.Grabbed;
+	}
+
+	// Token: 0x0600134F RID: 4943 RVA: 0x000B5D58 File Offset: 0x000B3F58
+	private void GrabbedState()
+	{
+		BoyCustomAnimState boyCustomAnimState = this.boy.state as BoyCustomAnimState;
+		float num = 1f;
+		if (this.flushScript.streamMode == StreamMode.FullOff || this.flushScript.streamMode == StreamMode.Stopping)
+		{
+			float num2 = this.curAngle;
+			if (this.flushScript.streamMode == StreamMode.Stopping)
+			{
+				num2 = Mathf.Max(num2, 50f);
+			}
+			Vector3 vector = MathUtils.v3(this.boy.input.stick, 0f);
+			if (Vector3.Dot(vector, base.transform.up) > 0f)
+			{
+				if (Vector3.Dot(vector, base.transform.forward) < 0f)
+				{
+					num2 = 180f;
+				}
+				else
+				{
+					num2 = 0f;
+				}
+			}
+			else if (vector.sqrMagnitude > 0f)
+			{
+				num2 = Vector3.Angle(vector, base.transform.forward);
+			}
+			else
+			{
+				this.sinusPushCounter = 0f;
+			}
+			if (this.curAngle <= 90f)
+			{
+				num2 = Mathf.Clamp(num2, 0f, 80f);
+			}
+			else
+			{
+				num2 = Mathf.Clamp(num2, 100f, 180f);
+			}
+			this.sinusPushCounter += Time.deltaTime * 10f;
+			num = 0.5f + (1f - Mathf.Cos(this.sinusPushCounter)) * 1f;
+			this.stickVelocity = this.stickVelocity * (1f - Time.deltaTime * 2f) + (num2 - this.curAngle) * this.stickAccell * Time.deltaTime;
+			this.stickVelocity = Mathf.Clamp(this.stickVelocity, -this.stickMaxSpeed, this.stickMaxSpeed);
+		}
+		else
+		{
+			this.sinusPushCounter = 0f;
+			this.stickVelocity -= Time.deltaTime * this.flushAccel;
+			float num3 = -this.maxFlushSpeed;
+			if (this.curAngle < this.angleDampingZone)
+			{
+				num3 *= this.curAngle / this.angleDampingZone;
+			}
+			this.stickVelocity = Mathf.Max(this.stickVelocity, num3);
+		}
+		this.factor += (num - this.factor) * Time.deltaTime * 8f;
+		this.curAngle += this.factor * this.stickVelocity * Time.deltaTime;
+		this.curAngle = Mathf.Clamp(this.curAngle, 0f, 180f);
+		this.SetOrient(false);
+		if (!GameInput.rawAction)
+		{
+			this.SetNotGrabbedState(true);
+		}
+		else
+		{
+			this.UpdatePlayerAnim();
+		}
+	}
+
+	// Token: 0x06001350 RID: 4944 RVA: 0x000B6004 File Offset: 0x000B4204
+	private void SetNotGrabbedState(bool clearAnim = true)
+	{
+		if (this.flushScript.streamMode == StreamMode.FullOn)
+		{
+			this.coolDown = 2.5f;
+		}
+		else if (this.flushScript.streamMode == StreamMode.Starting || this.flushScript.streamMode == StreamMode.Stopping)
+		{
+			this.coolDown = 1f;
+		}
+		this.state = WaterStreamGrabHook.State.NotGrabbed;
+		this.endGrab.Signal();
+		this.previousDistToHand = float.MinValue;
+		if (clearAnim)
+		{
+			BoyUtils.ClearState(this.boy, -1f);
+		}
+	}
+
+	// Token: 0x06001351 RID: 4945 RVA: 0x000B6094 File Offset: 0x000B4294
+	private void NotGrabbedState()
+	{
+		if (this.boyInside && GameInput.rawAction)
+		{
+			if (this.flushScript.streamMode != StreamMode.FullOff)
+			{
+				if (this.boyInside && this.previousDistToHand < 1f && this.coolDown <= 0f && (this.previousDistToHand < this.distToHand || this.distToHand < 0.25f))
+				{
+					this.SetGrabbedState();
+				}
+			}
+			else if (this.boyInside && this.distToHand < 0.75f)
+			{
+				this.SetGrabbedState();
+			}
+		}
+	}
+
+	// Token: 0x06001352 RID: 4946 RVA: 0x000B6140 File Offset: 0x000B4340
+	private AnimClipNode GetWantedNoFlushAnim()
+	{
+		if (this.boy.input.looseDir.sqrMagnitude == 0f)
+		{
+			return this.SwimGrabFreeFloatA;
+		}
+		return this.SwimGrabHandleIdle;
+	}
+
+	// Token: 0x06001353 RID: 4947 RVA: 0x000B617C File Offset: 0x000B437C
+	private void UpdateNoFlushAnims()
+	{
+		if (this.currentAnim != this.SwimGrabFreeFloatA && this.currentAnim != this.SwimGrabHandleIdle)
+		{
+			if (this.currentAnim == this.SwimGrabFlushAbove || this.currentAnim == this.SwimGrabFlushEnd)
+			{
+				if (this.currentAnim.frame > this.currentAnim.numFrames - 1f)
+				{
+					this.setPlayAnimOnBoy(this.GetWantedNoFlushAnim());
+				}
+			}
+			else if (this.currentAnim == this.SwimGrabWhileFlushA || this.currentAnim == this.SwimGrabWhileFlushBackward)
+			{
+				if (this.currentAnim.frame > 30f)
+				{
+					this.setPlayAnimOnBoy(this.SwimGrabFlushEnd);
+				}
+			}
+			else
+			{
+				this.setPlayAnimOnBoy(this.SwimGrabFlushEnd);
+			}
+		}
+		else
+		{
+			AnimClipNode wantedNoFlushAnim = this.GetWantedNoFlushAnim();
+			if (wantedNoFlushAnim != this.currentAnim)
+			{
+				this.setPlayAnimOnBoy(wantedNoFlushAnim);
+			}
+		}
+	}
+
+	// Token: 0x06001354 RID: 4948 RVA: 0x000B6298 File Offset: 0x000B4498
+	private void UpdateFlushingAnims()
+	{
+		if (this.currentAnim != this.SwimGrabFlushMaxA)
+		{
+			if (this.currentAnim == this.SwimGrabFlushAbove_Flush || this.currentAnim == this.SwimGrabFloatToFlushA || this.currentAnim == this.SwimGrabFloatToFlushBackward || this.currentAnim == this.SwimGrabWhileFlushA || this.currentAnim == this.SwimGrabWhileFlushBackward)
+			{
+				if (this.currentAnim.frame > this.currentAnim.numFrames - 1f)
+				{
+					this.setPlayAnimOnBoy(this.SwimGrabFlushMaxA);
+				}
+			}
+			else if (this.curAngle <= 90f)
+			{
+				this.setPlayAnimOnBoy(this.SwimGrabFloatToFlushA);
+			}
+			else
+			{
+				this.setPlayAnimOnBoy(this.SwimGrabFloatToFlushBackward);
+			}
+		}
+	}
+
+	// Token: 0x06001355 RID: 4949 RVA: 0x000B6388 File Offset: 0x000B4588
+	private void UpdatePlayerAnim()
+	{
+		if (this.flushScript.streamMode == StreamMode.FullOff || this.flushScript.streamMode == StreamMode.Stopping)
+		{
+			this.UpdateNoFlushAnims();
+		}
+		else if (this.flushScript.streamMode == StreamMode.Starting || this.flushScript.streamMode == StreamMode.FullOn)
+		{
+			this.UpdateFlushingAnims();
+		}
+	}
+
+	// Token: 0x06001356 RID: 4950 RVA: 0x000B63EC File Offset: 0x000B45EC
+	private void FixedUpdate()
+	{
+		if (this.boyInside)
+		{
+			Vector3 vector = this.boy.pos3 + MathUtils.v3(this.boy.capsuleUp * 0.7f, 0f);
+			Vector3 position = this.animationContainer.transform.position;
+			this.distToHand = (vector - position).magnitude;
+		}
+		this.coolDown -= Time.deltaTime;
+		if (this.boy.isDead)
+		{
+			return;
+		}
+		if (this.state == WaterStreamGrabHook.State.Grabbed)
+		{
+			this.GrabbedState();
+		}
+		else if (this.state == WaterStreamGrabHook.State.NotGrabbed)
+		{
+			this.NotGrabbedState();
+		}
+		this.previousDistToHand = this.distToHand;
+	}
+
+	// Token: 0x04002386 RID: 9094
+	public WaterFlushTunnel flushScript;
+
+	// Token: 0x04002387 RID: 9095
+	public AnimClipNode SwimGrabFlushAbove_Flush;
+
+	// Token: 0x04002388 RID: 9096
+	public AnimClipNode SwimGrabFlushAbove;
+
+	// Token: 0x04002389 RID: 9097
+	public AnimClipNode SwimGrabFlushEnd;
+
+	// Token: 0x0400238A RID: 9098
+	public AnimClipNode SwimGrabFlushMaxA;
+
+	// Token: 0x0400238B RID: 9099
+	public AnimClipNode SwimGrabHandleIdle;
+
+	// Token: 0x0400238C RID: 9100
+	public AnimClipNode SwimGrabWhileFlushA;
+
+	// Token: 0x0400238D RID: 9101
+	public AnimClipNode SwimGrabWhileFlushBackward;
+
+	// Token: 0x0400238E RID: 9102
+	public AnimClipNode SwimGrabFreeFloatA;
+
+	// Token: 0x0400238F RID: 9103
+	public AnimClipNode SwimGrabFloatToFlushA;
+
+	// Token: 0x04002390 RID: 9104
+	public AnimClipNode SwimGrabFloatToFlushBackward;
+
+	// Token: 0x04002391 RID: 9105
+	private SignalIn hatchOpened;
+
+	// Token: 0x04002392 RID: 9106
+	private SignalOut startGrab;
+
+	// Token: 0x04002393 RID: 9107
+	private SignalOut endGrab;
+
+	// Token: 0x04002394 RID: 9108
+	private WaterStreamGrabHook.State state;
+
+	// Token: 0x04002395 RID: 9109
+	private bool hatchOpen;
+
+	// Token: 0x04002396 RID: 9110
+	private bool boyInside;
+
+	// Token: 0x04002397 RID: 9111
+	private float distToHand = float.MaxValue;
+
+	// Token: 0x04002398 RID: 9112
+	private float previousDistToHand = float.MinValue;
+
+	// Token: 0x04002399 RID: 9113
+	private float coolDown;
+
+	// Token: 0x0400239A RID: 9114
+	private Transform animationContainer;
+
+	// Token: 0x0400239B RID: 9115
+	private Boy boy;
+
+	// Token: 0x0400239C RID: 9116
+	private AnimClipNode currentAnim;
+
+	// Token: 0x0400239D RID: 9117
+	private float curAngle;
+
+	// Token: 0x0400239E RID: 9118
+	private float rotationalAngle;
+
+	// Token: 0x0400239F RID: 9119
+	private float stickVelocity;
+
+	// Token: 0x040023A0 RID: 9120
+	public float flushAccel = 150f;
+
+	// Token: 0x040023A1 RID: 9121
+	public float maxFlushSpeed = 260f;
+
+	// Token: 0x040023A2 RID: 9122
+	public float angleDampingZone = 60f;
+
+	// Token: 0x040023A3 RID: 9123
+	public float stickAccell = 3f;
+
+	// Token: 0x040023A4 RID: 9124
+	public float stickMaxSpeed = 30f;
+
+	// Token: 0x040023A5 RID: 9125
+	private float sinusPushCounter;
+
+	// Token: 0x040023A6 RID: 9126
+	private float factor = 1f;
+
+	// Token: 0x02000274 RID: 628
+	private enum State
+	{
+		// Token: 0x040023A8 RID: 9128
+		None,
+		// Token: 0x040023A9 RID: 9129
+		Grabbed,
+		// Token: 0x040023AA RID: 9130
+		NotGrabbed
+	}
+}

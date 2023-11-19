@@ -1,0 +1,33 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000E0 RID: 224
+public class WaterGirlTeleportPos : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000702 RID: 1794 RVA: 0x0004F92C File Offset: 0x0004DB2C
+	public bool PreAwake(int callcount)
+	{
+		this.teleportGirlToTarget = SignalIn.Create("teleportGirlToTarget", base.gameObject, new Action(this.TeleportGirl));
+		return true;
+	}
+
+	// Token: 0x06000703 RID: 1795 RVA: 0x0004F954 File Offset: 0x0004DB54
+	private void TeleportGirl()
+	{
+		Vector3 vector = this.teleportTarget.position - this.girl.position;
+		vector.z = 0f;
+		this.girlLayer.position = this.girlLayer.position + vector;
+	}
+
+	// Token: 0x04000C2C RID: 3116
+	public Transform teleportTarget;
+
+	// Token: 0x04000C2D RID: 3117
+	public Transform girlLayer;
+
+	// Token: 0x04000C2E RID: 3118
+	public Transform girl;
+
+	// Token: 0x04000C2F RID: 3119
+	private SignalIn teleportGirlToTarget;
+}

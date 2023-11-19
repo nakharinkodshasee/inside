@@ -1,0 +1,17 @@
+using System;
+
+// Token: 0x02000373 RID: 883
+public class WaterFogToShaderUmbrella : Umbrella<WaterFogToShader>
+{
+	// Token: 0x06001821 RID: 6177 RVA: 0x000D2B08 File Offset: 0x000D0D08
+	public override void DispatchUpdate()
+	{
+		int num = 0;
+		int size = this.size;
+		while (num != size)
+		{
+			this.targets[num].UmbrellaUpdate();
+			num++;
+		}
+	}
+}

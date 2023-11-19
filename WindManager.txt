@@ -1,0 +1,102 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003F6 RID: 1014
+public class WindManager : MonoBehaviour
+{
+	// Token: 0x06001AE2 RID: 6882 RVA: 0x000EC380 File Offset: 0x000EA580
+	private void FixedUpdate()
+	{
+		this.windTimer += Time.deltaTime;
+		if (this.windTimer >= this.transitionTime)
+		{
+			this.SetTransition();
+		}
+		float f = this.windTimer / this.transitionTime;
+		this.currentFraction = this.fromFraction + (this.targetFraction - this.fromFraction) * MathUtils.SmoothFraction(f);
+		WindManager.windStrength = this.currentFraction * (this.maxWind - this.minWind) + this.minWind;
+		this.currentLeafFraction += (this.currentFraction - this.currentLeafFraction) * Time.deltaTime * this.leafDelay;
+		float num = (this.currentLeafFraction * (this.maxLeafSpeed - this.minLeafSpeed) + this.minLeafSpeed) * Time.deltaTime;
+		WindManager.leafTime += num;
+		if (this.debug)
+		{
+		}
+	}
+
+	// Token: 0x06001AE3 RID: 6883 RVA: 0x000EC468 File Offset: 0x000EA668
+	private void SetTransition()
+	{
+		this.fromFraction = this.currentFraction;
+		this.windTimer = 0f;
+		if (this.debug)
+		{
+			this.windIntensity = Mathf.Max(this.windIntensity, 0.1f);
+			this.minTransitionTime = Mathf.Max(this.minTransitionTime, 0.1f);
+			this.transitionSpeed = Mathf.Max(this.transitionSpeed, 0.1f);
+			this.maxAcceleration = Mathf.Max(this.maxAcceleration, 0.1f);
+		}
+		float num = Random.Range(-1f, this.windIntensity);
+		num = Mathf.Max(num, 0f);
+		this.targetFraction = num / this.windIntensity;
+		float num2 = Mathf.Abs(this.targetFraction - this.currentFraction) / this.transitionSpeed / Random.Range(this.minAcceleration, this.maxAcceleration);
+		num2 = Mathf.Max(num2, this.minTransitionTime);
+		this.transitionTime = num2;
+	}
+
+	// Token: 0x040030B9 RID: 12473
+	public float maxWind = 2f;
+
+	// Token: 0x040030BA RID: 12474
+	public float minWind = 0.6f;
+
+	// Token: 0x040030BB RID: 12475
+	public float maxLeafSpeed = 35f;
+
+	// Token: 0x040030BC RID: 12476
+	public float minLeafSpeed = 10f;
+
+	// Token: 0x040030BD RID: 12477
+	public float leafDelay = 2f;
+
+	// Token: 0x040030BE RID: 12478
+	public float windIntensity = 4f;
+
+	// Token: 0x040030BF RID: 12479
+	public float transitionSpeed = 0.45f;
+
+	// Token: 0x040030C0 RID: 12480
+	public float minTransitionTime = 1.5f;
+
+	// Token: 0x040030C1 RID: 12481
+	public float minAcceleration = 0.85f;
+
+	// Token: 0x040030C2 RID: 12482
+	public float maxAcceleration = 1.25f;
+
+	// Token: 0x040030C3 RID: 12483
+	public bool debug;
+
+	// Token: 0x040030C4 RID: 12484
+	public static float windStrength = 1f;
+
+	// Token: 0x040030C5 RID: 12485
+	public static float leafTime;
+
+	// Token: 0x040030C6 RID: 12486
+	private float windTimer;
+
+	// Token: 0x040030C7 RID: 12487
+	private float fromFraction;
+
+	// Token: 0x040030C8 RID: 12488
+	private float targetFraction;
+
+	// Token: 0x040030C9 RID: 12489
+	private float currentFraction;
+
+	// Token: 0x040030CA RID: 12490
+	private float transitionTime;
+
+	// Token: 0x040030CB RID: 12491
+	private float currentLeafFraction;
+}

@@ -1,0 +1,221 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004AA RID: 1194
+public class WaterFlushGateKill : MonoBehaviour
+{
+	// Token: 0x06001F3C RID: 7996 RVA: 0x0010B464 File Offset: 0x00109664
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioFlushGateKill = new AudioEventSimple("boy_flushGateKill");
+	}
+
+	// Token: 0x06001F3D RID: 7997 RVA: 0x0010B48C File Offset: 0x0010968C
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.deathAnim.gameObject.SetActive(false);
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x06001F3E RID: 7998 RVA: 0x0010B4BC File Offset: 0x001096BC
+	private bool IsAnimPlaying()
+	{
+		if (this.gate.IsPlaying(this.closeAnimName))
+		{
+			this.currentAnimTime = this.gate[this.closeAnimName].normalizedTime;
+			return true;
+		}
+		this.currentAnimTime = 0f;
+		return false;
+	}
+
+	// Token: 0x06001F3F RID: 7999 RVA: 0x0010B50C File Offset: 0x0010970C
+	private bool IsBoyCloseToCenter()
+	{
+		if (this.spineBone)
+		{
+			float magnitude = (this.spineBone.position - this.gateCenter.position).magnitude;
+			if (magnitude <= 0.35f)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x06001F40 RID: 8000 RVA: 0x0010B55C File Offset: 0x0010975C
+	private bool IsHeadAndAncleOnOppositSides()
+	{
+		Vector3 position = this.gateCenter.position;
+		Vector3 normalized = (this.headBone.position - position).normalized;
+		float num = Vector3.Dot(this.gateCenter.forward, normalized);
+		Vector3 normalized2 = (this.rightAncleBone.position - position).normalized;
+		float num2 = Vector3.Dot(this.gateCenter.forward, normalized2);
+		return (num > 0f && num2 < 0f) || (num < 0f && num2 > 0f);
+	}
+
+	// Token: 0x06001F41 RID: 8001 RVA: 0x0010B604 File Offset: 0x00109804
+	private void DoKill()
+	{
+		this.bottom.GetComponent<Collider>().enabled = false;
+		this.top.GetComponent<Collider>().enabled = false;
+		this.boy.visualBoy.actor.GetComponentInChildren<SkinnedMeshRenderer>().enabled = false;
+		if (this.boy.facing == -1f)
+		{
+			this.deathAnim.eulerAngles = new Vector3(0f, 270f, 180f);
+		}
+		this.deathAnim.position = this.boy.pos3;
+		this.deathAnim.gameObject.SetActive(true);
+		this.deathAnim.GetComponent<Animation>().Play();
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.15f, 0.4f, 0, 0f);
+		this.audioFlushGateKill.PostFast(AudioKeyObject.AkGameObjs.boy);
+		if (this.deathEffectsParent != null)
+		{
+			for (int i = 0; i < this.deathEffectsParent.childCount; i++)
+			{
+				ParticleSystem component = this.deathEffectsParent.GetChild(i).GetComponent<ParticleSystem>();
+				if (component)
+				{
+					component.Play();
+				}
+			}
+		}
+		if (this.camInsideKillReference && ScriptGlobals.camera.transform.position.x > this.camInsideKillReference.position.x)
+		{
+			this.flushHimOut = true;
+		}
+		this.boy.Kill(false);
+	}
+
+	// Token: 0x06001F42 RID: 8002 RVA: 0x0010B788 File Offset: 0x00109988
+	private void DelayBoyToKill()
+	{
+		if (this.gate[this.closeAnimName].normalizedTime > 0.9f && !ScriptGlobals.mainCharacter.isDead)
+		{
+			this.DoKill();
+		}
+	}
+
+	// Token: 0x06001F43 RID: 8003 RVA: 0x0010B7CC File Offset: 0x001099CC
+	private void FlushOutCorpse()
+	{
+		if (this.gate.IsPlaying(this.openAnimName))
+		{
+			this.flushOutTimer += Time.deltaTime;
+			float num = Mathf.InverseLerp(1f, 4f, this.flushOutTimer);
+			this.deathAnim.Translate((Vector3.left + Vector3.up * 0.33f) * num * 9f * Time.deltaTime, 0);
+		}
+	}
+
+	// Token: 0x06001F44 RID: 8004 RVA: 0x0010B858 File Offset: 0x00109A58
+	private void Update()
+	{
+		if (ScriptGlobals.mainCharacter.isDead && this.flushHimOut)
+		{
+			this.FlushOutCorpse();
+		}
+		if (this.boy && !ScriptGlobals.mainCharacter.isDead)
+		{
+			if (!this.spineBone)
+			{
+				this.spineBone = this.boy.visualBoy.actor.bones[this.boy.visualBoy.actor.GetBone("SpineA")].transform;
+			}
+			if (!this.headBone)
+			{
+				this.headBone = this.boy.visualBoy.actor.bones[this.boy.visualBoy.actor.GetBone("Head")].transform;
+			}
+			if (!this.rightAncleBone)
+			{
+				this.rightAncleBone = this.boy.visualBoy.actor.bones[this.boy.visualBoy.actor.GetBone("RightAnkle")].transform;
+			}
+			if (!this.killInitiated && this.IsAnimPlaying() && this.IsBoyCloseToCenter() && this.IsHeadAndAncleOnOppositSides() && this.currentAnimTime > 0.75f)
+			{
+				if (this.boy.facing == -1f)
+				{
+					this.panicSwim.transform.eulerAngles = new Vector3(0f, -90f, 0f);
+				}
+				BoyUtils.StartCustomAnim(this.boy, this.panicSwim, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+				this.killInitiated = true;
+			}
+			if (this.killInitiated)
+			{
+				this.DelayBoyToKill();
+			}
+			return;
+		}
+	}
+
+	// Token: 0x040039E4 RID: 14820
+	public Transform gateCenter;
+
+	// Token: 0x040039E5 RID: 14821
+	public Animation gate;
+
+	// Token: 0x040039E6 RID: 14822
+	public string openAnimName = "Open";
+
+	// Token: 0x040039E7 RID: 14823
+	public string closeAnimName = "Close";
+
+	// Token: 0x040039E8 RID: 14824
+	public Transform deathAnim;
+
+	// Token: 0x040039E9 RID: 14825
+	public AnimClipNode panicSwim;
+
+	// Token: 0x040039EA RID: 14826
+	public Collider bottom;
+
+	// Token: 0x040039EB RID: 14827
+	public Collider top;
+
+	// Token: 0x040039EC RID: 14828
+	public Transform deathEffectsParent;
+
+	// Token: 0x040039ED RID: 14829
+	public Transform camInsideKillReference;
+
+	// Token: 0x040039EE RID: 14830
+	private bool animPlayingLastFrame;
+
+	// Token: 0x040039EF RID: 14831
+	private bool killInitiated;
+
+	// Token: 0x040039F0 RID: 14832
+	private float currentAnimTime;
+
+	// Token: 0x040039F1 RID: 14833
+	private Transform spineBone;
+
+	// Token: 0x040039F2 RID: 14834
+	private Transform headBone;
+
+	// Token: 0x040039F3 RID: 14835
+	private Transform rightAncleBone;
+
+	// Token: 0x040039F4 RID: 14836
+	private Boy boy;
+
+	// Token: 0x040039F5 RID: 14837
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioFlushGateKill;
+
+	// Token: 0x040039F6 RID: 14838
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x040039F7 RID: 14839
+	private bool flushHimOut;
+
+	// Token: 0x040039F8 RID: 14840
+	private float flushOutTimer;
+}

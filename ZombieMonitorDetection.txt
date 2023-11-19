@@ -1,0 +1,644 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200042F RID: 1071
+public class ZombieMonitorDetection : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001C0A RID: 7178 RVA: 0x000F5814 File Offset: 0x000F3A14
+	public bool PreAwake(int callcount)
+	{
+		this.boyDetected = SignalOut.Create("boyDetected", base.gameObject);
+		this.startDogKill = SignalOut.Create("startDogKill", base.gameObject);
+		this.swapToDogKill = SignalIn.Create("swapToDogKill", base.gameObject, delegate
+		{
+			this.dogKillIsActive = true;
+		});
+		this.doAllowFault = SignalIn.Create("doAllowFault", base.gameObject, new Action(this.AllowFault));
+		this.doStopSound = SignalIn.Create("doStopSound", base.gameObject, new Action(this.StopSound));
+		this.doStartSound = SignalIn.Create("doStartSound", base.gameObject, new Action(this.StartSound));
+		return true;
+	}
+
+	// Token: 0x06001C0B RID: 7179 RVA: 0x000F58D8 File Offset: 0x000F3AD8
+	public void AllowFault()
+	{
+		this.allowFaultActive = true;
+	}
+
+	// Token: 0x06001C0C RID: 7180 RVA: 0x000F58E4 File Offset: 0x000F3AE4
+	public void StartSound()
+	{
+		this.walking = true;
+		if (this.insideTurnAroundZone && !this.didTurnAround && !this.insideTurnAroundZoneThreshold && !this.monitorCameraScript.IsKillingBoy())
+		{
+			this.StartDelayKill(0.4f, "too late with turn around in turn around zone");
+		}
+		this.timeInState = 0f;
+		this.allowFaultActive = false;
+		this.didTurnAround = false;
+	}
+
+	// Token: 0x06001C0D RID: 7181 RVA: 0x000F5954 File Offset: 0x000F3B54
+	public void StopSound()
+	{
+		this.didJump = false;
+		this.firstWalk = false;
+		this.walking = false;
+		this.timeInState = 0f;
+		this.allowFaultActive = false;
+	}
+
+	// Token: 0x06001C0E RID: 7182 RVA: 0x000F5980 File Offset: 0x000F3B80
+	public void StartDetection()
+	{
+		if (!this.detectionActive)
+		{
+			this.detectionActive = true;
+		}
+	}
+
+	// Token: 0x06001C0F RID: 7183 RVA: 0x000F5994 File Offset: 0x000F3B94
+	public void SetDetectionDelay(float aDelayTime)
+	{
+		this.detectionDelay = aDelayTime;
+	}
+
+	// Token: 0x06001C10 RID: 7184 RVA: 0x000F59A0 File Offset: 0x000F3BA0
+	public void SkipDelay()
+	{
+		this.detectionDelay = 0f;
+	}
+
+	// Token: 0x06001C11 RID: 7185 RVA: 0x000F59B0 File Offset: 0x000F3BB0
+	public void BoyStartRun()
+	{
+		this.boyRunActive = true;
+	}
+
+	// Token: 0x06001C12 RID: 7186 RVA: 0x000F59BC File Offset: 0x000F3BBC
+	public void BoyInGroup()
+	{
+		this.detectionActive = false;
+	}
+
+	// Token: 0x06001C13 RID: 7187 RVA: 0x000F59C8 File Offset: 0x000F3BC8
+	private void UpdateWalkVelocityTest()
+	{
+		VisualBoyRun visualBoyRun = ScriptGlobals.boy.visualBoy.state as VisualBoyRun;
+		if (visualBoyRun && visualBoyRun.isTurnAnim)
+		{
+			return;
+		}
+		float num = 0.1f;
+		float x = ScriptGlobals.boy.velocity.x;
+		if (!this.allowFaultActive && !this.firstWalk)
+		{
+			if (this.timeInState > 1.5f)
+			{
+				if (this.walking && Mathf.Abs(x) < 0.35f)
+				{
+					this.penalty = Mathf.Min(1f, this.penalty + Time.deltaTime * 4.5f);
+				}
+				else if (!this.walking && Mathf.Abs(x) > num)
+				{
+					this.penalty = Mathf.Min(1f, this.penalty + Time.deltaTime * this.longStandStillMovePenalty);
+				}
+			}
+			else if (this.timeInState > 0.5f)
+			{
+				if (this.walking && Mathf.Abs(x) < 0.35f)
+				{
+					this.penalty = Mathf.Min(1f, this.penalty + Time.deltaTime * 1.5f);
+				}
+				else if (!this.walking && Mathf.Abs(x) > num)
+				{
+					this.penalty = Mathf.Min(1f, this.penalty + Time.deltaTime * this.standStillMovePenalty);
+				}
+			}
+		}
+		if (this.walking && Mathf.Abs(x) >= 0.35f)
+		{
+			this.penalty = Mathf.Max(0f, this.penalty - Time.deltaTime * 1f);
+		}
+		if (!this.walking && Mathf.Abs(x) <= num)
+		{
+			this.penalty = Mathf.Max(0f, this.penalty - Time.deltaTime * 1f);
+		}
+	}
+
+	// Token: 0x06001C14 RID: 7188 RVA: 0x000F5BC4 File Offset: 0x000F3DC4
+	private void UpdatePositionInLineTest()
+	{
+		float num = Mathf.Abs(ScriptGlobals.boy.transform.position.x - this.boyTargetPos.transform.position.x);
+		this.showCloseToEdgeTimer -= Time.deltaTime;
+		if (this.showedEdgePenalty && this.showCloseToEdgeTimer < -3.5f)
+		{
+			this.showedEdgePenalty = false;
+		}
+		if (num <= this.distanceThresholdWarning)
+		{
+			this.outSideEdgeArea = true;
+		}
+		else if (num > this.distanceThresholdWarning + 0.1f)
+		{
+			this.outSideEdgeArea = false;
+		}
+		if (num > this.distanceThresholdKill && (this.monitorCameraScript == null || !this.monitorCameraScript.IsKillingBoy()))
+		{
+			this.StartDelayKill(0f, "too far away from lineup position");
+		}
+		else if (!this.outSideEdgeArea && (double)this.timeInState > 0.33)
+		{
+			this.gettingCloseToEdgePenalty = Mathf.Min(1f, this.penalty + Time.deltaTime * 2.5f);
+			if (!this.showedEdgePenalty)
+			{
+				this.showCloseToEdgeTimer = 1f;
+				this.showedEdgePenalty = true;
+			}
+		}
+	}
+
+	// Token: 0x06001C15 RID: 7189 RVA: 0x000F5D10 File Offset: 0x000F3F10
+	private void StartDelayKill(float time, string debugString)
+	{
+		if (!this.delayKillStarted)
+		{
+			this.boyDetected.Signal();
+			if (this.monitorCameraScript != null)
+			{
+				this.delayKillStarted = true;
+				this.killDelay = time;
+			}
+		}
+	}
+
+	// Token: 0x06001C16 RID: 7190 RVA: 0x000F5D48 File Offset: 0x000F3F48
+	private void UpdateJumpZone()
+	{
+		this.timeInState += Time.deltaTime;
+		this.UpdateWalkVelocityTest();
+		this.UpdatePositionInLineTest();
+		if (ScriptGlobals.boy.facing < 0f)
+		{
+			this.StartDelayKill(0.6f, "killed due to wrong facing");
+		}
+		if (this.boyJumpedThisFrame)
+		{
+			if (this.timeInState < 1.4f)
+			{
+				this.AddVisualWarning(1.75f);
+			}
+			if (this.didJump)
+			{
+				this.StartDelayKill(0.6f, "killed due to double jump");
+			}
+			else if (this.walking)
+			{
+				this.StartDelayKill(0.6f, "killed due to jump while walking");
+			}
+			else if (this.timeInState < 0.8f)
+			{
+				this.StartDelayKill(0.6f, "killed due to jump to early");
+			}
+			else if (Mathf.Abs(ScriptGlobals.boy.velocity.x) > 0.1f)
+			{
+				this.StartDelayKill(0.6f, "killed due to jumping back or forward");
+			}
+			else
+			{
+				this.didJump = true;
+			}
+		}
+		if (!this.walking && !this.didJump)
+		{
+			if (this.timeInState > 1.85f)
+			{
+				if (this.warningVisualTimer <= 0f)
+				{
+				}
+				if (!this.insideJumpZoneThreshold || (this.insideJumpZoneThreshold && !this.insideJumpZoneThresholdButOutside))
+				{
+					this.AddVisualWarning(1.75f);
+				}
+			}
+			if (this.timeInState > 2.5f && !this.insideJumpZoneThreshold && !this.monitorCameraScript.IsKillingBoy())
+			{
+				this.StartDelayKill(0f, "too late with jump in jumpZone");
+			}
+		}
+	}
+
+	// Token: 0x06001C17 RID: 7191 RVA: 0x000F5EFC File Offset: 0x000F40FC
+	private void UpdateTurnAroundZone()
+	{
+		this.timeInState += Time.deltaTime;
+		this.UpdateWalkVelocityTest();
+		this.UpdatePositionInLineTest();
+		Actor actor = ScriptGlobals.boy.visualBoy.actor;
+		Transform transform = actor.bones[actor.specificBones.spineB].transform;
+		float num = Mathf.Sign(Vector3.Dot(transform.forward, Vector3.right));
+		if (ScriptGlobals.boy.status.groundCollider == null)
+		{
+			this.StartDelayKill(0.6f, "killed due jumping in turn around zone");
+		}
+		if (num < 0f)
+		{
+			if (this.walking)
+			{
+				this.StartDelayKill(0.6f, "killed due to wrong facing while walking");
+			}
+			else if (this.timeInState < 1f)
+			{
+				this.StartDelayKill(0.6f, "killed due to early turn in turn around zone");
+			}
+			else if (this.didTurnAround)
+			{
+				this.StartDelayKill(0.6f, "killed due to double turn around");
+			}
+			if (this.previousFacing > 0f && this.timeInState < 1.45f)
+			{
+				this.AddVisualWarning(1.75f);
+			}
+			if (this.timeInState > 3.35f)
+			{
+				if (this.warningVisualTimer <= 0f)
+				{
+				}
+				this.AddVisualWarning(1.75f);
+			}
+		}
+		if (this.previousFacing < 0f && num > 0f)
+		{
+			if (this.timeInState < 2.75f)
+			{
+				this.AddVisualWarning(1.75f);
+			}
+			this.didTurnAround = true;
+		}
+		if (!this.walking && !this.didTurnAround && num > 0f && this.timeInState > 1.9f)
+		{
+			if (this.warningVisualTimer <= 0f)
+			{
+			}
+			if (!this.insideTurnAroundZoneThreshold || (this.insideTurnAroundZoneThreshold && !this.insideTurnAroundZoneThresholdButOutside))
+			{
+				this.AddVisualWarning(1.75f);
+			}
+		}
+		this.previousFacing = num;
+	}
+
+	// Token: 0x06001C18 RID: 7192 RVA: 0x000F6108 File Offset: 0x000F4308
+	private void UpdateNormal()
+	{
+		this.timeInState += Time.deltaTime;
+		this.UpdateWalkVelocityTest();
+		this.UpdatePositionInLineTest();
+		if (ScriptGlobals.boy.facing < 0f || ScriptGlobals.boy.status.groundCollider == null)
+		{
+			this.StartDelayKill(0.6f, "boy jumped or turned around KILL HIM");
+		}
+	}
+
+	// Token: 0x06001C19 RID: 7193 RVA: 0x000F6174 File Offset: 0x000F4374
+	private void UpdateWarning()
+	{
+		if ((!this.warning && this.penalty >= 1f) || this.showCloseToEdgeTimer > 0f)
+		{
+			this.warning = true;
+		}
+		else if (this.warning && this.penalty <= 0f)
+		{
+			this.warning = false;
+			this.timeInWarningState = 0f;
+		}
+		if (this.delayKillStarted)
+		{
+			this.warning = true;
+		}
+		if (this.warning)
+		{
+			this.timeInWarningState += Time.deltaTime;
+			if (this.timeInWarningState > this.maxWarningTime && (this.monitorCameraScript == null || !this.monitorCameraScript.IsKillingBoy()) && this.penalty > 0.5f)
+			{
+				this.StartDelayKill(0f, "killed, too long in warning state");
+			}
+		}
+	}
+
+	// Token: 0x06001C1A RID: 7194 RVA: 0x000F6268 File Offset: 0x000F4468
+	private void AddVisualWarning(float value = 1.75f)
+	{
+		if (this.warningVisualTimer <= 0f)
+		{
+			this.warningVisualTimer = value;
+		}
+	}
+
+	// Token: 0x06001C1B RID: 7195 RVA: 0x000F6284 File Offset: 0x000F4484
+	private void UpdateRunState()
+	{
+		if (ScriptGlobals.boy.velocity.x < 2.8f)
+		{
+			this.penalty = Mathf.Min(1f, this.penalty + Time.deltaTime * 1f);
+		}
+		else if (ScriptGlobals.boy.velocity.x >= 3f)
+		{
+			this.penalty = Mathf.Max(0f, this.penalty - Time.deltaTime * 2f);
+		}
+		if (ScriptGlobals.boy.velocity.x < 0.5f)
+		{
+			this.StartDelayKill(0.6f, "killed due to stop in Run Zone");
+		}
+		if (ScriptGlobals.boy.facing < 0f)
+		{
+			this.StartDelayKill(0.6f, "killed due wrong facing in Run Zone");
+		}
+	}
+
+	// Token: 0x06001C1C RID: 7196 RVA: 0x000F6364 File Offset: 0x000F4564
+	private void UpdateBoyJumpState()
+	{
+		bool flag = ScriptGlobals.boy.status.groundCollider == null;
+		if (flag && !this.previousGroundState)
+		{
+			this.boyJumpedThisFrame = true;
+		}
+		else
+		{
+			this.boyJumpedThisFrame = false;
+		}
+		this.previousGroundState = flag;
+		if (this.boyJumpedThisFrame)
+		{
+		}
+	}
+
+	// Token: 0x06001C1D RID: 7197 RVA: 0x000F63C0 File Offset: 0x000F45C0
+	private void Kill()
+	{
+		if (!this.dogKillIsActive)
+		{
+			this.monitorCameraScript.KillBoy();
+		}
+		else
+		{
+			this.startDogKill.Signal();
+		}
+	}
+
+	// Token: 0x06001C1E RID: 7198 RVA: 0x000F63F4 File Offset: 0x000F45F4
+	private void UpdateDelayKill()
+	{
+		if (this.delayKillStarted)
+		{
+			this.killDelay -= Time.deltaTime;
+			if (this.killDelay <= 0f && !this.monitorCameraScript.IsKillingBoy())
+			{
+				this.Kill();
+				this.detectionActive = false;
+			}
+		}
+	}
+
+	// Token: 0x06001C1F RID: 7199 RVA: 0x000F644C File Offset: 0x000F464C
+	private void UpdateInsideJumpZone()
+	{
+		float num = Mathf.Abs(ScriptGlobals.boy.transform.position.x - this.jumpZonePivot.transform.position.x);
+		this.insideJumpZone = false;
+		this.insideJumpZoneThreshold = false;
+		this.insideJumpZoneThresholdButOutside = false;
+		if (num < this.jumpZonePivot.length / 2f + this.jumpZoneRadiusThreshold)
+		{
+			this.insideJumpZone = true;
+			if (num > this.jumpZonePivot.length / 2f - this.jumpZoneRadiusThreshold)
+			{
+				this.insideJumpZoneThreshold = true;
+				if (num > this.jumpZonePivot.length / 2f)
+				{
+					this.insideJumpZoneThresholdButOutside = true;
+				}
+			}
+		}
+	}
+
+	// Token: 0x06001C20 RID: 7200 RVA: 0x000F650C File Offset: 0x000F470C
+	private void UpdateInsideTurnAroundZone()
+	{
+		float num = Mathf.Abs(ScriptGlobals.boy.transform.position.x - this.turnAroundZonePivot.transform.position.x);
+		this.insideTurnAroundZone = false;
+		this.insideTurnAroundZoneThreshold = false;
+		this.insideTurnAroundZoneThresholdButOutside = false;
+		if (num < this.turnAroundZonePivot.length / 2f + this.turnAroundZoneRadiusThreshold)
+		{
+			this.insideTurnAroundZone = true;
+			if (num > this.turnAroundZonePivot.length / 2f - this.turnAroundZoneRadiusThreshold)
+			{
+				this.insideTurnAroundZoneThreshold = true;
+				if (num > this.turnAroundZonePivot.length / 2f)
+				{
+					this.insideTurnAroundZoneThresholdButOutside = true;
+				}
+			}
+		}
+	}
+
+	// Token: 0x06001C21 RID: 7201 RVA: 0x000F65CC File Offset: 0x000F47CC
+	private void FixedUpdate()
+	{
+		if (this.detectionActive)
+		{
+			if (this.detectionDelay > 0f)
+			{
+				this.detectionDelay -= Time.deltaTime;
+				return;
+			}
+			this.UpdateInsideJumpZone();
+			this.UpdateInsideTurnAroundZone();
+			this.UpdateBoyJumpState();
+			this.UpdateDelayKill();
+			if (this.insideJumpZone)
+			{
+				this.UpdateJumpZone();
+			}
+			else if (this.insideTurnAroundZone)
+			{
+				this.UpdateTurnAroundZone();
+			}
+			else if (this.boyRunActive)
+			{
+				this.UpdateRunState();
+			}
+			else
+			{
+				this.UpdateNormal();
+			}
+			bool flag = this.warning;
+			this.UpdateWarning();
+			if (this.warningVisualTimer > 0f)
+			{
+				this.warningVisualTimer -= Time.deltaTime;
+			}
+			if (this.warningLightBlinking)
+			{
+				if (this.warningVisualTimer <= 0f && !this.warning)
+				{
+					this.warningLightBlinking = false;
+					this.warningEnd.OnEvent(this);
+				}
+			}
+			else if (this.warningVisualTimer > 0f || this.warning)
+			{
+				this.warningLightBlinking = true;
+				this.warningStart.OnEvent(this);
+			}
+		}
+	}
+
+	// Token: 0x04003362 RID: 13154
+	public ZombieMonitorCameraGameplay monitorCameraScript;
+
+	// Token: 0x04003363 RID: 13155
+	public GameObject boyTargetPos;
+
+	// Token: 0x04003364 RID: 13156
+	public float distanceThresholdKill = 2.3f;
+
+	// Token: 0x04003365 RID: 13157
+	public float distanceThresholdWarning = 1.8f;
+
+	// Token: 0x04003366 RID: 13158
+	public LineupCommandZone jumpZonePivot;
+
+	// Token: 0x04003367 RID: 13159
+	public float jumpZoneRadiusThreshold = 0.2f;
+
+	// Token: 0x04003368 RID: 13160
+	public LineupCommandZone turnAroundZonePivot;
+
+	// Token: 0x04003369 RID: 13161
+	public float turnAroundZoneRadiusThreshold = 0.2f;
+
+	// Token: 0x0400336A RID: 13162
+	public float detectionDelay = 4f;
+
+	// Token: 0x0400336B RID: 13163
+	public float maxWarningTime = 4f;
+
+	// Token: 0x0400336C RID: 13164
+	public bool allowFaultActive;
+
+	// Token: 0x0400336D RID: 13165
+	public float standStillMovePenalty = 1.5f;
+
+	// Token: 0x0400336E RID: 13166
+	public float longStandStillMovePenalty = 4.5f;
+
+	// Token: 0x0400336F RID: 13167
+	public float penalty;
+
+	// Token: 0x04003370 RID: 13168
+	private bool detectionActive;
+
+	// Token: 0x04003371 RID: 13169
+	private bool walking;
+
+	// Token: 0x04003372 RID: 13170
+	private float timeInState;
+
+	// Token: 0x04003373 RID: 13171
+	private bool firstWalk;
+
+	// Token: 0x04003374 RID: 13172
+	private bool didJump;
+
+	// Token: 0x04003375 RID: 13173
+	private bool delayKillStarted;
+
+	// Token: 0x04003376 RID: 13174
+	private float killDelay;
+
+	// Token: 0x04003377 RID: 13175
+	public SimpleEvent<ZombieMonitorDetection> warningStart = new SimpleEvent<ZombieMonitorDetection>("warningStart");
+
+	// Token: 0x04003378 RID: 13176
+	public SimpleEvent<ZombieMonitorDetection> warningEnd = new SimpleEvent<ZombieMonitorDetection>("warningEnd");
+
+	// Token: 0x04003379 RID: 13177
+	private SignalOut boyDetected;
+
+	// Token: 0x0400337A RID: 13178
+	private SignalOut startDogKill;
+
+	// Token: 0x0400337B RID: 13179
+	private SignalIn swapToDogKill;
+
+	// Token: 0x0400337C RID: 13180
+	private SignalIn doAllowFault;
+
+	// Token: 0x0400337D RID: 13181
+	private SignalIn doStopSound;
+
+	// Token: 0x0400337E RID: 13182
+	private SignalIn doStartSound;
+
+	// Token: 0x0400337F RID: 13183
+	private bool dogKillIsActive;
+
+	// Token: 0x04003380 RID: 13184
+	private bool boyRunActive;
+
+	// Token: 0x04003381 RID: 13185
+	private float gettingCloseToEdgePenalty;
+
+	// Token: 0x04003382 RID: 13186
+	private bool outSideEdgeArea;
+
+	// Token: 0x04003383 RID: 13187
+	private bool showedEdgePenalty;
+
+	// Token: 0x04003384 RID: 13188
+	private float showCloseToEdgeTimer;
+
+	// Token: 0x04003385 RID: 13189
+	private bool didTurnAround;
+
+	// Token: 0x04003386 RID: 13190
+	private float previousFacing = 1f;
+
+	// Token: 0x04003387 RID: 13191
+	private float warningVisualTimer;
+
+	// Token: 0x04003388 RID: 13192
+	private bool warning;
+
+	// Token: 0x04003389 RID: 13193
+	private float timeInWarningState;
+
+	// Token: 0x0400338A RID: 13194
+	private bool warningLightBlinking;
+
+	// Token: 0x0400338B RID: 13195
+	private bool boyJumpedThisFrame;
+
+	// Token: 0x0400338C RID: 13196
+	private bool previousGroundState;
+
+	// Token: 0x0400338D RID: 13197
+	private bool insideJumpZone;
+
+	// Token: 0x0400338E RID: 13198
+	private bool insideJumpZoneThreshold;
+
+	// Token: 0x0400338F RID: 13199
+	private bool insideJumpZoneThresholdButOutside;
+
+	// Token: 0x04003390 RID: 13200
+	private bool insideTurnAroundZone;
+
+	// Token: 0x04003391 RID: 13201
+	private bool insideTurnAroundZoneThreshold;
+
+	// Token: 0x04003392 RID: 13202
+	private bool insideTurnAroundZoneThresholdButOutside;
+}

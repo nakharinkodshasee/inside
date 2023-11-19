@@ -1,0 +1,29 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000DD RID: 221
+public class WaterGirlSubmarineSpawnTranslater : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060006E0 RID: 1760 RVA: 0x0004D8D0 File Offset: 0x0004BAD0
+	public bool PreAwake(int callcount)
+	{
+		this.spawnTranslater = SignalIn.Create("spawnTranslater", base.gameObject, new Action(this.SpawnTranslate));
+		return true;
+	}
+
+	// Token: 0x060006E1 RID: 1761 RVA: 0x0004D8F8 File Offset: 0x0004BAF8
+	private void SpawnTranslate()
+	{
+		Submarine component = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine).gameObject.GetComponent<Submarine>();
+		float num = Mathf.InverseLerp(2f, 10f, component.GetComponent<Rigidbody>().velocity.x);
+		Vector3 vector = Vector3.right * num * 10f;
+		Debug.Log("transVec : " + vector);
+		this.GirlParent.Translate(vector);
+	}
+
+	// Token: 0x04000BE9 RID: 3049
+	public Transform GirlParent;
+
+	// Token: 0x04000BEA RID: 3050
+	private SignalIn spawnTranslater;
+}

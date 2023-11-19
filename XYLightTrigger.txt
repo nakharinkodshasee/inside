@@ -1,0 +1,102 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020003A4 RID: 932
+public class XYLightTrigger : MonoBehaviour
+{
+	// Token: 0x060018F9 RID: 6393 RVA: 0x000D78A4 File Offset: 0x000D5AA4
+	private void Start()
+	{
+		if (this.animateAmbientLight)
+		{
+			this.ambientStartRGB.x = RenderSettings.ambientLight.r;
+			this.ambientStartRGB.y = RenderSettings.ambientLight.g;
+			this.ambientStartRGB.z = RenderSettings.ambientLight.b;
+		}
+	}
+
+	// Token: 0x060018FA RID: 6394 RVA: 0x000D7904 File Offset: 0x000D5B04
+	private void Update()
+	{
+	}
+
+	// Token: 0x060018FB RID: 6395 RVA: 0x000D7908 File Offset: 0x000D5B08
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (collider.gameObject.GetComponent<Boy>())
+		{
+			this.playerInTrigger = true;
+		}
+	}
+
+	// Token: 0x060018FC RID: 6396 RVA: 0x000D7928 File Offset: 0x000D5B28
+	private void OnTriggerExit(Collider collider)
+	{
+		if (collider.gameObject.GetComponent<Boy>())
+		{
+			this.playerInTrigger = false;
+		}
+	}
+
+	// Token: 0x060018FD RID: 6397 RVA: 0x000D7948 File Offset: 0x000D5B48
+	private void FixedUpdate()
+	{
+		if (this.playerInTrigger)
+		{
+			float num = base.GetComponent<Collider>().bounds.extents.x * 2f;
+			float num2 = this.objectToFollow.transform.position.x - base.GetComponent<Collider>().bounds.center.x + num * 0.5f;
+			float num3 = Mathf.Clamp01(num2 / num);
+			foreach (GameObject gameObject in this.lightsToAnimate)
+			{
+				if (gameObject.GetComponent<Light>())
+				{
+					gameObject.GetComponent<Light>().intensity = this.leftIntensity + (this.rightIntensity - this.leftIntensity) * num3;
+				}
+			}
+			if (this.animateAmbientLight)
+			{
+				Color ambientLight = RenderSettings.ambientLight;
+				float num4 = this.leftIntensity + (this.rightIntensity - this.leftIntensity) * num3;
+				if (this.scaleAmbientUp)
+				{
+					ambientLight.r = this.ambientStartRGB.x + (1f - this.ambientStartRGB.x) * num4;
+					ambientLight.g = this.ambientStartRGB.y + (1f - this.ambientStartRGB.y) * num4;
+					ambientLight.b = this.ambientStartRGB.z + (1f - this.ambientStartRGB.z) * num4;
+				}
+				else
+				{
+					ambientLight.r = this.ambientStartRGB.x - this.ambientStartRGB.x * (1f - num4);
+					ambientLight.g = this.ambientStartRGB.y - this.ambientStartRGB.y * (1f - num4);
+					ambientLight.b = this.ambientStartRGB.z - this.ambientStartRGB.z * (1f - num4);
+				}
+				Debug.Log("scale: " + num3);
+				RenderSettings.ambientLight = ambientLight;
+			}
+		}
+	}
+
+	// Token: 0x04002CD4 RID: 11476
+	public GameObject objectToFollow;
+
+	// Token: 0x04002CD5 RID: 11477
+	public List<GameObject> lightsToAnimate;
+
+	// Token: 0x04002CD6 RID: 11478
+	public bool animateAmbientLight;
+
+	// Token: 0x04002CD7 RID: 11479
+	public bool scaleAmbientUp;
+
+	// Token: 0x04002CD8 RID: 11480
+	public float leftIntensity;
+
+	// Token: 0x04002CD9 RID: 11481
+	public float rightIntensity = 1f;
+
+	// Token: 0x04002CDA RID: 11482
+	private bool playerInTrigger;
+
+	// Token: 0x04002CDB RID: 11483
+	private Vector3 ambientStartRGB;
+}

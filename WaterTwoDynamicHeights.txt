@@ -1,0 +1,204 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005D3 RID: 1491
+public class WaterTwoDynamicHeights : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060025C9 RID: 9673 RVA: 0x00134558 File Offset: 0x00132758
+	public bool PreAwake(int callcount)
+	{
+		SignalIn.Create("signal1", base.gameObject, new Action(this.signal1Received));
+		SignalIn.Create("signal2", base.gameObject, new Action(this.signal2Received));
+		return true;
+	}
+
+	// Token: 0x060025CA RID: 9674 RVA: 0x001345A0 File Offset: 0x001327A0
+	private void Start()
+	{
+		this.maxHeight = this.water.transform.localScale.y;
+		this.minHeight = this.maxHeight - this.heightToSubstract * 2f;
+		this.mediumHeight = this.maxHeight - this.heightToSubstract;
+		this.desiredVolume = this.maxHeight * this.water.transform.localScale.x * this.water.transform.localScale.z;
+	}
+
+	// Token: 0x060025CB RID: 9675 RVA: 0x00134638 File Offset: 0x00132838
+	private void signal1Received()
+	{
+		if (this.emptying_1)
+		{
+			return;
+		}
+		this.emptying_1 = true;
+		this.filling_1 = false;
+		this.timer1 = 0f;
+		if (this.emptying_2)
+		{
+			this.speed = this.emptySpeed * 2f;
+			this.desiredVolume = this.minHeight * this.water.transform.localScale.x * this.water.transform.localScale.z;
+		}
+		else if (this.filling_2)
+		{
+			this.speed = Mathf.Abs(this.fillSpeed - this.emptySpeed);
+			this.desiredVolume = Mathf.Abs(this.water.Volume - this.heightToSubstract * this.water.transform.localScale.x * this.water.transform.localScale.z);
+		}
+		else
+		{
+			this.speed = this.emptySpeed;
+			this.desiredVolume = this.mediumHeight * this.water.transform.localScale.x * this.water.transform.localScale.z;
+		}
+	}
+
+	// Token: 0x060025CC RID: 9676 RVA: 0x00134790 File Offset: 0x00132990
+	private void signal2Received()
+	{
+		if (this.emptying_2)
+		{
+			return;
+		}
+		this.emptying_2 = true;
+		this.filling_2 = false;
+		this.timer2 = 0f;
+		if (this.emptying_1)
+		{
+			this.speed = this.emptySpeed * 2f;
+			this.desiredVolume = this.minHeight * this.water.transform.localScale.x * this.water.transform.localScale.z;
+		}
+		else if (this.filling_1)
+		{
+			this.speed = Mathf.Abs(this.fillSpeed - this.emptySpeed);
+			this.desiredVolume = Mathf.Abs(this.water.Volume - this.heightToSubstract * this.water.transform.localScale.x * this.water.transform.localScale.z);
+		}
+		else
+		{
+			this.speed = this.emptySpeed;
+			this.desiredVolume = this.mediumHeight * this.water.transform.localScale.x * this.water.transform.localScale.z;
+		}
+	}
+
+	// Token: 0x060025CD RID: 9677 RVA: 0x001348E8 File Offset: 0x00132AE8
+	private void FixedUpdate()
+	{
+		if (this.emptying_1)
+		{
+			this.timer1 += Time.deltaTime;
+			if (this.timer1 >= this.timeToRefill)
+			{
+				this.emptying_1 = false;
+				this.filling_1 = true;
+				if (this.emptying_2)
+				{
+					this.speed = Mathf.Abs(this.fillSpeed - this.emptySpeed);
+					this.desiredVolume = this.mediumHeight * this.water.transform.localScale.x * this.water.transform.localScale.z;
+				}
+				else
+				{
+					if (this.filling_2)
+					{
+						this.speed = this.fillSpeed * 2f;
+					}
+					else
+					{
+						this.speed = this.fillSpeed;
+					}
+					this.desiredVolume = this.maxHeight * this.water.transform.localScale.x * this.water.transform.localScale.z;
+				}
+			}
+		}
+		if (this.emptying_2)
+		{
+			this.timer2 += Time.deltaTime;
+			if (this.timer2 >= this.timeToRefill)
+			{
+				this.emptying_2 = false;
+				this.filling_2 = true;
+				if (this.emptying_1)
+				{
+					this.speed = Mathf.Abs(this.fillSpeed - this.emptySpeed);
+					this.desiredVolume = this.mediumHeight * this.water.transform.localScale.x * this.water.transform.localScale.z;
+				}
+				else
+				{
+					if (this.filling_1)
+					{
+						this.speed = this.fillSpeed * 2f;
+					}
+					else
+					{
+						this.speed = this.fillSpeed;
+					}
+					this.desiredVolume = this.maxHeight * this.water.transform.localScale.x * this.water.transform.localScale.z;
+				}
+			}
+		}
+		this.currentVolume = this.water.Volume;
+		if (Mathf.Abs(this.water.Volume - this.desiredVolume) < 0.5f)
+		{
+			return;
+		}
+		if (this.water.Volume > this.desiredVolume)
+		{
+			this.water.AddVolume(-1f * this.speed);
+		}
+		else if (this.water.Volume < this.desiredVolume)
+		{
+			this.water.AddVolume(1f * this.speed);
+		}
+	}
+
+	// Token: 0x040044F9 RID: 17657
+	public FluidVolume water;
+
+	// Token: 0x040044FA RID: 17658
+	public float heightToSubstract;
+
+	// Token: 0x040044FB RID: 17659
+	public float timeToRefill;
+
+	// Token: 0x040044FC RID: 17660
+	public float fillSpeed;
+
+	// Token: 0x040044FD RID: 17661
+	public float emptySpeed;
+
+	// Token: 0x040044FE RID: 17662
+	private float speed;
+
+	// Token: 0x040044FF RID: 17663
+	private float maxHeight;
+
+	// Token: 0x04004500 RID: 17664
+	private float mediumHeight;
+
+	// Token: 0x04004501 RID: 17665
+	private float minHeight;
+
+	// Token: 0x04004502 RID: 17666
+	private float desiredVolume;
+
+	// Token: 0x04004503 RID: 17667
+	private float currentVolume;
+
+	// Token: 0x04004504 RID: 17668
+	private float timer1;
+
+	// Token: 0x04004505 RID: 17669
+	private float timer2;
+
+	// Token: 0x04004506 RID: 17670
+	private SignalIn signal1;
+
+	// Token: 0x04004507 RID: 17671
+	private SignalIn signal2;
+
+	// Token: 0x04004508 RID: 17672
+	private bool emptying_1;
+
+	// Token: 0x04004509 RID: 17673
+	private bool emptying_2;
+
+	// Token: 0x0400450A RID: 17674
+	private bool filling_1;
+
+	// Token: 0x0400450B RID: 17675
+	private bool filling_2;
+}

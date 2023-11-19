@@ -1,0 +1,112 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005F0 RID: 1520
+public class widthControl : MonoBehaviour
+{
+	// Token: 0x06002651 RID: 9809 RVA: 0x00137760 File Offset: 0x00135960
+	private void findTriggerStretchPoints()
+	{
+		if ((this.swingPlate.position - this.swingPlate2.position).x > 0f)
+		{
+			this.right = this.swingPlate.position;
+			this.right.x = this.right.x + this.maxWidth / 2f;
+			this.left = this.swingPlate2.position;
+			this.left.x = this.left.x + this.maxWidth / 2f;
+		}
+		else
+		{
+			this.right = this.swingPlate2.position;
+			this.right.x = this.right.x - this.maxWidth / 2f;
+			this.left = this.swingPlate.position;
+			this.left.x = this.left.x - this.maxWidth / 2f;
+		}
+	}
+
+	// Token: 0x06002652 RID: 9810 RVA: 0x00137870 File Offset: 0x00135A70
+	private void Start()
+	{
+		this.findTriggerStretchPoints();
+		this.grabTrigger = base.gameObject.GetComponent<BoxCollider>();
+	}
+
+	// Token: 0x06002653 RID: 9811 RVA: 0x0013788C File Offset: 0x00135A8C
+	private void Update()
+	{
+		if (this.dragTimeout > 0f)
+		{
+			this.CannotDrag();
+		}
+		else
+		{
+			this.DragSwingPlate();
+		}
+	}
+
+	// Token: 0x06002654 RID: 9812 RVA: 0x001378B0 File Offset: 0x00135AB0
+	private void CannotDrag()
+	{
+		this.dragTimeout -= Time.deltaTime;
+	}
+
+	// Token: 0x06002655 RID: 9813 RVA: 0x001378C4 File Offset: 0x00135AC4
+	private void DragSwingPlate()
+	{
+		if (!this.swingPlate2GrabTrigger.gameObject.activeSelf)
+		{
+			this.swingPlate2GrabTrigger.gameObject.SetActive(true);
+			this.grabTrigger.GetComponent<Collider>().enabled = true;
+		}
+		this.findTriggerStretchPoints();
+		BoyGrabState boyGrabState = ScriptGlobals.boy.state as BoyGrabState;
+		Rigidbody rigidbody = (boyGrabState == null) ? null : boyGrabState.body;
+		if (rigidbody == this.swingPlate.GetComponent<Rigidbody>())
+		{
+			float magnitude = (this.swingPlate.position - this.swingPlate2.position).magnitude;
+			if (magnitude <= 0.25f)
+			{
+				this.dragTimeout = 0.7f;
+				this.swingPlate2GrabTrigger.gameObject.SetActive(false);
+				this.grabTrigger.GetComponent<Collider>().enabled = false;
+				BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+			}
+		}
+		float num = (this.right.x - this.left.x) / this.maxWidth;
+		Vector3 position = (this.right - this.left) / 2f + this.left;
+		if (num > 1f)
+		{
+			position.x = this.swingPlate.position.x;
+		}
+		position.y = base.gameObject.transform.position.y;
+		position.z = base.gameObject.transform.position.z;
+		base.gameObject.transform.position = position;
+		num = Mathf.Clamp(num, 0f, 0.9f);
+		Vector3 localScale = base.gameObject.transform.localScale;
+		localScale.x = num;
+		base.gameObject.transform.localScale = localScale;
+	}
+
+	// Token: 0x040045AF RID: 17839
+	public float maxWidth;
+
+	// Token: 0x040045B0 RID: 17840
+	public Transform swingPlate;
+
+	// Token: 0x040045B1 RID: 17841
+	public Transform swingPlate2;
+
+	// Token: 0x040045B2 RID: 17842
+	public Transform swingPlate2GrabTrigger;
+
+	// Token: 0x040045B3 RID: 17843
+	private Vector3 right;
+
+	// Token: 0x040045B4 RID: 17844
+	private Vector3 left;
+
+	// Token: 0x040045B5 RID: 17845
+	private BoxCollider grabTrigger;
+
+	// Token: 0x040045B6 RID: 17846
+	private float dragTimeout;
+}

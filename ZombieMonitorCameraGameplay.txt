@@ -1,0 +1,521 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000429 RID: 1065
+public class ZombieMonitorCameraGameplay : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001BE2 RID: 7138 RVA: 0x000F4470 File Offset: 0x000F2670
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.cameraBehaviour.cameraSoundEmitter, null);
+		this.audioSentryCamFire = new AudioEventSimpleLocal("env_city_lineup_sentryCam_fire", akGameObj);
+		this.audioSentryCamHitBoy = new AudioEventSimpleLocal("env_city_lineup_sentryCam_hitBoy", akGameObj);
+		AkGameObj akGameObj2 = AudioUtils.EnsureAkGameObj(this.lightAudio.gameObject, null);
+		this.audioSentryCam_LightOn = new AudioEventSimpleLocal("env_city_lineup_sentryCam_lightOn", akGameObj2);
+	}
+
+	// Token: 0x06001BE3 RID: 7139 RVA: 0x000F44E8 File Offset: 0x000F26E8
+	public bool PreAwake(int callcount)
+	{
+		this.doLoadSave = SignalIn.Create("doLoadSave", base.gameObject, new Action(this.LoadSaveState));
+		this.forceShootBoy = SignalIn.Create("forceShootBoy", base.gameObject, new Action(this.KillBoy));
+		this.boyShot = SignalOut.Create("boyShot", base.gameObject);
+		this.enterScene = SignalIn.Create("enterScene", base.gameObject, new Action(this.EnterScene));
+		this.setPullDirectionToLeft = SignalIn.Create("setPullDirectionToLeft", base.gameObject, delegate
+		{
+			this.SetPullDirectionSign(-1);
+		});
+		return true;
+	}
+
+	// Token: 0x06001BE4 RID: 7140 RVA: 0x000F4594 File Offset: 0x000F2794
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.mStartUpDelayTimer = this.startUpDelay;
+		if (this.debugFollowBoyAtStart)
+		{
+			this.state = ZombieMonitorCameraGameplay.State.FollowBoy;
+		}
+		this.cameraBehaviour.SetSpotlightIntensity(0f);
+		this.InitFallBehind();
+	}
+
+	// Token: 0x06001BE5 RID: 7141 RVA: 0x000F45DC File Offset: 0x000F27DC
+	public void InitFallBehind()
+	{
+		float closestPointAsDistance = this.cameraBehaviour.rail.GetClosestPointAsDistance(this.fallBehindStartPoint.position);
+		float closestPointAsDistance2 = this.cameraBehaviour.rail.GetClosestPointAsDistance(this.fallBehindEndPoint.position);
+		this.mDistanceToFallBehindOver = closestPointAsDistance2 - closestPointAsDistance;
+	}
+
+	// Token: 0x06001BE6 RID: 7142 RVA: 0x000F462C File Offset: 0x000F282C
+	private void LoadSaveState()
+	{
+		this.UpdateFallBehind();
+		this.monitorDection.StartDetection();
+		this.monitorDection.SetDetectionDelay(0.5f);
+		this.cameraBehaviour.MoveTo(ScriptGlobals.boy.pos3 + Vector3.left * this.mFallBehindOffset, true);
+		this.cameraBehaviour.LookAt(ScriptGlobals.boy.pos3, true);
+		this.lightAudio.WakeUp();
+		this.state = ZombieMonitorCameraGameplay.State.ObserveBoy;
+	}
+
+	// Token: 0x06001BE7 RID: 7143 RVA: 0x000F46B0 File Offset: 0x000F28B0
+	public void EnterScene()
+	{
+		this.state = ZombieMonitorCameraGameplay.State.EnterScene;
+	}
+
+	// Token: 0x06001BE8 RID: 7144 RVA: 0x000F46BC File Offset: 0x000F28BC
+	private void EnterSceneState()
+	{
+		this.UpdateFallBehind();
+		this.cameraBehaviour.SetSpotlightIntensity(0f);
+		this.mStartUpDelayTimer -= Time.deltaTime * 3f;
+		if (this.mStartUpDelayTimer > 0f)
+		{
+			return;
+		}
+		float num = this.cameraBehaviour.MoveTo(ScriptGlobals.boy.pos3 + Vector3.left * this.mFallBehindOffset, false);
+		if (num < 0.5f)
+		{
+			this.monitorDection.StartDetection();
+			this.state = ZombieMonitorCameraGameplay.State.StartUpCamera;
+		}
+		this.cameraBehaviour.LookAt(ScriptGlobals.boy.pos3, false);
+	}
+
+	// Token: 0x06001BE9 RID: 7145 RVA: 0x000F4768 File Offset: 0x000F2968
+	private void StartUpCameraState()
+	{
+		this.lightAudio.WakeUp();
+		this.audioSentryCam_LightOn.PostFast();
+		this.UpdateFallBehind();
+		this.mWakeUpTimer += Time.deltaTime;
+		if (this.mWakeUpTimer >= this.laserFlicker.keys[this.laserFlicker.length - 1].time)
+		{
+			this.state = ZombieMonitorCameraGameplay.State.FollowBoy;
+		}
+		this.cameraBehaviour.SetTargetVelocity(0f);
+		this.cameraBehaviour.SetSpotlightIntensity(this.laserFlicker.Evaluate(this.mWakeUpTimer));
+		this.cameraBehaviour.LookAt(ScriptGlobals.boy.pos3, false);
+	}
+
+	// Token: 0x06001BEA RID: 7146 RVA: 0x000F481C File Offset: 0x000F2A1C
+	private void FollowBoyState()
+	{
+		this.UpdateFallBehind();
+		float x = this.cameraBehaviour.railAttachPart.position.x;
+		if (x >= ScriptGlobals.boy.pos3.x - this.mFallBehindOffset)
+		{
+			this.cameraBehaviour.SetMaxAcceleration(this.cameraBehaviour.GetMaxAcceleration() * 1.5f);
+			this.mTargetVelocity = 0f;
+			this.state = ZombieMonitorCameraGameplay.State.ObserveBoy;
+		}
+		else
+		{
+			this.mTargetVelocity = this.speedWhenFollowing;
+		}
+		float num = 1f;
+		if (this.rightLimitAtDoor != null)
+		{
+			num = Mathf.InverseLerp(0f, 3f, Mathf.Abs(x - this.rightLimitAtDoor.position.x));
+		}
+		this.cameraBehaviour.SetTargetVelocity(this.mTargetVelocity * num);
+		this.LookAtBoy();
+	}
+
+	// Token: 0x06001BEB RID: 7147 RVA: 0x000F4904 File Offset: 0x000F2B04
+	private void ObserveBoyState()
+	{
+		if (this.cameraBehaviour.railAttachPart.position.x <= ScriptGlobals.boy.pos3.x - this.mFallBehindOffset - this.maxOffsetFromFallBehindTarget)
+		{
+			this.cameraBehaviour.SetMaxAcceleration(this.cameraBehaviour.GetMaxAcceleration() / 1.5f);
+			this.state = ZombieMonitorCameraGameplay.State.FollowBoy;
+		}
+		this.LookAtBoy();
+	}
+
+	// Token: 0x06001BEC RID: 7148 RVA: 0x000F4978 File Offset: 0x000F2B78
+	public void StartConstantMovement()
+	{
+		this.state = ZombieMonitorCameraGameplay.State.ConstantMovement;
+	}
+
+	// Token: 0x06001BED RID: 7149 RVA: 0x000F4984 File Offset: 0x000F2B84
+	private void ConstantMovementState()
+	{
+		if (this.cameraBehaviour.railAttachPart.position.x >= ScriptGlobals.boy.pos3.x - this.mFallBehindOffset)
+		{
+			this.mTargetVelocity = 0f;
+		}
+		else
+		{
+			this.mTargetVelocity = ((ScriptGlobals.boy.velocity.x <= 0f) ? this.speedWhenFollowing : ScriptGlobals.boy.velocity.x);
+		}
+		this.cameraBehaviour.SetTargetVelocity(this.mTargetVelocity);
+		this.LookAtBoy();
+	}
+
+	// Token: 0x06001BEE RID: 7150 RVA: 0x000F4A30 File Offset: 0x000F2C30
+	public void SetLeaveState()
+	{
+		this.velocityFade = 1f;
+		this.state = ZombieMonitorCameraGameplay.State.LeaveState;
+	}
+
+	// Token: 0x06001BEF RID: 7151 RVA: 0x000F4A44 File Offset: 0x000F2C44
+	public void LeaveState()
+	{
+		this.velocityFade -= Time.deltaTime * 0.4f;
+		if (this.velocityFade < 0f)
+		{
+			this.velocityFade = 0f;
+		}
+		this.cameraBehaviour.SetTargetVelocity(this.velocityFade);
+	}
+
+	// Token: 0x06001BF0 RID: 7152 RVA: 0x000F4A98 File Offset: 0x000F2C98
+	private void LookAtBoy()
+	{
+		if (ScriptGlobals.boy.state is BoyJumpState)
+		{
+			this.mLookAtTarget = new Vector3(ScriptGlobals.boy.pos3.x, this.mLookAtTarget.y, ScriptGlobals.boy.pos3.z);
+		}
+		else
+		{
+			this.mLookAtTarget = ScriptGlobals.boy.pos3;
+		}
+		this.cameraBehaviour.LookAt(this.mLookAtTarget, false);
+	}
+
+	// Token: 0x06001BF1 RID: 7153 RVA: 0x000F4B1C File Offset: 0x000F2D1C
+	private void UpdateFallBehind()
+	{
+		float num = Mathf.Abs(ScriptGlobals.boy.pos3.x - this.fallBehindStartPoint.position.x);
+		float num2 = Mathf.Min(num / this.mDistanceToFallBehindOver, 1f);
+		this.mFallBehindOffset = this.fallBehindDistance.Evaluate(num2);
+		num2 = 0f;
+		this.cameraBehaviour.SetSpotlightIntensity(this.fallBehindLightIntensity.Evaluate(num2));
+	}
+
+	// Token: 0x06001BF2 RID: 7154 RVA: 0x000F4B98 File Offset: 0x000F2D98
+	public void KillBoy()
+	{
+		if (this.state == ZombieMonitorCameraGameplay.State.None || this.state == ZombieMonitorCameraGameplay.State.LeaveState)
+		{
+			return;
+		}
+		this.audioSentryCamFire.PostFast();
+		this.state = ZombieMonitorCameraGameplay.State.KillBoy;
+		VisualBoy visualBoy = ScriptGlobals.boy.visualBoy;
+		Actor actor = visualBoy.actor;
+		RagdollSkeleton ragdoll = visualBoy.ragdoll;
+		this.mBodyPartShot = visualBoy.ragdoll[actor.specificBones.spineB];
+		this.wireGun.ShootAt(this.mBodyPartShot, this.targetOffset, 1);
+		this.boyShot.Signal();
+		this.gunHasShot.OnEvent(this);
+		this.mExtendWireTimeRemaining = this.extendTime;
+		this.mWaitForDragTimeRemaining = this.timeBeforeDragging;
+		this.ragdollObject.GetComponent<RagdollActor>().GotFocus(visualBoy.ragdoll);
+		RagdollSkeleton.BodyIndex bodyIndex = ragdoll.begin;
+		while (bodyIndex != ragdoll.end)
+		{
+			Rigidbody rigidbody = ragdoll[bodyIndex];
+			rigidbody.GetComponent<Collider>().material.dynamicFriction = this.deadBoyFriction;
+			rigidbody.drag = this.deadBoyDrag;
+			rigidbody.angularDrag = this.deadBoyAngularDrag;
+			bodyIndex = ++bodyIndex;
+		}
+		ragdoll.SetMass(this.deadBoyMass);
+		ragdoll.GrowArmAngleLimits();
+	}
+
+	// Token: 0x06001BF3 RID: 7155 RVA: 0x000F4CD4 File Offset: 0x000F2ED4
+	public bool IsKillingBoy()
+	{
+		return this.state == ZombieMonitorCameraGameplay.State.KillBoy;
+	}
+
+	// Token: 0x06001BF4 RID: 7156 RVA: 0x000F4CE0 File Offset: 0x000F2EE0
+	private void KillBoyState()
+	{
+		if (!ScriptGlobals.boy.isDead && this.wireGun.DoneShooting())
+		{
+			this.audioSentryCamHitBoy.PostFast();
+			ScriptGlobals.boy.Kill();
+			if (this.probeHolder)
+			{
+				ScriptGlobals.boy.transform.FindChild("CameraProbe").parent = this.probeHolder.transform;
+			}
+			this.mFrameToAddForceAt = (long)(Time.frameCount + 2);
+			return;
+		}
+		this.mTimeSinceKill += Time.deltaTime;
+		this.ragdollObject.GetComponent<RagdollActor>().angularStrength = this.deadBoyAnimationStrength.Evaluate(this.mTimeSinceKill);
+		if (this.mFrameToAddForceAt >= 0L && this.mFrameToAddForceAt <= PhysicsUtils.stepCount)
+		{
+			Vector3 vector = this.wireGun.transform.position - this.mBodyPartShot.transform.position;
+			this.mBodyPartShot.AddForce(-vector.normalized * this.wireImpactForce, 1);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftSpike, 0.3f, 0.3f, 0, 0f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.3f, 0, 0f);
+			this.mFrameToAddForceAt = -1L;
+		}
+		this.cameraBehaviour.SetTargetVelocity(0f);
+		if (this.wireGun.DoneShooting())
+		{
+			this.mExtendWireTimeRemaining -= Time.deltaTime;
+			this.mWaitForDragTimeRemaining -= Time.deltaTime;
+			if (this.mExtendWireTimeRemaining > 0f)
+			{
+				this.wireGun.ExtendRope();
+			}
+			else if (this.mWaitForDragTimeRemaining <= 0f)
+			{
+				this.cameraBehaviour.LookAt(this.mBodyPartShot.transform.position, false);
+				this.cameraBehaviour.SetTargetVelocity(this.speedWhenDragging * (float)this.mPullDirSign);
+				this.cameraBehaviour.SetMaxAcceleration(this.accelerationWhenDragging);
+			}
+		}
+	}
+
+	// Token: 0x06001BF5 RID: 7157 RVA: 0x000F4EF8 File Offset: 0x000F30F8
+	private void DisableCamera()
+	{
+		base.gameObject.SetActive(false);
+		this.state = ZombieMonitorCameraGameplay.State.None;
+	}
+
+	// Token: 0x06001BF6 RID: 7158 RVA: 0x000F4F10 File Offset: 0x000F3110
+	private void Update()
+	{
+		if (this.state != ZombieMonitorCameraGameplay.State.None)
+		{
+			switch (this.state)
+			{
+			case ZombieMonitorCameraGameplay.State.StartUpCamera:
+				this.StartUpCameraState();
+				break;
+			case ZombieMonitorCameraGameplay.State.EnterScene:
+				this.EnterSceneState();
+				break;
+			case ZombieMonitorCameraGameplay.State.FollowBoy:
+				this.FollowBoyState();
+				break;
+			case ZombieMonitorCameraGameplay.State.ObserveBoy:
+				this.ObserveBoyState();
+				break;
+			case ZombieMonitorCameraGameplay.State.ConstantMovement:
+				this.ConstantMovementState();
+				break;
+			case ZombieMonitorCameraGameplay.State.KillBoy:
+				this.KillBoyState();
+				break;
+			case ZombieMonitorCameraGameplay.State.LeaveState:
+				this.LeaveState();
+				break;
+			}
+		}
+	}
+
+	// Token: 0x06001BF7 RID: 7159 RVA: 0x000F4FA8 File Offset: 0x000F31A8
+	public void SetPullDirectionSign(int aSign)
+	{
+		if (this.state != ZombieMonitorCameraGameplay.State.KillBoy)
+		{
+			this.mPullDirSign = aSign;
+		}
+	}
+
+	// Token: 0x04003312 RID: 13074
+	public ZombieMonitorDetection monitorDection;
+
+	// Token: 0x04003313 RID: 13075
+	public ZombieMonitorCamera cameraBehaviour;
+
+	// Token: 0x04003314 RID: 13076
+	public Transform rightLimitAtDoor;
+
+	// Token: 0x04003315 RID: 13077
+	public AnimationCurve laserFlicker;
+
+	// Token: 0x04003316 RID: 13078
+	public float startUpDelay = 1f;
+
+	// Token: 0x04003317 RID: 13079
+	public GameObject ragdollObject;
+
+	// Token: 0x04003318 RID: 13080
+	public float speedWhenFollowing = 1f;
+
+	// Token: 0x04003319 RID: 13081
+	public float speedWhenDragging = 4f;
+
+	// Token: 0x0400331A RID: 13082
+	public float accelerationWhenDragging = 15f;
+
+	// Token: 0x0400331B RID: 13083
+	public RopeGun wireGun;
+
+	// Token: 0x0400331C RID: 13084
+	public Vector3 targetOffset = Vector3.zero;
+
+	// Token: 0x0400331D RID: 13085
+	public float extendTime = 1f;
+
+	// Token: 0x0400331E RID: 13086
+	public float timeBeforeDragging;
+
+	// Token: 0x0400331F RID: 13087
+	public float wireImpactForce = 3.5f;
+
+	// Token: 0x04003320 RID: 13088
+	public float deadBoyFriction = 0.35f;
+
+	// Token: 0x04003321 RID: 13089
+	public float deadBoyMass = 3f;
+
+	// Token: 0x04003322 RID: 13090
+	public float deadBoyDrag = 0.1f;
+
+	// Token: 0x04003323 RID: 13091
+	public float deadBoyAngularDrag = 1.5f;
+
+	// Token: 0x04003324 RID: 13092
+	public AnimationCurve deadBoyAnimationStrength;
+
+	// Token: 0x04003325 RID: 13093
+	public float maxOffsetFromFallBehindTarget = 3f;
+
+	// Token: 0x04003326 RID: 13094
+	public Transform fallBehindStartPoint;
+
+	// Token: 0x04003327 RID: 13095
+	public Transform fallBehindEndPoint;
+
+	// Token: 0x04003328 RID: 13096
+	public AnimationCurve fallBehindDistance;
+
+	// Token: 0x04003329 RID: 13097
+	public AnimationCurve fallBehindLightIntensity;
+
+	// Token: 0x0400332A RID: 13098
+	public bool debugFollowBoyAtStart;
+
+	// Token: 0x0400332B RID: 13099
+	public RTPCSphere lightAudio;
+
+	// Token: 0x0400332C RID: 13100
+	private float mExtendWireTimeRemaining;
+
+	// Token: 0x0400332D RID: 13101
+	private float mWaitForDragTimeRemaining;
+
+	// Token: 0x0400332E RID: 13102
+	private long mFrameToAddForceAt = -1L;
+
+	// Token: 0x0400332F RID: 13103
+	private float mTimeSinceKill;
+
+	// Token: 0x04003330 RID: 13104
+	private ZombieMonitorCameraGameplay.State state;
+
+	// Token: 0x04003331 RID: 13105
+	private float mStartUpDelayTimer;
+
+	// Token: 0x04003332 RID: 13106
+	private Rigidbody mBodyPartShot;
+
+	// Token: 0x04003333 RID: 13107
+	private int mPullDirSign = 1;
+
+	// Token: 0x04003334 RID: 13108
+	private float mFallBehindOffset;
+
+	// Token: 0x04003335 RID: 13109
+	private float mDistanceToFallBehindOver;
+
+	// Token: 0x04003336 RID: 13110
+	private float mWakeUpTimer;
+
+	// Token: 0x04003337 RID: 13111
+	private float mTargetVelocity;
+
+	// Token: 0x04003338 RID: 13112
+	private Vector3 mLookAtTarget;
+
+	// Token: 0x04003339 RID: 13113
+	private float leaveFraction;
+
+	// Token: 0x0400333A RID: 13114
+	public SimpleEvent<ZombieMonitorCameraGameplay> gunHasShot = new SimpleEvent<ZombieMonitorCameraGameplay>("gunHasShot");
+
+	// Token: 0x0400333B RID: 13115
+	private SignalIn doLoadSave;
+
+	// Token: 0x0400333C RID: 13116
+	private SignalIn forceShootBoy;
+
+	// Token: 0x0400333D RID: 13117
+	private SignalOut boyShot;
+
+	// Token: 0x0400333E RID: 13118
+	private SignalIn enterScene;
+
+	// Token: 0x0400333F RID: 13119
+	private SignalIn setPullDirectionToLeft;
+
+	// Token: 0x04003340 RID: 13120
+	public GameObject probeHolder;
+
+	// Token: 0x04003341 RID: 13121
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioSentryCamFire;
+
+	// Token: 0x04003342 RID: 13122
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioSentryCamHitBoy;
+
+	// Token: 0x04003343 RID: 13123
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioSentryCam_LightOn;
+
+	// Token: 0x04003344 RID: 13124
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04003345 RID: 13125
+	private float velocityFade;
+
+	// Token: 0x0200042A RID: 1066
+	private enum State
+	{
+		// Token: 0x04003347 RID: 13127
+		None,
+		// Token: 0x04003348 RID: 13128
+		StartUpCamera,
+		// Token: 0x04003349 RID: 13129
+		EnterScene,
+		// Token: 0x0400334A RID: 13130
+		FollowBoy,
+		// Token: 0x0400334B RID: 13131
+		ObserveBoy,
+		// Token: 0x0400334C RID: 13132
+		ConstantMovement,
+		// Token: 0x0400334D RID: 13133
+		KillBoy,
+		// Token: 0x0400334E RID: 13134
+		LeaveState
+	}
+}

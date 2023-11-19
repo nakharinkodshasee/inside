@@ -1,0 +1,108 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200051A RID: 1306
+public class WaterFanStreamFX : MonoBehaviour
+{
+	// Token: 0x06002218 RID: 8728 RVA: 0x0011D5CC File Offset: 0x0011B7CC
+	private void Awake()
+	{
+		this.colProp = this.surf.GetColorProperty("_SurfColorOutside");
+		this.startSurfColor = this.surf.GetColorValue(this.colProp);
+		this.startAlphas = new float[this.particles.Length];
+		this.startSpeeds = new float[this.particles.Length];
+		this.startSizes = new float[this.particles.Length];
+		this.startEmits = new float[this.particles.Length];
+		this.startLives = new float[this.particles.Length];
+		for (int i = 0; i < this.particles.Length; i++)
+		{
+			this.startAlphas[i] = this.particles[i].startColor.a;
+			this.startSpeeds[i] = this.particles[i].startSpeed;
+			this.startSizes[i] = this.particles[i].startSize;
+			this.startEmits[i] = this.particles[i].emissionRate;
+			this.startLives[i] = this.particles[i].startLifetime;
+		}
+	}
+
+	// Token: 0x06002219 RID: 8729 RVA: 0x0011D6F0 File Offset: 0x0011B8F0
+	private void LateUpdate()
+	{
+		float num = Mathf.SmoothStep(0f, 1f, this.spin);
+		for (int i = 0; i < this.particles.Length; i++)
+		{
+			this.particles[i].startColor = this.particles[i].startColor.Alpha(this.startAlphas[i] * num);
+			this.particles[i].startSpeed = this.startSpeeds[i] * num;
+			this.particles[i].startSize = this.startSizes[i] * num;
+			this.particles[i].emissionRate = this.startEmits[i] * num;
+			this.particles[i].startLifetime = this.startLives[i] * num;
+		}
+		this.surf.SetColorProperty(this.colProp, this.startSurfColor.Alpha(this.spin));
+		for (int j = 0; j < this.smokeLights.Length; j++)
+		{
+			this.smokeLights[j].color = this.lightSource.color * this.lightSource.intensity * this.lightIntensity;
+		}
+		if (this.gate)
+		{
+			this.open = this.gate.GetOpenFraction();
+		}
+		for (int k = 0; k < this.smokeLightsBottom.Length; k++)
+		{
+			this.smokeLightsBottom[k].range = this.lightBottomRange * this.open;
+		}
+		this.windZone.windMain = num * -2f;
+	}
+
+	// Token: 0x04003F94 RID: 16276
+	public float spin;
+
+	// Token: 0x04003F95 RID: 16277
+	public float open;
+
+	// Token: 0x04003F96 RID: 16278
+	public ParticleSystem[] particles;
+
+	// Token: 0x04003F97 RID: 16279
+	public MaterialInstance surf;
+
+	// Token: 0x04003F98 RID: 16280
+	public Light lightSource;
+
+	// Token: 0x04003F99 RID: 16281
+	public WindZone windZone;
+
+	// Token: 0x04003F9A RID: 16282
+	public float lightIntensity;
+
+	// Token: 0x04003F9B RID: 16283
+	public float lightBottomRange;
+
+	// Token: 0x04003F9C RID: 16284
+	public SuctionGate gate;
+
+	// Token: 0x04003F9D RID: 16285
+	public SmokeLight[] smokeLights;
+
+	// Token: 0x04003F9E RID: 16286
+	public SmokeLight[] smokeLightsBottom;
+
+	// Token: 0x04003F9F RID: 16287
+	private MaterialInstance.ColorProperty colProp;
+
+	// Token: 0x04003FA0 RID: 16288
+	private float[] startAlphas;
+
+	// Token: 0x04003FA1 RID: 16289
+	private float[] startSpeeds;
+
+	// Token: 0x04003FA2 RID: 16290
+	private float[] startSizes;
+
+	// Token: 0x04003FA3 RID: 16291
+	private float[] startEmits;
+
+	// Token: 0x04003FA4 RID: 16292
+	private float[] startLives;
+
+	// Token: 0x04003FA5 RID: 16293
+	private Color startSurfColor;
+}

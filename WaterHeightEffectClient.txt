@@ -1,0 +1,80 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020003A1 RID: 929
+public class WaterHeightEffectClient : MonoBehaviour
+{
+	// Token: 0x060018F1 RID: 6385 RVA: 0x000D7568 File Offset: 0x000D5768
+	private void Start()
+	{
+		if (!this.useCustomHeight)
+		{
+			this.customHeight = base.transform.position.y;
+		}
+		if (this.startActive)
+		{
+			this.Activate();
+		}
+	}
+
+	// Token: 0x060018F2 RID: 6386 RVA: 0x000D75AC File Offset: 0x000D57AC
+	public void Activate()
+	{
+		this.clientActive = true;
+		int i = 0;
+		int count = this.fxParticles.Count;
+		while (i < count)
+		{
+			if (this.fxParticles[i] != null)
+			{
+				this.fxParticles[i].Play();
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x060018F3 RID: 6387 RVA: 0x000D7608 File Offset: 0x000D5808
+	public void Deactivate()
+	{
+		this.clientActive = false;
+		int i = 0;
+		int count = this.fxParticles.Count;
+		while (i < count)
+		{
+			if (this.fxParticles[i] != null)
+			{
+				this.fxParticles[i].Stop();
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x04002CC7 RID: 11463
+	public WaterHeightEffectClient.TriggerType surfaceTrigger = WaterHeightEffectClient.TriggerType.Above;
+
+	// Token: 0x04002CC8 RID: 11464
+	public bool useCustomHeight;
+
+	// Token: 0x04002CC9 RID: 11465
+	public float customHeight;
+
+	// Token: 0x04002CCA RID: 11466
+	public bool startActive;
+
+	// Token: 0x04002CCB RID: 11467
+	public List<ParticleSystem> fxParticles = new List<ParticleSystem>();
+
+	// Token: 0x04002CCC RID: 11468
+	[HideInInspector]
+	public bool clientActive;
+
+	// Token: 0x020003A2 RID: 930
+	public enum TriggerType
+	{
+		// Token: 0x04002CCE RID: 11470
+		Above = 1,
+		// Token: 0x04002CCF RID: 11471
+		Below
+	}
+}

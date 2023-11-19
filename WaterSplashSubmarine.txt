@@ -1,0 +1,472 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000270 RID: 624
+public class WaterSplashSubmarine : MonoBehaviour
+{
+	// Token: 0x06001332 RID: 4914 RVA: 0x000B4F74 File Offset: 0x000B3174
+	private void Awake()
+	{
+		this.rippleListProp = new MaterialInstance.VectorProperty[this.rippleList.Length];
+		int i = 0;
+		int num = this.rippleList.Length;
+		while (i < num)
+		{
+			MaterialInstance materialInstance = this.rippleList[i];
+			if (materialInstance)
+			{
+				this.rippleListProp[i] = materialInstance.GetOrAddVectorProperty("_LockPos");
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06001333 RID: 4915 RVA: 0x000B4FD8 File Offset: 0x000B31D8
+	public void Init(GameObject w, WaterQueueMaster wQM)
+	{
+		this.accelFilter = new AttackReleaseFilter(this.attack, this.release);
+		this.water = w.transform;
+		this.particles = base.GetComponentsInChildren<ParticleSystem>(true);
+		this.impact.Init();
+		this.cruise.Init();
+		this.boost.Init();
+	}
+
+	// Token: 0x06001334 RID: 4916 RVA: 0x000B5038 File Offset: 0x000B3238
+	public virtual void Setup(Submarine sub, Color splashColor, WaterQueueMaster wQM = null)
+	{
+		int i = 0;
+		int num = this.particles.Length;
+		while (i < num)
+		{
+			this.particles[i].ClearPosition();
+			i++;
+		}
+		this.submarine = sub;
+		this.SetSplashColor(splashColor);
+		if (wQM)
+		{
+			for (int j = 0; j < this.particles.Length; j++)
+			{
+				WaterToShader component = this.particles[j].GetComponent<WaterToShader>();
+				if (component)
+				{
+					component.SetWaterQueueMaster(wQM);
+					component.Setup();
+					component.RefreshSurface(false);
+				}
+			}
+		}
+		this.waterHeight = this.water.localScale.y * 0.5f + this.water.position.y;
+		if (this.submarine.IsAtSurface())
+		{
+			if (this.submarine.velocity3.magnitude > 5f)
+			{
+				this.SetImpact();
+				this.SetBoost();
+			}
+			else
+			{
+				this.SetCruise();
+			}
+		}
+		else
+		{
+			this.SetDive();
+		}
+		if (this.waves)
+		{
+			if (wQM.reflectionAboveOutside)
+			{
+				PDPlanarReflection component2 = wQM.reflectionAboveOutside.GetComponent<PDPlanarReflection>();
+				if (component2)
+				{
+					component2.SubscribeToReflectionTexture(this.waves.GetComponent<MaterialInstance>());
+					this.waves.Play();
+				}
+				else
+				{
+					this.waves.gameObject.SetActive(false);
+				}
+			}
+			else
+			{
+				this.waves.gameObject.SetActive(false);
+			}
+		}
+	}
+
+	// Token: 0x06001335 RID: 4917 RVA: 0x000B51D4 File Offset: 0x000B33D4
+	protected virtual void FixedUpdate()
+	{
+		if (this.state == WaterSplashSubmarine.State.End)
+		{
+			return;
+		}
+		this.subSpeed = this.submarine.velocity3.magnitude;
+		this.subAccel = this.accelFilter.Filter(Mathf.Clamp01(Mathf.Abs(this.subSpeed - this.subSpeedOld) * 25f));
+		this.subSpeedOld = this.subSpeed;
+	}
+
+	// Token: 0x06001336 RID: 4918 RVA: 0x000B5244 File Offset: 0x000B3444
+	protected virtual void Update()
+	{
+		this.waterHeight = this.water.localScale.y * 0.5f + this.water.position.y;
+		if (this.state != WaterSplashSubmarine.State.End)
+		{
+			base.transform.position = new Vector3(this.submarine.pos3.x, this.waterHeight, this.submarine.pos3.z);
+		}
+		if (this.state != WaterSplashSubmarine.State.None)
+		{
+			switch (this.state)
+			{
+			case WaterSplashSubmarine.State.Dive:
+				this.DiveState();
+				break;
+			case WaterSplashSubmarine.State.Boost:
+				this.BoostState();
+				break;
+			case WaterSplashSubmarine.State.Cruise:
+				this.CruiseState();
+				break;
+			case WaterSplashSubmarine.State.End:
+				this.EndState();
+				break;
+			}
+		}
+		else if (!this.submarine.IsAtSurface())
+		{
+			this.SetDive();
+		}
+		else if (this.submarine.velocity3.magnitude > 5f)
+		{
+			this.SetBoost();
+		}
+		else
+		{
+			this.SetCruise();
+		}
+		if (this.impactState == WaterSplashSubmarine.StateImpact.Impact)
+		{
+			this.ImpactState();
+		}
+		if (this.waves)
+		{
+			if (this.state == WaterSplashSubmarine.State.Cruise || this.state == WaterSplashSubmarine.State.Boost)
+			{
+				this.waves.emissionRate = this.subSpeed * 3f - 1f;
+			}
+			else
+			{
+				this.waves.emissionRate = 0f;
+			}
+		}
+		this.SetRippleHeight();
+	}
+
+	// Token: 0x06001337 RID: 4919 RVA: 0x000B53EC File Offset: 0x000B35EC
+	private void SetCruise()
+	{
+		if (!this.cruise)
+		{
+			this.state = WaterSplashSubmarine.State.None;
+			return;
+		}
+		this.boost.Stop();
+		this.cruise.Play();
+		this.state = WaterSplashSubmarine.State.Cruise;
+	}
+
+	// Token: 0x06001338 RID: 4920 RVA: 0x000B5424 File Offset: 0x000B3624
+	private void SetBoost()
+	{
+		if (!this.boost)
+		{
+			this.state = WaterSplashSubmarine.State.None;
+			return;
+		}
+		this.boost.transform.localEulerAngles = new Vector3(270f, 0f, (this.submarine.velocity3.x >= -2f) ? ((this.submarine.velocity3.x <= 2f) ? 270f : 180f) : 0f);
+		this.cruise.Stop();
+		this.boost.Play();
+		this.state = WaterSplashSubmarine.State.Boost;
+	}
+
+	// Token: 0x06001339 RID: 4921 RVA: 0x000B54D8 File Offset: 0x000B36D8
+	private void SetDive()
+	{
+		this.cruise.Stop();
+		this.boost.Stop();
+		this.state = WaterSplashSubmarine.State.Dive;
+	}
+
+	// Token: 0x0600133A RID: 4922 RVA: 0x000B54F8 File Offset: 0x000B36F8
+	private void SetImpact()
+	{
+		if (!this.impact)
+		{
+			this.state = WaterSplashSubmarine.State.None;
+			return;
+		}
+		this.impact.Play();
+		this.impactEndTimer = this.impact.particle.duration;
+		this.impactState = WaterSplashSubmarine.StateImpact.Impact;
+	}
+
+	// Token: 0x0600133B RID: 4923 RVA: 0x000B5548 File Offset: 0x000B3748
+	private void SetEnd()
+	{
+		this.endTimer = 16f;
+		this.state = WaterSplashSubmarine.State.End;
+	}
+
+	// Token: 0x0600133C RID: 4924 RVA: 0x000B555C File Offset: 0x000B375C
+	private void CruiseState()
+	{
+		float num = this.SurfaceCircumfrance();
+		float num2 = this.subSpeed * 0.5f - 0.5f;
+		this.cruise.transform.localScale = new Vector3(num, num, num);
+		this.cruise.transform.localEulerAngles = new Vector3(270f, 0f, (this.submarine.velocity3.x >= -1f) ? ((this.submarine.velocity3.x <= 1f) ? ((Time.frameCount % 2 != 0) ? 90f : 270f) : 180f) : 0f);
+		this.cruise.ShrinkFade(num2 * this.subAccel);
+		this.cruise.Emission(num2 * num);
+		if (!this.submarine.IsAtSurface())
+		{
+			this.SetDive();
+		}
+		else if (this.submarine.velocity3.magnitude > 5f)
+		{
+			this.SetBoost();
+		}
+	}
+
+	// Token: 0x0600133D RID: 4925 RVA: 0x000B5684 File Offset: 0x000B3884
+	private void BoostState()
+	{
+		float num = this.SurfaceCircumfrance();
+		float num2 = this.subSpeed * 0.5f - 0.5f;
+		this.boost.transform.localScale = new Vector3(num, num, num);
+		this.boost.Emission(num2 * num);
+		if (!this.submarine.IsAtSurface())
+		{
+			this.SetDive();
+		}
+		else if (this.submarine.velocity3.magnitude < 5f)
+		{
+			this.SetCruise();
+		}
+	}
+
+	// Token: 0x0600133E RID: 4926 RVA: 0x000B5710 File Offset: 0x000B3910
+	private void DiveState()
+	{
+		if (!this.submarine.IsAtSurface())
+		{
+			return;
+		}
+		if (this.submarine.velocity3.magnitude > 5f)
+		{
+			this.SetBoost();
+		}
+		else
+		{
+			this.SetCruise();
+		}
+	}
+
+	// Token: 0x0600133F RID: 4927 RVA: 0x000B575C File Offset: 0x000B395C
+	private void ImpactState()
+	{
+		this.impact.transform.position = this.submarine.pos3;
+		if (this.impactEndTimer > 0f)
+		{
+			this.impactEndTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.impactState = WaterSplashSubmarine.StateImpact.None;
+		}
+	}
+
+	// Token: 0x06001340 RID: 4928 RVA: 0x000B57B4 File Offset: 0x000B39B4
+	private void EndState()
+	{
+		if (this.endTimer > 0f)
+		{
+			this.endTimer -= Time.deltaTime;
+		}
+		else
+		{
+			base.gameObject.SetActive(false);
+		}
+	}
+
+	// Token: 0x06001341 RID: 4929 RVA: 0x000B57EC File Offset: 0x000B39EC
+	private float SurfaceCircumfrance()
+	{
+		float num = this.submarine.pos3.y - this.waterHeight;
+		return Mathf.Sqrt(Mathf.Max(0.1f, 1.5f - num * num));
+	}
+
+	// Token: 0x06001342 RID: 4930 RVA: 0x000B582C File Offset: 0x000B3A2C
+	private void SetRippleHeight()
+	{
+		int i = 0;
+		int num = this.rippleList.Length;
+		while (i < num)
+		{
+			if (this.rippleList[i])
+			{
+				this.rippleList[i].SetVectorProperty(this.rippleListProp[i], new Vector2(this.waterHeight, 1f));
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06001343 RID: 4931 RVA: 0x000B5890 File Offset: 0x000B3A90
+	public void SetSplashColor(Color splashColor)
+	{
+		if (this.currentSplashColor != null && splashColor == this.currentSplashColor.Value)
+		{
+			return;
+		}
+		for (int i = 0; i < this.particles.Length; i++)
+		{
+			if (this.particles[i])
+			{
+				MaterialInstance component = this.particles[i].GetComponent<MaterialInstance>();
+				if (component)
+				{
+					MaterialInstance.ColorProperty colorProperty = component.GetColorProperty("_TintColor");
+					if (colorProperty == null)
+					{
+						colorProperty = component.GetColorProperty("_MainCol");
+					}
+					if (colorProperty == null)
+					{
+						colorProperty = component.GetColorProperty("_Color");
+					}
+					if (colorProperty != null)
+					{
+						splashColor.a = component.GetColorValue(colorProperty).a;
+						component.SetColorProperty(colorProperty, splashColor);
+					}
+				}
+			}
+		}
+		this.currentSplashColor = new Color?(splashColor);
+	}
+
+	// Token: 0x06001344 RID: 4932 RVA: 0x000B5978 File Offset: 0x000B3B78
+	public void Remove()
+	{
+		this.impactState = WaterSplashSubmarine.StateImpact.None;
+		this.SetEnd();
+		int i = 0;
+		int num = this.particles.Length;
+		while (i < num)
+		{
+			this.particles[i].Stop();
+			i++;
+		}
+	}
+
+	// Token: 0x06001345 RID: 4933 RVA: 0x000B59BC File Offset: 0x000B3BBC
+	public Submarine GetSubmarine()
+	{
+		return this.submarine;
+	}
+
+	// Token: 0x04002368 RID: 9064
+	public WaterSplashBoy.ScalableParticles impact;
+
+	// Token: 0x04002369 RID: 9065
+	public WaterSplashBoy.ScalableParticles cruise;
+
+	// Token: 0x0400236A RID: 9066
+	public WaterSplashBoy.ScalableParticles boost;
+
+	// Token: 0x0400236B RID: 9067
+	public ParticleSystem waves;
+
+	// Token: 0x0400236C RID: 9068
+	[Range(0f, 8f)]
+	public int attack;
+
+	// Token: 0x0400236D RID: 9069
+	[Range(0f, 512f)]
+	public int release;
+
+	// Token: 0x0400236E RID: 9070
+	public MaterialInstance[] rippleList;
+
+	// Token: 0x0400236F RID: 9071
+	private MaterialInstance.VectorProperty[] rippleListProp;
+
+	// Token: 0x04002370 RID: 9072
+	private WaterSplashSubmarine.State state;
+
+	// Token: 0x04002371 RID: 9073
+	private WaterSplashSubmarine.StateImpact impactState;
+
+	// Token: 0x04002372 RID: 9074
+	private Submarine submarine;
+
+	// Token: 0x04002373 RID: 9075
+	private float subAccel;
+
+	// Token: 0x04002374 RID: 9076
+	private float subSpeed;
+
+	// Token: 0x04002375 RID: 9077
+	private float subSpeedOld;
+
+	// Token: 0x04002376 RID: 9078
+	private float waterHeight;
+
+	// Token: 0x04002377 RID: 9079
+	private float endTimer;
+
+	// Token: 0x04002378 RID: 9080
+	private float impactEndTimer;
+
+	// Token: 0x04002379 RID: 9081
+	private Color? currentSplashColor;
+
+	// Token: 0x0400237A RID: 9082
+	[HideInInspector]
+	[SerializeField]
+	private ParticleSystem[] particles;
+
+	// Token: 0x0400237B RID: 9083
+	[SerializeField]
+	[HideInInspector]
+	private AttackReleaseFilter accelFilter;
+
+	// Token: 0x0400237C RID: 9084
+	[SerializeField]
+	[HideInInspector]
+	private Transform water;
+
+	// Token: 0x02000271 RID: 625
+	private enum State
+	{
+		// Token: 0x0400237E RID: 9086
+		None,
+		// Token: 0x0400237F RID: 9087
+		Dive,
+		// Token: 0x04002380 RID: 9088
+		Boost,
+		// Token: 0x04002381 RID: 9089
+		Cruise,
+		// Token: 0x04002382 RID: 9090
+		End
+	}
+
+	// Token: 0x02000272 RID: 626
+	private enum StateImpact
+	{
+		// Token: 0x04002384 RID: 9092
+		None,
+		// Token: 0x04002385 RID: 9093
+		Impact
+	}
+}

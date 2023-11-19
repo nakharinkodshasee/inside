@@ -1,0 +1,137 @@
+using System;
+using System.Linq;
+using UnityEngine;
+
+// Token: 0x020000D8 RID: 216
+public class WaterGirlAudioEvents : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060006C9 RID: 1737 RVA: 0x0004D238 File Offset: 0x0004B438
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (!this.girlRigidbody)
+		{
+			this.girlRigidbody = base.GetComponent<Rigidbody>();
+		}
+		if (!this.girlObject)
+		{
+			this.girlObject = base.gameObject;
+		}
+		this.speedPoints = (from sp in this.speedPoints
+		where sp != null
+		select sp).ToArray<Transform>();
+		this.akGameObjWaterGirl = AudioUtils.EnsureAkGameObj(this.girlObject, null);
+		this.audioUnload = new AudioEventSimpleLocal("waterGirl_unload", this.akGameObjWaterGirl);
+		this.previousSpeedPointsPos = new Vector3[this.speedPoints.Length];
+	}
+
+	// Token: 0x060006CA RID: 1738 RVA: 0x0004D300 File Offset: 0x0004B500
+	public bool PreAwake(int callcount)
+	{
+		this.disableTransition = SignalIn.Create("disableTransition", base.gameObject, new Action(this.OnAudioDisable));
+		return true;
+	}
+
+	// Token: 0x060006CB RID: 1739 RVA: 0x0004D328 File Offset: 0x0004B528
+	private void OnAudioDisable()
+	{
+		SoundEngine.RTPCs.puzzleTransitionAR1.SetFast(100f, AudioKeyObject.AkGameObjs.global, 0f);
+		this.isTransitionActive = false;
+	}
+
+	// Token: 0x060006CC RID: 1740 RVA: 0x0004D358 File Offset: 0x0004B558
+	private void OnDestroy()
+	{
+		this.audioUnload.PostFast();
+	}
+
+	// Token: 0x060006CD RID: 1741 RVA: 0x0004D368 File Offset: 0x0004B568
+	private void Update()
+	{
+		float num = 0f;
+		int i = 0;
+		int num2 = this.speedPoints.Length;
+		while (i < num2)
+		{
+			Vector3 localPosition = this.speedPoints[i].localPosition;
+			num += (this.previousSpeedPointsPos[i] - localPosition).magnitude;
+			this.previousSpeedPointsPos[i] = localPosition;
+			i++;
+		}
+		if (this.girlObject)
+		{
+			num = (float)Mathf.RoundToInt(num * 750f * this.speedFactor);
+			float value = AudioUtils.ClampRTPC(num);
+			SoundEngine.RTPCs.animMove.SetFast(value, this.akGameObjWaterGirl);
+			float value2 = AudioUtils.ClampRTPC(this.girlRigidbody.velocity.magnitude * 20f);
+			SoundEngine.RTPCs.phyMove.SetFast(value2, this.akGameObjWaterGirl, 0f);
+		}
+		float magnitude = (this.girlRigidbody.position - ScriptGlobals.boy.pos3).magnitude;
+		SoundEngine.RTPCs.girlToBoyDist.SetFast(magnitude, this.akGameObjWaterGirl, 0f);
+		if (this.isTransitionActive && magnitude < WaterGirlAudioEvents.puzzleTransition)
+		{
+			WaterGirlAudioEvents.puzzleTransition = magnitude;
+		}
+		WaterGirlAudioEvents.updateTransition = true;
+	}
+
+	// Token: 0x060006CE RID: 1742 RVA: 0x0004D4B0 File Offset: 0x0004B6B0
+	private void LateUpdate()
+	{
+		if (WaterGirlAudioEvents.updateTransition)
+		{
+			SoundEngine.RTPCs.puzzleTransitionAR1.SetFast(WaterGirlAudioEvents.puzzleTransition, AudioKeyObject.AkGameObjs.global, 0f);
+			WaterGirlAudioEvents.puzzleTransition = 100f;
+			WaterGirlAudioEvents.updateTransition = false;
+		}
+	}
+
+	// Token: 0x04000BC4 RID: 3012
+	public Rigidbody girlRigidbody;
+
+	// Token: 0x04000BC5 RID: 3013
+	public GameObject girlObject;
+
+	// Token: 0x04000BC6 RID: 3014
+	public Transform[] speedPoints;
+
+	// Token: 0x04000BC7 RID: 3015
+	public float speedFactor = 1f;
+
+	// Token: 0x04000BC8 RID: 3016
+	private SignalIn disableTransition;
+
+	// Token: 0x04000BC9 RID: 3017
+	private bool isTransitionActive = true;
+
+	// Token: 0x04000BCA RID: 3018
+	private static float puzzleTransition = 100f;
+
+	// Token: 0x04000BCB RID: 3019
+	private static bool updateTransition;
+
+	// Token: 0x04000BCC RID: 3020
+	[HideInInspector]
+	[SerializeField]
+	private Vector3[] previousSpeedPointsPos;
+
+	// Token: 0x04000BCD RID: 3021
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioUnload;
+
+	// Token: 0x04000BCE RID: 3022
+	[SerializeField]
+	[HideInInspector]
+	private AkGameObj akGameObjWaterGirl;
+
+	// Token: 0x04000BCF RID: 3023
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

@@ -1,0 +1,298 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004A8 RID: 1192
+public class WaterCeilingMoveBox : MonoBehaviour
+{
+	// Token: 0x06001F2F RID: 7983 RVA: 0x0010ACE0 File Offset: 0x00108EE0
+	private void Start()
+	{
+		this.myState = WaterCeilingMoveBox.MyState.idle;
+		this.animStartRot = this.idleGrab.transform.rotation;
+		if (!this.noGrab)
+		{
+			this.noGrab = this.boxBody.gameObject.AddComponent<NoGrab>();
+		}
+		this.noGrab.SetIsEnabled(false);
+	}
+
+	// Token: 0x06001F30 RID: 7984 RVA: 0x0010AD3C File Offset: 0x00108F3C
+	private void SetIdleState()
+	{
+		this.myState = WaterCeilingMoveBox.MyState.idle;
+		BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+		this.pushPullDeadZoneTimer = 0f;
+		this.reGrabDeadZone = WaterCeilingMoveBox.reGrabDelay;
+	}
+
+	// Token: 0x06001F31 RID: 7985 RVA: 0x0010AD78 File Offset: 0x00108F78
+	private void UpdateIdle()
+	{
+		this.reGrabDeadZone = Mathf.Max(0f, this.reGrabDeadZone - Time.deltaTime);
+		if (ScriptGlobals.boy != null && ScriptGlobals.boy.input != null && ScriptGlobals.boy.input.rawAction && this.boxIsInWater && this.noOfPlayerProbesInside > 0)
+		{
+			this.SetGrabState(true);
+		}
+	}
+
+	// Token: 0x06001F32 RID: 7986 RVA: 0x0010ADF8 File Offset: 0x00108FF8
+	private void SetGrabState(bool reposition = false)
+	{
+		this.myState = WaterCeilingMoveBox.MyState.grabIdle;
+		if (reposition)
+		{
+			RagdollSkeleton ragdoll = ScriptGlobals.boy.visualBoy.ragdoll;
+			SpecificBones specificBones = ScriptGlobals.boy.visualBoy.actor.specificBones;
+			Vector3 bonePos = ragdoll.GetBonePos(specificBones.head);
+			Vector3 localPosition = base.transform.InverseTransformPoint(bonePos);
+			localPosition.x = FastMath.Clamp(localPosition.x, -0.3f, 0.3f);
+			localPosition.y = FastMath.Clamp(localPosition.y, -0.5f, 0.2f);
+			Transform transform = this.idleGrab.transform;
+			localPosition.z = transform.localPosition.z;
+			transform.localPosition = localPosition;
+			this.pullGrab.transform.localPosition = localPosition;
+			this.pushGrab.transform.localPosition = localPosition;
+		}
+		if (this.pushPullDeadZoneTimer == 0f && this.reGrabDeadZone == 0f)
+		{
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.idleGrab, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			if (reposition)
+			{
+				VisualBoyTimeBlend.Config blendConfig = new VisualBoyTimeBlend.Config(0.5f, true);
+				blendConfig.blendLegsDurationScale = 1f;
+				ScriptGlobals.boy.visualBoy.StartBlend(blendConfig);
+			}
+		}
+	}
+
+	// Token: 0x06001F33 RID: 7987 RVA: 0x0010AF44 File Offset: 0x00109144
+	private void UpdateGrabState(bool forceSetAnim = false)
+	{
+		if (!ScriptGlobals.boy.input.rawAction || !this.boxIsInWater)
+		{
+			this.SetIdleState();
+		}
+		else if (ScriptGlobals.boy.input.stick.x < -0.5f)
+		{
+			this.SetPullState();
+		}
+		else if (ScriptGlobals.boy.input.stick.x > 0.5f)
+		{
+			this.SetPushState();
+		}
+		else if (forceSetAnim)
+		{
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.idleGrab, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+	}
+
+	// Token: 0x06001F34 RID: 7988 RVA: 0x0010AFF4 File Offset: 0x001091F4
+	private void SetPullState()
+	{
+		this.myState = WaterCeilingMoveBox.MyState.grabPull;
+		if (this.pushPullDeadZoneTimer == 0f)
+		{
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.pullGrab, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.pushPullDeadZoneTimer = -WaterCeilingMoveBox.changeDelay;
+		}
+	}
+
+	// Token: 0x06001F35 RID: 7989 RVA: 0x0010B034 File Offset: 0x00109234
+	private void UpdatePullState(bool forceSetAnim = false)
+	{
+		if (!ScriptGlobals.boy.input.rawAction || !this.boxIsInWater)
+		{
+			this.SetIdleState();
+		}
+		else if (ScriptGlobals.boy.input.stick.x > -0.3f)
+		{
+			this.SetGrabState(false);
+		}
+		else
+		{
+			this.boxBody.AddForce(-Vector3.right * this.pushForceScale);
+			if (forceSetAnim)
+			{
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.pullGrab, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				this.pushPullDeadZoneTimer = -WaterCeilingMoveBox.changeDelay;
+			}
+		}
+	}
+
+	// Token: 0x06001F36 RID: 7990 RVA: 0x0010B0E4 File Offset: 0x001092E4
+	private void SetPushState()
+	{
+		this.myState = WaterCeilingMoveBox.MyState.grabPush;
+		if (this.pushPullDeadZoneTimer == 0f)
+		{
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.pushGrab, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.pushPullDeadZoneTimer = WaterCeilingMoveBox.changeDelay;
+		}
+	}
+
+	// Token: 0x06001F37 RID: 7991 RVA: 0x0010B12C File Offset: 0x0010932C
+	private void UpdatePushState(bool forceSetAnim = false)
+	{
+		if (!ScriptGlobals.boy.input.rawAction || !this.boxIsInWater)
+		{
+			this.SetIdleState();
+		}
+		else if (ScriptGlobals.boy.input.stick.x < 0.3f)
+		{
+			this.SetGrabState(false);
+		}
+		else
+		{
+			this.boxBody.AddForce(Vector3.right * this.pushForceScale);
+			if (forceSetAnim)
+			{
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.pushGrab, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				this.pushPullDeadZoneTimer = WaterCeilingMoveBox.changeDelay;
+			}
+		}
+	}
+
+	// Token: 0x06001F38 RID: 7992 RVA: 0x0010B1D4 File Offset: 0x001093D4
+	private void FixedUpdate()
+	{
+		if (this.water == null)
+		{
+			return;
+		}
+		this.boxIsInWater = this.water.GetComponent<Collider>().bounds.Contains(this.boxBody.transform.position + Vector3.up * 0f);
+		if (ScriptGlobals.boy.state is BoySwimState)
+		{
+			if (!this.noGrab.NoGrabIsEnabled())
+			{
+				this.noGrab.SetIsEnabled(true);
+			}
+		}
+		else if (this.noGrab.NoGrabIsEnabled())
+		{
+			this.noGrab.SetIsEnabled(false);
+		}
+		this.idleGrab.transform.rotation = this.animStartRot;
+		this.pullGrab.transform.rotation = this.animStartRot;
+		this.pushGrab.transform.rotation = this.animStartRot;
+		if (this.myState == WaterCeilingMoveBox.MyState.idle)
+		{
+			this.UpdateIdle();
+		}
+		else
+		{
+			bool forceSetAnim = false;
+			if (this.reGrabDeadZone > 0f)
+			{
+				this.reGrabDeadZone = Mathf.Max(this.reGrabDeadZone - Time.deltaTime, 0f);
+				if (this.reGrabDeadZone == 0f)
+				{
+					forceSetAnim = true;
+				}
+			}
+			if (this.pushPullDeadZoneTimer > 0f)
+			{
+				this.pushPullDeadZoneTimer = Mathf.Max(this.pushPullDeadZoneTimer - Time.deltaTime, 0f);
+				if (this.pushPullDeadZoneTimer == 0f && this.myState != WaterCeilingMoveBox.MyState.grabPush)
+				{
+					forceSetAnim = true;
+				}
+			}
+			else if (this.pushPullDeadZoneTimer < 0f)
+			{
+				this.pushPullDeadZoneTimer = Mathf.Min(this.pushPullDeadZoneTimer + Time.deltaTime, 0f);
+				if (this.pushPullDeadZoneTimer == 0f && this.myState != WaterCeilingMoveBox.MyState.grabPull)
+				{
+					forceSetAnim = true;
+				}
+			}
+			if (this.myState == WaterCeilingMoveBox.MyState.grabIdle)
+			{
+				this.UpdateGrabState(forceSetAnim);
+			}
+			else if (this.myState == WaterCeilingMoveBox.MyState.grabPull)
+			{
+				this.UpdatePullState(forceSetAnim);
+			}
+			else if (this.myState == WaterCeilingMoveBox.MyState.grabPush)
+			{
+				this.UpdatePushState(forceSetAnim);
+			}
+		}
+	}
+
+	// Token: 0x06001F39 RID: 7993 RVA: 0x0010B3FC File Offset: 0x001095FC
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>() != null)
+		{
+			this.noOfPlayerProbesInside++;
+		}
+	}
+
+	// Token: 0x06001F3A RID: 7994 RVA: 0x0010B420 File Offset: 0x00109620
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>() != null)
+		{
+			this.noOfPlayerProbesInside--;
+		}
+	}
+
+	// Token: 0x040039D0 RID: 14800
+	public FluidVolume water;
+
+	// Token: 0x040039D1 RID: 14801
+	public Rigidbody boxBody;
+
+	// Token: 0x040039D2 RID: 14802
+	public float pushForceScale;
+
+	// Token: 0x040039D3 RID: 14803
+	public AnimClipNode idleGrab;
+
+	// Token: 0x040039D4 RID: 14804
+	public AnimClipNode pullGrab;
+
+	// Token: 0x040039D5 RID: 14805
+	public AnimClipNode pushGrab;
+
+	// Token: 0x040039D6 RID: 14806
+	public NoGrab noGrab;
+
+	// Token: 0x040039D7 RID: 14807
+	private WaterCeilingMoveBox.MyState myState;
+
+	// Token: 0x040039D8 RID: 14808
+	private bool boxIsInWater;
+
+	// Token: 0x040039D9 RID: 14809
+	private Quaternion animStartRot;
+
+	// Token: 0x040039DA RID: 14810
+	private static float changeDelay = 0.4f;
+
+	// Token: 0x040039DB RID: 14811
+	private static float reGrabDelay = 0.2f;
+
+	// Token: 0x040039DC RID: 14812
+	private float pushPullDeadZoneTimer;
+
+	// Token: 0x040039DD RID: 14813
+	private float reGrabDeadZone;
+
+	// Token: 0x040039DE RID: 14814
+	private int noOfPlayerProbesInside;
+
+	// Token: 0x020004A9 RID: 1193
+	private enum MyState
+	{
+		// Token: 0x040039E0 RID: 14816
+		idle,
+		// Token: 0x040039E1 RID: 14817
+		grabIdle,
+		// Token: 0x040039E2 RID: 14818
+		grabPull,
+		// Token: 0x040039E3 RID: 14819
+		grabPush
+	}
+}

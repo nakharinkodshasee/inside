@@ -1,0 +1,281 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200008D RID: 141
+public class WaterLeechFarm : BoyInput, IPreAwake
+{
+	// Token: 0x17000010 RID: 16
+	// (get) Token: 0x060004BC RID: 1212 RVA: 0x000348CC File Offset: 0x00032ACC
+	public override bool action
+	{
+		get
+		{
+			return GameInput.action;
+		}
+	}
+
+	// Token: 0x17000011 RID: 17
+	// (get) Token: 0x060004BD RID: 1213 RVA: 0x000348D4 File Offset: 0x00032AD4
+	public override bool grab
+	{
+		get
+		{
+			return GameInput.grab;
+		}
+	}
+
+	// Token: 0x17000012 RID: 18
+	// (get) Token: 0x060004BE RID: 1214 RVA: 0x000348DC File Offset: 0x00032ADC
+	public override bool jump
+	{
+		get
+		{
+			return GameInput.jump;
+		}
+	}
+
+	// Token: 0x17000013 RID: 19
+	// (get) Token: 0x060004BF RID: 1215 RVA: 0x000348E4 File Offset: 0x00032AE4
+	public override bool rawAction
+	{
+		get
+		{
+			return GameInput.rawAction;
+		}
+	}
+
+	// Token: 0x17000014 RID: 20
+	// (get) Token: 0x060004C0 RID: 1216 RVA: 0x000348EC File Offset: 0x00032AEC
+	public override bool rawJump
+	{
+		get
+		{
+			return GameInput.rawJump;
+		}
+	}
+
+	// Token: 0x17000015 RID: 21
+	// (get) Token: 0x060004C1 RID: 1217 RVA: 0x000348F4 File Offset: 0x00032AF4
+	public override vector2f stick
+	{
+		get
+		{
+			return new vector2f(GameInput.stick.x * (1f - this.slowDownFrac), GameInput.stick.y * (1f - this.slowDownFrac));
+		}
+	}
+
+	// Token: 0x060004C2 RID: 1218 RVA: 0x0003493C File Offset: 0x00032B3C
+	public bool PreAwake(int callcount)
+	{
+		this.activateFarm = SignalIn.Create("activateFarm", base.gameObject, new Action(this.ActivateFarm));
+		return true;
+	}
+
+	// Token: 0x060004C3 RID: 1219 RVA: 0x00034964 File Offset: 0x00032B64
+	private void Start()
+	{
+		for (int i = 0; i < this.numberOfLeaches; i++)
+		{
+			GameObject gameObject = Object.Instantiate<GameObject>(this.leechTemplate.gameObject);
+			gameObject.transform.parent = base.transform;
+			WaterLeech component = gameObject.GetComponent<WaterLeech>();
+			this.leeches.Add(component);
+			WaterLeech component2 = component.GetComponent<WaterLeech>();
+			Vector3 vector;
+			vector..ctor(Random.Range(-1f, 1f), Random.Range(-1f, 1f), Random.Range(-0.5f, 0.5f));
+			component2.SpawnLeech(vector.normalized * 2.5f);
+			component.attachedToBoy += this.AttachedToBoy;
+			component.detachedFromBoy += this.DetachedFromBoy;
+			this.leechIdleTarget.transform.position = base.transform.position;
+		}
+		this.leechTemplate.gameObject.SetActive(false);
+		this.isActive = this.startActive;
+	}
+
+	// Token: 0x17000016 RID: 22
+	// (get) Token: 0x060004C4 RID: 1220 RVA: 0x00034A6C File Offset: 0x00032C6C
+	public bool IsActive
+	{
+		get
+		{
+			return this.isActive;
+		}
+	}
+
+	// Token: 0x060004C5 RID: 1221 RVA: 0x00034A74 File Offset: 0x00032C74
+	private void ActivateFarm()
+	{
+		this.isActive = true;
+	}
+
+	// Token: 0x060004C6 RID: 1222 RVA: 0x00034A80 File Offset: 0x00032C80
+	public bool AllowAttach()
+	{
+		return this.timeSinceLastAttach > 0.15f;
+	}
+
+	// Token: 0x060004C7 RID: 1223 RVA: 0x00034A98 File Offset: 0x00032C98
+	private void AttachedToBoy(WaterLeech leech)
+	{
+		this.leechesAttached.Add(leech);
+		this.timeSinceLastAttach = 0f;
+	}
+
+	// Token: 0x060004C8 RID: 1224 RVA: 0x00034AB4 File Offset: 0x00032CB4
+	private void DetachedFromBoy(WaterLeech leech)
+	{
+		this.leechesAttached.Remove(leech);
+	}
+
+	// Token: 0x060004C9 RID: 1225 RVA: 0x00034AC4 File Offset: 0x00032CC4
+	private void UpdateBoySlowdown()
+	{
+		if (this.leechesAttached.Count > 0 && ScriptGlobals.boy.input != this)
+		{
+			ScriptGlobals.boy.input = this;
+		}
+		else if (this.leechesAttached.Count == 0 && ScriptGlobals.boy.input == this)
+		{
+			ScriptGlobals.boy.input = null;
+		}
+		this.slowDownFrac = Mathf.InverseLerp(0f, 10f, (float)this.leechesAttached.Count);
+		if (this.slowDownFrac >= 1f && !ScriptGlobals.boy.isDead)
+		{
+			this.killed = true;
+			ScriptGlobals.boy.Kill(false);
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.deathAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+	}
+
+	// Token: 0x060004CA RID: 1226 RVA: 0x00034BA4 File Offset: 0x00032DA4
+	private void UpdateAttackState()
+	{
+		if (!this.isActive)
+		{
+			return;
+		}
+		if (!this.isAttacking && ScriptGlobals.boy.transform.position.y < this.waterSurface.position.y)
+		{
+			float num = this.attackDistance;
+			if ((this.leechIdleTarget.transform.position - base.transform.position).sqrMagnitude > 12.25f)
+			{
+				num *= this.awayFromIdleAttackDistanceScale;
+			}
+			if ((this.leechIdleTarget.transform.position - ScriptGlobals.boy.transform.position).sqrMagnitude < num * num)
+			{
+				foreach (WaterLeech waterLeech in this.leeches)
+				{
+					waterLeech.Attack();
+				}
+				this.isAttacking = true;
+			}
+		}
+		if (this.isAttacking && ScriptGlobals.boy.transform.position.y > this.waterSurface.position.y + 0.2f)
+		{
+			Vector3 vector = Vector3.zero;
+			foreach (WaterLeech waterLeech2 in this.leeches)
+			{
+				vector += waterLeech2.transform.position;
+			}
+			vector *= 1f / (float)this.leeches.Count;
+			if (vector.y > this.waterSurface.position.y - 2f)
+			{
+				vector.y = this.waterSurface.position.y - 2f;
+			}
+			this.leechIdleTarget.transform.position = vector;
+			foreach (WaterLeech waterLeech3 in this.leeches)
+			{
+				WaterLeech waterLeech4 = waterLeech3;
+				Vector3 vector2;
+				vector2..ctor(Random.Range(-1f, 1f), Random.Range(-1f, 1f), Random.Range(-0.5f, 0.5f));
+				waterLeech4.Retreat(vector2.normalized * Random.Range(0.5f, 2f));
+			}
+			this.isAttacking = false;
+		}
+	}
+
+	// Token: 0x060004CB RID: 1227 RVA: 0x00034E9C File Offset: 0x0003309C
+	private void UpdateMoveIdleTarget()
+	{
+		this.leechIdleTarget.transform.position = Vector3.MoveTowards(this.leechIdleTarget.transform.position, base.transform.position, 0.75f * Time.deltaTime);
+	}
+
+	// Token: 0x060004CC RID: 1228 RVA: 0x00034EE4 File Offset: 0x000330E4
+	private void FixedUpdate()
+	{
+		this.timeSinceLastAttach += Time.deltaTime;
+		this.UpdateAttackState();
+		this.UpdateBoySlowdown();
+		if (this.killed && !this.ragDolled)
+		{
+			this.killedTimer += Time.deltaTime;
+			if (this.killedTimer > 2f)
+			{
+				ScriptGlobals.boy.Kill();
+				this.ragDolled = true;
+			}
+		}
+		if (!this.isAttacking)
+		{
+			this.UpdateMoveIdleTarget();
+		}
+	}
+
+	// Token: 0x0400082F RID: 2095
+	public float attackDistance = 11f;
+
+	// Token: 0x04000830 RID: 2096
+	public float awayFromIdleAttackDistanceScale = 1.5f;
+
+	// Token: 0x04000831 RID: 2097
+	public int numberOfLeaches = 20;
+
+	// Token: 0x04000832 RID: 2098
+	public WaterLeech leechTemplate;
+
+	// Token: 0x04000833 RID: 2099
+	public Transform leechIdleTarget;
+
+	// Token: 0x04000834 RID: 2100
+	public Transform waterSurface;
+
+	// Token: 0x04000835 RID: 2101
+	public AnimClipNode deathAnim;
+
+	// Token: 0x04000836 RID: 2102
+	public bool startActive = true;
+
+	// Token: 0x04000837 RID: 2103
+	private bool isAttacking;
+
+	// Token: 0x04000838 RID: 2104
+	private List<WaterLeech> leeches = new List<WaterLeech>();
+
+	// Token: 0x04000839 RID: 2105
+	private List<WaterLeech> leechesAttached = new List<WaterLeech>();
+
+	// Token: 0x0400083A RID: 2106
+	private Vector3 flockingPos;
+
+	// Token: 0x0400083B RID: 2107
+	private bool isActive;
+
+	// Token: 0x0400083C RID: 2108
+	private SignalIn activateFarm;
+
+	// Token: 0x0400083D RID: 2109
+	private float timeSinceLastAttach;
+
+	// Token: 0x0400083E RID: 2110
+	private float slowDownFrac;
+
+	// Token: 0x0400083F RID: 2111
+	private bool killed;
+
+	// Token: 0x04000840 RID: 2112
+	private float killedTimer;
+
+	// Token: 0x04000841 RID: 2113
+	private bool ragDolled;
+}

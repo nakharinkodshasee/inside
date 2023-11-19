@@ -1,0 +1,295 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004AB RID: 1195
+public class WaterFlushKiller : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001F46 RID: 8006 RVA: 0x0010BA5C File Offset: 0x00109C5C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.deathAnim.gameObject, this);
+		this.audioBoyKilled = new AudioEventSimpleLocal("env_lab_labEntranceFlush_propella_boyKilled", akGameObj);
+	}
+
+	// Token: 0x06001F47 RID: 8007 RVA: 0x0010BAA0 File Offset: 0x00109CA0
+	public bool PreAwake(int callcount)
+	{
+		this.killTop = SignalIn.Create("killTop", base.gameObject, new Action(this.killedFromTop));
+		this.killBottom = SignalIn.Create("killBottom", base.gameObject, new Action(this.killedFromBottom));
+		this.boyInsideSuckZone = SignalIn.Create("boyInsideSuckZone", base.gameObject, delegate
+		{
+			this.boyInSuckZone = true;
+		});
+		this.boyOutsideSuckZone = SignalIn.Create("boyOutsideSuckZone", base.gameObject, delegate
+		{
+			this.boyInSuckZone = false;
+		});
+		this.boyEnterBottomKiller = SignalIn.Create("boyEnterBottomKiller", base.gameObject, delegate
+		{
+			this.boyInsideBottomKiller = true;
+		});
+		this.boyExitBottomKiller = SignalIn.Create("boyExitBottomKiller", base.gameObject, delegate
+		{
+			this.boyInsideBottomKiller = false;
+		});
+		this.boyEnterTopKiller = SignalIn.Create("boyEnterTopKiller", base.gameObject, delegate
+		{
+			this.boyInsideTopKiller = true;
+		});
+		this.boyExitTopKiller = SignalIn.Create("boyExitTopKiller", base.gameObject, delegate
+		{
+			this.boyInsideTopKiller = false;
+		});
+		return true;
+	}
+
+	// Token: 0x06001F48 RID: 8008 RVA: 0x0010BBC0 File Offset: 0x00109DC0
+	private void Awake()
+	{
+		this.OnPreProcess();
+		this.boy = ScriptGlobals.boy;
+		if (this.boy != null)
+		{
+			CameraBlendProbe[] componentsInChildren = this.boy.GetComponentsInChildren<CameraBlendProbe>(true);
+			this.cameraProbe = componentsInChildren[0].gameObject;
+		}
+	}
+
+	// Token: 0x06001F49 RID: 8009 RVA: 0x0010BC0C File Offset: 0x00109E0C
+	private void Start()
+	{
+		this.deathAnim.gameObject.SetActive(false);
+		this.previousMode = this.flushScript.streamMode;
+	}
+
+	// Token: 0x06001F4A RID: 8010 RVA: 0x0010BC3C File Offset: 0x00109E3C
+	private void getReadyToActivateKillers()
+	{
+		this.doActivateKillers = true;
+		this.timer = 0f;
+	}
+
+	// Token: 0x06001F4B RID: 8011 RVA: 0x0010BC50 File Offset: 0x00109E50
+	private void CheckForKill()
+	{
+		if (this.isKilling)
+		{
+			return;
+		}
+		if (this.boyInsideBottomKiller)
+		{
+			this.killedFromBottom();
+		}
+		else if (this.boyInsideTopKiller)
+		{
+			this.killedFromTop();
+		}
+	}
+
+	// Token: 0x06001F4C RID: 8012 RVA: 0x0010BC88 File Offset: 0x00109E88
+	private void activateKillers()
+	{
+		this.CheckForKill();
+	}
+
+	// Token: 0x06001F4D RID: 8013 RVA: 0x0010BC90 File Offset: 0x00109E90
+	private void deactivateKillers()
+	{
+	}
+
+	// Token: 0x06001F4E RID: 8014 RVA: 0x0010BC94 File Offset: 0x00109E94
+	private void killedFromTop()
+	{
+		if (!this.isKilling)
+		{
+			this.doKill();
+		}
+	}
+
+	// Token: 0x06001F4F RID: 8015 RVA: 0x0010BCA8 File Offset: 0x00109EA8
+	private void killedFromBottom()
+	{
+		if (!this.isKilling)
+		{
+			this.doKill();
+			Vector3 eulerAngles = this.deathAnim.eulerAngles;
+			eulerAngles.z += 180f;
+			this.deathAnim.eulerAngles = eulerAngles;
+		}
+	}
+
+	// Token: 0x06001F50 RID: 8016 RVA: 0x0010BCF4 File Offset: 0x00109EF4
+	private void doKill()
+	{
+		this.audioBoyKilled.PostFast();
+		this.isKilling = true;
+		this.boy.visualBoy.actor.GetComponentInChildren<SkinnedMeshRenderer>().enabled = false;
+		this.deathAnim.gameObject.SetActive(true);
+		this.deathAnim.GetComponent<Animation>().Play();
+		this.boyAnimForCamToFollow.position = this.boy.pos3;
+		AnimClipNode component = this.boyAnimForCamToFollow.GetComponent<AnimClipNode>();
+		BoyUtils.StartCustomAnim(this.boy, component, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 1f, 0.2f, 0, 0f);
+		this.boy.Kill(false);
+	}
+
+	// Token: 0x06001F51 RID: 8017 RVA: 0x0010BDB0 File Offset: 0x00109FB0
+	private void pushBoyHere(Transform target)
+	{
+		float magnitude = (target.position - this.boy.pos3).magnitude;
+		Vector2 vector = (target.position - this.boy.pos3).normalized;
+		vector2f a = new vector2f(vector.x, vector.y);
+		float num = Mathf.InverseLerp(4f, 1f, magnitude);
+		float num2 = Mathf.Lerp(0.1f, 0.6f, num);
+		float b = num * 3f;
+		this.boy.AddVelocity(a * b * Time.fixedDeltaTime / this.boy.mass, null, 1f);
+	}
+
+	// Token: 0x06001F52 RID: 8018 RVA: 0x0010BE78 File Offset: 0x0010A078
+	private void checkBoyPlacement()
+	{
+		if ((this.propellaCenter.position - this.boy.pos3).normalized.x < 0f && this.boyInSuckZone)
+		{
+			float magnitude = (this.topAnim.position - this.boy.pos3).magnitude;
+			float magnitude2 = (this.bottomAnim.position - this.boy.pos3).magnitude;
+			if (magnitude < magnitude2)
+			{
+				this.pushBoyHere(this.topAnim);
+			}
+			else
+			{
+				this.pushBoyHere(this.bottomAnim);
+			}
+		}
+	}
+
+	// Token: 0x06001F53 RID: 8019 RVA: 0x0010BF34 File Offset: 0x0010A134
+	private void FixedUpdate()
+	{
+		if (this.isLethal)
+		{
+			this.checkBoyPlacement();
+			this.CheckForKill();
+		}
+		if (this.flushScript.streamMode != this.previousMode)
+		{
+			if (this.previousMode == StreamMode.FullOn)
+			{
+				this.deactivateKillers();
+				this.isLethal = false;
+			}
+			else if (this.previousMode == StreamMode.FullOff)
+			{
+				this.getReadyToActivateKillers();
+			}
+		}
+		this.previousMode = this.flushScript.streamMode;
+		if (this.doActivateKillers)
+		{
+			this.timer += Time.deltaTime;
+			if (this.timer >= this.timeFromStreamToKill)
+			{
+				this.activateKillers();
+				this.isLethal = true;
+				this.doActivateKillers = false;
+			}
+		}
+	}
+
+	// Token: 0x040039F9 RID: 14841
+	public WaterFlushTunnel flushScript;
+
+	// Token: 0x040039FA RID: 14842
+	public Transform deathAnim;
+
+	// Token: 0x040039FB RID: 14843
+	public Transform newCamProbeParent;
+
+	// Token: 0x040039FC RID: 14844
+	public Transform camTarget;
+
+	// Token: 0x040039FD RID: 14845
+	public Transform boyAnimForCamToFollow;
+
+	// Token: 0x040039FE RID: 14846
+	public float timeFromStreamToKill = 1.5f;
+
+	// Token: 0x040039FF RID: 14847
+	public Transform propellaCenter;
+
+	// Token: 0x04003A00 RID: 14848
+	public Transform topAnim;
+
+	// Token: 0x04003A01 RID: 14849
+	public Transform bottomAnim;
+
+	// Token: 0x04003A02 RID: 14850
+	private SignalIn killTop;
+
+	// Token: 0x04003A03 RID: 14851
+	private SignalIn killBottom;
+
+	// Token: 0x04003A04 RID: 14852
+	private SignalIn boyInsideSuckZone;
+
+	// Token: 0x04003A05 RID: 14853
+	private SignalIn boyOutsideSuckZone;
+
+	// Token: 0x04003A06 RID: 14854
+	private SignalIn boyEnterBottomKiller;
+
+	// Token: 0x04003A07 RID: 14855
+	private SignalIn boyExitBottomKiller;
+
+	// Token: 0x04003A08 RID: 14856
+	private SignalIn boyEnterTopKiller;
+
+	// Token: 0x04003A09 RID: 14857
+	private SignalIn boyExitTopKiller;
+
+	// Token: 0x04003A0A RID: 14858
+	private bool isKilling;
+
+	// Token: 0x04003A0B RID: 14859
+	private bool doActivateKillers;
+
+	// Token: 0x04003A0C RID: 14860
+	private bool isLethal;
+
+	// Token: 0x04003A0D RID: 14861
+	private GameObject cameraProbe;
+
+	// Token: 0x04003A0E RID: 14862
+	private Boy boy;
+
+	// Token: 0x04003A0F RID: 14863
+	private float timer;
+
+	// Token: 0x04003A10 RID: 14864
+	private StreamMode previousMode;
+
+	// Token: 0x04003A11 RID: 14865
+	private bool boyInSuckZone;
+
+	// Token: 0x04003A12 RID: 14866
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioBoyKilled;
+
+	// Token: 0x04003A13 RID: 14867
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04003A14 RID: 14868
+	private bool boyInsideBottomKiller;
+
+	// Token: 0x04003A15 RID: 14869
+	private bool boyInsideTopKiller;
+}

@@ -1,0 +1,235 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003F4 RID: 1012
+public class WaterLevelFxController : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001AD1 RID: 6865 RVA: 0x000EBD1C File Offset: 0x000E9F1C
+	public bool PreAwake(int callcount)
+	{
+		this.waterUp = SignalIn.Create("waterUp", base.gameObject, new Action(this.SetWaterUpState));
+		this.waterDown = SignalIn.Create("waterDown", base.gameObject, new Action(this.SetWaterDownState));
+		this.waterFull = SignalIn.Create("waterFull", base.gameObject, new Action(this.OnWaterFull));
+		this.waterEmpty = SignalIn.Create("waterEmpty", base.gameObject, new Action(this.OnWaterEmpty));
+		return true;
+	}
+
+	// Token: 0x06001AD2 RID: 6866 RVA: 0x000EBDB4 File Offset: 0x000E9FB4
+	private void Setup()
+	{
+		this.decalWaterBoundsProp = new MaterialInstance.VectorProperty[this.decals.Length];
+		for (int i = 0; i < this.decals.Length; i++)
+		{
+			this.decalWaterBoundsProp[i] = this.decals[i].GetVectorProperty("_WaterBounds");
+		}
+		this.waterFallPlayings = new bool[this.waterFalls.Length];
+	}
+
+	// Token: 0x06001AD3 RID: 6867 RVA: 0x000EBE1C File Offset: 0x000EA01C
+	private void Start()
+	{
+		this.Setup();
+		this.ResetWetHeight();
+	}
+
+	// Token: 0x06001AD4 RID: 6868 RVA: 0x000EBE2C File Offset: 0x000EA02C
+	private void Update()
+	{
+		this.SetWetHeight();
+		for (int i = 0; i < this.decals.Length; i++)
+		{
+			this.decals[i].SetVectorProperty(this.decalWaterBoundsProp[i], this.wetHeight);
+		}
+		if (this.state == WaterLevelFxController.State.OnWaterDown)
+		{
+			this.OnWaterDownState();
+		}
+		else if (this.state == WaterLevelFxController.State.OnWaterUp)
+		{
+			this.OnWaterUpState();
+		}
+	}
+
+	// Token: 0x06001AD5 RID: 6869 RVA: 0x000EBE9C File Offset: 0x000EA09C
+	public void SetWaterUpState()
+	{
+		this.StopDistortion(this.distortSuck);
+		this.state = WaterLevelFxController.State.OnWaterUp;
+	}
+
+	// Token: 0x06001AD6 RID: 6870 RVA: 0x000EBEB4 File Offset: 0x000EA0B4
+	public void SetWaterDownState()
+	{
+		this.StopDistortion(this.distortBlow);
+		this.state = WaterLevelFxController.State.OnWaterDown;
+	}
+
+	// Token: 0x06001AD7 RID: 6871 RVA: 0x000EBECC File Offset: 0x000EA0CC
+	public void OnWaterFull()
+	{
+		this.StopDistortion(this.distortBlow);
+		this.state = WaterLevelFxController.State.None;
+	}
+
+	// Token: 0x06001AD8 RID: 6872 RVA: 0x000EBEE4 File Offset: 0x000EA0E4
+	public void OnWaterEmpty()
+	{
+		this.StopDistortion(this.distortSuck);
+		this.state = WaterLevelFxController.State.None;
+	}
+
+	// Token: 0x06001AD9 RID: 6873 RVA: 0x000EBEFC File Offset: 0x000EA0FC
+	private void OnWaterUpState()
+	{
+		this.PlayDistortion(this.distortBlow);
+		this.SetWaterFalls();
+	}
+
+	// Token: 0x06001ADA RID: 6874 RVA: 0x000EBF10 File Offset: 0x000EA110
+	private void OnWaterDownState()
+	{
+		this.PlayDistortion(this.distortSuck);
+		this.SetWaterFalls();
+	}
+
+	// Token: 0x06001ADB RID: 6875 RVA: 0x000EBF24 File Offset: 0x000EA124
+	private void SetWetHeight()
+	{
+		if (this.upsideDown)
+		{
+			this.wetHeight.x = this.waterSurface.position.y;
+			this.wetHeight.y = this.waterSurface.position.y + this.decalWaterFade;
+			this.wetHeight.z = Mathf.Min(this.wetHeight.z, this.wetHeight.x);
+			this.wetHeight.w = Mathf.Min(this.wetHeight.w, this.wetHeight.y);
+		}
+		else
+		{
+			this.wetHeight.x = this.waterSurface.position.y - this.decalWaterFade;
+			this.wetHeight.y = this.waterSurface.position.y;
+			this.wetHeight.z = Mathf.Max(this.wetHeight.z, this.wetHeight.x);
+			this.wetHeight.w = Mathf.Max(this.wetHeight.w, this.wetHeight.y);
+		}
+	}
+
+	// Token: 0x06001ADC RID: 6876 RVA: 0x000EC060 File Offset: 0x000EA260
+	private void ResetWetHeight()
+	{
+		if (this.upsideDown)
+		{
+			this.wetHeight.x = this.waterSurface.position.y;
+			this.wetHeight.y = this.waterSurface.position.y + this.decalWaterFade;
+		}
+		else
+		{
+			this.wetHeight.x = this.waterSurface.position.y - this.decalWaterFade;
+			this.wetHeight.y = this.waterSurface.position.y;
+		}
+		this.wetHeight.z = this.wetHeight.x;
+		this.wetHeight.w = this.wetHeight.y;
+	}
+
+	// Token: 0x06001ADD RID: 6877 RVA: 0x000EC130 File Offset: 0x000EA330
+	private void SetWaterFalls()
+	{
+		for (int i = 0; i < this.waterFalls.Length; i++)
+		{
+			if ((!this.upsideDown) ? (this.waterFalls[i].transform.position.y > this.waterSurface.position.y) : (this.waterFalls[i].transform.position.y < this.waterSurface.position.y))
+			{
+				if (!this.waterFallPlayings[i])
+				{
+					this.waterFalls[i].Play();
+					this.waterFallPlayings[i] = true;
+				}
+			}
+			else
+			{
+				this.waterFalls[i].Stop();
+				this.waterFallPlayings[i] = false;
+			}
+		}
+	}
+
+	// Token: 0x06001ADE RID: 6878 RVA: 0x000EC208 File Offset: 0x000EA408
+	private void PlayDistortion(ParticleSystem[] partSys)
+	{
+		for (int i = 0; i < partSys.Length; i++)
+		{
+			if ((!this.upsideDown) ? (partSys[i].transform.position.y + 0.5f < this.waterSurface.position.y) : (partSys[i].transform.position.y - 0.5f > this.waterSurface.position.y))
+			{
+				if (!partSys[i].isPlaying)
+				{
+					partSys[i].Play();
+				}
+			}
+			else
+			{
+				partSys[i].Stop();
+			}
+		}
+	}
+
+	// Token: 0x06001ADF RID: 6879 RVA: 0x000EC2C4 File Offset: 0x000EA4C4
+	private void StopDistortion(ParticleSystem[] partSys)
+	{
+		for (int i = 0; i < partSys.Length; i++)
+		{
+			partSys[i].Stop();
+		}
+	}
+
+	// Token: 0x040030A6 RID: 12454
+	public bool upsideDown;
+
+	// Token: 0x040030A7 RID: 12455
+	public float decalWaterFade = 0.1f;
+
+	// Token: 0x040030A8 RID: 12456
+	public Transform waterSurface;
+
+	// Token: 0x040030A9 RID: 12457
+	public MaterialInstance[] decals;
+
+	// Token: 0x040030AA RID: 12458
+	public ParticleSystem[] distortSuck;
+
+	// Token: 0x040030AB RID: 12459
+	public ParticleSystem[] distortBlow;
+
+	// Token: 0x040030AC RID: 12460
+	public ParticleSystem[] waterFalls;
+
+	// Token: 0x040030AD RID: 12461
+	public bool[] waterFallPlayings;
+
+	// Token: 0x040030AE RID: 12462
+	private Vector4 wetHeight;
+
+	// Token: 0x040030AF RID: 12463
+	private MaterialInstance.VectorProperty[] decalWaterBoundsProp;
+
+	// Token: 0x040030B0 RID: 12464
+	protected WaterLevelFxController.State state;
+
+	// Token: 0x040030B1 RID: 12465
+	private SignalIn waterUp;
+
+	// Token: 0x040030B2 RID: 12466
+	private SignalIn waterDown;
+
+	// Token: 0x040030B3 RID: 12467
+	private SignalIn waterFull;
+
+	// Token: 0x040030B4 RID: 12468
+	private SignalIn waterEmpty;
+
+	// Token: 0x020003F5 RID: 1013
+	protected enum State
+	{
+		// Token: 0x040030B6 RID: 12470
+		None,
+		// Token: 0x040030B7 RID: 12471
+		OnWaterUp,
+		// Token: 0x040030B8 RID: 12472
+		OnWaterDown
+	}
+}

@@ -1,0 +1,372 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200008B RID: 139
+public class WaterLeech : MonoBehaviour
+{
+	// Token: 0x14000001 RID: 1
+	// (add) Token: 0x0600049F RID: 1183 RVA: 0x00033EB0 File Offset: 0x000320B0
+	// (remove) Token: 0x060004A0 RID: 1184 RVA: 0x00033ECC File Offset: 0x000320CC
+	public event WaterLeech.LeechEvent attachedToBoy;
+
+	// Token: 0x14000002 RID: 2
+	// (add) Token: 0x060004A1 RID: 1185 RVA: 0x00033EE8 File Offset: 0x000320E8
+	// (remove) Token: 0x060004A2 RID: 1186 RVA: 0x00033F04 File Offset: 0x00032104
+	public event WaterLeech.LeechEvent detachedFromBoy;
+
+	// Token: 0x060004A3 RID: 1187 RVA: 0x00033F20 File Offset: 0x00032120
+	private void Start()
+	{
+		this.SetIdleState();
+	}
+
+	// Token: 0x060004A4 RID: 1188 RVA: 0x00033F28 File Offset: 0x00032128
+	public void SpawnLeech(Vector3 spawnPos)
+	{
+		this.spawnPos = spawnPos;
+		base.transform.position = this.farm.leechIdleTarget.transform.position + spawnPos;
+		this.randomSeed = Random.Range(0f, 1f);
+		this.chaseSpeed *= Random.Range(0.75f, 1.1f);
+		this.idleSpeed *= Random.Range(0.75f, 1.1f);
+		base.transform.rotation = Quaternion.Euler(new Vector3(Random.Range(0f, 360f), Random.Range(0f, 360f), Random.Range(0f, 360f)));
+	}
+
+	// Token: 0x060004A5 RID: 1189 RVA: 0x00033FF4 File Offset: 0x000321F4
+	public void Attack()
+	{
+		if (this.state == WaterLeech.State.Idle)
+		{
+			this.SetChaseBoyState();
+		}
+	}
+
+	// Token: 0x060004A6 RID: 1190 RVA: 0x00034008 File Offset: 0x00032208
+	public void Retreat(Vector3 spawnPos)
+	{
+		if (this.state == WaterLeech.State.Chase || this.state == WaterLeech.State.Detached || this.state == WaterLeech.State.Attached)
+		{
+			if (this.state == WaterLeech.State.Attached && this.detachedFromBoy != null)
+			{
+				this.detachedFromBoy(this);
+			}
+			this.SetIdleState();
+			this.spawnPos = spawnPos;
+		}
+	}
+
+	// Token: 0x060004A7 RID: 1191 RVA: 0x0003406C File Offset: 0x0003226C
+	private void SetIdleState()
+	{
+		this.state = WaterLeech.State.Idle;
+		this.stateTimer = 0f;
+	}
+
+	// Token: 0x060004A8 RID: 1192 RVA: 0x00034080 File Offset: 0x00032280
+	private void UpdateIdleTarget()
+	{
+		this.currentTarget = this.farm.leechIdleTarget.transform.position + this.spawnPos + new Vector3(Mathf.Sin(this.stateTimer + this.randomSeed), Mathf.Sin(this.stateTimer * 0.7f + this.randomSeed), Mathf.Sin(this.stateTimer * 0.3f + this.randomSeed)) * 0.075f;
+	}
+
+	// Token: 0x060004A9 RID: 1193 RVA: 0x0003410C File Offset: 0x0003230C
+	private void IdleState()
+	{
+		this.UpdateIdleTarget();
+		Quaternion quaternion = base.transform.rotation;
+		Vector3 normalized = (this.currentTarget - base.transform.position).normalized;
+		quaternion = Quaternion.RotateTowards(quaternion, Quaternion.LookRotation(normalized), Time.deltaTime * 150f);
+		base.GetComponent<Rigidbody>().MoveRotation(quaternion);
+		base.GetComponent<Rigidbody>().MovePosition(base.transform.position + base.transform.forward * this.idleSpeed * Time.deltaTime);
+		if (base.transform.position.y > this.waterSurfacePivot.transform.position.y - 0.2f)
+		{
+			quaternion = Quaternion.RotateTowards(quaternion, Quaternion.LookRotation(Vector3.down), Time.deltaTime * 500f);
+			base.GetComponent<Rigidbody>().MoveRotation(quaternion);
+		}
+	}
+
+	// Token: 0x060004AA RID: 1194 RVA: 0x00034208 File Offset: 0x00032408
+	private void SetChaseBoyState()
+	{
+		this.state = WaterLeech.State.Chase;
+		this.targetBone = ScriptGlobals.boy.visualBoy.actor.bones[Random.Range(0, ScriptGlobals.boy.visualBoy.actor.bones.Length)];
+	}
+
+	// Token: 0x060004AB RID: 1195 RVA: 0x00034260 File Offset: 0x00032460
+	private void UpdateChaseTarget()
+	{
+		this.currentTarget = this.targetBone.transform.position;
+	}
+
+	// Token: 0x060004AC RID: 1196 RVA: 0x00034278 File Offset: 0x00032478
+	private void ChaseState()
+	{
+		this.UpdateChaseTarget();
+		Quaternion quaternion = base.transform.rotation;
+		Vector3 vector = this.currentTarget - base.transform.position;
+		Vector3 vector2 = base.transform.position - this.targetBone.transform.position;
+		vector2.z = 0f;
+		float sqrMagnitude = vector2.sqrMagnitude;
+		vector.Normalize();
+		quaternion = Quaternion.RotateTowards(quaternion, Quaternion.LookRotation(vector), Time.deltaTime * this.chaseRotationSpeed);
+		base.GetComponent<Rigidbody>().MoveRotation(quaternion);
+		base.GetComponent<Rigidbody>().MovePosition(base.transform.position + base.transform.forward * this.chaseSpeed * Time.deltaTime);
+		if (base.transform.position.y > this.waterSurfacePivot.transform.position.y - 0.05f)
+		{
+			quaternion = Quaternion.RotateTowards(quaternion, Quaternion.LookRotation(Vector3.down), Time.deltaTime * 500f);
+			base.GetComponent<Rigidbody>().MoveRotation(quaternion);
+		}
+		if (sqrMagnitude < 0.0225f && this.farm.AllowAttach())
+		{
+			this.SetAttachedState();
+		}
+	}
+
+	// Token: 0x060004AD RID: 1197 RVA: 0x000343CC File Offset: 0x000325CC
+	private void SetStrandedState()
+	{
+		base.GetComponent<Rigidbody>().isKinematic = false;
+		this.stateTimer = 0f;
+		this.state = WaterLeech.State.Stranded;
+	}
+
+	// Token: 0x060004AE RID: 1198 RVA: 0x000343EC File Offset: 0x000325EC
+	private void StrandedState()
+	{
+	}
+
+	// Token: 0x060004AF RID: 1199 RVA: 0x000343F0 File Offset: 0x000325F0
+	private void Splat()
+	{
+		GameObject gameObject = Object.Instantiate<GameObject>(this.splatter);
+		base.gameObject.transform.parent = base.transform.parent;
+		gameObject.transform.position = base.GetComponent<Rigidbody>().position;
+		Object.Destroy(base.gameObject);
+	}
+
+	// Token: 0x060004B0 RID: 1200 RVA: 0x00034448 File Offset: 0x00032648
+	private void SetWiggleState(GameObject g)
+	{
+		this.state = WaterLeech.State.Wiggle;
+	}
+
+	// Token: 0x060004B1 RID: 1201 RVA: 0x00034454 File Offset: 0x00032654
+	private void WiggleState()
+	{
+		base.GetComponent<Rigidbody>().AddTorque(new Vector3(0f, 0f, 0.0005f));
+	}
+
+	// Token: 0x060004B2 RID: 1202 RVA: 0x00034478 File Offset: 0x00032678
+	private void SetAttachedState()
+	{
+		this.randomAttachAdd = new Vector3(Random.Range(-0.05f, 0.05f), Random.Range(-0.05f, 0.05f), 0f);
+		if (this.attachedToBoy != null)
+		{
+			this.attachedToBoy(this);
+		}
+		this.state = WaterLeech.State.Attached;
+		this.attachStrength = Random.Range(1f, 4f);
+		this.AttachedState();
+		this.stateTimer = 0f;
+	}
+
+	// Token: 0x060004B3 RID: 1203 RVA: 0x000344F8 File Offset: 0x000326F8
+	private void AttachedState()
+	{
+		Vector3 vector = this.targetBone.transform.position + this.randomAttachAdd;
+		vector.z -= 0.2f;
+		base.GetComponent<Rigidbody>().MovePosition(vector);
+		Quaternion quaternion = Quaternion.LookRotation(this.targetBone.transform.up);
+		base.GetComponent<Rigidbody>().MoveRotation(quaternion);
+		if (ScriptGlobals.boy.velocity.GetSqrLength() > 0.25f || ScriptGlobals.boy.isDead)
+		{
+			this.attachStrength -= Time.deltaTime;
+			if (ScriptGlobals.boy.isDead)
+			{
+				this.attachStrength -= Time.deltaTime;
+			}
+			if (this.attachStrength <= 0f)
+			{
+				this.SetDetachState();
+			}
+		}
+	}
+
+	// Token: 0x060004B4 RID: 1204 RVA: 0x000345D8 File Offset: 0x000327D8
+	private void SetDetachState()
+	{
+		this.detachDir = (base.transform.position - ScriptGlobals.boy.transform.position).normalized;
+		this.state = WaterLeech.State.Detached;
+		if (this.detachedFromBoy != null)
+		{
+			this.detachedFromBoy(this);
+		}
+		this.stateTimer = 0f;
+	}
+
+	// Token: 0x060004B5 RID: 1205 RVA: 0x0003463C File Offset: 0x0003283C
+	private void DetachedState()
+	{
+		base.GetComponent<Rigidbody>().MovePosition(base.transform.position + this.detachDir * Mathf.InverseLerp(1f, -0.5f, this.stateTimer * 2f) * 0.75f * Time.deltaTime);
+		if ((double)this.stateTimer >= 0.5)
+		{
+			this.SetChaseBoyState();
+		}
+	}
+
+	// Token: 0x060004B6 RID: 1206 RVA: 0x000346BC File Offset: 0x000328BC
+	private void OnTriggerEnter(Collider c)
+	{
+		WaterLeechStrander component = c.gameObject.GetComponent<WaterLeechStrander>();
+		if (component)
+		{
+			this.SetStrandedState();
+		}
+	}
+
+	// Token: 0x060004B7 RID: 1207 RVA: 0x000346E8 File Offset: 0x000328E8
+	private void OnTriggerExit(Collider c)
+	{
+		WaterLeechStrander component = c.gameObject.GetComponent<WaterLeechStrander>();
+		if (component)
+		{
+			base.GetComponent<Rigidbody>().isKinematic = true;
+			if (this.farm.IsActive)
+			{
+				this.SetChaseBoyState();
+			}
+			else
+			{
+				this.SetIdleState();
+			}
+		}
+	}
+
+	// Token: 0x060004B8 RID: 1208 RVA: 0x0003473C File Offset: 0x0003293C
+	private void OnCollisionEnter(Collision c)
+	{
+		if (this.state != WaterLeech.State.Stranded)
+		{
+			return;
+		}
+		Rigidbody attachedRigidbody = c.collider.attachedRigidbody;
+		if (attachedRigidbody && (double)attachedRigidbody.mass > 0.55)
+		{
+			if (base.GetComponent<Rigidbody>().position.y > attachedRigidbody.gameObject.transform.position.y)
+			{
+				this.SetWiggleState(c.gameObject);
+			}
+			else
+			{
+				this.Splat();
+			}
+		}
+	}
+
+	// Token: 0x060004B9 RID: 1209 RVA: 0x000347CC File Offset: 0x000329CC
+	private void OnCollisionExit(Collision c)
+	{
+		if (this.state == WaterLeech.State.Wiggle)
+		{
+			this.SetStrandedState();
+		}
+	}
+
+	// Token: 0x060004BA RID: 1210 RVA: 0x000347E0 File Offset: 0x000329E0
+	private void FixedUpdate()
+	{
+		this.stateTimer += Time.deltaTime;
+		switch (this.state)
+		{
+		case WaterLeech.State.Idle:
+			this.IdleState();
+			break;
+		case WaterLeech.State.Chase:
+			this.ChaseState();
+			break;
+		case WaterLeech.State.Stranded:
+			this.StrandedState();
+			break;
+		case WaterLeech.State.Wiggle:
+			this.WiggleState();
+			break;
+		case WaterLeech.State.Detached:
+			this.DetachedState();
+			break;
+		case WaterLeech.State.SetStranded:
+			this.SetStrandedState();
+			break;
+		case WaterLeech.State.Attached:
+			this.AttachedState();
+			break;
+		}
+	}
+
+	// Token: 0x04000815 RID: 2069
+	public WaterLeechFarm farm;
+
+	// Token: 0x04000816 RID: 2070
+	public Transform waterSurfacePivot;
+
+	// Token: 0x04000817 RID: 2071
+	public float idleSpeed;
+
+	// Token: 0x04000818 RID: 2072
+	public float chaseSpeed;
+
+	// Token: 0x04000819 RID: 2073
+	public float chaseRotationSpeed = 250f;
+
+	// Token: 0x0400081A RID: 2074
+	public GameObject splatter;
+
+	// Token: 0x0400081B RID: 2075
+	private WaterLeech.State state;
+
+	// Token: 0x0400081C RID: 2076
+	private float stateTimer;
+
+	// Token: 0x0400081D RID: 2077
+	private Vector3 spawnPos;
+
+	// Token: 0x0400081E RID: 2078
+	private Vector3 currentTarget;
+
+	// Token: 0x0400081F RID: 2079
+	private float randomSeed;
+
+	// Token: 0x04000820 RID: 2080
+	private Actor.Bone targetBone;
+
+	// Token: 0x04000821 RID: 2081
+	private Vector3 randomAttachAdd;
+
+	// Token: 0x04000822 RID: 2082
+	private float attachStrength;
+
+	// Token: 0x04000823 RID: 2083
+	private Vector3 detachDir;
+
+	// Token: 0x0200008C RID: 140
+	private enum State
+	{
+		// Token: 0x04000827 RID: 2087
+		None,
+		// Token: 0x04000828 RID: 2088
+		Idle,
+		// Token: 0x04000829 RID: 2089
+		Chase,
+		// Token: 0x0400082A RID: 2090
+		Stranded,
+		// Token: 0x0400082B RID: 2091
+		Wiggle,
+		// Token: 0x0400082C RID: 2092
+		Detached,
+		// Token: 0x0400082D RID: 2093
+		SetStranded,
+		// Token: 0x0400082E RID: 2094
+		Attached
+	}
+
+	// Token: 0x02000668 RID: 1640
+	// (Invoke) Token: 0x06002836 RID: 10294
+	public delegate void LeechEvent(WaterLeech leech);
+}

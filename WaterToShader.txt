@@ -1,0 +1,438 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200037A RID: 890
+[ExecuteInEditMode]
+public class WaterToShader : UmbrellaBehaviour<WaterToShader>, IPreAwake
+{
+	// Token: 0x06001839 RID: 6201 RVA: 0x000D378C File Offset: 0x000D198C
+	private void Start()
+	{
+		this.Setup();
+	}
+
+	// Token: 0x0600183A RID: 6202 RVA: 0x000D3794 File Offset: 0x000D1994
+	public bool PreAwake(int callcount)
+	{
+		this.Setup();
+		return true;
+	}
+
+	// Token: 0x0600183B RID: 6203 RVA: 0x000D37A0 File Offset: 0x000D19A0
+	public void UmbrellaUpdate()
+	{
+		this.afterFirstUpdate = true;
+		this.UpdateWaterBounds(false);
+		if (this.waterIsMovable && this.updateBump)
+		{
+			this.UpdateBump();
+		}
+	}
+
+	// Token: 0x0600183C RID: 6204 RVA: 0x000D37D8 File Offset: 0x000D19D8
+	public void SetWaterQueueMaster(WaterQueueMaster wQM)
+	{
+		this.waterTrigger = wQM;
+		this.hasBeenSetup = false;
+	}
+
+	// Token: 0x0600183D RID: 6205 RVA: 0x000D37E8 File Offset: 0x000D19E8
+	public void Setup()
+	{
+		if (this.hasBeenSetup)
+		{
+			return;
+		}
+		this.hasBeenSetup = true;
+		if (this.getSubmarine && SingletonBehaviour<CompanionManager>.instance)
+		{
+			Companion companion = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine);
+			if (companion != null)
+			{
+				this.submarine = companion.GetComponent<Submarine>();
+			}
+		}
+		this.mi_dst = base.GetComponent<MaterialInstance>();
+		if (this.waterTrigger && (this.waterTrigger.dynamicWater || this.waterTrigger.GetComponent<Rigidbody>() != null))
+		{
+			this.waterIsMovable = true;
+		}
+		this.GetInstanceProperties();
+		if (this.getWaterBounds && !this.waterIsMovable)
+		{
+			this.UpdateWaterBounds(true);
+		}
+	}
+
+	// Token: 0x0600183E RID: 6206 RVA: 0x000D38B4 File Offset: 0x000D1AB4
+	private void GetInstanceProperties()
+	{
+		if (this.getWaterBounds || this.getSubmarine)
+		{
+			this.dst_waterBounds = this.mi_dst.GetOrAddVectorProperty("_WaterBounds");
+			this.hasWaterBounds = (this.dst_waterBounds != null);
+		}
+		if (!this.waterTrigger)
+		{
+			return;
+		}
+		if (this.getBump)
+		{
+			this.dst_bumpTiling = this.mi_dst.GetOrAddVectorProperty("_BumpTiling");
+			this.dst_bumpSpeed = this.mi_dst.GetOrAddFloatProperty("_BumpSpeed");
+			this.dst_bumpMap = this.mi_dst.GetOrAddTextureProperty("_BumpMap");
+		}
+		if (this.getRefraction)
+		{
+			this.dst_refractBump = this.mi_dst.GetOrAddFloatProperty("_RefractBump");
+			this.dst_refractBlur = this.mi_dst.GetOrAddFloatProperty("_Blur");
+			this.dst_refractDist = this.mi_dst.GetOrAddFloatProperty("_BumpDist");
+		}
+		if (this.getReflection)
+		{
+			this.dst_fresnelBump = this.mi_dst.GetOrAddFloatProperty("_FresnelBump");
+			this.dst_fresnelOutside = this.mi_dst.GetOrAddFloatProperty("_FresnelOutside");
+			this.dst_fresnelInsideA = this.mi_dst.GetOrAddFloatProperty("_FresnelInsideA");
+			this.dst_fresnelInsideB = this.mi_dst.GetOrAddFloatProperty("_FresnelInsideB");
+			this.dst_reflectBump = this.mi_dst.GetOrAddFloatProperty("_ReflectBump");
+			this.dst_boost = this.mi_dst.GetOrAddFloatProperty("_Boost");
+			this.dst_boostTreshold = this.mi_dst.GetOrAddFloatProperty("_BoostTheshold");
+			this.dst_vignette = this.mi_dst.GetOrAddFloatProperty("_Vignette");
+			this.dst_vignetteLength = this.mi_dst.GetOrAddFloatProperty("_VignetteLength");
+			this.dst_noise = this.mi_dst.GetOrAddFloatProperty("_Noise");
+		}
+		if (this.updateBump)
+		{
+			this.dst_pdTime = this.mi_dst.GetOrAddFloatProperty("_PDTime");
+			this.dst_bumpMultiplier = this.mi_dst.GetOrAddFloatProperty("_BumpMultiplier");
+		}
+	}
+
+	// Token: 0x0600183F RID: 6207 RVA: 0x000D3AC8 File Offset: 0x000D1CC8
+	public void RefreshSurface(bool useBottom)
+	{
+		this.useBottom = useBottom;
+		this.SetInstanceValues();
+	}
+
+	// Token: 0x06001840 RID: 6208 RVA: 0x000D3AD8 File Offset: 0x000D1CD8
+	private void SetInstanceValues()
+	{
+		if (object.ReferenceEquals(this.mi_dst, null))
+		{
+			return;
+		}
+		if (object.ReferenceEquals(this.waterTrigger, null))
+		{
+			return;
+		}
+		if (this.getBump)
+		{
+			if (this.cachedBumpTiling != this.waterTrigger.cachedBumpTiling)
+			{
+				this.mi_dst.SetVectorProperty(this.dst_bumpTiling, this.waterTrigger.cachedBumpTiling);
+				this.cachedBumpTiling = this.waterTrigger.cachedBumpTiling;
+			}
+			if (this.cachedBumpSpeed != this.waterTrigger.cachedBumpSpeed)
+			{
+				this.mi_dst.SetFloatProperty(this.dst_bumpSpeed, this.waterTrigger.cachedBumpSpeed);
+				this.cachedBumpSpeed = this.waterTrigger.cachedBumpSpeed;
+			}
+			if (this.cachedBumpMap != this.waterTrigger.cachedBumpMap)
+			{
+				this.mi_dst.SetTextureProperty(this.dst_bumpMap, this.waterTrigger.cachedBumpMap);
+				this.cachedBumpMap = this.waterTrigger.cachedBumpMap;
+			}
+		}
+		if (this.getRefraction)
+		{
+			if (this.cachedRefractBump != this.waterTrigger.cachedRefractBump)
+			{
+				this.mi_dst.SetFloatProperty(this.dst_refractBump, this.waterTrigger.cachedRefractBump);
+				this.cachedRefractBump = this.waterTrigger.cachedRefractBump;
+			}
+			if (this.cachedRefractBlur != this.waterTrigger.cachedRefractBlur)
+			{
+				this.mi_dst.SetFloatProperty(this.dst_refractBlur, this.waterTrigger.cachedRefractBlur);
+				this.cachedRefractBlur = this.waterTrigger.cachedRefractBlur;
+			}
+			if (this.cachedRefractDist != this.waterTrigger.cachedRefractDist)
+			{
+				this.mi_dst.SetFloatProperty(this.dst_refractDist, this.waterTrigger.cachedRefractDist);
+				this.cachedRefractDist = this.waterTrigger.cachedRefractDist;
+			}
+		}
+		if (this.getReflection)
+		{
+			if (this.cachedFresnelBump != this.waterTrigger.cachedFresnelBump)
+			{
+				this.mi_dst.SetFloatProperty(this.dst_fresnelBump, this.waterTrigger.cachedFresnelBump);
+				this.cachedFresnelBump = this.waterTrigger.cachedFresnelBump;
+			}
+			if (this.cachedFresnelOutside != this.waterTrigger.cachedFresnelOutside)
+			{
+				this.mi_dst.SetFloatProperty(this.dst_fresnelOutside, this.waterTrigger.cachedFresnelOutside);
+				this.cachedFresnelOutside = this.waterTrigger.cachedFresnelOutside;
+			}
+			if (this.cachedFresnelInsideA != this.waterTrigger.cachedFresnelInsideA)
+			{
+				this.mi_dst.SetFloatProperty(this.dst_fresnelInsideA, this.waterTrigger.cachedFresnelInsideA);
+				this.cachedFresnelInsideA = this.waterTrigger.cachedFresnelInsideA;
+			}
+			if (this.cachedFresnelInsideB != this.waterTrigger.cachedFresnelInsideB)
+			{
+				this.mi_dst.SetFloatProperty(this.dst_fresnelInsideB, this.waterTrigger.cachedFresnelInsideB);
+				this.cachedFresnelInsideB = this.waterTrigger.cachedFresnelInsideB;
+			}
+			if (this.cachedReflectBump != this.waterTrigger.cachedReflectBump)
+			{
+				this.mi_dst.SetFloatProperty(this.dst_reflectBump, this.waterTrigger.cachedReflectBump);
+				this.cachedReflectBump = this.waterTrigger.cachedReflectBump;
+			}
+			if (this.cachedBoost != this.waterTrigger.cachedBoost)
+			{
+				this.mi_dst.SetFloatProperty(this.dst_boost, this.waterTrigger.cachedBoost);
+				this.cachedBoost = this.waterTrigger.cachedBoost;
+			}
+			if (this.cachedBoostThreshold != this.waterTrigger.cachedBoostThreshold)
+			{
+				this.mi_dst.SetFloatProperty(this.dst_boostTreshold, this.waterTrigger.cachedBoostThreshold);
+				this.cachedBoostThreshold = this.waterTrigger.cachedBoostThreshold;
+			}
+			if (this.cachedVignette != this.waterTrigger.cachedVignette)
+			{
+				this.mi_dst.SetFloatProperty(this.dst_vignette, this.waterTrigger.cachedVignette);
+				this.cachedVignette = this.waterTrigger.cachedVignette;
+			}
+			if (this.cachedVignetteLength != this.waterTrigger.cachedVignetteLength)
+			{
+				this.mi_dst.SetFloatProperty(this.dst_vignetteLength, this.waterTrigger.cachedVignetteLength);
+				this.cachedVignetteLength = this.waterTrigger.cachedVignetteLength;
+			}
+			if (this.cachedNoise != this.waterTrigger.cachedNoise)
+			{
+				this.mi_dst.SetFloatProperty(this.dst_noise, this.waterTrigger.cachedNoise);
+				this.cachedNoise = this.waterTrigger.cachedNoise;
+			}
+		}
+	}
+
+	// Token: 0x06001841 RID: 6209 RVA: 0x000D3F64 File Offset: 0x000D2164
+	private void UpdateWaterBounds(bool always = false)
+	{
+		if ((((!this.getWaterBounds || !this.waterIsMovable) && (!this.getSubmarine || object.ReferenceEquals(this.submarine, null) || !this.submarine.gameObject.activeSelf)) || !this.hasWaterBounds) && !always)
+		{
+			return;
+		}
+		Vector4 zero = Vector4Fast.zero;
+		if (this.getWaterBounds && (this.waterIsMovable || always) && this.waterTrigger)
+		{
+			if (!this.waterTrigger.dataCached)
+			{
+				this.waterTrigger.CacheTransformData();
+			}
+			if (this.useHorizontalBounds)
+			{
+				zero.x = this.waterTrigger.cachedLocalScale.x;
+				zero.y = this.waterTrigger.cachedPosition.x;
+			}
+			else
+			{
+				zero.x = this.waterTrigger.cachedPosition.y;
+				zero.x += this.waterTrigger.cachedLocalScale.y * ((!this.useBottom) ? 0.5f : -0.5f);
+				zero.y = ((!this.useBottom) ? 1f : -1f);
+			}
+		}
+		else
+		{
+			zero.x = this.lastBounds.x;
+			zero.y = this.lastBounds.y;
+		}
+		if (this.getSubmarine && this.submarine)
+		{
+			zero.z = this.submarine.cachedPosition.x;
+			zero.w = this.submarine.cachedPosition.y;
+		}
+		else
+		{
+			zero.z = -100f;
+			zero.w = -100f;
+		}
+		if (this.lastBounds.x != zero.x || this.lastBounds.y != zero.y || this.lastBounds.z != zero.z || this.lastBounds.w != zero.w)
+		{
+			this.mi_dst.SetVectorProperty(this.dst_waterBounds, zero);
+			this.lastBounds = zero;
+		}
+	}
+
+	// Token: 0x06001842 RID: 6210 RVA: 0x000D41CC File Offset: 0x000D23CC
+	private void UpdateBump()
+	{
+		if (!this.getBump || object.ReferenceEquals(this.waterTrigger, null))
+		{
+			return;
+		}
+		this.mi_dst.SetFloatProperty(this.dst_pdTime, this.waterTrigger.cachedPDTime);
+		this.mi_dst.SetFloatProperty(this.dst_bumpMultiplier, this.waterTrigger.cachedBumpMultiplier);
+	}
+
+	// Token: 0x04002BA5 RID: 11173
+	public WaterQueueMaster waterTrigger;
+
+	// Token: 0x04002BA6 RID: 11174
+	public bool useBottom;
+
+	// Token: 0x04002BA7 RID: 11175
+	public bool getBump = true;
+
+	// Token: 0x04002BA8 RID: 11176
+	public bool getReflection = true;
+
+	// Token: 0x04002BA9 RID: 11177
+	public bool getRefraction;
+
+	// Token: 0x04002BAA RID: 11178
+	public bool getWaterBounds = true;
+
+	// Token: 0x04002BAB RID: 11179
+	public bool useHorizontalBounds;
+
+	// Token: 0x04002BAC RID: 11180
+	public bool getSubmarine = true;
+
+	// Token: 0x04002BAD RID: 11181
+	private bool waterIsMovable;
+
+	// Token: 0x04002BAE RID: 11182
+	public bool updateBump;
+
+	// Token: 0x04002BAF RID: 11183
+	private MaterialInstance mi_dst;
+
+	// Token: 0x04002BB0 RID: 11184
+	private MaterialInstance.VectorProperty dst_waterBounds;
+
+	// Token: 0x04002BB1 RID: 11185
+	private bool hasWaterBounds;
+
+	// Token: 0x04002BB2 RID: 11186
+	private MaterialInstance.VectorProperty dst_bumpTiling;
+
+	// Token: 0x04002BB3 RID: 11187
+	private MaterialInstance.FloatProperty dst_bumpSpeed;
+
+	// Token: 0x04002BB4 RID: 11188
+	private MaterialInstance.TextureProperty dst_bumpMap;
+
+	// Token: 0x04002BB5 RID: 11189
+	private MaterialInstance.FloatProperty dst_fresnelBump;
+
+	// Token: 0x04002BB6 RID: 11190
+	private MaterialInstance.FloatProperty dst_fresnelOutside;
+
+	// Token: 0x04002BB7 RID: 11191
+	private MaterialInstance.FloatProperty dst_fresnelInsideA;
+
+	// Token: 0x04002BB8 RID: 11192
+	private MaterialInstance.FloatProperty dst_fresnelInsideB;
+
+	// Token: 0x04002BB9 RID: 11193
+	private MaterialInstance.FloatProperty dst_reflectBump;
+
+	// Token: 0x04002BBA RID: 11194
+	private MaterialInstance.FloatProperty dst_boost;
+
+	// Token: 0x04002BBB RID: 11195
+	private MaterialInstance.FloatProperty dst_boostTreshold;
+
+	// Token: 0x04002BBC RID: 11196
+	private MaterialInstance.FloatProperty dst_vignette;
+
+	// Token: 0x04002BBD RID: 11197
+	private MaterialInstance.FloatProperty dst_vignetteLength;
+
+	// Token: 0x04002BBE RID: 11198
+	private MaterialInstance.FloatProperty dst_noise;
+
+	// Token: 0x04002BBF RID: 11199
+	private MaterialInstance.FloatProperty dst_refractBump;
+
+	// Token: 0x04002BC0 RID: 11200
+	private MaterialInstance.FloatProperty dst_refractBlur;
+
+	// Token: 0x04002BC1 RID: 11201
+	private MaterialInstance.FloatProperty dst_refractDist;
+
+	// Token: 0x04002BC2 RID: 11202
+	private MaterialInstance.FloatProperty dst_pdTime;
+
+	// Token: 0x04002BC3 RID: 11203
+	private MaterialInstance.FloatProperty dst_bumpMultiplier;
+
+	// Token: 0x04002BC4 RID: 11204
+	private Submarine submarine;
+
+	// Token: 0x04002BC5 RID: 11205
+	private bool hasBeenSetup;
+
+	// Token: 0x04002BC6 RID: 11206
+	[NonSerialized]
+	private bool afterFirstUpdate;
+
+	// Token: 0x04002BC7 RID: 11207
+	private Vector4 cachedBumpTiling = Vector4.zero;
+
+	// Token: 0x04002BC8 RID: 11208
+	private float cachedBumpSpeed;
+
+	// Token: 0x04002BC9 RID: 11209
+	private Texture cachedBumpMap;
+
+	// Token: 0x04002BCA RID: 11210
+	private float cachedFresnelBump;
+
+	// Token: 0x04002BCB RID: 11211
+	private float cachedFresnelOutside;
+
+	// Token: 0x04002BCC RID: 11212
+	private float cachedFresnelInsideA;
+
+	// Token: 0x04002BCD RID: 11213
+	private float cachedFresnelInsideB;
+
+	// Token: 0x04002BCE RID: 11214
+	private float cachedReflectBump;
+
+	// Token: 0x04002BCF RID: 11215
+	private float cachedBoost;
+
+	// Token: 0x04002BD0 RID: 11216
+	private float cachedBoostThreshold;
+
+	// Token: 0x04002BD1 RID: 11217
+	private float cachedVignette;
+
+	// Token: 0x04002BD2 RID: 11218
+	private float cachedVignetteLength;
+
+	// Token: 0x04002BD3 RID: 11219
+	private float cachedNoise;
+
+	// Token: 0x04002BD4 RID: 11220
+	private float cachedRefractBump;
+
+	// Token: 0x04002BD5 RID: 11221
+	private float cachedRefractBlur;
+
+	// Token: 0x04002BD6 RID: 11222
+	private float cachedRefractDist;
+
+	// Token: 0x04002BD7 RID: 11223
+	private float cachedPDTime;
+
+	// Token: 0x04002BD8 RID: 11224
+	private float cachedBumpMultiplier;
+
+	// Token: 0x04002BD9 RID: 11225
+	private Vector4 lastBounds = Vector4.zero;
+}

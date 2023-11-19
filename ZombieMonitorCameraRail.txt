@@ -1,0 +1,209 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200042D RID: 1069
+public class ZombieMonitorCameraRail : MonoBehaviour
+{
+	// Token: 0x06001C00 RID: 7168 RVA: 0x000F51C8 File Offset: 0x000F33C8
+	[LateProcessBuild(0)]
+	public void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.Init();
+	}
+
+	// Token: 0x06001C01 RID: 7169 RVA: 0x000F51E4 File Offset: 0x000F33E4
+	private void Start()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x06001C02 RID: 7170 RVA: 0x000F51EC File Offset: 0x000F33EC
+	public void Init()
+	{
+		if (this.mRailNodes.Count != 0)
+		{
+			return;
+		}
+		float num = 0f;
+		for (int i = 0; i < this.nodes.Count; i++)
+		{
+			ZombieMonitorCameraRail.RailNode railNode = new ZombieMonitorCameraRail.RailNode();
+			railNode.position = this.nodes[i].position;
+			railNode.length = ((i < this.nodes.Count - 1) ? (this.nodes[i + 1].position - this.nodes[i].position).magnitude : 0f);
+			railNode.direction = ((i < this.nodes.Count - 1) ? (this.nodes[i + 1].position - this.nodes[i].position).normalized : Vector3.zero);
+			this.mRailNodes.Add(railNode);
+			num += railNode.length;
+		}
+		this.maxRailPos = num;
+	}
+
+	// Token: 0x06001C03 RID: 7171 RVA: 0x000F5310 File Offset: 0x000F3510
+	public float GetClosestPointAsDistance(Vector3 aPos)
+	{
+		float num = float.MaxValue;
+		float result = 0f;
+		float num2 = 0f;
+		for (int i = 0; i < this.mRailNodes.Count - 1; i++)
+		{
+			Vector3 position = this.mRailNodes[i].position;
+			Vector3 position2 = this.mRailNodes[i + 1].position;
+			Vector3 vector = aPos - position;
+			Vector3 vector2 = position2 - position;
+			float num3 = vector2.x * vector2.x + vector2.y * vector2.y + vector2.z * vector2.z;
+			float num4 = vector.x * vector2.x + vector.y * vector2.y + vector.z * vector2.z;
+			float num5 = Mathf.Clamp01(num4 / num3);
+			Vector3 vector3 = position + vector2 * num5;
+			float sqrMagnitude = (vector3 - aPos).sqrMagnitude;
+			if (sqrMagnitude < num)
+			{
+				num = sqrMagnitude;
+				result = num2 + (vector2 * num5).magnitude;
+			}
+			num2 += vector2.magnitude;
+		}
+		return result;
+	}
+
+	// Token: 0x06001C04 RID: 7172 RVA: 0x000F5448 File Offset: 0x000F3648
+	public Vector3 ClampToRail(ref Vector3 worldPos)
+	{
+		int num = 0;
+		float x = worldPos.x;
+		int i = 1;
+		int count = this.nodes.Count;
+		while (i < count)
+		{
+			if (this.nodes[i].position.x >= x)
+			{
+				break;
+			}
+			num = i;
+			i++;
+		}
+		if (this.nodes.Count > num + 1)
+		{
+			Vector3 position = this.nodes[num].position;
+			Vector3 position2 = this.nodes[num + 1].position;
+			float num2 = (x - position.x) / (position2.x - position.x);
+			worldPos = position * (1f - num2) + position2 * num2;
+			worldPos.x = x;
+			return (position2 - position).normalized;
+		}
+		return Vector3.zero;
+	}
+
+	// Token: 0x06001C05 RID: 7173 RVA: 0x000F5540 File Offset: 0x000F3740
+	public Vector3 GetPositionFromDistance(float aDistanceOnRail)
+	{
+		if (aDistanceOnRail <= 0f)
+		{
+			return this.mRailNodes[0].position;
+		}
+		float num = aDistanceOnRail;
+		int i = 0;
+		int count = this.mRailNodes.Count;
+		while (i < count)
+		{
+			ZombieMonitorCameraRail.RailNode railNode = this.mRailNodes[i];
+			if (num < railNode.length)
+			{
+				return railNode.position + railNode.direction * num;
+			}
+			num -= railNode.length;
+			i++;
+		}
+		return this.mRailNodes[this.mRailNodes.Count - 1].position;
+	}
+
+	// Token: 0x06001C06 RID: 7174 RVA: 0x000F55E4 File Offset: 0x000F37E4
+	public float GetPositionOfNextNode(float aDistanceOnRail, float aVelocity)
+	{
+		if (aDistanceOnRail < 0f)
+		{
+			return -aDistanceOnRail;
+		}
+		float num = aDistanceOnRail;
+		int i = 0;
+		while (i < this.mRailNodes.Count)
+		{
+			if (num < this.mRailNodes[i].length)
+			{
+				if (aVelocity < 0f)
+				{
+					return aDistanceOnRail - num;
+				}
+				return aDistanceOnRail - num + this.mRailNodes[i].length;
+			}
+			else
+			{
+				num -= this.mRailNodes[i].length;
+				i++;
+			}
+		}
+		return num;
+	}
+
+	// Token: 0x06001C07 RID: 7175 RVA: 0x000F5670 File Offset: 0x000F3870
+	public float GetRadiansOfNextTurn(float aDistanceOnRail, float aVelocity)
+	{
+		if (aDistanceOnRail < 0f)
+		{
+			return 0f;
+		}
+		float num = aDistanceOnRail;
+		int i = 0;
+		while (i < this.mRailNodes.Count)
+		{
+			if (num < this.mRailNodes[i].length)
+			{
+				if (aVelocity < 0f)
+				{
+					return (i > 1) ? Mathf.Acos(Vector3.Dot(this.mRailNodes[i].direction, this.mRailNodes[i - 1].direction)) : 0f;
+				}
+				return (i < this.mRailNodes.Count - 2) ? Mathf.Acos(Vector3.Dot(this.mRailNodes[i].direction, this.mRailNodes[i + 1].direction)) : 0f;
+			}
+			else
+			{
+				num -= this.mRailNodes[i].length;
+				i++;
+			}
+		}
+		return 0f;
+	}
+
+	// Token: 0x0400335B RID: 13147
+	public List<Transform> nodes = new List<Transform>();
+
+	// Token: 0x0400335C RID: 13148
+	public float maxRailPos;
+
+	// Token: 0x0400335D RID: 13149
+	[SerializeField]
+	[HideInInspector]
+	private List<ZombieMonitorCameraRail.RailNode> mRailNodes = new List<ZombieMonitorCameraRail.RailNode>();
+
+	// Token: 0x0400335E RID: 13150
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x0200042E RID: 1070
+	[Serializable]
+	private class RailNode
+	{
+		// Token: 0x0400335F RID: 13151
+		public Vector3 position;
+
+		// Token: 0x04003360 RID: 13152
+		public Vector3 direction;
+
+		// Token: 0x04003361 RID: 13153
+		public float length;
+	}
+}

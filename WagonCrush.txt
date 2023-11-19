@@ -1,0 +1,66 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000249 RID: 585
+public class WagonCrush : Device, IPreAwake
+{
+	// Token: 0x06001225 RID: 4645 RVA: 0x000AAA60 File Offset: 0x000A8C60
+	public bool PreAwake(int callcount)
+	{
+		this.crush = SignalOut.Create("crush", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001226 RID: 4646 RVA: 0x000AAA7C File Offset: 0x000A8C7C
+	protected override void Start()
+	{
+		base.Start();
+		this.startPosX = this.wagon.position.x;
+	}
+
+	// Token: 0x06001227 RID: 4647 RVA: 0x000AAAA8 File Offset: 0x000A8CA8
+	private void FixedUpdate()
+	{
+		int i = 0;
+		int count = this.boysInside.Count;
+		while (i < count)
+		{
+			Boy boy = this.boysInside[i];
+			if (!boy.isDead)
+			{
+				float num = Mathf.Abs(this.startPosX - this.wagon.position.x);
+				if (this.debug)
+				{
+				}
+				if (num < this.crushDist && (boy.state is BoyGrabPlateauState || boy.state is BoyReachPlateauState))
+				{
+					boy.Kill();
+					BoyUtils.StartCustomAnim(boy, (boy.facing != 1f) ? this.animCrushLeft : this.animCrushRight, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+					this.crush.Signal();
+				}
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x04002153 RID: 8531
+	public Transform wagon;
+
+	// Token: 0x04002154 RID: 8532
+	public AnimClipNode animCrushLeft;
+
+	// Token: 0x04002155 RID: 8533
+	public AnimClipNode animCrushRight;
+
+	// Token: 0x04002156 RID: 8534
+	public float crushDist = 0.4f;
+
+	// Token: 0x04002157 RID: 8535
+	public bool debug;
+
+	// Token: 0x04002158 RID: 8536
+	public SignalOut crush;
+
+	// Token: 0x04002159 RID: 8537
+	private float startPosX;
+}

@@ -1,0 +1,409 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000369 RID: 873
+[ExecuteInEditMode]
+public class WaterCameraRendering : MonoBehaviour
+{
+	// Token: 0x060017F7 RID: 6135 RVA: 0x000D1308 File Offset: 0x000CF508
+	private void OnEnable()
+	{
+		this.cam = base.GetComponent<Camera>();
+		this.pdPostCombined = base.GetComponent<D11PDPostCombined>();
+		this.d11Water = base.GetComponent<D11WaterCameraRendering>();
+		if (this.d11Water == null)
+		{
+			this.d11Water = base.gameObject.AddComponent<D11WaterCameraRendering>();
+		}
+		this._transform = base.transform;
+	}
+
+	// Token: 0x060017F8 RID: 6136 RVA: 0x000D1368 File Offset: 0x000CF568
+	public void WarmUp()
+	{
+		this.watersCoarseSort.Add(null);
+		this.watersCoarseSort.Clear();
+		int count = WaterCameraRendering.waterMasters.Count;
+	}
+
+	// Token: 0x060017F9 RID: 6137 RVA: 0x000D1398 File Offset: 0x000CF598
+	private void OnPreCull()
+	{
+		if (WaterCameraRendering.TranslateWaterEdge.size > 0)
+		{
+			WaterCameraRendering.EdgeAction edgeAction;
+			edgeAction.pos = this._transform.position + this._transform.forward * this.cam.nearClipPlane;
+			edgeAction.up = this._transform.up;
+			edgeAction.up /= edgeAction.up.y;
+			edgeAction.rot = Quaternion.Euler(0f, this._transform.eulerAngles.y, 0f);
+			WaterCameraRendering.TranslateWaterEdge.Dispatch(ref edgeAction);
+		}
+		if (this.clearStencil && this.quad != null && this.clearMat != null)
+		{
+			Graphics.DrawMesh(this.quad, this._transform.localToWorldMatrix, this.clearMat, 0, this.cam);
+		}
+		this.OnPreRender_BEFORE_FORKING();
+	}
+
+	// Token: 0x060017FA RID: 6138 RVA: 0x000D14A8 File Offset: 0x000CF6A8
+	private void OnPreRender_BEFORE_FORKING()
+	{
+		WaterCameraRendering.camPos = base.transform.position;
+		int i = 0;
+		int count = WaterCameraRendering.waterMasters.Count;
+		while (i < count)
+		{
+			Transform transform = WaterCameraRendering.waterMasters[i].transform;
+			WaterCameraRendering.waterMasters[i].camDist = this.BoxDistance(WaterCameraRendering.camPos - transform.position, transform.localScale * 0.5f);
+			i++;
+		}
+		this.watersCoarseSort.Clear();
+		this.watersCoarseSort.AddRange(WaterCameraRendering.waterMasters);
+		this.watersCoarseSort.Sort(WaterCameraRendering.fcomp);
+		if (this.raySort)
+		{
+			this.RaycastSort();
+		}
+		this.UnderWaterCheck();
+		for (int j = 0; j < WaterCameraRendering.watersLength; j++)
+		{
+			if (this.underWater)
+			{
+				WaterCameraRendering.watersSorted[j].UpdateQueueUnderWater(j, WaterCameraRendering.watersLength - 1);
+			}
+			else
+			{
+				WaterCameraRendering.watersSorted[WaterCameraRendering.watersLength - j - 1].UpdateQueueOverWater(j, WaterCameraRendering.watersLength - 1);
+			}
+		}
+		WaterCameraRendering.UpdateTransparentWaterQueues.Dispatch();
+	}
+
+	// Token: 0x060017FB RID: 6139 RVA: 0x000D15DC File Offset: 0x000CF7DC
+	public static void AddToWaters(WaterQueueMaster wQM)
+	{
+		WaterCameraRendering.waterMasters.Add(wQM);
+	}
+
+	// Token: 0x060017FC RID: 6140 RVA: 0x000D15EC File Offset: 0x000CF7EC
+	public static void RemoveFromWaters(WaterQueueMaster wQM)
+	{
+		WaterCameraRendering.waterMasters.Remove(wQM);
+	}
+
+	// Token: 0x060017FD RID: 6141 RVA: 0x000D15FC File Offset: 0x000CF7FC
+	private void UnderWaterCheck()
+	{
+		this.underWater = false;
+		if (WaterCameraRendering.watersLength > 0 && WaterCameraRendering.watersSorted[0].camDist <= 0f)
+		{
+			this.underWater = true;
+		}
+		this.d11Water.underWater = this.underWater;
+		if (this.pdPostCombined)
+		{
+			if (WaterCameraRendering.watersLength > 0 && this.watersCoarseSort[0] && this.watersCoarseSort[0].effectPost)
+			{
+				if (WaterCameraRendering.watersLength > 1 && this.watersCoarseSort[1] && this.watersCoarseSort[1].camDist < 0.5f)
+				{
+					this.underWaterNess = -1f;
+				}
+				else
+				{
+					this.underWaterNess = this.watersCoarseSort[0].camDist;
+				}
+				this.pdPostCombined.waterDist = this.underWaterNess;
+			}
+			else
+			{
+				this.pdPostCombined.waterDist = 0f;
+			}
+		}
+	}
+
+	// Token: 0x060017FE RID: 6142 RVA: 0x000D171C File Offset: 0x000CF91C
+	private float BoxDistance(Vector2 p, Vector2 b)
+	{
+		Vector2 vector = Vector2.Max(p, -p) - b;
+		return Mathf.Min(Mathf.Max(vector.x, vector.y), 0f) + Vector2.Max(vector, Vector2.zero).magnitude;
+	}
+
+	// Token: 0x060017FF RID: 6143 RVA: 0x000D1770 File Offset: 0x000CF970
+	private void RaycastSort()
+	{
+		WaterCameraRendering.watersLength = Mathf.Min(16, this.watersCoarseSort.Count);
+		for (int i = 0; i < WaterCameraRendering.watersLength; i++)
+		{
+			WaterCameraRendering.waters[i] = new WaterCameraRendering.SortWater(this.watersCoarseSort[i]);
+		}
+		for (int j = 0; j < WaterCameraRendering.watersLength; j++)
+		{
+			int k;
+			for (k = 0; k < WaterCameraRendering.watersLength; k++)
+			{
+				if (!WaterCameraRendering.waters[k].moved)
+				{
+					break;
+				}
+			}
+			float maxValue = float.MaxValue;
+			if (WaterCameraRendering.waters[k].water.camDist > 0f)
+			{
+				int num = k + 1;
+				int l = num;
+				int num2 = WaterCameraRendering.watersLength - j;
+				while (l < num2)
+				{
+					if (num != k && !WaterCameraRendering.waters[num].moved)
+					{
+						if (WaterCameraRendering.waters[k].RayTestAgainst(ref num, ref k, ref maxValue))
+						{
+							num = k;
+						}
+						if (WaterCameraRendering.waters[k].water.camDist < 0f)
+						{
+							break;
+						}
+					}
+					num++;
+					l++;
+				}
+			}
+			WaterCameraRendering.watersSorted[j] = WaterCameraRendering.waters[k].water;
+			WaterCameraRendering.waters[k].moved = true;
+		}
+	}
+
+	// Token: 0x04002AF6 RID: 10998
+	public bool clearStencil = true;
+
+	// Token: 0x04002AF7 RID: 10999
+	public bool underWater;
+
+	// Token: 0x04002AF8 RID: 11000
+	public float underWaterNess = -1f;
+
+	// Token: 0x04002AF9 RID: 11001
+	public static List<WaterQueueMaster> waterMasters = new List<WaterQueueMaster>();
+
+	// Token: 0x04002AFA RID: 11002
+	private List<WaterQueueMaster> watersCoarseSort = new List<WaterQueueMaster>();
+
+	// Token: 0x04002AFB RID: 11003
+	public static int ReservedTransparencyQueues = 12;
+
+	// Token: 0x04002AFC RID: 11004
+	public static int ReservedWaveQueues = 12;
+
+	// Token: 0x04002AFD RID: 11005
+	public static int TransparencyQueueRefract;
+
+	// Token: 0x04002AFE RID: 11006
+	public static int TransparencyQueueNoRefract;
+
+	// Token: 0x04002AFF RID: 11007
+	public static int WaveQueue;
+
+	// Token: 0x04002B00 RID: 11008
+	public static FastEventEx<WaterCameraRendering.EdgeAction> TranslateWaterEdge = new FastEventEx<WaterCameraRendering.EdgeAction>(32);
+
+	// Token: 0x04002B01 RID: 11009
+	public static FastEvent UpdateTransparentWaterQueues = new FastEvent(128);
+
+	// Token: 0x04002B02 RID: 11010
+	private Camera cam;
+
+	// Token: 0x04002B03 RID: 11011
+	public static Vector2 camPos;
+
+	// Token: 0x04002B04 RID: 11012
+	[HideInInspector]
+	public Mesh quad;
+
+	// Token: 0x04002B05 RID: 11013
+	[HideInInspector]
+	public Material clearMat;
+
+	// Token: 0x04002B06 RID: 11014
+	private D11PDPostCombined pdPostCombined;
+
+	// Token: 0x04002B07 RID: 11015
+	private D11WaterCameraRendering d11Water;
+
+	// Token: 0x04002B08 RID: 11016
+	private Transform _transform;
+
+	// Token: 0x04002B09 RID: 11017
+	private static WaterCameraRendering.wqmComparer fcomp = new WaterCameraRendering.wqmComparer();
+
+	// Token: 0x04002B0A RID: 11018
+	public bool raySort = true;
+
+	// Token: 0x04002B0B RID: 11019
+	private static WaterCameraRendering.SortWater[] waters = new WaterCameraRendering.SortWater[16];
+
+	// Token: 0x04002B0C RID: 11020
+	private static WaterQueueMaster[] watersSorted = new WaterQueueMaster[16];
+
+	// Token: 0x04002B0D RID: 11021
+	private static int watersLength = 16;
+
+	// Token: 0x0200036A RID: 874
+	public struct EdgeAction
+	{
+		// Token: 0x04002B0E RID: 11022
+		public Vector3 pos;
+
+		// Token: 0x04002B0F RID: 11023
+		public Vector3 up;
+
+		// Token: 0x04002B10 RID: 11024
+		public Quaternion rot;
+	}
+
+	// Token: 0x0200036B RID: 875
+	private class wqmComparer : IComparer<WaterQueueMaster>
+	{
+		// Token: 0x06001801 RID: 6145 RVA: 0x000D18FC File Offset: 0x000CFAFC
+		public int Compare(WaterQueueMaster a, WaterQueueMaster b)
+		{
+			return a.camDist.CompareTo(b.camDist);
+		}
+	}
+
+	// Token: 0x0200036C RID: 876
+	private struct SortWater
+	{
+		// Token: 0x06001802 RID: 6146 RVA: 0x000D1910 File Offset: 0x000CFB10
+		public SortWater(WaterQueueMaster water)
+		{
+			this.water = water;
+			this.moved = false;
+			Transform transform = water.transform;
+			Vector2 vector = transform.position - WaterCameraRendering.camPos;
+			Vector2 vector2 = transform.localScale * 0.5f;
+			this.min = vector - vector2;
+			this.max = vector + vector2;
+			if (water.camDist < 0f)
+			{
+				this.botLef = false;
+				this.botRig = false;
+				this.topLef = false;
+				this.topRig = false;
+				this.rayBotLef = Vector3Fast.zero;
+				this.rayTopRig = Vector3Fast.zero;
+				this.rayBotRig = Vector3Fast.zero;
+				this.rayTopLef = Vector3Fast.zero;
+				return;
+			}
+			bool flag = this.min.y > 0f;
+			bool flag2 = this.max.y < 0f;
+			bool flag3 = this.min.x > 0f;
+			bool flag4 = this.max.x < 0f;
+			this.botLef = (flag3 || flag);
+			this.botRig = (flag4 || flag);
+			this.topLef = (flag3 || flag2);
+			this.topRig = (flag4 || flag2);
+			if (this.botLef)
+			{
+				this.rayBotLef.z = Mathf.Sqrt(this.min.x * this.min.x + this.min.y * this.min.y);
+				this.rayBotLef.x = this.rayBotLef.z / this.min.x;
+				this.rayBotLef.y = this.rayBotLef.z / this.min.y;
+			}
+			else
+			{
+				this.rayBotLef = Vector3Fast.zero;
+			}
+			if (this.topRig)
+			{
+				this.rayTopRig.z = Mathf.Sqrt(this.max.x * this.max.x + this.max.y * this.max.y);
+				this.rayTopRig.x = this.rayTopRig.z / this.min.x;
+				this.rayTopRig.y = this.rayTopRig.z / this.min.y;
+			}
+			else
+			{
+				this.rayTopRig = Vector3Fast.zero;
+			}
+			if (this.botRig)
+			{
+				this.rayBotRig.z = Mathf.Sqrt(this.max.x * this.max.x + this.min.y * this.min.y);
+				this.rayBotRig.x = this.rayBotRig.z / this.max.x;
+				this.rayBotRig.y = this.rayBotRig.z / this.min.y;
+			}
+			else
+			{
+				this.rayBotRig = Vector3Fast.zero;
+			}
+			if (this.topLef)
+			{
+				this.rayTopLef.z = Mathf.Sqrt(this.min.x * this.min.x + this.max.y * this.max.y);
+				this.rayTopLef.x = this.rayTopLef.z / this.min.x;
+				this.rayTopLef.y = this.rayTopLef.z / this.max.y;
+			}
+			else
+			{
+				this.rayTopLef = Vector3Fast.zero;
+			}
+		}
+
+		// Token: 0x06001803 RID: 6147 RVA: 0x000D1CE0 File Offset: 0x000CFEE0
+		public bool RayTestAgainst(ref int occ, ref int near, ref float minDelta)
+		{
+			return (this.botLef && this.RayRectTest(ref this.rayBotLef, ref occ, ref near, ref minDelta)) || (this.topRig && this.RayRectTest(ref this.rayTopRig, ref occ, ref near, ref minDelta)) || (this.botRig && this.RayRectTest(ref this.rayBotRig, ref occ, ref near, ref minDelta)) || (this.topLef && this.RayRectTest(ref this.rayTopLef, ref occ, ref near, ref minDelta));
+		}
+
+		// Token: 0x06001804 RID: 6148 RVA: 0x000D1D74 File Offset: 0x000CFF74
+		private bool RayRectTest(ref Vector3 ray, ref int occ, ref int near, ref float minDelta)
+		{
+			Vector2 vector = Vector2.Scale(WaterCameraRendering.waters[occ].min, ray);
+			Vector2 vector2 = Vector2.Scale(WaterCameraRendering.waters[occ].max, ray);
+			float num = Mathf.Max(Mathf.Min(vector2.x, vector.x), Mathf.Min(vector2.y, vector.y));
+			float num2 = Mathf.Min(Mathf.Max(vector2.x, vector.x), Mathf.Max(vector2.y, vector.y));
+			float num3 = ray.z - num - 0.1f;
+			bool flag = num > 0f && num2 > 0f && num2 > num && num3 > 0f;
+			if (flag && num3 < minDelta)
+			{
+				near = occ;
+				minDelta = num3;
+			}
+			return flag;
+		}
+
+		// Token: 0x04002B11 RID: 11025
+		public WaterQueueMaster water;
+
+		// Token: 0x04002B12 RID: 11026
+		public bool moved;
+
+		// Token: 0x04002B13 RID: 11027
+		private Vector2 min;
+
+		// Token: 0x04002B14 RID: 11028
+		private Vector2 max;
+
+		// Token: 0x04002B15 RID: 11029
+		private bool botLef;
+
+		// Token: 0x04002B16 RID: 11030
+		private bool topRig;
+
+		// Token: 0x04002B17 RID: 11031
+		private bool botRig;
+
+		// Token: 0x04002B18 RID: 11032
+		private bool topLef;
+
+		// Token: 0x04002B19 RID: 11033
+		private Vector3 rayBotLef;
+
+		// Token: 0x04002B1A RID: 11034
+		private Vector3 rayTopRig;
+
+		// Token: 0x04002B1B RID: 11035
+		private Vector3 rayBotRig;
+
+		// Token: 0x04002B1C RID: 11036
+		private Vector3 rayTopLef;
+	}
+}

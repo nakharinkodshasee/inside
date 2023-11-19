@@ -1,0 +1,537 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200024A RID: 586
+public class WaterDoor : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001229 RID: 4649 RVA: 0x000AABC4 File Offset: 0x000A8DC4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.door.gameObject, this);
+		this.audioStartOpenEvent = new AudioEventSimpleLocal(this.audioPrefix + "_waterDoorOpen", akGameObj);
+		this.audioStartCloseEvent = new AudioEventSimpleLocal(this.audioPrefix + "_waterDoorClose", akGameObj);
+		this.audioClosedEvent = new AudioEventSimpleLocal(this.audioPrefix + "_waterDoorClosed", akGameObj);
+		this.audioOpenedEvent = new AudioEventSimpleLocal(this.audioPrefix + "_waterDoorOpened", akGameObj);
+		this.audioChangeToCloseEvent = new AudioEventSimpleLocal(this.audioPrefix + "_waterDoorChangeToClose", akGameObj);
+		this.audioChangeToOpenEvent = new AudioEventSimpleLocal(this.audioPrefix + "_waterDoorChangeToOpen", akGameObj);
+		float num = this.door.transform.lossyScale.y * 0.5f + this.safetyDist;
+		float y = this.door.transform.position.y;
+		if (this.waterOnCeiling)
+		{
+			this.boundaryUp = y + num + 0.1f;
+			this.boundaryDown = y + num;
+		}
+		else
+		{
+			this.boundaryDown = y - num;
+			this.boundaryUp = y - num + 0.1f;
+		}
+		float num2 = Mathf.Abs(this.down.position.y - this.up.position.y);
+		this.convertedMoveSpeed = 1f / (num2 / this.moveSpeed);
+		this.doorRigidbody = this.door.GetComponent<Rigidbody>();
+		this.doorCollider = this.door.GetComponentInChildren<Collider>();
+		this.gateColliderHeight = this.doorCollider.bounds.extents.y;
+	}
+
+	// Token: 0x0600122A RID: 4650 RVA: 0x000AADA8 File Offset: 0x000A8FA8
+	public bool PreAwake(int callcount)
+	{
+		this.doorIsOpen = SignalOut.Create("doorIsOpen", base.gameObject);
+		this.doorIsClosed = SignalOut.Create("doorIsClosed", base.gameObject);
+		this.blocked = SignalOut.Create("blocked", base.gameObject);
+		this.emergencyOpen = SignalIn.Create("emergencyOpen", base.gameObject, new Action(this.SetEmergencyOpenState));
+		this.loadClosed = SignalIn.Create("loadClosed", base.gameObject, new Action(this.DoLoadClosed));
+		this.loadOpen = SignalIn.Create("loadOpen", base.gameObject, new Action(this.DoLoadOpen));
+		return true;
+	}
+
+	// Token: 0x0600122B RID: 4651 RVA: 0x000AAE60 File Offset: 0x000A9060
+	private void Start()
+	{
+		if (this.water == null)
+		{
+			return;
+		}
+		this.OnPreProcess();
+		float x = this.doorCollider.bounds.extents.x;
+		float x2 = this.doorCollider.transform.position.x;
+		if (this.blockers.Length > 0)
+		{
+			float z = this.blockers[0].transform.position.z;
+			Vector3 position = base.transform.position;
+			position.x = x2 + x + 0.02f;
+			position.z = z;
+			this.rayBlockRight = new Ray(position, Vector3.down);
+			Vector3 position2 = base.transform.position;
+			position2.x = x2 - x - 0.02f;
+			position2.z = z;
+			this.rayBlockLeft = new Ray(position2, Vector3.down);
+		}
+		if (this.startOpen)
+		{
+			this.state = WaterDoor.State.LoadOpen;
+		}
+		else
+		{
+			this.state = WaterDoor.State.LoadClosed;
+		}
+	}
+
+	// Token: 0x0600122C RID: 4652 RVA: 0x000AAF74 File Offset: 0x000A9174
+	private void DoLoadClosed()
+	{
+		this.state = WaterDoor.State.LoadClosed;
+	}
+
+	// Token: 0x0600122D RID: 4653 RVA: 0x000AAF80 File Offset: 0x000A9180
+	private void DoLoadOpen()
+	{
+		this.state = WaterDoor.State.LoadOpen;
+	}
+
+	// Token: 0x0600122E RID: 4654 RVA: 0x000AAF8C File Offset: 0x000A918C
+	private void SetEmergencyOpenState()
+	{
+		this.currentMoveTarget = this.up;
+		this.audioStartOpenEvent.PostFast();
+		this.UpdateBlock();
+		this.state = WaterDoor.State.EmergencyOpen;
+	}
+
+	// Token: 0x0600122F RID: 4655 RVA: 0x000AAFB4 File Offset: 0x000A91B4
+	private void EmergencyOpenState()
+	{
+		this.timer += Time.deltaTime;
+		if (this.timer >= this.emergencyTime / 4f)
+		{
+			this.UpdateMove();
+		}
+		if (this.timer >= this.emergencyTime)
+		{
+			this.timer = 0f;
+			this.doorIsOpen.Signal();
+			this.SetMoveUpState();
+		}
+	}
+
+	// Token: 0x06001230 RID: 4656 RVA: 0x000AB020 File Offset: 0x000A9220
+	private void SetMoveDownState()
+	{
+		this.currentMoveTarget = this.down;
+		this.doorIsClosed.Signal();
+		this.UpdateBlock();
+		this.state = WaterDoor.State.MoveDown;
+	}
+
+	// Token: 0x06001231 RID: 4657 RVA: 0x000AB054 File Offset: 0x000A9254
+	private void MoveDownState()
+	{
+		this.UpdateMove();
+		if (this.OpenCheck())
+		{
+			this.audioChangeToOpenEvent.PostFast();
+			this.SetMoveUpState();
+		}
+	}
+
+	// Token: 0x06001232 RID: 4658 RVA: 0x000AB07C File Offset: 0x000A927C
+	private void SetMoveUpState()
+	{
+		this.currentMoveTarget = this.up;
+		this.doorIsOpen.Signal();
+		this.UpdateBlock();
+		this.state = WaterDoor.State.MoveUp;
+	}
+
+	// Token: 0x06001233 RID: 4659 RVA: 0x000AB0B0 File Offset: 0x000A92B0
+	private void MoveUpState()
+	{
+		this.UpdateMove();
+		if (this.CloseCheck())
+		{
+			this.audioChangeToCloseEvent.PostFast();
+			this.SetMoveDownState();
+		}
+	}
+
+	// Token: 0x06001234 RID: 4660 RVA: 0x000AB0D8 File Offset: 0x000A92D8
+	private void OpenedState()
+	{
+		if (this.CloseCheck())
+		{
+			this.audioStartCloseEvent.PostFast();
+			this.SetMoveDownState();
+		}
+	}
+
+	// Token: 0x06001235 RID: 4661 RVA: 0x000AB0F8 File Offset: 0x000A92F8
+	private void ClosedState()
+	{
+		if (this.OpenCheck())
+		{
+			this.audioStartOpenEvent.PostFast();
+			this.SetMoveUpState();
+		}
+	}
+
+	// Token: 0x06001236 RID: 4662 RVA: 0x000AB118 File Offset: 0x000A9318
+	private void LoadOpenState()
+	{
+		this.doorRigidbody.position = this.up.position;
+		this.openFraction = 1f;
+		this.state = WaterDoor.State.Opened;
+	}
+
+	// Token: 0x06001237 RID: 4663 RVA: 0x000AB150 File Offset: 0x000A9350
+	private void LoadClosedState()
+	{
+		this.doorRigidbody.position = this.down.position;
+		this.openFraction = 0f;
+		this.state = WaterDoor.State.Closed;
+	}
+
+	// Token: 0x06001238 RID: 4664 RVA: 0x000AB188 File Offset: 0x000A9388
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case WaterDoor.State.Opened:
+			this.OpenedState();
+			break;
+		case WaterDoor.State.Closed:
+			this.ClosedState();
+			break;
+		case WaterDoor.State.MoveUp:
+			this.MoveUpState();
+			break;
+		case WaterDoor.State.MoveDown:
+			this.MoveDownState();
+			break;
+		case WaterDoor.State.EmergencyOpen:
+			this.EmergencyOpenState();
+			break;
+		case WaterDoor.State.LoadOpen:
+			this.LoadOpenState();
+			break;
+		case WaterDoor.State.LoadClosed:
+			this.LoadClosedState();
+			break;
+		}
+	}
+
+	// Token: 0x06001239 RID: 4665 RVA: 0x000AB214 File Offset: 0x000A9414
+	private void UpdateMove()
+	{
+		if (this.currentMoveTarget == this.up)
+		{
+			this.openFraction = Mathf.MoveTowards(this.openFraction, 1f, this.convertedMoveSpeed * Time.deltaTime);
+		}
+		else
+		{
+			this.openFraction = Mathf.MoveTowards(this.openFraction, 0f, this.convertedMoveSpeed * Time.deltaTime);
+		}
+		Vector3 vector = Vector3.Lerp(this.down.position, this.up.position, this.moveCurve.Evaluate(this.openFraction));
+		vector.y = this.CheckBlock(vector.y);
+		this.doorRigidbody.MovePosition(vector);
+		float num = Vector3.Distance(this.door.transform.position, this.currentMoveTarget.position);
+		if (num <= 0.01f && this.currentMoveTarget == this.up)
+		{
+			this.audioOpenedEvent.PostFast();
+			this.state = WaterDoor.State.Opened;
+		}
+		else if (num <= 0.01f && this.currentMoveTarget == this.down)
+		{
+			this.audioClosedEvent.PostFast();
+			this.state = WaterDoor.State.Closed;
+		}
+	}
+
+	// Token: 0x0600123A RID: 4666 RVA: 0x000AB35C File Offset: 0x000A955C
+	private bool CloseCheck()
+	{
+		if (this.waterOnCeiling)
+		{
+			return this.GetWaterHeight() < this.boundaryDown;
+		}
+		return this.GetWaterHeight() > this.boundaryUp;
+	}
+
+	// Token: 0x0600123B RID: 4667 RVA: 0x000AB394 File Offset: 0x000A9594
+	private bool OpenCheck()
+	{
+		if (this.waterOnCeiling)
+		{
+			return this.GetWaterHeight() > this.boundaryUp;
+		}
+		return this.GetWaterHeight() < this.boundaryDown;
+	}
+
+	// Token: 0x0600123C RID: 4668 RVA: 0x000AB3CC File Offset: 0x000A95CC
+	private float GetWaterHeight()
+	{
+		float y = this.water.transform.position.y;
+		float y2 = this.water.transform.lossyScale.y;
+		return y + ((!this.waterOnCeiling) ? (y2 * 0.5f) : (-y2 * 0.5f));
+	}
+
+	// Token: 0x0600123D RID: 4669 RVA: 0x000AB430 File Offset: 0x000A9630
+	public bool AddingWaterAllowed(FluidVolume fluidVolume)
+	{
+		if (this.currentlyBlocked)
+		{
+			float num = fluidVolume.transform.position.y - fluidVolume.transform.localScale.y / 2f;
+			if (num < this.blockedPosY - this.gateColliderHeight + 0.35f)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	// Token: 0x0600123E RID: 4670 RVA: 0x000AB494 File Offset: 0x000A9694
+	private void UpdateBlock()
+	{
+		if (this.blockers.Length == 0)
+		{
+			return;
+		}
+		float num = 10f;
+		int i = 0;
+		int num2 = this.blockers.Length;
+		while (i < num2)
+		{
+			Collider collider = this.blockers[i];
+			RaycastHit raycastHit;
+			if (collider.Raycast(this.rayBlockRight, ref raycastHit, 4f) || collider.Raycast(this.rayBlockLeft, ref raycastHit, 4f))
+			{
+				float num3 = base.transform.position.y - raycastHit.point.y;
+				if (num3 < num)
+				{
+					num = num3;
+				}
+			}
+			i++;
+		}
+		this.blockedPosY = base.transform.position.y + this.gateColliderHeight - num + 0.001f;
+	}
+
+	// Token: 0x0600123F RID: 4671 RVA: 0x000AB568 File Offset: 0x000A9768
+	private float CheckBlock(float posY)
+	{
+		if (this.blockers.Length <= 0)
+		{
+			return posY;
+		}
+		if (posY < this.blockedPosY)
+		{
+			posY = this.blockedPosY;
+		}
+		bool flag = posY <= this.blockedPosY;
+		if (flag != this.currentlyBlocked)
+		{
+			this.currentlyBlocked = flag;
+			if (this.currentlyBlocked)
+			{
+				this.audioClosedEvent.PostFast();
+				this.blocked.Signal();
+			}
+			else
+			{
+				this.audioStartOpenEvent.PostFast();
+			}
+			int i = 0;
+			int num = this.blockers.Length;
+			while (i < num)
+			{
+				Collider collider = this.blockers[i];
+				Rigidbody attachedRigidbody = collider.attachedRigidbody;
+				if (attachedRigidbody)
+				{
+					if (this.currentlyBlocked)
+					{
+						attachedRigidbody.constraints |= 2;
+					}
+					else
+					{
+						attachedRigidbody.constraints &= -3;
+					}
+				}
+				i++;
+			}
+		}
+		return posY;
+	}
+
+	// Token: 0x0400215A RID: 8538
+	public AnimationCurve moveCurve;
+
+	// Token: 0x0400215B RID: 8539
+	public FluidVolume water;
+
+	// Token: 0x0400215C RID: 8540
+	public Rigidbody door;
+
+	// Token: 0x0400215D RID: 8541
+	public float moveSpeed = 15f;
+
+	// Token: 0x0400215E RID: 8542
+	public Transform down;
+
+	// Token: 0x0400215F RID: 8543
+	public Transform up;
+
+	// Token: 0x04002160 RID: 8544
+	public Collider[] blockers;
+
+	// Token: 0x04002161 RID: 8545
+	public float safetyDist = 0.75f;
+
+	// Token: 0x04002162 RID: 8546
+	public bool waterOnCeiling;
+
+	// Token: 0x04002163 RID: 8547
+	public string audioPrefix = string.Empty;
+
+	// Token: 0x04002164 RID: 8548
+	public bool startOpen;
+
+	// Token: 0x04002165 RID: 8549
+	public bool currentlyBlocked;
+
+	// Token: 0x04002166 RID: 8550
+	public bool debug;
+
+	// Token: 0x04002167 RID: 8551
+	private SignalOut doorIsOpen;
+
+	// Token: 0x04002168 RID: 8552
+	private SignalOut doorIsClosed;
+
+	// Token: 0x04002169 RID: 8553
+	private SignalOut blocked;
+
+	// Token: 0x0400216A RID: 8554
+	private SignalIn emergencyOpen;
+
+	// Token: 0x0400216B RID: 8555
+	private SignalIn loadClosed;
+
+	// Token: 0x0400216C RID: 8556
+	private SignalIn loadOpen;
+
+	// Token: 0x0400216D RID: 8557
+	private WaterDoor.State state;
+
+	// Token: 0x0400216E RID: 8558
+	private Transform currentMoveTarget;
+
+	// Token: 0x0400216F RID: 8559
+	private float emergencyTime = 2f;
+
+	// Token: 0x04002170 RID: 8560
+	private float timer;
+
+	// Token: 0x04002171 RID: 8561
+	private float openFraction;
+
+	// Token: 0x04002172 RID: 8562
+	private float blockedPosY;
+
+	// Token: 0x04002173 RID: 8563
+	private Ray rayBlockRight;
+
+	// Token: 0x04002174 RID: 8564
+	private Ray rayBlockLeft;
+
+	// Token: 0x04002175 RID: 8565
+	[SerializeField]
+	[HideInInspector]
+	private Rigidbody doorRigidbody;
+
+	// Token: 0x04002176 RID: 8566
+	[HideInInspector]
+	[SerializeField]
+	private float boundaryUp;
+
+	// Token: 0x04002177 RID: 8567
+	[SerializeField]
+	[HideInInspector]
+	private float boundaryDown;
+
+	// Token: 0x04002178 RID: 8568
+	[HideInInspector]
+	[SerializeField]
+	private float convertedMoveSpeed;
+
+	// Token: 0x04002179 RID: 8569
+	[SerializeField]
+	[HideInInspector]
+	private float gateColliderHeight;
+
+	// Token: 0x0400217A RID: 8570
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x0400217B RID: 8571
+	[SerializeField]
+	[HideInInspector]
+	private Collider doorCollider;
+
+	// Token: 0x0400217C RID: 8572
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStartOpenEvent;
+
+	// Token: 0x0400217D RID: 8573
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStartCloseEvent;
+
+	// Token: 0x0400217E RID: 8574
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioClosedEvent;
+
+	// Token: 0x0400217F RID: 8575
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioOpenedEvent;
+
+	// Token: 0x04002180 RID: 8576
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioChangeToCloseEvent;
+
+	// Token: 0x04002181 RID: 8577
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioChangeToOpenEvent;
+
+	// Token: 0x0200024B RID: 587
+	private enum State
+	{
+		// Token: 0x04002183 RID: 8579
+		None,
+		// Token: 0x04002184 RID: 8580
+		Opened,
+		// Token: 0x04002185 RID: 8581
+		Closed,
+		// Token: 0x04002186 RID: 8582
+		MoveUp,
+		// Token: 0x04002187 RID: 8583
+		MoveDown,
+		// Token: 0x04002188 RID: 8584
+		EmergencyOpen,
+		// Token: 0x04002189 RID: 8585
+		LoadOpen,
+		// Token: 0x0400218A RID: 8586
+		LoadClosed
+	}
+}

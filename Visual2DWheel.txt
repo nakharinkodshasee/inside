@@ -1,0 +1,42 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000232 RID: 562
+public class Visual2DWheel : MonoBehaviour
+{
+	// Token: 0x06001161 RID: 4449 RVA: 0x000A41FC File Offset: 0x000A23FC
+	private void Awake()
+	{
+		this.initialLocalRotation = base.transform.localEulerAngles;
+		this.initialPos = base.transform.position;
+	}
+
+	// Token: 0x06001162 RID: 4450 RVA: 0x000A422C File Offset: 0x000A242C
+	private void Update()
+	{
+		float num = base.transform.position.x - this.initialPos.x;
+		float y = num * 57.29578f / this.radius;
+		Vector3 localEulerAngles = this.initialLocalRotation;
+		localEulerAngles.y = y;
+		base.transform.localEulerAngles = localEulerAngles;
+	}
+
+	// Token: 0x06001163 RID: 4451 RVA: 0x000A4284 File Offset: 0x000A2484
+	private void OnDrawGizmos()
+	{
+		if (EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			Gizmos.color = Color.white;
+			Gizmos.DrawSphere(base.transform.position, this.radius);
+		}
+	}
+
+	// Token: 0x04001FCB RID: 8139
+	public float radius = 1f;
+
+	// Token: 0x04001FCC RID: 8140
+	private Vector3 initialLocalRotation;
+
+	// Token: 0x04001FCD RID: 8141
+	private Vector3 initialPos;
+}

@@ -1,0 +1,26 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000E3 RID: 227
+public class WormIdleSimple : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000712 RID: 1810 RVA: 0x0004FDB8 File Offset: 0x0004DFB8
+	public bool PreAwake(int callcount)
+	{
+		float speed = Random.Range(this.minAnimSpeed, this.maxAnimSpeed);
+		this.anim[this.animIdle.name].speed = speed;
+		return true;
+	}
+
+	// Token: 0x04000C43 RID: 3139
+	public Animation anim;
+
+	// Token: 0x04000C44 RID: 3140
+	public AnimationClip animIdle;
+
+	// Token: 0x04000C45 RID: 3141
+	public float minAnimSpeed = 0.8f;
+
+	// Token: 0x04000C46 RID: 3142
+	public float maxAnimSpeed = 1.2f;
+}

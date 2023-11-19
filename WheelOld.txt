@@ -1,0 +1,135 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+// Token: 0x020005BA RID: 1466
+public class WheelOld : MonoBehaviour
+{
+	// Token: 0x170000A9 RID: 169
+	// (get) Token: 0x0600254C RID: 9548 RVA: 0x0013211C File Offset: 0x0013031C
+	public bool IsGrounded
+	{
+		get
+		{
+			return this.mGroundNormals.Count > 0;
+		}
+	}
+
+	// Token: 0x0600254D RID: 9549 RVA: 0x0013212C File Offset: 0x0013032C
+	private void Reset()
+	{
+		if (base.GetComponent<CapsuleCollider>() != null)
+		{
+			this.colliderObject = base.GetComponent<CapsuleCollider>();
+		}
+	}
+
+	// Token: 0x0600254E RID: 9550 RVA: 0x0013214C File Offset: 0x0013034C
+	private void FixedUpdate()
+	{
+		if (this.mLastCollisionTimeStep + 1L < PhysicsUtils.stepCount)
+		{
+			this.mGroundNormals.Clear();
+		}
+	}
+
+	// Token: 0x0600254F RID: 9551 RVA: 0x0013216C File Offset: 0x0013036C
+	private void Start()
+	{
+		Vector3 vector = base.transform.TransformDirection(this.spinAxis);
+		this.mVisualSpinAxis = this.visualObject.transform.InverseTransformDirection(vector);
+	}
+
+	// Token: 0x06002550 RID: 9552 RVA: 0x001321A4 File Offset: 0x001303A4
+	private void Update()
+	{
+		float num = this.colliderObject.radius * 3.1415927f * 2f;
+		if (this.IsGrounded)
+		{
+			this.mRotationVelocity = 360f * (this.mOwnerForwardVelocity / num);
+		}
+		else if (this.powered)
+		{
+			float num2 = 360f * (Mathf.Abs(this.mCurrentEnginePower) * this.mMaxForwardVelocity / num);
+			this.mRotationVelocity = Mathf.Clamp(this.mRotationVelocity + this.mCurrentEnginePower * num2 * Time.deltaTime, -num2, num2);
+		}
+		else
+		{
+			this.mRotationVelocity -= Mathf.Sign(this.mRotationVelocity) * this.mMaxForwardVelocity * Time.deltaTime;
+		}
+		this.visualObject.transform.rotation *= Quaternion.Euler(this.mVisualSpinAxis * this.mRotationVelocity * Time.deltaTime);
+	}
+
+	// Token: 0x06002551 RID: 9553 RVA: 0x0013229C File Offset: 0x0013049C
+	public void SetMovementData(float aForwardVelocity, float aMaxForwardVelocity, float aCurrentEnginePower)
+	{
+		this.mOwnerForwardVelocity = aForwardVelocity;
+		this.mMaxForwardVelocity = aMaxForwardVelocity;
+		this.mCurrentEnginePower = aCurrentEnginePower;
+	}
+
+	// Token: 0x06002552 RID: 9554 RVA: 0x001322B4 File Offset: 0x001304B4
+	public Vector3 GetForwardVector(Vector3 aRight)
+	{
+		Vector3 vector = this.mGroundNormals.Aggregate((Vector3 total, Vector3 next) => total + next) / (float)this.mGroundNormals.Count;
+		return Vector3.Cross(base.transform.TransformDirection(this.spinAxis), vector);
+	}
+
+	// Token: 0x06002553 RID: 9555 RVA: 0x00132314 File Offset: 0x00130514
+	public void AddNormal(Vector3 aNormal)
+	{
+		if (this.mLastCollisionTimeStep != PhysicsUtils.stepCount)
+		{
+			this.mGroundNormals.Clear();
+		}
+		this.mLastCollisionTimeStep = PhysicsUtils.stepCount;
+		this.mGroundNormals.Add(aNormal);
+	}
+
+	// Token: 0x06002554 RID: 9556 RVA: 0x00132354 File Offset: 0x00130554
+	private void OnCollisionStay(Collision aCollision)
+	{
+		if (aCollision.collider.isTrigger)
+		{
+			return;
+		}
+		foreach (ContactPoint contactPoint in aCollision.contacts)
+		{
+			this.AddNormal(contactPoint.normal);
+		}
+	}
+
+	// Token: 0x04004450 RID: 17488
+	public GameObject visualObject;
+
+	// Token: 0x04004451 RID: 17489
+	public Vector3 spinAxis;
+
+	// Token: 0x04004452 RID: 17490
+	public CapsuleCollider colliderObject;
+
+	// Token: 0x04004453 RID: 17491
+	public bool powered;
+
+	// Token: 0x04004454 RID: 17492
+	private readonly List<Vector3> mGroundNormals = new List<Vector3>();
+
+	// Token: 0x04004455 RID: 17493
+	private float mRotationVelocity;
+
+	// Token: 0x04004456 RID: 17494
+	private float mOwnerForwardVelocity;
+
+	// Token: 0x04004457 RID: 17495
+	private float mMaxForwardVelocity;
+
+	// Token: 0x04004458 RID: 17496
+	private float mCurrentEnginePower;
+
+	// Token: 0x04004459 RID: 17497
+	private long mLastCollisionTimeStep = -1L;
+
+	// Token: 0x0400445A RID: 17498
+	private Vector3 mVisualSpinAxis;
+}

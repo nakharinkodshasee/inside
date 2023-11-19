@@ -1,0 +1,72 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000379 RID: 889
+[ExecuteInEditMode]
+public class WaterQueueTransparent : QueueBase, IFastEventListener
+{
+	// Token: 0x06001835 RID: 6197 RVA: 0x000D3658 File Offset: 0x000D1858
+	protected override void OnEnable()
+	{
+		if (Camera.main != null)
+		{
+			this.curWaterCam = Camera.main.GetComponent<WaterCameraRendering>();
+		}
+		base.OnEnable();
+		WaterCameraRendering.UpdateTransparentWaterQueues.Register(this, ref this.updateHandle);
+	}
+
+	// Token: 0x06001836 RID: 6198 RVA: 0x000D369C File Offset: 0x000D189C
+	protected override void OnDisable()
+	{
+		base.OnDisable();
+		WaterCameraRendering.UpdateTransparentWaterQueues.Unregister(ref this.updateHandle);
+		this.SetOrder(0);
+	}
+
+	// Token: 0x06001837 RID: 6199 RVA: 0x000D36BC File Offset: 0x000D18BC
+	public void OnFastEvent(FastEvent sender)
+	{
+		int num;
+		if (this.wave)
+		{
+			num = WaterCameraRendering.WaveQueue;
+		}
+		else if (this.refract)
+		{
+			if (this.refractFromAboveOnly && this.curWaterCam && this.curWaterCam.underWater)
+			{
+				num = WaterCameraRendering.TransparencyQueueNoRefract;
+			}
+			else
+			{
+				num = WaterCameraRendering.TransparencyQueueRefract;
+			}
+		}
+		else
+		{
+			num = WaterCameraRendering.TransparencyQueueNoRefract;
+		}
+		num += 5 + this.queueOffs;
+		this.SetOrder(num);
+	}
+
+	// Token: 0x04002B9F RID: 11167
+	public bool refract;
+
+	// Token: 0x04002BA0 RID: 11168
+	public bool refractFromAboveOnly;
+
+	// Token: 0x04002BA1 RID: 11169
+	public bool wave;
+
+	// Token: 0x04002BA2 RID: 11170
+	[Range(-5f, 5f)]
+	public int queueOffs;
+
+	// Token: 0x04002BA3 RID: 11171
+	private WaterCameraRendering curWaterCam;
+
+	// Token: 0x04002BA4 RID: 11172
+	private int updateHandle = -1;
+}

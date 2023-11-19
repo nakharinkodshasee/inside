@@ -1,0 +1,318 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000279 RID: 633
+public class WireFenceDeformer : MonoBehaviour
+{
+	// Token: 0x06001375 RID: 4981 RVA: 0x000B7FD0 File Offset: 0x000B61D0
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioMoveSoft = new AudioEventSimpleLocal("env_sewer_dogChaseAndFenceSewers_fenceMove_soft", akGameObj);
+		this.audioMoveMedium = new AudioEventSimpleLocal("env_sewer_dogChaseAndFenceSewers_fenceMove_medium", akGameObj);
+		this.audioMoveHard = new AudioEventSimpleLocal("env_sewer_dogChaseAndFenceSewers_fenceMove_hard", akGameObj);
+	}
+
+	// Token: 0x06001376 RID: 4982 RVA: 0x000B8030 File Offset: 0x000B6230
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.posOffset.x = -1f;
+	}
+
+	// Token: 0x06001377 RID: 4983 RVA: 0x000B8048 File Offset: 0x000B6248
+	private void SetDimensionProperties()
+	{
+		if (this.matInstance)
+		{
+			this.matInstance.SetFloatProperty(this.prop_maxYOffset, this.maxYLocalMeshOffset);
+			this.matInstance.SetFloatProperty(this.prop_minYOffset, this.minYLocalMeshOffset);
+			this.matInstance.SetFloatProperty(this.prop_maxXOffset, this.maxXLocalMeshOffset);
+			this.matInstance.SetFloatProperty(this.prop_minXOffset, this.minXLocalMeshOffset);
+		}
+	}
+
+	// Token: 0x06001378 RID: 4984 RVA: 0x000B80C4 File Offset: 0x000B62C4
+	private void OnEnable()
+	{
+		this.matInstance = base.gameObject.GetComponent<MaterialInstance>();
+		this.prop_center = this.matInstance.GetOrAddVectorProperty("pushCenter");
+		this.prop_magnitude = this.matInstance.GetOrAddFloatProperty("pushMagnitude");
+		this.prop_maxYOffset = this.matInstance.GetOrAddFloatProperty("maxYOffset");
+		this.prop_minYOffset = this.matInstance.GetOrAddFloatProperty("minYOffset");
+		this.prop_maxXOffset = this.matInstance.GetOrAddFloatProperty("maxXOffset");
+		this.prop_minXOffset = this.matInstance.GetOrAddFloatProperty("minXOffset");
+		this.SetDimensionProperties();
+	}
+
+	// Token: 0x06001379 RID: 4985 RVA: 0x000B816C File Offset: 0x000B636C
+	private void OnValidate()
+	{
+		this.SetDimensionProperties();
+	}
+
+	// Token: 0x0600137A RID: 4986 RVA: 0x000B8174 File Offset: 0x000B6374
+	private void SetPosOffset(Vector3 worldPos)
+	{
+		this.posOffset = base.transform.InverseTransformPoint(worldPos);
+		this.posOffset.x = this.posOffset.x * base.transform.lossyScale.x;
+		this.posOffset.x = Mathf.Clamp(this.posOffset.x, -1f, 1f);
+		this.posOffset.z = this.posOffset.z * base.transform.lossyScale.z;
+		this.posOffset.y = 0f;
+	}
+
+	// Token: 0x0600137B RID: 4987 RVA: 0x000B8214 File Offset: 0x000B6414
+	public float GetPosOffsetX()
+	{
+		return this.posOffset.x;
+	}
+
+	// Token: 0x0600137C RID: 4988 RVA: 0x000B8224 File Offset: 0x000B6424
+	public void StartPushEffect(Vector3 worldPos, float power = 1f, bool followPlayer = true, bool hulvPush = false)
+	{
+		this.followBoy = followPlayer;
+		this.pushTimer = this.wobbleTime;
+		this.smallPushTimer = this.smallWobbleTime;
+		this.powerBoost = power;
+		this.startBoostTimer = this.startBoostTime;
+		this.SetPosOffset(worldPos);
+		if (hulvPush)
+		{
+			if (Mathf.Abs(power) < 0.4f)
+			{
+				this.audioMoveSoft.PostFast();
+			}
+			else if (Mathf.Abs(power) < 0.6f)
+			{
+				this.audioMoveMedium.PostFast();
+			}
+			else if (Mathf.Abs(power) > 0.9f)
+			{
+				this.audioMoveHard.PostFast();
+			}
+		}
+	}
+
+	// Token: 0x0600137D RID: 4989 RVA: 0x000B82D0 File Offset: 0x000B64D0
+	public void StartSmallEffectOnly(Vector3 worldPos)
+	{
+		this.smallPushTimer = this.smallWobbleTime;
+		this.SetPosOffset(worldPos);
+	}
+
+	// Token: 0x0600137E RID: 4990 RVA: 0x000B82E8 File Offset: 0x000B64E8
+	public bool IsMainEffectRunning()
+	{
+		return this.pushTimer > 0.85f;
+	}
+
+	// Token: 0x0600137F RID: 4991 RVA: 0x000B82F8 File Offset: 0x000B64F8
+	public bool IsEffectRunning()
+	{
+		return this.pushTimer > 0f || this.smallPushTimer > 0f || this.footStepTimers.Count > 0;
+	}
+
+	// Token: 0x06001380 RID: 4992 RVA: 0x000B832C File Offset: 0x000B652C
+	public bool IsSmallEffectRunning()
+	{
+		return this.smallPushTimer > 0f;
+	}
+
+	// Token: 0x06001381 RID: 4993 RVA: 0x000B833C File Offset: 0x000B653C
+	public void DoFootStep()
+	{
+		this.footStepTimers.Add(this.footStepWobbleTime);
+	}
+
+	// Token: 0x06001382 RID: 4994 RVA: 0x000B8350 File Offset: 0x000B6550
+	private float CalcSingleOffset(float timer, float maxTime, float depth, float nrShakes)
+	{
+		if (maxTime <= 0f || timer < 0f)
+		{
+			return 0f;
+		}
+		float num = timer / maxTime;
+		float num2 = (1f - num) * 3.1415927f * nrShakes;
+		return Mathf.Sin(num2) * num * depth * this.powerBoost;
+	}
+
+	// Token: 0x06001383 RID: 4995 RVA: 0x000B83A0 File Offset: 0x000B65A0
+	public float GetCurrentOffset()
+	{
+		float num = this.CalcSingleOffset(this.pushTimer, this.wobbleTime, this.pushDepth, this.shakes);
+		foreach (float num2 in this.footStepTimers)
+		{
+			float num3 = num2;
+			num += this.CalcSingleOffset(num3, this.footStepWobbleTime, this.footStepPushDepth, this.footStepShakes);
+			num += this.CalcSingleOffset(num3 - this.footStepWobbleTime * 0.8f, this.footStepWobbleTime * 0.2f, this.footStepPushDepth * 0.4f, this.footStepShakes * 0.5f);
+		}
+		return num;
+	}
+
+	// Token: 0x06001384 RID: 4996 RVA: 0x000B8478 File Offset: 0x000B6678
+	private void UpdatePush(float dt)
+	{
+		this.pushTimer = Mathf.Min(this.pushTimer, this.wobbleTime);
+		if (this.followBoy)
+		{
+			this.SetPosOffset(ScriptGlobals.boy.pos3);
+		}
+		this.matInstance.SetFloatProperty(this.prop_magnitude, this.GetCurrentOffset() + this.CalcSingleOffset(this.smallPushTimer, this.smallWobbleTime, this.smallPushDepth, this.smallShakes));
+		this.matInstance.SetVectorProperty(this.prop_center, this.posOffset);
+		if (this.startBoostTimer > 0f)
+		{
+			float num = this.startBoostTimer / this.startBoostTime;
+			this.pushTimer -= dt * (1f + this.startBoost * num);
+			this.startBoostTimer -= dt;
+		}
+		else
+		{
+			this.pushTimer -= dt;
+		}
+		this.smallPushTimer -= dt;
+		for (int i = this.footStepTimers.Count - 1; i >= 0; i--)
+		{
+			List<float> list2;
+			List<float> list = list2 = this.footStepTimers;
+			int index2;
+			int index = index2 = i;
+			float num2 = list2[index2];
+			list[index] = num2 - dt;
+			if (this.footStepTimers[i] <= 0f)
+			{
+				this.footStepTimers.RemoveAt(i);
+			}
+		}
+	}
+
+	// Token: 0x06001385 RID: 4997 RVA: 0x000B85D0 File Offset: 0x000B67D0
+	private void Update()
+	{
+		if (this.pushTimer > 0f || this.smallPushTimer > 0f || this.footStepTimers.Count > 0)
+		{
+			this.UpdatePush(Time.deltaTime);
+		}
+		else if (this.matInstance != null)
+		{
+			this.matInstance.SetVectorProperty(this.prop_center, this.debugCenter);
+			this.matInstance.SetFloatProperty(this.prop_magnitude, 0f);
+		}
+	}
+
+	// Token: 0x040023F4 RID: 9204
+	public Vector3 debugCenter;
+
+	// Token: 0x040023F5 RID: 9205
+	public float pushDepth = 0.13f;
+
+	// Token: 0x040023F6 RID: 9206
+	public float wobbleTime = 1.7f;
+
+	// Token: 0x040023F7 RID: 9207
+	public float shakes = 4f;
+
+	// Token: 0x040023F8 RID: 9208
+	public float smallPushDepth = 0.06f;
+
+	// Token: 0x040023F9 RID: 9209
+	public float smallWobbleTime = 0.8f;
+
+	// Token: 0x040023FA RID: 9210
+	public float smallShakes = 15f;
+
+	// Token: 0x040023FB RID: 9211
+	public float footStepPushDepth = 0.04f;
+
+	// Token: 0x040023FC RID: 9212
+	public float footStepWobbleTime = 1.8f;
+
+	// Token: 0x040023FD RID: 9213
+	public float footStepShakes = 4.5f;
+
+	// Token: 0x040023FE RID: 9214
+	public float startBoost = 1f;
+
+	// Token: 0x040023FF RID: 9215
+	public float startBoostTime = 0.2f;
+
+	// Token: 0x04002400 RID: 9216
+	private float powerBoost = 1f;
+
+	// Token: 0x04002401 RID: 9217
+	private float startBoostTimer;
+
+	// Token: 0x04002402 RID: 9218
+	public float pushTimer;
+
+	// Token: 0x04002403 RID: 9219
+	public float smallPushTimer;
+
+	// Token: 0x04002404 RID: 9220
+	public float maxYLocalMeshOffset = 1.76f;
+
+	// Token: 0x04002405 RID: 9221
+	public float minYLocalMeshOffset = -1.88f;
+
+	// Token: 0x04002406 RID: 9222
+	public float maxXLocalMeshOffset = 2.33f;
+
+	// Token: 0x04002407 RID: 9223
+	public float minXLocalMeshOffset = -2.4f;
+
+	// Token: 0x04002408 RID: 9224
+	private List<float> footStepTimers = new List<float>();
+
+	// Token: 0x04002409 RID: 9225
+	public bool followBoy = true;
+
+	// Token: 0x0400240A RID: 9226
+	private Vector3 posOffset = Vector3.zero;
+
+	// Token: 0x0400240B RID: 9227
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x0400240C RID: 9228
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioMoveSoft;
+
+	// Token: 0x0400240D RID: 9229
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioMoveMedium;
+
+	// Token: 0x0400240E RID: 9230
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioMoveHard;
+
+	// Token: 0x0400240F RID: 9231
+	private MaterialInstance matInstance;
+
+	// Token: 0x04002410 RID: 9232
+	private MaterialInstance.VectorProperty prop_center;
+
+	// Token: 0x04002411 RID: 9233
+	private MaterialInstance.FloatProperty prop_magnitude;
+
+	// Token: 0x04002412 RID: 9234
+	private MaterialInstance.FloatProperty prop_maxYOffset;
+
+	// Token: 0x04002413 RID: 9235
+	private MaterialInstance.FloatProperty prop_minYOffset;
+
+	// Token: 0x04002414 RID: 9236
+	private MaterialInstance.FloatProperty prop_maxXOffset;
+
+	// Token: 0x04002415 RID: 9237
+	private MaterialInstance.FloatProperty prop_minXOffset;
+}

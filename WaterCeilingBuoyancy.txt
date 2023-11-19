@@ -1,0 +1,73 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004A6 RID: 1190
+public class WaterCeilingBuoyancy : MonoBehaviour
+{
+	// Token: 0x06001F26 RID: 7974 RVA: 0x0010AAC0 File Offset: 0x00108CC0
+	private void Start()
+	{
+		this.objTransform = base.transform;
+		this.objRigidbody = base.GetComponent<Rigidbody>();
+		this.halfHeight = base.GetComponent<Rigidbody>().GetComponent<Collider>().bounds.extents.y;
+	}
+
+	// Token: 0x06001F27 RID: 7975 RVA: 0x0010AB0C File Offset: 0x00108D0C
+	private void FixedUpdate()
+	{
+		if (!this.water)
+		{
+			return;
+		}
+		float surfaceHeight = this.water.GetSurfaceHeight(Vector3Fast.down);
+		float num = this.objTransform.position.y + this.halfHeight - this.submergedProcentage * this.halfHeight;
+		if (surfaceHeight < num)
+		{
+			float num2 = this.objTransform.position.y - this.halfHeight;
+			float num3 = (surfaceHeight - num2) / this.halfHeight;
+			num3 = 1f + Mathf.Clamp(num3, -1f, 0f);
+			this.objRigidbody.AddForce(Vector3Fast.up * this.buoyancyForce * num3);
+		}
+	}
+
+	// Token: 0x06001F28 RID: 7976 RVA: 0x0010ABCC File Offset: 0x00108DCC
+	private void OnTriggerEnter(Collider col)
+	{
+		BoyWater component = col.GetComponent<BoyWater>();
+		if (component)
+		{
+			this.water = component;
+		}
+	}
+
+	// Token: 0x06001F29 RID: 7977 RVA: 0x0010ABF4 File Offset: 0x00108DF4
+	private void OnTriggerExit(Collider col)
+	{
+		BoyWater component = col.GetComponent<BoyWater>();
+		if (component)
+		{
+			this.water = null;
+		}
+	}
+
+	// Token: 0x040039C6 RID: 14790
+	public float submergedProcentage = 0.25f;
+
+	// Token: 0x040039C7 RID: 14791
+	public float buoyancyForce = 10f;
+
+	// Token: 0x040039C8 RID: 14792
+	private BoyWater water;
+
+	// Token: 0x040039C9 RID: 14793
+	private Transform objTransform;
+
+	// Token: 0x040039CA RID: 14794
+	private Rigidbody objRigidbody;
+
+	// Token: 0x040039CB RID: 14795
+	private Collider colliderObj;
+
+	// Token: 0x040039CC RID: 14796
+	private float halfHeight;
+}

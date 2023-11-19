@@ -1,0 +1,100 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020003A3 RID: 931
+public class WaterHeightEffectManager : MonoBehaviour
+{
+	// Token: 0x060018F5 RID: 6389 RVA: 0x000D7678 File Offset: 0x000D5878
+	private void Start()
+	{
+		if (this.effectClients.Count < 1)
+		{
+		}
+	}
+
+	// Token: 0x060018F6 RID: 6390 RVA: 0x000D768C File Offset: 0x000D588C
+	private void Update()
+	{
+		if (this.effectClients.Count > 0)
+		{
+			float waterHeight = this.GetWaterHeight();
+			if (this.debug)
+			{
+			}
+			int i = 0;
+			int count = this.effectClients.Count;
+			while (i < count)
+			{
+				if (this.debug)
+				{
+				}
+				WaterHeightEffectClient.TriggerType surfaceTrigger = this.effectClients[i].surfaceTrigger;
+				if (surfaceTrigger != WaterHeightEffectClient.TriggerType.Above)
+				{
+					if (surfaceTrigger == WaterHeightEffectClient.TriggerType.Below)
+					{
+						if (this.effectClients[i].customHeight < waterHeight && !this.effectClients[i].clientActive)
+						{
+							if (this.debug)
+							{
+							}
+							this.effectClients[i].Activate();
+						}
+						if (this.effectClients[i].customHeight > waterHeight && this.effectClients[i].clientActive)
+						{
+							if (this.debug)
+							{
+							}
+							this.effectClients[i].Deactivate();
+						}
+					}
+				}
+				else
+				{
+					if (this.effectClients[i].customHeight > waterHeight && !this.effectClients[i].clientActive)
+					{
+						if (this.debug)
+						{
+						}
+						this.effectClients[i].Activate();
+					}
+					if (this.effectClients[i].customHeight < waterHeight && this.effectClients[i].clientActive)
+					{
+						if (this.debug)
+						{
+						}
+						this.effectClients[i].Deactivate();
+					}
+				}
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x060018F7 RID: 6391 RVA: 0x000D7840 File Offset: 0x000D5A40
+	private float GetWaterHeight()
+	{
+		if (this.water == null)
+		{
+			return 0f;
+		}
+		if (!this.useBottom)
+		{
+			return this.water.GetSurfaceHeight(Vector3.up);
+		}
+		return this.water.GetSurfaceHeight(Vector3.down);
+	}
+
+	// Token: 0x04002CD0 RID: 11472
+	public BoyWater water;
+
+	// Token: 0x04002CD1 RID: 11473
+	public bool useBottom;
+
+	// Token: 0x04002CD2 RID: 11474
+	public List<WaterHeightEffectClient> effectClients = new List<WaterHeightEffectClient>();
+
+	// Token: 0x04002CD3 RID: 11475
+	public bool debug;
+}

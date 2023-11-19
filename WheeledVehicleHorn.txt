@@ -1,0 +1,21 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003CD RID: 973
+public class WheeledVehicleHorn : MonoBehaviour
+{
+	// Token: 0x04002F01 RID: 12033
+	public DrivableWheeledVehicle vehicle;
+
+	// Token: 0x04002F02 RID: 12034
+	public string hornStartSoundEvent = "honk_start";
+
+	// Token: 0x04002F03 RID: 12035
+	public string hornStopSoundEvent = "honk_stop";
+
+	// Token: 0x04002F04 RID: 12036
+	public SimpleEvent<WheeledVehicleHorn> hornStarted = new SimpleEvent<WheeledVehicleHorn>("hornStarted");
+
+	// Token: 0x04002F05 RID: 12037
+	public SimpleEvent<WheeledVehicleHorn> hornStopped = new SimpleEvent<WheeledVehicleHorn>("hornStopped");
+}

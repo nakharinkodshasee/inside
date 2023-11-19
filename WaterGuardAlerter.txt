@@ -1,0 +1,94 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200051C RID: 1308
+public class WaterGuardAlerter : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002226 RID: 8742 RVA: 0x0011DF64 File Offset: 0x0011C164
+	public bool PreAwake(int callcount)
+	{
+		this.alertGuard = SignalOut.Create("alertGuard", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06002227 RID: 8743 RVA: 0x0011DF80 File Offset: 0x0011C180
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyInsideProbe = true;
+		}
+	}
+
+	// Token: 0x06002228 RID: 8744 RVA: 0x0011DF9C File Offset: 0x0011C19C
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyInsideProbe = false;
+		}
+	}
+
+	// Token: 0x06002229 RID: 8745 RVA: 0x0011DFB8 File Offset: 0x0011C1B8
+	private void FixedUpdate()
+	{
+		if (this.boyInsideProbe && !this.signalFired)
+		{
+			float num = ScriptGlobals.boy.pos.x - this.testGuard.position.x;
+			float num2 = ScriptGlobals.boy.pos.y - this.testGuard.position.y;
+			bool flag = num2 < 2f;
+			if (num < this.maxRightDist)
+			{
+				float num3 = 0f;
+				if (num > this.minRightDist)
+				{
+					num3 = (num - this.minRightDist) / (this.maxRightDist - this.minRightDist);
+				}
+				float num4 = 2f + num3 * (this.maxHeight - 2f);
+				flag = (num2 <= num4);
+			}
+			if (flag && num2 < 2f)
+			{
+				float x = this.rightPos.transform.position.x;
+				float num5 = x - ScriptGlobals.boy.pos.x;
+				float num6 = ScriptGlobals.boy.pos.x - this.testGuard.position.x;
+				if (num6 > 1.2f * (num5 + 1f))
+				{
+					flag = false;
+				}
+			}
+			if (flag)
+			{
+				this.signalFired = true;
+				this.alertGuard.Signal();
+			}
+		}
+	}
+
+	// Token: 0x04003FC2 RID: 16322
+	public float maxRightDist = 15f;
+
+	// Token: 0x04003FC3 RID: 16323
+	public float minRightDist = 3f;
+
+	// Token: 0x04003FC4 RID: 16324
+	public float maxHeight = 15f;
+
+	// Token: 0x04003FC5 RID: 16325
+	public Transform testGuard;
+
+	// Token: 0x04003FC6 RID: 16326
+	public Transform rightPos;
+
+	// Token: 0x04003FC7 RID: 16327
+	private bool boyInsideProbe;
+
+	// Token: 0x04003FC8 RID: 16328
+	private bool signalFired;
+
+	// Token: 0x04003FC9 RID: 16329
+	private int noOfCharacterProbesInside;
+
+	// Token: 0x04003FCA RID: 16330
+	public SignalOut alertGuard;
+}

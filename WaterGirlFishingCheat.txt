@@ -1,0 +1,76 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000DA RID: 218
+public class WaterGirlFishingCheat : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060006D2 RID: 1746 RVA: 0x0004D50C File Offset: 0x0004B70C
+	public bool PreAwake(int callcount)
+	{
+		this.girlInsideTrigger = SignalIn.Create("girlInsideTrigger", base.gameObject, new Action(this.OnGirlInsideTrigger));
+		this.girlOutsideTrigger = SignalIn.Create("girlOutsideTrigger", base.gameObject, new Action(this.OnGirlOutsideTrigger));
+		this.buttonPushed = SignalIn.Create("buttonPushed", base.gameObject, new Action(this.OnButtonPushed));
+		this.jumpedInWater = SignalIn.Create("jumpedInWater", base.gameObject, new Action(this.OnJumpedInWater));
+		this.cheatPerformed = SignalOut.Create("cheatPerformed", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060006D3 RID: 1747 RVA: 0x0004D5B8 File Offset: 0x0004B7B8
+	private void OnButtonPushed()
+	{
+		this.buttonIsPushed = true;
+	}
+
+	// Token: 0x060006D4 RID: 1748 RVA: 0x0004D5C4 File Offset: 0x0004B7C4
+	private void OnJumpedInWater()
+	{
+		if ((this.buttonIsPushed || !this.buttonPushRequired) && this.girlIsInsideTrigger)
+		{
+			this.buttonIsPushed = false;
+			this.girl.position = base.transform.position;
+			this.cheatPerformed.Signal();
+		}
+	}
+
+	// Token: 0x060006D5 RID: 1749 RVA: 0x0004D61C File Offset: 0x0004B81C
+	private void OnGirlInsideTrigger()
+	{
+		this.girlIsInsideTrigger = true;
+	}
+
+	// Token: 0x060006D6 RID: 1750 RVA: 0x0004D628 File Offset: 0x0004B828
+	private void OnGirlOutsideTrigger()
+	{
+		this.girlIsInsideTrigger = false;
+	}
+
+	// Token: 0x04000BD1 RID: 3025
+	public Transform girl;
+
+	// Token: 0x04000BD2 RID: 3026
+	public Transform girlLayer;
+
+	// Token: 0x04000BD3 RID: 3027
+	public bool buttonPushRequired = true;
+
+	// Token: 0x04000BD4 RID: 3028
+	private SignalIn girlInsideTrigger;
+
+	// Token: 0x04000BD5 RID: 3029
+	private SignalIn girlOutsideTrigger;
+
+	// Token: 0x04000BD6 RID: 3030
+	private SignalIn buttonPushed;
+
+	// Token: 0x04000BD7 RID: 3031
+	private SignalIn jumpedInWater;
+
+	// Token: 0x04000BD8 RID: 3032
+	private SignalOut cheatPerformed;
+
+	// Token: 0x04000BD9 RID: 3033
+	private bool girlIsInsideTrigger;
+
+	// Token: 0x04000BDA RID: 3034
+	private bool buttonIsPushed;
+}

@@ -1,0 +1,61 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000540 RID: 1344
+public class WaterHeightCameraHelper : MonoBehaviour
+{
+	// Token: 0x060022FB RID: 8955 RVA: 0x00124B9C File Offset: 0x00122D9C
+	[EarlyProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		int num = this.blendBoxes.RemoveAll((CameraBlendBox e) => e == null);
+		if (num > 0)
+		{
+		}
+	}
+
+	// Token: 0x060022FC RID: 8956 RVA: 0x00124BEC File Offset: 0x00122DEC
+	private void Start()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x060022FD RID: 8957 RVA: 0x00124BF4 File Offset: 0x00122DF4
+	private void Update()
+	{
+		float num = Mathf.InverseLerp(this.waterUp.position.y, this.waterDown.position.y, this.waterSurfacePivot.position.y);
+		for (int i = 0; i < this.blendBoxes.Count; i++)
+		{
+			this.blendBoxes[i].positionAim.y = Mathf.Lerp(this.yAimWhenWaterUp, this.yAimWhenWaterDown, num);
+		}
+	}
+
+	// Token: 0x0400414D RID: 16717
+	public List<CameraBlendBox> blendBoxes;
+
+	// Token: 0x0400414E RID: 16718
+	public Transform waterSurfacePivot;
+
+	// Token: 0x0400414F RID: 16719
+	public Transform waterUp;
+
+	// Token: 0x04004150 RID: 16720
+	public Transform waterDown;
+
+	// Token: 0x04004151 RID: 16721
+	public float yAimWhenWaterUp;
+
+	// Token: 0x04004152 RID: 16722
+	public float yAimWhenWaterDown;
+
+	// Token: 0x04004153 RID: 16723
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

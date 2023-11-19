@@ -1,0 +1,30 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000D7 RID: 215
+public class WaterGirlAimHelper : MonoBehaviour
+{
+	// Token: 0x060006C5 RID: 1733 RVA: 0x0004D1C0 File Offset: 0x0004B3C0
+	private void Start()
+	{
+		this.submarine = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine).gameObject.GetComponent<Submarine>();
+	}
+
+	// Token: 0x060006C6 RID: 1734 RVA: 0x0004D1E8 File Offset: 0x0004B3E8
+	private void Update()
+	{
+		base.transform.position = this.girl.transform.position;
+	}
+
+	// Token: 0x04000BC0 RID: 3008
+	public WaterGirlSubmarineTest girl;
+
+	// Token: 0x04000BC1 RID: 3009
+	public Transform doorTransform;
+
+	// Token: 0x04000BC2 RID: 3010
+	public Transform doorTarget;
+
+	// Token: 0x04000BC3 RID: 3011
+	private Submarine submarine;
+}

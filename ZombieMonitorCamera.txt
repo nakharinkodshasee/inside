@@ -1,0 +1,300 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000428 RID: 1064
+public class ZombieMonitorCamera : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001BD6 RID: 7126 RVA: 0x000F3D3C File Offset: 0x000F1F3C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObjCamera = AudioUtils.EnsureAkGameObj(this.cameraSoundEmitter, null);
+		this.audioStartMove = new AudioEventSimpleLocal("env_city_lineup_sentryCam_move", this.akGameObjCamera);
+		this.audioStopMove = new AudioEventSimpleLocal("env_city_lineup_sentryCam_move_stop", this.akGameObjCamera);
+		if (this.rail != null)
+		{
+			this.rail.OnPreProcess();
+			this.mRailPosition = this.rail.GetClosestPointAsDistance(this.railAttachPart.position);
+		}
+		this.pitchJoint.rotation = this.pitchJoint.rotation;
+		this.flareMaterialInstance = this.flareGameObject.GetComponent<MaterialInstance>();
+		this.spotlightMaterialInstance = this.spotlightMesh.GetComponent<MaterialInstance>();
+	}
+
+	// Token: 0x06001BD7 RID: 7127 RVA: 0x000F3E0C File Offset: 0x000F200C
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		this.flareColorProperty = this.flareMaterialInstance.GetColorProperty("_Color");
+		this.intensityProperty = this.spotlightMaterialInstance.GetFloatProperty("_Illum");
+		if (this.glowMaterial)
+		{
+			this.glowColorProp = this.glowMaterial.GetOrAddColorProperty("_Color");
+			if (this.glowColorProp != null)
+			{
+				this.glowOriginalColor = this.glowMaterial.GetColorValue(this.glowColorProp);
+			}
+		}
+		this.mMaxAcceleration = this.maxAcceleration;
+		return true;
+	}
+
+	// Token: 0x06001BD8 RID: 7128 RVA: 0x000F3EA0 File Offset: 0x000F20A0
+	private void Update()
+	{
+		float num = Mathf.Clamp((this.mTargetVelocity - this.mCurrentVelocity) / 0.1f, -this.mMaxAcceleration, this.mMaxAcceleration);
+		this.mCurrentVelocity += num * Time.deltaTime;
+		this.mRailPosition += this.mCurrentVelocity * Time.deltaTime;
+		this.mRailPosition = Mathf.Min(this.mRailPosition, this.rail.maxRailPos);
+		this.railAttachPart.position = this.rail.GetPositionFromDistance(this.mRailPosition);
+		this.sendAKEvents();
+		this.yawJoint.localRotation = Quaternion.Euler(0f, this.pitchJoint.localRotation.eulerAngles.y, 0f);
+	}
+
+	// Token: 0x06001BD9 RID: 7129 RVA: 0x000F3F74 File Offset: 0x000F2174
+	public void LookAt(Vector3 aPosition, bool aInstantFlag = false)
+	{
+		Vector3 position = this.pitchJoint.position;
+		Vector3 position2 = this.lookFromPosition.position;
+		Vector3 vector = position - position2;
+		Vector3 vector2 = aPosition - position2;
+		Quaternion quaternion = Quaternion.LookRotation(aPosition + vector - position, this.railAttachPart.up);
+		this.pitchJoint.rotation = ((!aInstantFlag) ? Quaternion.RotateTowards(this.pitchJoint.rotation, quaternion, Time.deltaTime * this.lookAtSpeed) : quaternion);
+		if (aInstantFlag)
+		{
+			this.yawJoint.localRotation = Quaternion.Euler(0f, this.pitchJoint.localRotation.eulerAngles.y, 0f);
+		}
+	}
+
+	// Token: 0x06001BDA RID: 7130 RVA: 0x000F403C File Offset: 0x000F223C
+	public float MoveTo(Vector3 aPosition, bool aInstantFlag = false)
+	{
+		float closestPointAsDistance = this.rail.GetClosestPointAsDistance(aPosition);
+		if (aInstantFlag)
+		{
+			this.mRailPosition = closestPointAsDistance;
+			this.railAttachPart.position = this.rail.GetPositionFromDistance(this.mRailPosition);
+			return 0f;
+		}
+		float num = closestPointAsDistance - this.mRailPosition;
+		float positionOfNextNode = this.rail.GetPositionOfNextNode(this.mRailPosition, num);
+		if (Mathf.Abs(positionOfNextNode - this.mRailPosition) < Mathf.Abs(num))
+		{
+			num = positionOfNextNode - this.mRailPosition;
+			num = Mathf.Max(Mathf.Abs(num), 0.1f) * Mathf.Sign(num);
+			if (Mathf.Abs(num) > 1f)
+			{
+				this.mTargetVelocity = this.moveSpeed * Mathf.Sign(num);
+			}
+			else
+			{
+				float radiansOfNextTurn = this.rail.GetRadiansOfNextTurn(this.mRailPosition, num);
+				this.mTargetVelocity = this.moveSpeed * Mathf.Sign(num) * (1f - radiansOfNextTurn * 0.5f / 3.1415927f);
+			}
+		}
+		else if (Mathf.Abs(num) > 3f)
+		{
+			this.mTargetVelocity = this.moveSpeed * Mathf.Sign(num);
+		}
+		else if (Mathf.Abs(num) > 0.1f)
+		{
+			this.mTargetVelocity = this.moveSpeed * (num / 3f);
+		}
+		else
+		{
+			this.mTargetVelocity = 0f;
+		}
+		return Mathf.Abs(closestPointAsDistance - this.mRailPosition);
+	}
+
+	// Token: 0x06001BDB RID: 7131 RVA: 0x000F41AC File Offset: 0x000F23AC
+	public float GetRailPosDiff(Vector3 aPosition)
+	{
+		float closestPointAsDistance = this.rail.GetClosestPointAsDistance(aPosition);
+		return closestPointAsDistance - this.mRailPosition;
+	}
+
+	// Token: 0x06001BDC RID: 7132 RVA: 0x000F41D0 File Offset: 0x000F23D0
+	public void SetTargetVelocity(float aVelocity)
+	{
+		this.mTargetVelocity = aVelocity;
+	}
+
+	// Token: 0x06001BDD RID: 7133 RVA: 0x000F41DC File Offset: 0x000F23DC
+	public float GetMaxAcceleration()
+	{
+		return this.mMaxAcceleration;
+	}
+
+	// Token: 0x06001BDE RID: 7134 RVA: 0x000F41E4 File Offset: 0x000F23E4
+	public void SetMaxAcceleration(float aAcceleration)
+	{
+		this.mMaxAcceleration = aAcceleration;
+	}
+
+	// Token: 0x06001BDF RID: 7135 RVA: 0x000F41F0 File Offset: 0x000F23F0
+	public void SetSpotlightIntensity(float aValue)
+	{
+		if (this.mMaxSpotlightMeshIllum < 0f && this.mMaxSpotlightIntensity < 0f)
+		{
+			this.mMaxSpotlightMeshIllum = this.spotlightMaterialInstance.GetFloatValue(this.intensityProperty);
+			this.mMaxSpotlightIntensity = this.spotlight.intensity;
+			this.mStartFlareColorValue = this.flareMaterialInstance.GetColorValue(this.flareColorProperty);
+		}
+		this.spotlightMaterialInstance.SetFloatProperty(this.intensityProperty, aValue * this.mMaxSpotlightMeshIllum);
+		this.spotlight.intensity = aValue * this.mMaxSpotlightIntensity;
+		Color value = this.mStartFlareColorValue;
+		value.a *= aValue;
+		this.flareMaterialInstance.SetColorProperty(this.flareColorProperty, value);
+		if (this.glowMaterial && this.glowColorProp != null)
+		{
+			Color value2 = this.glowOriginalColor;
+			value2.a *= aValue;
+			this.glowMaterial.SetColorProperty(this.glowColorProp, value2);
+		}
+	}
+
+	// Token: 0x06001BE0 RID: 7136 RVA: 0x000F42F4 File Offset: 0x000F24F4
+	private void sendAKEvents()
+	{
+		if (this.cameraSoundEmitter != null)
+		{
+			if (this.mCurrentVelocity <= 0.01f && this.camIsMoving)
+			{
+				this.camIsMoving = false;
+				this.audioStopMove.PostFast();
+			}
+			else if ((double)this.mCurrentVelocity >= 0.02 && !this.camIsMoving)
+			{
+				this.camIsMoving = true;
+				this.audioStartMove.PostFast();
+			}
+			if (this.camIsMoving)
+			{
+				float value = Mathf.InverseLerp(0f, this.moveSpeed, this.mCurrentVelocity) * 100f;
+				SoundEngine.RTPCs.speed.SetFast(value, this.akGameObjCamera, 0f);
+			}
+		}
+	}
+
+	// Token: 0x040032F0 RID: 13040
+	public Transform railAttachPart;
+
+	// Token: 0x040032F1 RID: 13041
+	public Transform pitchJoint;
+
+	// Token: 0x040032F2 RID: 13042
+	public Transform yawJoint;
+
+	// Token: 0x040032F3 RID: 13043
+	public Transform lookFromPosition;
+
+	// Token: 0x040032F4 RID: 13044
+	public GameObject cameraSoundEmitter;
+
+	// Token: 0x040032F5 RID: 13045
+	public Light spotlight;
+
+	// Token: 0x040032F6 RID: 13046
+	public MeshRenderer spotlightMesh;
+
+	// Token: 0x040032F7 RID: 13047
+	public GameObject flareGameObject;
+
+	// Token: 0x040032F8 RID: 13048
+	public MaterialInstance glowMaterial;
+
+	// Token: 0x040032F9 RID: 13049
+	public Light warningLight;
+
+	// Token: 0x040032FA RID: 13050
+	public ZombieMonitorCameraRail rail;
+
+	// Token: 0x040032FB RID: 13051
+	public float moveSpeed = 2f;
+
+	// Token: 0x040032FC RID: 13052
+	public float lookAtSpeed = 5f;
+
+	// Token: 0x040032FD RID: 13053
+	public float maxAcceleration = 2.5f;
+
+	// Token: 0x040032FE RID: 13054
+	public float maxAimOffset = 1f;
+
+	// Token: 0x040032FF RID: 13055
+	public float aimOffsetSpeed = 1f;
+
+	// Token: 0x04003300 RID: 13056
+	private float mTargetVelocity;
+
+	// Token: 0x04003301 RID: 13057
+	private float mCurrentVelocity;
+
+	// Token: 0x04003302 RID: 13058
+	private float mMaxAcceleration;
+
+	// Token: 0x04003303 RID: 13059
+	private float mMaxSpotlightMeshIllum = -1f;
+
+	// Token: 0x04003304 RID: 13060
+	private float mMaxSpotlightIntensity = -1f;
+
+	// Token: 0x04003305 RID: 13061
+	private Color mStartFlareColorValue = Color.black;
+
+	// Token: 0x04003306 RID: 13062
+	private bool camIsMoving;
+
+	// Token: 0x04003307 RID: 13063
+	private Color glowOriginalColor;
+
+	// Token: 0x04003308 RID: 13064
+	private MaterialInstance.FloatProperty intensityProperty;
+
+	// Token: 0x04003309 RID: 13065
+	private MaterialInstance.ColorProperty glowColorProp;
+
+	// Token: 0x0400330A RID: 13066
+	private MaterialInstance.ColorProperty flareColorProperty;
+
+	// Token: 0x0400330B RID: 13067
+	[HideInInspector]
+	[SerializeField]
+	private MaterialInstance flareMaterialInstance;
+
+	// Token: 0x0400330C RID: 13068
+	[HideInInspector]
+	[SerializeField]
+	private MaterialInstance spotlightMaterialInstance;
+
+	// Token: 0x0400330D RID: 13069
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStartMove;
+
+	// Token: 0x0400330E RID: 13070
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStopMove;
+
+	// Token: 0x0400330F RID: 13071
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObjCamera;
+
+	// Token: 0x04003310 RID: 13072
+	[SerializeField]
+	[HideInInspector]
+	private float mRailPosition;
+
+	// Token: 0x04003311 RID: 13073
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

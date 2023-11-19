@@ -1,0 +1,125 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000542 RID: 1346
+public class WaterLockDoorsBlinkingButtons : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600230A RID: 8970 RVA: 0x00125154 File Offset: 0x00123354
+	public bool PreAwake(int callcount)
+	{
+		this.startEmpty = SignalIn.Create("startEmpty", base.gameObject, new Action(this.DoStartEmptying));
+		this.startFill = SignalIn.Create("startFill", base.gameObject, new Action(this.DoStartFilling));
+		this.idle = SignalIn.Create("idle", base.gameObject, new Action(this.DoIdle));
+		return true;
+	}
+
+	// Token: 0x0600230B RID: 8971 RVA: 0x001251C8 File Offset: 0x001233C8
+	private void Start()
+	{
+		this.fillButton.material = this.matOff;
+		this.emptyButton.material = this.matOff;
+	}
+
+	// Token: 0x0600230C RID: 8972 RVA: 0x001251F8 File Offset: 0x001233F8
+	private void DoStartFilling()
+	{
+		this.timer = this.onTime;
+		this.fillButton.material = this.matOff;
+		this.emptyButton.material = this.matOff;
+		this.mode = 1;
+		this.lampOn = false;
+	}
+
+	// Token: 0x0600230D RID: 8973 RVA: 0x00125244 File Offset: 0x00123444
+	private void DoIdle()
+	{
+		this.fillButton.material = this.matOff;
+		this.emptyButton.material = this.matOff;
+		this.mode = 0;
+		this.lampOn = false;
+	}
+
+	// Token: 0x0600230E RID: 8974 RVA: 0x00125284 File Offset: 0x00123484
+	private void DoStartEmptying()
+	{
+		this.timer = this.onTime;
+		this.fillButton.material = this.matOff;
+		this.emptyButton.material = this.matOff;
+		this.mode = -1;
+		this.lampOn = false;
+	}
+
+	// Token: 0x0600230F RID: 8975 RVA: 0x001252D0 File Offset: 0x001234D0
+	private void FixedUpdate()
+	{
+		if (this.mode != 0)
+		{
+			this.timer -= Time.deltaTime;
+			if (!this.lampOn && this.timer <= 0f)
+			{
+				this.timer = this.onTime;
+				this.lampOn = true;
+				if (this.mode == 1)
+				{
+					this.fillButton.material = this.matFill;
+				}
+				else if (this.mode == -1)
+				{
+					this.emptyButton.material = this.matEmpty;
+				}
+			}
+			else if (this.lampOn && this.timer <= 0f)
+			{
+				this.timer = this.offTime;
+				this.lampOn = false;
+				if (this.mode == 1)
+				{
+					this.fillButton.material = this.matOff;
+				}
+				else if (this.mode == -1)
+				{
+					this.emptyButton.material = this.matOff;
+				}
+			}
+		}
+	}
+
+	// Token: 0x0400416D RID: 16749
+	public Renderer fillButton;
+
+	// Token: 0x0400416E RID: 16750
+	public Renderer emptyButton;
+
+	// Token: 0x0400416F RID: 16751
+	public Material matFill;
+
+	// Token: 0x04004170 RID: 16752
+	public Material matEmpty;
+
+	// Token: 0x04004171 RID: 16753
+	public Material matOff;
+
+	// Token: 0x04004172 RID: 16754
+	public float onTime = 0.5f;
+
+	// Token: 0x04004173 RID: 16755
+	public float offTime = 1f;
+
+	// Token: 0x04004174 RID: 16756
+	private SignalIn startEmpty;
+
+	// Token: 0x04004175 RID: 16757
+	private SignalIn idle;
+
+	// Token: 0x04004176 RID: 16758
+	private SignalIn startFill;
+
+	// Token: 0x04004177 RID: 16759
+	private bool lampOn;
+
+	// Token: 0x04004178 RID: 16760
+	private float timer;
+
+	// Token: 0x04004179 RID: 16761
+	private int mode;
+}

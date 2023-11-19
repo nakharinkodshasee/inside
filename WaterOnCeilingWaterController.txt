@@ -1,0 +1,197 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004AF RID: 1199
+public class WaterOnCeilingWaterController : MonoBehaviour, IWaterStream, IPreAwake
+{
+	// Token: 0x06001F6D RID: 8045 RVA: 0x0010C8C4 File Offset: 0x0010AAC4
+	public bool PreAwake(int callcount)
+	{
+		this.LoadCompleted = SignalIn.Create("LoadCompleted", base.gameObject, new Action(this.SetCompletedVolume));
+		return true;
+	}
+
+	// Token: 0x06001F6E RID: 8046 RVA: 0x0010C8EC File Offset: 0x0010AAEC
+	private void Start()
+	{
+		if (!this.water)
+		{
+			return;
+		}
+		this.waterFluidVolume = this.water.GetComponent<FluidVolume>();
+		if (!this.waterFluidVolume)
+		{
+			return;
+		}
+		this.waterFluidVolume.AddStreamSource(this);
+		this.SetIdleState();
+	}
+
+	// Token: 0x06001F6F RID: 8047 RVA: 0x0010C940 File Offset: 0x0010AB40
+	private void SetCompletedVolume()
+	{
+		this.waterFluidVolume.Volume = this.completedVolume;
+		this.target.position = this.moverLoadPos.position;
+	}
+
+	// Token: 0x06001F70 RID: 8048 RVA: 0x0010C96C File Offset: 0x0010AB6C
+	private void SetIdleState()
+	{
+		this.state = WaterOnCeilingWaterController.State.Idle;
+	}
+
+	// Token: 0x06001F71 RID: 8049 RVA: 0x0010C978 File Offset: 0x0010AB78
+	private void IdleState()
+	{
+		float num = this.target.position.y - this.surface.position.y;
+		if (Mathf.Abs(num) < 0.05f)
+		{
+			return;
+		}
+		this.SetAdjustState(Mathf.Sign(num));
+	}
+
+	// Token: 0x06001F72 RID: 8050 RVA: 0x0010C9CC File Offset: 0x0010ABCC
+	private void SetAdjustState(float dir)
+	{
+		this.volumeAdded = 0f;
+		this.currentDir = dir;
+		if (this.currentDir == 1f)
+		{
+			this.currentAmount = 3f;
+		}
+		else
+		{
+			this.currentAmount = 18.3f;
+		}
+		this.CalculateVolumeToAdd(this.currentAmount);
+		this.state = WaterOnCeilingWaterController.State.Adjust;
+		Debug.Log("SetAdjustState");
+	}
+
+	// Token: 0x06001F73 RID: 8051 RVA: 0x0010CA34 File Offset: 0x0010AC34
+	private void AdjustState()
+	{
+		float num = this.target.position.y - this.surface.position.y;
+		if (this.volumeAdded < Mathf.Abs(this.volumeToAdd))
+		{
+			float num2;
+			if (this.moveScript.IsAtTarget())
+			{
+				num2 = this.speedLastFrame;
+			}
+			else
+			{
+				num2 = this.speed * this.water.transform.localScale.x * this.water.transform.localScale.z * Mathf.InverseLerp(0.05f, 0.25f, num);
+			}
+			num2 = Mathf.Clamp(num2, 200f, 3000f);
+			float num3 = Mathf.Sign(this.volumeToAdd) * num2 * Time.deltaTime;
+			this.waterFluidVolume.AddVolume(num3);
+			this.volumeAdded += Mathf.Abs(num3);
+			this.speedLastFrame = num2;
+		}
+		if (Mathf.Abs(num) < 0.05f)
+		{
+			this.SetIdleState();
+		}
+		else if (Mathf.Sign(num) != this.currentDir)
+		{
+			this.SetAdjustState(Mathf.Sign(this.target.position.y - this.surface.position.y));
+		}
+	}
+
+	// Token: 0x06001F74 RID: 8052 RVA: 0x0010CB94 File Offset: 0x0010AD94
+	private void FixedUpdate()
+	{
+		if (this.state == WaterOnCeilingWaterController.State.Adjust)
+		{
+			this.AdjustState();
+		}
+		else if (this.state == WaterOnCeilingWaterController.State.Idle)
+		{
+			this.IdleState();
+		}
+	}
+
+	// Token: 0x06001F75 RID: 8053 RVA: 0x0010CBC0 File Offset: 0x0010ADC0
+	public Vector3 GetStreamAtPosition(Vector3 pos)
+	{
+		if (this.state == WaterOnCeilingWaterController.State.Idle || this.volumeAdded >= Mathf.Abs(this.volumeToAdd))
+		{
+			return Vector3.zero;
+		}
+		float num = this.speed * Mathf.Sign(this.volumeToAdd);
+		return this.water.transform.up * num * this.streamScale;
+	}
+
+	// Token: 0x06001F76 RID: 8054 RVA: 0x0010CC2C File Offset: 0x0010AE2C
+	private void CalculateVolumeToAdd(float amount)
+	{
+		this.volumeToAdd = amount * this.water.transform.localScale.x * this.water.transform.localScale.z - this.waterFluidVolume.Volume;
+	}
+
+	// Token: 0x06001F77 RID: 8055 RVA: 0x0010CC80 File Offset: 0x0010AE80
+	private void OnDestroy()
+	{
+		this.waterFluidVolume.RemoveStreamSource(this);
+	}
+
+	// Token: 0x04003A41 RID: 14913
+	public GameObject water;
+
+	// Token: 0x04003A42 RID: 14914
+	public Transform target;
+
+	// Token: 0x04003A43 RID: 14915
+	public Transform surface;
+
+	// Token: 0x04003A44 RID: 14916
+	public AnalogMover moveScript;
+
+	// Token: 0x04003A45 RID: 14917
+	public float speed = 2.5f;
+
+	// Token: 0x04003A46 RID: 14918
+	public float streamScale = 0.5f;
+
+	// Token: 0x04003A47 RID: 14919
+	public Transform moverLoadPos;
+
+	// Token: 0x04003A48 RID: 14920
+	public float completedVolume = 11072.83f;
+
+	// Token: 0x04003A49 RID: 14921
+	private WaterOnCeilingWaterController.State state;
+
+	// Token: 0x04003A4A RID: 14922
+	private FluidVolume waterFluidVolume;
+
+	// Token: 0x04003A4B RID: 14923
+	private float volumeToAdd;
+
+	// Token: 0x04003A4C RID: 14924
+	private float volumeAdded;
+
+	// Token: 0x04003A4D RID: 14925
+	private float currentAmount;
+
+	// Token: 0x04003A4E RID: 14926
+	private float currentDir;
+
+	// Token: 0x04003A4F RID: 14927
+	private float speedLastFrame;
+
+	// Token: 0x04003A50 RID: 14928
+	private SignalIn LoadCompleted;
+
+	// Token: 0x020004B0 RID: 1200
+	private enum State
+	{
+		// Token: 0x04003A52 RID: 14930
+		None,
+		// Token: 0x04003A53 RID: 14931
+		Idle,
+		// Token: 0x04003A54 RID: 14932
+		Adjust
+	}
+}

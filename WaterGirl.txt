@@ -1,0 +1,716 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000D6 RID: 214
+public class WaterGirl : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060006A6 RID: 1702 RVA: 0x0004BCCC File Offset: 0x00049ECC
+	public float GetWaterTop()
+	{
+		return this.waterTop;
+	}
+
+	// Token: 0x060006A7 RID: 1703 RVA: 0x0004BCD4 File Offset: 0x00049ED4
+	public bool PreAwake(int callcount)
+	{
+		this.startChase = SignalIn.Create("startChase", base.gameObject, new Action(this.StartChase));
+		this.stopChase = SignalIn.Create("stopChase", base.gameObject, new Action(this.StopChase));
+		this.wakeUp = SignalIn.Create("wakeUp", base.gameObject, new Action(this.WakeUp));
+		this.sleep = SignalIn.Create("sleep", base.gameObject, new Action(this.FallASleep));
+		this.initializeWakeUp = SignalIn.Create("initializeWakeUp", base.gameObject, new Action(this.InitializeWakeUp));
+		this.setStoredViaPoint = SignalIn.Create("setStoredViaPoint", base.gameObject, new Action(this.SetStoredViaPoint));
+		this.setCheatChaseDelay = SignalIn.Create("setCheatChaseDelay", base.gameObject, new Action(this.OnSetCheatChaseDelay));
+		this.catchedBoy = SignalOut.Create("catchedBoy", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060006A8 RID: 1704 RVA: 0x0004BDE8 File Offset: 0x00049FE8
+	private void Start()
+	{
+		this.rigBod = base.GetComponent<Rigidbody>();
+		this.boy = ScriptGlobals.boy;
+		this.colMask = (1 << CollisionUtils.Layers.ungrouped | 1 << CollisionUtils.Layers.environment | 1 << CollisionUtils.Layers.item);
+		if (this.boy.visualBoy == null)
+		{
+			base.gameObject.SetActive(false);
+			return;
+		}
+		this.triggerCatch.probeEnter.Event += this.OnCatchTriggerEnter;
+		this.blendInFactor = 0f;
+		if (this.waterTriggerToGetTopFrom != null)
+		{
+			this.waterTop = this.waterTriggerToGetTopFrom.bounds.max.y - 0.1f;
+		}
+	}
+
+	// Token: 0x060006A9 RID: 1705 RVA: 0x0004BEB4 File Offset: 0x0004A0B4
+	public void SetAnkleBone(Transform ankleBone)
+	{
+		this.ankle = ankleBone;
+	}
+
+	// Token: 0x060006AA RID: 1706 RVA: 0x0004BEC0 File Offset: 0x0004A0C0
+	private void RotateTowards(Vector3 pos, float deltaTime)
+	{
+		if (!this.awake)
+		{
+			return;
+		}
+		Vector3 normalized = (pos - base.transform.position).normalized;
+		Vector3 vector;
+		vector..ctor(0f, Mathf.Abs(normalized.x) * 5f, normalized.y);
+		Vector3 normalized2 = vector.normalized;
+		Vector3 vector2 = Vector3.Cross(normalized2, normalized);
+		this.rotateQuad = Quaternion.LookRotation(vector2, normalized);
+		float num = Mathf.Min(5f * deltaTime, 1f);
+		if (this.wakingUpTimer > 0f)
+		{
+			num = deltaTime;
+		}
+		this.doRotate = true;
+		this.rotateDelta = num;
+	}
+
+	// Token: 0x060006AB RID: 1707 RVA: 0x0004BF68 File Offset: 0x0004A168
+	private void OnSetCheatChaseDelay()
+	{
+		this.cheatChaseDelay = 0.8f;
+	}
+
+	// Token: 0x060006AC RID: 1708 RVA: 0x0004BF78 File Offset: 0x0004A178
+	private Vector3 GetBottomFast(Vector3 pos, float range)
+	{
+		Ray ray;
+		ray..ctor(pos, Vector3.down);
+		float num = float.MaxValue;
+		Vector3 result = pos + Vector3.down * range;
+		int i = 0;
+		int num2 = this.bottomColliders.Length;
+		while (i < num2)
+		{
+			Collider collider = this.bottomColliders[i];
+			RaycastHit raycastHit;
+			if (collider.gameObject.activeInHierarchy && collider.Raycast(ray, ref raycastHit, range) && raycastHit.distance < num)
+			{
+				result = raycastHit.point;
+				num = raycastHit.distance;
+			}
+			i++;
+		}
+		return result;
+	}
+
+	// Token: 0x060006AD RID: 1709 RVA: 0x0004C018 File Offset: 0x0004A218
+	private Vector3 GetBottom(Vector3 pos, float range)
+	{
+		if (this.usePresetBottomColliders)
+		{
+			return this.GetBottomFast(pos, range);
+		}
+		int num = -1;
+		float num2 = range;
+		RaycastHit[] array = Physics.RaycastAll(pos, Vector3.down, range, this.colMask);
+		int num3 = array.Length;
+		bool flag = this.rigBod != null;
+		if (num3 == 1)
+		{
+			if (!array[0].collider.isTrigger && (array[0].collider.attachedRigidbody != this.rigBod || !flag))
+			{
+				return array[0].point;
+			}
+			return pos + Vector3.down * range;
+		}
+		else
+		{
+			for (int i = 0; i < num3; i++)
+			{
+				if (!array[i].collider.isTrigger && array[i].distance < num2 && (array[i].collider.attachedRigidbody != this.rigBod || !flag))
+				{
+					num = i;
+					num2 = array[i].distance;
+				}
+			}
+			if (num >= 0)
+			{
+				return array[num].point;
+			}
+			return pos + Vector3.down * range;
+		}
+	}
+
+	// Token: 0x060006AE RID: 1710 RVA: 0x0004C168 File Offset: 0x0004A368
+	private void Update()
+	{
+		if (this.doRotate)
+		{
+			this.rigBod.MoveRotation(Quaternion.Slerp(base.transform.rotation, this.rotateQuad, Time.deltaTime * this.rotateDelta / Time.fixedDeltaTime));
+		}
+	}
+
+	// Token: 0x060006AF RID: 1711 RVA: 0x0004C1B4 File Offset: 0x0004A3B4
+	private void FixedUpdate()
+	{
+		if (this.rigBod == null)
+		{
+			return;
+		}
+		this.doRotate = false;
+		Vector3 vector = base.transform.InverseTransformDirection(this.rigBod.velocity);
+		if (vector.y > 0f)
+		{
+			float magnitude = vector.magnitude;
+			if (magnitude > 0.2f)
+			{
+				Vector3 vector2 = (Vector3.up * (Time.deltaTime * 6f) + vector * ((1f - Time.deltaTime) / magnitude)).normalized * magnitude;
+				Vector3 vector3 = base.transform.TransformDirection(vector2) - this.rigBod.velocity;
+				float magnitude2 = vector3.magnitude;
+				Vector3 vector4 = vector3 - this.rigBod.velocity * magnitude2 * Time.deltaTime * 4f;
+				this.rigBod.AddForce(vector3 - this.rigBod.velocity * magnitude2 * Time.deltaTime * 4f, 2);
+			}
+		}
+		float deltaTime = Time.deltaTime;
+		float num = base.transform.position.y - this.waterTop;
+		if (num > -0.6f)
+		{
+			if (num > -0.3f)
+			{
+				Vector3 vector5;
+				vector5..ctor(0f, -(0.5f + (num + 0.3f) * 3f) * Time.deltaTime * 15f, 0f);
+				this.rigBod.AddForce(vector5, 2);
+			}
+			else if (this.rigBod.velocity.y > 1f)
+			{
+				Vector3 vector6;
+				vector6..ctor(0f, -Time.deltaTime * 15f * this.rigBod.velocity.y, 0f);
+				this.rigBod.AddForce(vector6, 2);
+			}
+		}
+		Vector3 vector7 = this.ankle.transform.TransformPoint(new Vector3(0f, -0.005f, 0.06f)) + this.rigBod.velocity * deltaTime;
+		if (this.wakingUpTimer > 0f)
+		{
+			this.wakingUpTimer -= deltaTime;
+		}
+		float num2 = 1f;
+		if (this.target == this.boy.gameObject && !this.boyCaught)
+		{
+			this.sinusCounter += Time.deltaTime * 6f;
+			num2 = 1.1f + Mathf.Cos(this.sinusCounter) * 0.6f;
+			num2 *= 0.5f;
+			float magnitude3 = this.rigBod.velocity.magnitude;
+			if (magnitude3 > 0.1f)
+			{
+				Vector3 position = this.target.transform.position;
+				if (this.viaPoint != null)
+				{
+					position = this.viaPoint.transform.position;
+				}
+				if (this.GetUnderDoorPivot != null)
+				{
+					Vector3 position2 = this.GetUnderDoorPivot.position;
+					if (this.rigBod.position.x < position2.x && this.target.transform.position.x > position2.x)
+					{
+						position.y = Mathf.Min(position.y, position2.y);
+					}
+				}
+				if (this.GetUnderDoorPivot2 != null)
+				{
+					Vector3 position3 = this.GetUnderDoorPivot2.position;
+					if (this.rigBod.position.x < position3.x && this.target.transform.position.x > position3.x)
+					{
+						position.y = Mathf.Min(position.y, position3.y);
+					}
+				}
+				if (this.GetUnderDoorPivotLEFT != null)
+				{
+					Vector3 position4 = this.GetUnderDoorPivotLEFT.position;
+					if (this.rigBod.position.x > position4.x && this.target.transform.position.x < position4.x)
+					{
+						position.y = Mathf.Min(position.y, position4.y);
+					}
+				}
+				float num3 = Mathf.Min(Mathf.Abs((position - base.transform.position).x), 13f);
+				if (num3 > 3f)
+				{
+					position.y -= (num3 - 3f) * 0.1f;
+				}
+				if (this.viaPoint != null || this.target == this.boy.gameObject)
+				{
+					this.RotateTowards(position, deltaTime * 2f);
+				}
+				else
+				{
+					this.RotateTowards(position, deltaTime * 0.4f);
+				}
+			}
+		}
+		else
+		{
+			this.RotateTowards(base.transform.position + Vector3.up, deltaTime * 0.4f);
+			this.sinusCounter = 0f;
+		}
+		this.grib.transform.position = this.hand.transform.position;
+		Vector3 velocity = this.rigBod.velocity;
+		velocity.z = 0f;
+		this.rest.transform.position = this.GetBottom(base.transform.position + velocity * 0.2f, 20f) + Vector3.up * 1.5f;
+		if (this.moving)
+		{
+			this.cheatChaseDelay -= Time.deltaTime;
+		}
+		if (this.moving && this.wakingUpTimer <= 0f && this.cheatChaseDelay <= 0f)
+		{
+			this.blendInFactor = Mathf.Min(1f, this.blendInFactor + Time.deltaTime);
+			if (this.boyCaught)
+			{
+				this.force = this.target.transform.position - this.rigBod.position;
+			}
+			else if (this.target != null)
+			{
+				if (this.viaPoint != null && ((this.viaPoint.transform.position - base.transform.position).magnitude < 2f || Mathf.Abs(this.boy.pos3.x - base.transform.position.x) < 1f || (Mathf.Abs(this.boy.pos3.x - base.transform.position.x) < 2f && Mathf.Abs(this.boy.pos3.y - base.transform.position.y) < 2.5f)))
+				{
+					this.viaPoint = null;
+				}
+				if (this.viaPoint && this.target == this.boy.gameObject)
+				{
+					this.force = this.viaPoint.transform.position - this.rigBod.position;
+				}
+				else
+				{
+					this.force = this.target.transform.position - this.rigBod.position;
+					if (this.target != this.boy.gameObject)
+					{
+						this.force = this.target.transform.position - this.rigBod.position;
+						this.force.y = this.force.y * Mathf.Max(0f, (4f - this.rigBod.velocity.y) * 0.25f);
+						float magnitude4 = this.force.magnitude;
+						if (magnitude4 > 0.2f)
+						{
+							if (magnitude4 > 1f)
+							{
+								this.force *= Mathf.Min(magnitude4, 1.5f) / magnitude4;
+							}
+							this.rigBod.AddForce(this.force);
+						}
+					}
+					else
+					{
+						this.force.y = this.force.y - 0.2f * this.force.magnitude;
+					}
+				}
+			}
+			this.force.Normalize();
+			this.force *= this.swimSpeed * this.blendInFactor * this.dynamicSpeedScaler;
+			float num4 = Vector3.Distance(base.transform.position, this.target.transform.position);
+			if (num4 > 0.1f)
+			{
+				if (num4 < this.boyNear && this.rigBod.velocity.magnitude > 1.7f)
+				{
+					this.force *= this.boyNearDecrease;
+				}
+				this.force *= num2;
+				if (this.forceTarget)
+				{
+					this.rigBod.AddForceAtPosition(this.force, this.forceTarget.transform.position);
+				}
+				else
+				{
+					this.rigBod.AddForce(this.force);
+				}
+			}
+		}
+		else if (this.boyCaught)
+		{
+			this.force = this.target.transform.position - this.rigBod.position;
+			this.force.y = this.force.y * Mathf.Max(0f, (4f - this.rigBod.velocity.y) * 0.25f);
+			float magnitude5 = this.force.magnitude;
+			if (magnitude5 > 1f)
+			{
+				this.force *= Mathf.Min(magnitude5, 1.5f) / magnitude5;
+			}
+			this.rigBod.AddForce(this.force);
+		}
+		if (this.waterTriggerToGetTopFrom)
+		{
+			this.BoyInWaterCheck();
+		}
+		if (this.target == this.boy.gameObject && !this.boyCaught && this.boy.isDead)
+		{
+			this.StopChase();
+		}
+	}
+
+	// Token: 0x060006B0 RID: 1712 RVA: 0x0004CCC8 File Offset: 0x0004AEC8
+	public void SetTarget(GameObject t, float s)
+	{
+		if (this.chaseLogicTerminated)
+		{
+			return;
+		}
+		this.currentSpeed = 0f;
+		this.moving = true;
+		this.target = t;
+		this.swimSpeed = s * 0.58f;
+	}
+
+	// Token: 0x060006B1 RID: 1713 RVA: 0x0004CD08 File Offset: 0x0004AF08
+	public void TerminatChase()
+	{
+		this.chaseLogicTerminated = true;
+	}
+
+	// Token: 0x060006B2 RID: 1714 RVA: 0x0004CD14 File Offset: 0x0004AF14
+	public void SetViaPoint(GameObject p)
+	{
+		this.viaPoint = p;
+	}
+
+	// Token: 0x060006B3 RID: 1715 RVA: 0x0004CD20 File Offset: 0x0004AF20
+	private void StartChase()
+	{
+		if (this.awake)
+		{
+			this.SetTarget(this.boy.gameObject, this.chaseSpeed * 1.4f);
+		}
+	}
+
+	// Token: 0x060006B4 RID: 1716 RVA: 0x0004CD58 File Offset: 0x0004AF58
+	private void StopChase()
+	{
+		this.SetTarget(this.rest, this.restSpeed);
+	}
+
+	// Token: 0x060006B5 RID: 1717 RVA: 0x0004CD6C File Offset: 0x0004AF6C
+	private void Burst(float power)
+	{
+		Vector3 vector = this.target.transform.position - this.rigBod.position;
+		vector.Normalize();
+		vector *= power;
+		this.rigBod.AddForce(vector);
+	}
+
+	// Token: 0x060006B6 RID: 1718 RVA: 0x0004CDB8 File Offset: 0x0004AFB8
+	private void InitializeWakeUp()
+	{
+		this.awake = true;
+		this.viaPoint = null;
+	}
+
+	// Token: 0x060006B7 RID: 1719 RVA: 0x0004CDC8 File Offset: 0x0004AFC8
+	private void SetStoredViaPoint()
+	{
+		this.viaPoint = this.storedViaPoint;
+	}
+
+	// Token: 0x060006B8 RID: 1720 RVA: 0x0004CDD8 File Offset: 0x0004AFD8
+	private void WakeUp()
+	{
+		if (!this.boyCaught)
+		{
+			this.awake = true;
+			this.wakingUpTimer = this.wakeUpTime;
+		}
+	}
+
+	// Token: 0x060006B9 RID: 1721 RVA: 0x0004CDF8 File Offset: 0x0004AFF8
+	private void FallASleep()
+	{
+		this.StopChase();
+		this.awake = false;
+	}
+
+	// Token: 0x060006BA RID: 1722 RVA: 0x0004CE08 File Offset: 0x0004B008
+	public void StopWakeupSequence()
+	{
+		this.wakingUpTimer = 0f;
+	}
+
+	// Token: 0x060006BB RID: 1723 RVA: 0x0004CE18 File Offset: 0x0004B018
+	public bool GetBoyInWater()
+	{
+		return this.boyInWater;
+	}
+
+	// Token: 0x060006BC RID: 1724 RVA: 0x0004CE20 File Offset: 0x0004B020
+	private void BoyInWaterCheck()
+	{
+		if (!this.leftAnkle)
+		{
+			this.leftAnkle = this.boy.visualBoy.actor.bones[this.boy.visualBoy.actor.GetBone("LeftBall")].transform;
+		}
+		if (!this.rightAnkle)
+		{
+			this.rightAnkle = this.boy.visualBoy.actor.bones[this.boy.visualBoy.actor.GetBone("RightBall")].transform;
+		}
+		float num = Mathf.Min(this.leftAnkle.position.y, this.rightAnkle.position.y) + this.boyOffset;
+		float num2 = this.waterTop + 0.1f;
+		bool flag = num <= num2;
+		if (this.debugSurface && EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			Vector3 pos = this.boy.pos3;
+			pos.y = num;
+			Debug.DrawLine(pos, pos + Vector3.right, (!flag) ? Color.red : Color.green);
+			Vector3 pos2 = this.boy.pos3;
+			pos2.y = num2;
+			Debug.DrawLine(pos2, pos2 + Vector3.right, Color.cyan);
+		}
+		if (!this.boyCaught && this.boyInWater != flag)
+		{
+			this.boyInWater = flag;
+			if (this.boyInWater)
+			{
+				this.StartChase();
+			}
+			else
+			{
+				this.StopChase();
+			}
+		}
+	}
+
+	// Token: 0x060006BD RID: 1725 RVA: 0x0004CFD4 File Offset: 0x0004B1D4
+	private void CatchBoy()
+	{
+		SingletonBehaviour<BoyAudio>.instance.KillBoy(0f, false, false);
+		SoundEngine.Events.waterGirlKill.PostFast(AudioKeyObject.AkGameObjs.boy);
+		this.SetTarget(this.rest, this.restSpeed);
+		this.boyCaught = true;
+		this.moving = false;
+		this.worldCollider.height += 1.5f;
+		this.catchedBoy.Signal();
+	}
+
+	// Token: 0x060006BE RID: 1726 RVA: 0x0004D044 File Offset: 0x0004B244
+	public bool IsBoyTarget()
+	{
+		return this.boy != null && this.target == this.boy.gameObject;
+	}
+
+	// Token: 0x060006BF RID: 1727 RVA: 0x0004D07C File Offset: 0x0004B27C
+	public bool IsAwake()
+	{
+		return this.moving;
+	}
+
+	// Token: 0x060006C0 RID: 1728 RVA: 0x0004D084 File Offset: 0x0004B284
+	public bool IsWakingUp()
+	{
+		return this.wakingUpTimer > 0f;
+	}
+
+	// Token: 0x060006C1 RID: 1729 RVA: 0x0004D094 File Offset: 0x0004B294
+	public bool IsBoyCaught()
+	{
+		return this.boyCaught;
+	}
+
+	// Token: 0x060006C2 RID: 1730 RVA: 0x0004D09C File Offset: 0x0004B29C
+	private void OnCatchTriggerEnter(IsTriggeredByProbe p)
+	{
+		if (this.awake && !this.boyCaught)
+		{
+			this.CatchBoy();
+		}
+	}
+
+	// Token: 0x060006C3 RID: 1731 RVA: 0x0004D0BC File Offset: 0x0004B2BC
+	private void OnTriggerEnter(Collider c)
+	{
+		if (!this.boyCaught)
+		{
+			bool flag = false;
+			if (c.gameObject.GetComponent<BoyWater>() != null)
+			{
+				this.waterTop = c.bounds.max.y - 0.1f;
+				if (this.target == null)
+				{
+					flag = true;
+					this.moving = true;
+					this.SetTarget(this.rest, this.restSpeed);
+				}
+			}
+			Rigidbody attachedRigidbody = c.attachedRigidbody;
+			if (attachedRigidbody != null && attachedRigidbody.gameObject.GetComponent<BoyWater>() != null)
+			{
+				this.rigBod.useGravity = false;
+				if (!flag)
+				{
+					this.waterTop = attachedRigidbody.GetComponent<Collider>().bounds.max.y - 0.1f;
+					this.moving = true;
+					this.SetTarget(this.rest, this.restSpeed);
+				}
+			}
+		}
+	}
+
+	// Token: 0x04000B86 RID: 2950
+	public GameObject grib;
+
+	// Token: 0x04000B87 RID: 2951
+	public Transform ankle;
+
+	// Token: 0x04000B88 RID: 2952
+	public GameObject rest;
+
+	// Token: 0x04000B89 RID: 2953
+	public GameObject hand;
+
+	// Token: 0x04000B8A RID: 2954
+	public GameObject viaPoint;
+
+	// Token: 0x04000B8B RID: 2955
+	public GameObject storedViaPoint;
+
+	// Token: 0x04000B8C RID: 2956
+	public GameObject forceTarget;
+
+	// Token: 0x04000B8D RID: 2957
+	public CapsuleCollider worldCollider;
+
+	// Token: 0x04000B8E RID: 2958
+	public bool awake = true;
+
+	// Token: 0x04000B8F RID: 2959
+	public float wakeUpTime;
+
+	// Token: 0x04000B90 RID: 2960
+	private float wakingUpTimer;
+
+	// Token: 0x04000B91 RID: 2961
+	public bool pullBoyDownToAbyss;
+
+	// Token: 0x04000B92 RID: 2962
+	public Collider waterTriggerToGetTopFrom;
+
+	// Token: 0x04000B93 RID: 2963
+	public float chaseSpeed = 10f;
+
+	// Token: 0x04000B94 RID: 2964
+	public float dynamicSpeedScaler = 1f;
+
+	// Token: 0x04000B95 RID: 2965
+	public bool debugSurface;
+
+	// Token: 0x04000B96 RID: 2966
+	public float boyOffset = -0.95f;
+
+	// Token: 0x04000B97 RID: 2967
+	public Transform GetUnderDoorPivot;
+
+	// Token: 0x04000B98 RID: 2968
+	public Transform GetUnderDoorPivot2;
+
+	// Token: 0x04000B99 RID: 2969
+	public Transform GetUnderDoorPivotLEFT;
+
+	// Token: 0x04000B9A RID: 2970
+	public IsTriggeredByProbe triggerCatch;
+
+	// Token: 0x04000B9B RID: 2971
+	public Collider[] bottomColliders;
+
+	// Token: 0x04000B9C RID: 2972
+	public bool usePresetBottomColliders;
+
+	// Token: 0x04000B9D RID: 2973
+	private Boy boy;
+
+	// Token: 0x04000B9E RID: 2974
+	private SignalIn startChase;
+
+	// Token: 0x04000B9F RID: 2975
+	private SignalIn stopChase;
+
+	// Token: 0x04000BA0 RID: 2976
+	private SignalIn wakeUp;
+
+	// Token: 0x04000BA1 RID: 2977
+	private SignalIn sleep;
+
+	// Token: 0x04000BA2 RID: 2978
+	private SignalIn initializeWakeUp;
+
+	// Token: 0x04000BA3 RID: 2979
+	private SignalIn setStoredViaPoint;
+
+	// Token: 0x04000BA4 RID: 2980
+	private SignalIn setCheatChaseDelay;
+
+	// Token: 0x04000BA5 RID: 2981
+	private SignalOut catchedBoy;
+
+	// Token: 0x04000BA6 RID: 2982
+	private bool moving;
+
+	// Token: 0x04000BA7 RID: 2983
+	private bool boyCaught;
+
+	// Token: 0x04000BA8 RID: 2984
+	private GameObject target;
+
+	// Token: 0x04000BA9 RID: 2985
+	private float restSpeed = 0.4f;
+
+	// Token: 0x04000BAA RID: 2986
+	private float freeSpeed = 1.25f;
+
+	// Token: 0x04000BAB RID: 2987
+	private float crawlSpeed = 2f;
+
+	// Token: 0x04000BAC RID: 2988
+	private float swimSpeed;
+
+	// Token: 0x04000BAD RID: 2989
+	private float currentSpeed;
+
+	// Token: 0x04000BAE RID: 2990
+	private float boyNear = 3f;
+
+	// Token: 0x04000BAF RID: 2991
+	private float boyNearDecrease = 0.95f;
+
+	// Token: 0x04000BB0 RID: 2992
+	private float maxRopeLength = 2f;
+
+	// Token: 0x04000BB1 RID: 2993
+	private float blendInFactor;
+
+	// Token: 0x04000BB2 RID: 2994
+	private float waterTop = 1000000f;
+
+	// Token: 0x04000BB3 RID: 2995
+	private bool boyInWater;
+
+	// Token: 0x04000BB4 RID: 2996
+	private Transform leftAnkle;
+
+	// Token: 0x04000BB5 RID: 2997
+	private Transform rightAnkle;
+
+	// Token: 0x04000BB6 RID: 2998
+	private Rigidbody rigBod;
+
+	// Token: 0x04000BB7 RID: 2999
+	private Vector3 force;
+
+	// Token: 0x04000BB8 RID: 3000
+	private bool doRotate;
+
+	// Token: 0x04000BB9 RID: 3001
+	private float rotateDelta;
+
+	// Token: 0x04000BBA RID: 3002
+	private Quaternion rotateQuad = Quaternion.identity;
+
+	// Token: 0x04000BBB RID: 3003
+	private float sinusCounter;
+
+	// Token: 0x04000BBC RID: 3004
+	private float cheatChaseDelay;
+
+	// Token: 0x04000BBD RID: 3005
+	private int colMask;
+
+	// Token: 0x04000BBE RID: 3006
+	private Vector3 lastLookDir = Vector3.up;
+
+	// Token: 0x04000BBF RID: 3007
+	private bool chaseLogicTerminated;
+}

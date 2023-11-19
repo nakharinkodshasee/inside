@@ -1,0 +1,201 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000371 RID: 881
+[ExecuteInEditMode]
+public class WaterEdge : MonoBehaviour, IFastEventExListener<WaterCameraRendering.EdgeAction>, IPreAwake
+{
+	// Token: 0x06001814 RID: 6164 RVA: 0x000D25A0 File Offset: 0x000D07A0
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		this.preProcessed = true;
+		this.Setup();
+	}
+
+	// Token: 0x06001815 RID: 6165 RVA: 0x000D25B0 File Offset: 0x000D07B0
+	private void Setup()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.surfRenderer = this.surface.GetComponent<Renderer>();
+		if (this.surfRenderer == null)
+		{
+			base.enabled = false;
+			return;
+		}
+		WaterQueue[] componentsInChildren = base.GetComponentsInChildren<WaterQueue>(true);
+		this.mis = new MaterialInstance[componentsInChildren.Length];
+		int i = 0;
+		int num = this.mis.Length;
+		while (i < num)
+		{
+			this.mis[i] = componentsInChildren[i].GetComponent<MaterialInstance>();
+			i++;
+		}
+		this.misEdge = this.edge.GetComponentsInChildren<MaterialInstance>(true);
+	}
+
+	// Token: 0x06001816 RID: 6166 RVA: 0x000D2648 File Offset: 0x000D0848
+	public bool PreAwake(int callcount)
+	{
+		this.clipProps = new MaterialInstance.FloatProperty[this.mis.Length];
+		int i = 0;
+		int num = this.mis.Length;
+		while (i < num)
+		{
+			this.clipProps[i] = this.mis[i].GetOrAddFloatProperty("_Clip");
+			i++;
+		}
+		this.dispProps = new MaterialInstance.FloatProperty[this.misEdge.Length];
+		int j = 0;
+		int num2 = this.misEdge.Length;
+		while (j < num2)
+		{
+			this.dispProps[j] = this.misEdge[j].GetOrAddFloatProperty("_Disp");
+			j++;
+		}
+		if (!base.enabled)
+		{
+			return true;
+		}
+		this.SetMatProps(this.length);
+		return true;
+	}
+
+	// Token: 0x06001817 RID: 6167 RVA: 0x000D2700 File Offset: 0x000D0900
+	private void OnEnable()
+	{
+		WaterCameraRendering.TranslateWaterEdge.Register(this, ref this.translateToSurfaceHandle);
+		this.ActivateEdge(true);
+	}
+
+	// Token: 0x06001818 RID: 6168 RVA: 0x000D271C File Offset: 0x000D091C
+	private void OnDisable()
+	{
+		WaterCameraRendering.TranslateWaterEdge.Unregister(ref this.translateToSurfaceHandle);
+		this.ActivateEdge(false);
+	}
+
+	// Token: 0x06001819 RID: 6169 RVA: 0x000D2738 File Offset: 0x000D0938
+	public void OnFastEventEx(FastEventEx<WaterCameraRendering.EdgeAction> sender, ref WaterCameraRendering.EdgeAction edgeAction)
+	{
+		GeometryUtility.CalculateFrustumPlanes(Camera.current, ref WaterEdge.viewfrustum);
+		bool flag = GeometryUtility.TestPlanesAABB(WaterEdge.viewfrustum, this.surfRenderer.bounds);
+		this.ActivateEdge(flag);
+		if (!flag)
+		{
+			return;
+		}
+		if (this.mis == null || this.misEdge == null)
+		{
+			base.enabled = false;
+			return;
+		}
+		this.inverseTransform.localScale = new Vector3(1f / base.transform.localScale.x, 1f / base.transform.localScale.y, 1f / base.transform.localScale.z);
+		edgeAction.pos += (this.surface.position.y - edgeAction.pos.y) * edgeAction.up;
+		if (this.edge.localScale.z != this.length)
+		{
+			this.edge.localScale = new Vector3(1f, 1f, this.length);
+			this.SetMatProps(this.length);
+		}
+		if (this.displacement != this.oldDisp)
+		{
+			this.SetEdgeMatProps();
+		}
+		this.edge.rotation = edgeAction.rot;
+		this.edge.position = edgeAction.pos;
+	}
+
+	// Token: 0x0600181A RID: 6170 RVA: 0x000D28B4 File Offset: 0x000D0AB4
+	private void ActivateEdge(bool active)
+	{
+		if (this.edge == null || this.edge.gameObject == null || this.edge.gameObject.activeSelf == active)
+		{
+			return;
+		}
+		this.SetMatProps((!active) ? 0f : this.length);
+		this.edge.gameObject.SetActive(active);
+	}
+
+	// Token: 0x0600181B RID: 6171 RVA: 0x000D292C File Offset: 0x000D0B2C
+	private void SetMatProps(float scale)
+	{
+		int i = 0;
+		int num = this.mis.Length;
+		while (i < num)
+		{
+			MaterialInstance materialInstance = this.mis[i];
+			materialInstance.SetFloatProperty(this.clipProps[i], scale);
+			i++;
+		}
+	}
+
+	// Token: 0x0600181C RID: 6172 RVA: 0x000D296C File Offset: 0x000D0B6C
+	private void SetEdgeMatProps()
+	{
+		int i = 0;
+		int num = this.misEdge.Length;
+		while (i < num)
+		{
+			MaterialInstance materialInstance = this.misEdge[i];
+			materialInstance.SetFloatProperty(this.dispProps[i], this.displacement);
+			i++;
+		}
+		this.oldDisp = this.displacement;
+	}
+
+	// Token: 0x04002B37 RID: 11063
+	private static Plane[] viewfrustum = new Plane[6];
+
+	// Token: 0x04002B38 RID: 11064
+	public Transform surface;
+
+	// Token: 0x04002B39 RID: 11065
+	public Transform edge;
+
+	// Token: 0x04002B3A RID: 11066
+	public Transform inverseTransform;
+
+	// Token: 0x04002B3B RID: 11067
+	[Range(2f, 12f)]
+	public float length;
+
+	// Token: 0x04002B3C RID: 11068
+	[Range(0f, 0.25f)]
+	public float displacement = 0.1f;
+
+	// Token: 0x04002B3D RID: 11069
+	private float oldDisp;
+
+	// Token: 0x04002B3E RID: 11070
+	private MaterialInstance.FloatProperty[] clipProps;
+
+	// Token: 0x04002B3F RID: 11071
+	private MaterialInstance.FloatProperty[] dispProps;
+
+	// Token: 0x04002B40 RID: 11072
+	private int translateToSurfaceHandle = -1;
+
+	// Token: 0x04002B41 RID: 11073
+	[HideInInspector]
+	[SerializeField]
+	private MaterialInstance[] mis;
+
+	// Token: 0x04002B42 RID: 11074
+	[HideInInspector]
+	[SerializeField]
+	private MaterialInstance[] misEdge;
+
+	// Token: 0x04002B43 RID: 11075
+	[SerializeField]
+	[HideInInspector]
+	private Renderer surfRenderer;
+
+	// Token: 0x04002B44 RID: 11076
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

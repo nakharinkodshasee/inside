@@ -1,0 +1,32 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003CB RID: 971
+public class VehiclePushProperties : BoyPropertyModifier
+{
+	// Token: 0x06001A1F RID: 6687 RVA: 0x000E41B8 File Offset: 0x000E23B8
+	private void Reset()
+	{
+		this.maxForce = 0f;
+		if (base.GetComponent<DrivableWheeledVehicle>() != null)
+		{
+			if (base.GetComponent<Rigidbody>())
+			{
+				this.maxForce += base.GetComponent<Rigidbody>().mass;
+			}
+			foreach (Rigidbody rigidbody in base.GetComponentsInChildren<Rigidbody>())
+			{
+				this.maxForce += rigidbody.mass;
+			}
+		}
+	}
+
+	// Token: 0x06001A20 RID: 6688 RVA: 0x000E423C File Offset: 0x000E243C
+	public override void InitModification(Boy boy)
+	{
+		boy.properties.grab.maxForce = this.maxForce;
+	}
+
+	// Token: 0x04002EFB RID: 12027
+	public float maxForce = 70f;
+}

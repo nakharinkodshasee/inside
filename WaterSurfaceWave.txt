@@ -1,0 +1,702 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000277 RID: 631
+public class WaterSurfaceWave : MonoBehaviour
+{
+	// Token: 0x06001366 RID: 4966 RVA: 0x000B68B0 File Offset: 0x000B4AB0
+	public float GetTotalWaveEnergy()
+	{
+		return this.totalWaveEnergy;
+	}
+
+	// Token: 0x06001367 RID: 4967 RVA: 0x000B68B8 File Offset: 0x000B4AB8
+	[ContextMenu("PreProcessTest")]
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		base.gameObject.SetActive(false);
+	}
+
+	// Token: 0x06001368 RID: 4968 RVA: 0x000B68C8 File Offset: 0x000B4AC8
+	private void OnEnable()
+	{
+		this.OnPreProcess();
+		this.matInstance = base.gameObject.GetComponent<MaterialInstance>();
+		base.gameObject.GetComponent<Renderer>().enabled = false;
+		this.prop_texOffset = this.matInstance.GetOrAddFloatProperty("_texOffset");
+		this.prop_misc = this.matInstance.GetOrAddVectorProperty("_misc");
+		for (int i = 0; i < 5; i++)
+		{
+			this.prop_centerX[i] = this.matInstance.GetOrAddVectorProperty("_centerX" + i.ToString());
+			this.prop_centerZ[i] = this.matInstance.GetOrAddVectorProperty("_centerZ" + i.ToString());
+			this.prop_height[i] = this.matInstance.GetOrAddVectorProperty("_height" + i.ToString());
+			this.prop_curDist[i] = this.matInstance.GetOrAddVectorProperty("_curDist" + i.ToString());
+			this.prop_width[i] = this.matInstance.GetOrAddVectorProperty("_width" + i.ToString());
+		}
+		Vector4 value = default(Vector4);
+		if (this.maxXDist > 0f)
+		{
+			value.x = 1f / this.maxXDist;
+		}
+		else
+		{
+			value.x = 1000f;
+		}
+		if (this.maxZDist > 0f)
+		{
+			value.y = 1f / this.maxZDist;
+		}
+		else
+		{
+			value.y = 1000f;
+		}
+		value.z = this.waveRepetitions;
+		value.w = this.fadeFraction;
+		this.matInstance.SetVectorProperty(this.prop_misc, value);
+	}
+
+	// Token: 0x06001369 RID: 4969 RVA: 0x000B6A8C File Offset: 0x000B4C8C
+	private void ReSetParameters()
+	{
+		this.waterCenter = base.transform.position.x;
+		if (this.waterTrigger)
+		{
+			BoxCollider boxCollider = this.waterTrigger.GetComponent<Collider>() as BoxCollider;
+			if (boxCollider)
+			{
+				this.waterCenter = this.waterTrigger.transform.position.x;
+				Vector3 position = this.waterTrigger.transform.position;
+				position.y = this.waterTrigger.transform.position.y + this.waterTrigger.transform.lossyScale.y * 0.5f;
+				FluidVolume component = this.waterTrigger.GetComponent<FluidVolume>();
+				if (component)
+				{
+					this.useForBottom = component.bottomSurface;
+					this.useForTop = !component.noSurface;
+					if (!this.useForBottom && !this.useForTop)
+					{
+						base.gameObject.SetActive(false);
+					}
+				}
+				base.transform.position = position;
+				float x = this.waterTrigger.transform.lossyScale.x;
+				if (this.maxXDist * 2f > x)
+				{
+					this.maxXDist = x * 0.5f;
+				}
+				else
+				{
+					this.surfaceMoveDist = x * 0.5f - this.maxXDist;
+				}
+			}
+		}
+		this.xUVScale = 2f * this.maxXDist / (2f * this.maxXDist + this.surfaceMoveDist);
+		this.storedWaveRepetitions = this.waveRepetitions;
+		this.oneOverWaveRepetitions = 1f / this.waveRepetitions;
+		this.storedStepDist = this.stepDist;
+		this.needBoundUpdate = true;
+		this.storedMaxXDist = this.maxXDist;
+		this.storedMaxZDist = this.maxZDist;
+		this.stepsX = Mathf.Max(1, Mathf.RoundToInt(this.storedMaxXDist / this.stepDist));
+		this.stepsZ = Mathf.Max(1, Mathf.RoundToInt(this.storedMaxZDist / this.stepDist));
+		int num = (this.stepsX * 2 + 1) * (this.stepsZ * 2 + 1);
+		this.vertices = new Vector3[num];
+		this.normals = new Vector3[num];
+		this.oneOverStepsX = 1f / (float)this.stepsX;
+		this.oneOverStepsZ = 1f / (float)this.stepsZ;
+		Vector2[] uv = new Vector2[num];
+		int[] array = new int[4 * this.stepsX * this.stepsZ * 6];
+		for (int i = -this.stepsZ; i <= this.stepsZ; i++)
+		{
+			bool flag = (i + this.stepsZ) % 2 == this.stepsZ % 2;
+			float num2 = -0.25f + Mathf.Abs((float)(i % 2) * 0.5f);
+			for (int j = -this.stepsX; j <= this.stepsX; j++)
+			{
+				int index = this.GetIndex(i, j);
+				if (j < this.stepsX && i < this.stepsZ)
+				{
+					int num3 = ((i + this.stepsZ) * (2 * this.stepsX) + (j + this.stepsX)) * 6;
+					if (flag)
+					{
+						array[num3] = index;
+						array[num3 + 1] = index + (2 * this.stepsX + 1);
+						array[num3 + 2] = index + 1;
+						array[num3 + 3] = index + 1;
+						array[num3 + 4] = index + (2 * this.stepsX + 1);
+						array[num3 + 5] = index + (2 * this.stepsX + 1) + 1;
+					}
+					else
+					{
+						array[num3] = index;
+						array[num3 + 1] = index + (2 * this.stepsX + 1);
+						array[num3 + 2] = index + (2 * this.stepsX + 1) + 1;
+						array[num3 + 3] = index;
+						array[num3 + 4] = index + (2 * this.stepsX + 1) + 1;
+						array[num3 + 5] = index + 1;
+					}
+				}
+			}
+		}
+		this.mesh.vertices = this.vertices;
+		this.mesh.uv = uv;
+		this.mesh.triangles = array;
+		this.mesh.normals = this.normals;
+	}
+
+	// Token: 0x0600136A RID: 4970 RVA: 0x000B6EDC File Offset: 0x000B50DC
+	private int GetIndex(int zIndex, int xIndex)
+	{
+		return (zIndex + this.stepsZ) * (2 * this.stepsX + 1) + (xIndex + this.stepsX);
+	}
+
+	// Token: 0x0600136B RID: 4971 RVA: 0x000B6EFC File Offset: 0x000B50FC
+	private float ConvertDist(float dist_in, float oneOverSteps)
+	{
+		return dist_in * oneOverSteps;
+	}
+
+	// Token: 0x0600136C RID: 4972 RVA: 0x000B6F04 File Offset: 0x000B5104
+	private void CachableDrawWaves()
+	{
+		for (int i = -this.stepsZ; i <= this.stepsZ; i++)
+		{
+			float num = -0.25f + Mathf.Abs((float)(i % 2) * 0.5f);
+			for (int j = -this.stepsX; j <= this.stepsX; j++)
+			{
+				float num2 = this.ConvertDist((float)j + num, this.oneOverStepsX);
+				float num3 = num2 * (float)this.stepsX;
+				float num4 = this.ConvertDist((float)i, this.oneOverStepsZ);
+				float num5 = num4 * (float)this.stepsZ;
+				float num6 = Mathf.Max(0f, Mathf.Min(1f - Mathf.Abs(num2), 1f - Mathf.Abs(num4)));
+				Vector3 zero = Vector3.zero;
+				float num7 = 0f;
+				int index = this.GetIndex(i, j);
+				this.vertices[index] = new Vector3(num3 * this.stepDist, num7, num5 * this.stepDist);
+				this.normals[index] = zero;
+			}
+		}
+		this.mesh.vertices = this.vertices;
+		this.mesh.normals = this.normals;
+		if (this.needBoundUpdate)
+		{
+			this.needBoundUpdate = false;
+			this.mesh.RecalculateBounds();
+		}
+	}
+
+	// Token: 0x0600136D RID: 4973 RVA: 0x000B705C File Offset: 0x000B525C
+	private void DrawWaves()
+	{
+		if (this.maxXDist != this.storedMaxXDist || this.stepDist != this.storedStepDist || this.storedMaxZDist != this.maxZDist || this.storedWaveRepetitions != this.waveRepetitions)
+		{
+			this.ReSetParameters();
+			Vector4 value = default(Vector4);
+			if (this.maxXDist > 0f)
+			{
+				value.x = 1f / this.maxXDist;
+			}
+			else
+			{
+				value.x = 1000f;
+			}
+			if (this.maxZDist > 0f)
+			{
+				value.y = 1f / this.maxZDist;
+			}
+			else
+			{
+				value.y = 1000f;
+			}
+			value.z = this.waveRepetitions;
+			value.w = this.fadeFraction;
+			this.matInstance.SetVectorProperty(this.prop_misc, value);
+		}
+		this.CachableDrawWaves();
+	}
+
+	// Token: 0x0600136E RID: 4974 RVA: 0x000B7158 File Offset: 0x000B5358
+	private void MakeRandomDrop(float splashPower, bool bounce = false)
+	{
+		this.splashTimer = 10f;
+		base.GetComponent<Renderer>().enabled = true;
+		WaterSurfaceWave.WaveDefinitions waveDefinitions = new WaterSurfaceWave.WaveDefinitions();
+		waveDefinitions.center = ScriptGlobals.boy.pos3 - Random.Range(-0.25f, 0.25f) * Vector3.right + Random.Range(-0.75f, 0.75f) * Vector3.forward;
+		waveDefinitions.center += ScriptGlobals.boy.velocity.x * 0.3f * Vector3.right;
+		if (splashPower > 1f)
+		{
+			waveDefinitions.height = this.height * Random.Range(0.9f, 1f) * splashPower;
+		}
+		else
+		{
+			waveDefinitions.height = this.height * Random.Range(0.5f, 1f) * splashPower;
+		}
+		waveDefinitions.speed = this.speed * Random.Range(0.8f, 1f);
+		waveDefinitions.width = this.width * Random.Range(0.5f, 1f) * splashPower;
+		this.waveList.Add(waveDefinitions);
+		if (bounce)
+		{
+			float num = this.maxXDist + this.surfaceMoveDist - Mathf.Abs(waveDefinitions.center.x - this.waterCenter);
+			if (num < 5f)
+			{
+				float num2 = Mathf.Sign(waveDefinitions.center.x - this.waterCenter);
+				float x = waveDefinitions.center.x + num2 * 2f * (num - 0.25f);
+				WaterSurfaceWave.WaveDefinitions waveDefinitions2 = new WaterSurfaceWave.WaveDefinitions();
+				waveDefinitions2.center = waveDefinitions.center;
+				waveDefinitions2.center.x = x;
+				waveDefinitions2.height = waveDefinitions.height;
+				waveDefinitions2.speed = waveDefinitions.speed;
+				waveDefinitions2.width = waveDefinitions.width * 1.1f;
+				waveDefinitions2.extraLifeDistance = this.maxXDist * 0.5f;
+				this.waveList.Add(waveDefinitions2);
+				this.nextBounceDrop = 0.5f;
+			}
+		}
+	}
+
+	// Token: 0x0600136F RID: 4975 RVA: 0x000B7378 File Offset: 0x000B5578
+	private float convertPosz(float pos)
+	{
+		return Mathf.Round((pos + 5f) * 100f) * 1000f;
+	}
+
+	// Token: 0x06001370 RID: 4976 RVA: 0x000B7394 File Offset: 0x000B5594
+	private void SetShaderWave(int waveID)
+	{
+		Vector4 value = default(Vector4);
+		Vector4 value2 = default(Vector4);
+		Vector4 value3 = default(Vector4);
+		Vector4 value4 = default(Vector4);
+		Vector4 value5 = default(Vector4);
+		if (waveID * 4 < this.waveList.Count)
+		{
+			WaterSurfaceWave.WaveDefinitions waveDefinitions = this.waveList[waveID * 4];
+			value.x = waveDefinitions.center.x - base.transform.position.x;
+			value2.x = waveDefinitions.center.z - base.transform.position.z;
+			value3.x = waveDefinitions.height;
+			value4.x = waveDefinitions.curDist;
+			value5.x = waveDefinitions.width;
+		}
+		if (waveID * 4 + 1 < this.waveList.Count)
+		{
+			WaterSurfaceWave.WaveDefinitions waveDefinitions2 = this.waveList[waveID * 4 + 1];
+			value.y = waveDefinitions2.center.x - base.transform.position.x;
+			value2.y = waveDefinitions2.center.z - base.transform.position.z;
+			value3.y = waveDefinitions2.height;
+			value4.y = waveDefinitions2.curDist;
+			value5.y = waveDefinitions2.width;
+		}
+		if (waveID * 4 + 2 < this.waveList.Count)
+		{
+			WaterSurfaceWave.WaveDefinitions waveDefinitions3 = this.waveList[waveID * 4 + 2];
+			value.z = waveDefinitions3.center.x - base.transform.position.x;
+			value2.z = waveDefinitions3.center.z - base.transform.position.z;
+			value3.z = waveDefinitions3.height;
+			value4.z = waveDefinitions3.curDist;
+			value5.z = waveDefinitions3.width;
+		}
+		if (waveID * 4 + 3 < this.waveList.Count)
+		{
+			WaterSurfaceWave.WaveDefinitions waveDefinitions4 = this.waveList[waveID * 4 + 3];
+			value.w = waveDefinitions4.center.x - base.transform.position.x;
+			value2.w = waveDefinitions4.center.z - base.transform.position.z;
+			value3.w = waveDefinitions4.height;
+			value4.w = waveDefinitions4.curDist;
+			value5.w = waveDefinitions4.width;
+		}
+		this.matInstance.SetVectorProperty(this.prop_centerX[waveID], value);
+		this.matInstance.SetVectorProperty(this.prop_centerZ[waveID], value2);
+		this.matInstance.SetVectorProperty(this.prop_height[waveID], value3);
+		this.matInstance.SetVectorProperty(this.prop_curDist[waveID], value4);
+		this.matInstance.SetVectorProperty(this.prop_width[waveID], value5);
+	}
+
+	// Token: 0x06001371 RID: 4977 RVA: 0x000B76B0 File Offset: 0x000B58B0
+	private float GetNewDropStrength()
+	{
+		float num = 1f;
+		if (this.isAtBottom)
+		{
+			num = 3f;
+		}
+		float result = 0f;
+		if (ScriptGlobals.boy.state is BoyRunState && ScriptGlobals.boy.pos.y - base.transform.position.y > 0.66f)
+		{
+			return result;
+		}
+		if (ScriptGlobals.boy.state is BoyRopeState && ScriptGlobals.boy.pos.y - base.transform.position.y > 0.6f)
+		{
+			return result;
+		}
+		if (ScriptGlobals.boy.state is BoyJumpState)
+		{
+			this.boyJumping = true;
+		}
+		else
+		{
+			float num2 = Mathf.Abs(base.transform.position.y - ScriptGlobals.boy.pos.y);
+			if (Mathf.Abs(base.transform.position.y - ScriptGlobals.boy.pos.y) < num && Mathf.Abs(ScriptGlobals.boy.pos.x - this.waterCenter) < this.maxXDist + this.surfaceMoveDist)
+			{
+				if (this.isAtBottom)
+				{
+					result = 1f - Mathf.Max(num2 - 1f, 0f) / (num - 1f);
+				}
+				else if (this.boyJumping)
+				{
+					result = 1f;
+				}
+				else if (Mathf.Abs(ScriptGlobals.boy.velocity.x) > 0.5f || (this.isAtBottom && Mathf.Abs(ScriptGlobals.boy.velocity.y) > 0.5f))
+				{
+					result = 1f;
+				}
+			}
+			this.boyJumping = false;
+		}
+		return result;
+	}
+
+	// Token: 0x06001372 RID: 4978 RVA: 0x000B78C0 File Offset: 0x000B5AC0
+	private void Update()
+	{
+		if (this.matInstance == null || !ScriptGlobals.mainCharacterActive)
+		{
+			return;
+		}
+		this.splashTimer -= Time.deltaTime;
+		if (base.GetComponent<Renderer>().enabled && this.splashTimer <= 0f)
+		{
+			base.GetComponent<Renderer>().enabled = false;
+		}
+		bool flag = false;
+		if (this.maxXDist != this.storedMaxXDist || this.stepDist != this.storedStepDist || this.storedMaxZDist != this.maxZDist || this.storedWaveRepetitions != this.waveRepetitions)
+		{
+			this.ReSetParameters();
+			Vector4 value = default(Vector4);
+			if (this.maxXDist > 0f)
+			{
+				value.x = 1f / this.maxXDist;
+			}
+			else
+			{
+				value.x = 1000f;
+			}
+			if (this.maxZDist > 0f)
+			{
+				value.y = 1f / this.maxZDist;
+			}
+			else
+			{
+				value.y = 1000f;
+			}
+			value.z = this.waveRepetitions;
+			value.w = this.fadeFraction;
+			this.matInstance.SetVectorProperty(this.prop_misc, value);
+			this.DrawWaves();
+		}
+		else if (this.useForBottom || this.useForTop)
+		{
+			if (ScriptGlobals.boy.pos.y < this.waterTrigger.transform.position.y)
+			{
+				if (this.useForBottom)
+				{
+					flag = true;
+					this.isAtBottom = true;
+				}
+			}
+			else if (this.useForTop)
+			{
+				flag = true;
+				this.isAtBottom = false;
+			}
+			Vector3 position = base.transform.position;
+			if (this.isAtBottom)
+			{
+				if (this.waterTrigger.transform.up.y > 0f)
+				{
+					base.transform.localEulerAngles = new Vector3(180f, 0f, 0f);
+					position.y = this.waterTrigger.GetComponent<Collider>().bounds.min.y;
+				}
+				else
+				{
+					position.y = this.waterTrigger.GetComponent<Collider>().bounds.max.y;
+					base.transform.localEulerAngles = Vector3.zero;
+				}
+			}
+			else if (this.waterTrigger.transform.up.y > 0f)
+			{
+				position.y = this.waterTrigger.GetComponent<Collider>().bounds.max.y;
+				base.transform.localEulerAngles = Vector3.zero;
+			}
+			else
+			{
+				position.y = this.waterTrigger.GetComponent<Collider>().bounds.min.y;
+				base.transform.localEulerAngles = Vector3.zero;
+			}
+			if (position.y != base.transform.position.y)
+			{
+				base.transform.position = position;
+			}
+		}
+		if (flag)
+		{
+			this.nextDrop -= Time.deltaTime;
+			this.nextBounceDrop -= Time.deltaTime;
+			int count = this.waveList.Count;
+			if (this.nextDrop <= 0f && count < 20)
+			{
+				float newDropStrength = this.GetNewDropStrength();
+				if (newDropStrength > 0f)
+				{
+					this.MakeRandomDrop(newDropStrength, this.nextBounceDrop <= 0f && count < 19);
+					if (newDropStrength > 1f && this.waveList.Count < 20)
+					{
+						this.MakeRandomDrop(1f, false);
+					}
+					this.nextDrop = 0.3f;
+				}
+			}
+		}
+		int count2 = this.waveList.Count;
+		this.totalWaveEnergy = 0f;
+		for (int i = count2 - 1; i >= 0; i--)
+		{
+			WaterSurfaceWave.WaveDefinitions waveDefinitions = this.waveList[i];
+			waveDefinitions.curDist += waveDefinitions.speed * Time.deltaTime;
+			float num = this.maxXDist + waveDefinitions.width * this.waveRepetitions * 2f + waveDefinitions.extraLifeDistance;
+			float num2 = waveDefinitions.curDist / num;
+			num2 = Mathf.Clamp(num2, 0f, 1f);
+			this.totalWaveEnergy += Mathf.Sin(num2 * 3.1415927f) * waveDefinitions.height;
+			if (waveDefinitions.curDist > num)
+			{
+				this.waveList.RemoveAt(i);
+			}
+		}
+		count2 = this.waveList.Count;
+		if (count2 != 0 || this.activeLastFrame)
+		{
+			for (int j = 0; j < 5; j++)
+			{
+				this.SetShaderWave(j);
+			}
+			Vector3 position2 = base.transform.position;
+			float num3 = Mathf.Max(0f, this.surfaceMoveDist - this.stepDist * 0.5f);
+			float num4 = Mathf.Clamp(ScriptGlobals.boy.pos.x, this.waterCenter - num3, this.waterCenter + num3);
+			if (this.surfaceMoveDist > 0f)
+			{
+				float value2 = (num4 - this.waterCenter) / this.surfaceMoveDist * (1f - this.xUVScale);
+				this.matInstance.SetFloatProperty(this.prop_texOffset, value2);
+			}
+			position2.x = num4;
+			position2.z = ScriptGlobals.boy.pos3.z;
+			base.transform.position = position2;
+		}
+		this.activeLastFrame = (count2 > 0);
+	}
+
+	// Token: 0x040023BE RID: 9150
+	private const int NUM_VECTOR_INPUTS = 5;
+
+	// Token: 0x040023BF RID: 9151
+	private const int NUM_WAVES = 20;
+
+	// Token: 0x040023C0 RID: 9152
+	[Range(0.1f, 2f)]
+	public float width = 1.2f;
+
+	// Token: 0x040023C1 RID: 9153
+	[Range(0f, 0.1f)]
+	public float height = 0.12f;
+
+	// Token: 0x040023C2 RID: 9154
+	[Range(0f, 4f)]
+	public float speed = 4f;
+
+	// Token: 0x040023C3 RID: 9155
+	[Range(2f, 8f)]
+	public float maxXDist = 5f;
+
+	// Token: 0x040023C4 RID: 9156
+	[Range(2f, 8f)]
+	public float maxZDist = 3f;
+
+	// Token: 0x040023C5 RID: 9157
+	[Range(0.1f, 1f)]
+	public float stepDist = 0.25f;
+
+	// Token: 0x040023C6 RID: 9158
+	[Range(0.05f, 0.2f)]
+	public float fadeFraction = 0.12f;
+
+	// Token: 0x040023C7 RID: 9159
+	private float waveRepetitions = 3f;
+
+	// Token: 0x040023C8 RID: 9160
+	public GameObject waterTrigger;
+
+	// Token: 0x040023C9 RID: 9161
+	public GameObject waterSurfaceLogic;
+
+	// Token: 0x040023CA RID: 9162
+	private float oneOverWaveRepetitions = 1f;
+
+	// Token: 0x040023CB RID: 9163
+	private bool needBoundUpdate = true;
+
+	// Token: 0x040023CC RID: 9164
+	private float curDist;
+
+	// Token: 0x040023CD RID: 9165
+	private float totalWaveEnergy;
+
+	// Token: 0x040023CE RID: 9166
+	private MaterialInstance matInstance;
+
+	// Token: 0x040023CF RID: 9167
+	private bool isAtBottom;
+
+	// Token: 0x040023D0 RID: 9168
+	private List<WaterSurfaceWave.WaveDefinitions> waveList = new List<WaterSurfaceWave.WaveDefinitions>();
+
+	// Token: 0x040023D1 RID: 9169
+	private MaterialInstance.FloatProperty prop_texOffset;
+
+	// Token: 0x040023D2 RID: 9170
+	private MaterialInstance.VectorProperty prop_misc;
+
+	// Token: 0x040023D3 RID: 9171
+	private MaterialInstance.VectorProperty[] prop_centerX = new MaterialInstance.VectorProperty[5];
+
+	// Token: 0x040023D4 RID: 9172
+	private MaterialInstance.VectorProperty[] prop_centerZ = new MaterialInstance.VectorProperty[5];
+
+	// Token: 0x040023D5 RID: 9173
+	private MaterialInstance.VectorProperty[] prop_height = new MaterialInstance.VectorProperty[5];
+
+	// Token: 0x040023D6 RID: 9174
+	private MaterialInstance.VectorProperty[] prop_curDist = new MaterialInstance.VectorProperty[5];
+
+	// Token: 0x040023D7 RID: 9175
+	private MaterialInstance.VectorProperty[] prop_width = new MaterialInstance.VectorProperty[5];
+
+	// Token: 0x040023D8 RID: 9176
+	private float splashTimer;
+
+	// Token: 0x040023D9 RID: 9177
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x040023DA RID: 9178
+	[HideInInspector]
+	[SerializeField]
+	private Mesh mesh;
+
+	// Token: 0x040023DB RID: 9179
+	[HideInInspector]
+	[SerializeField]
+	private float waterCenter;
+
+	// Token: 0x040023DC RID: 9180
+	[SerializeField]
+	[HideInInspector]
+	private float surfaceMoveDist;
+
+	// Token: 0x040023DD RID: 9181
+	[HideInInspector]
+	[SerializeField]
+	private float xUVScale = 1f;
+
+	// Token: 0x040023DE RID: 9182
+	[SerializeField]
+	[HideInInspector]
+	private float storedMaxXDist;
+
+	// Token: 0x040023DF RID: 9183
+	[SerializeField]
+	[HideInInspector]
+	private float storedMaxZDist;
+
+	// Token: 0x040023E0 RID: 9184
+	[HideInInspector]
+	[SerializeField]
+	private float oneOverStepsX;
+
+	// Token: 0x040023E1 RID: 9185
+	[HideInInspector]
+	[SerializeField]
+	private float oneOverStepsZ;
+
+	// Token: 0x040023E2 RID: 9186
+	[SerializeField]
+	[HideInInspector]
+	private float storedStepDist;
+
+	// Token: 0x040023E3 RID: 9187
+	[SerializeField]
+	[HideInInspector]
+	private float storedWaveRepetitions;
+
+	// Token: 0x040023E4 RID: 9188
+	[SerializeField]
+	[HideInInspector]
+	private int stepsX;
+
+	// Token: 0x040023E5 RID: 9189
+	[SerializeField]
+	[HideInInspector]
+	private int stepsZ;
+
+	// Token: 0x040023E6 RID: 9190
+	[SerializeField]
+	[HideInInspector]
+	private bool useForBottom;
+
+	// Token: 0x040023E7 RID: 9191
+	[HideInInspector]
+	[SerializeField]
+	private bool useForTop;
+
+	// Token: 0x040023E8 RID: 9192
+	[SerializeField]
+	[HideInInspector]
+	private Vector3[] vertices;
+
+	// Token: 0x040023E9 RID: 9193
+	[HideInInspector]
+	[SerializeField]
+	private Vector3[] normals;
+
+	// Token: 0x040023EA RID: 9194
+	private bool boyJumping;
+
+	// Token: 0x040023EB RID: 9195
+	private float nextDrop;
+
+	// Token: 0x040023EC RID: 9196
+	private float nextBounceDrop;
+
+	// Token: 0x040023ED RID: 9197
+	private bool activeLastFrame;
+
+	// Token: 0x02000278 RID: 632
+	public class WaveDefinitions
+	{
+		// Token: 0x040023EE RID: 9198
+		public Vector3 center;
+
+		// Token: 0x040023EF RID: 9199
+		public float width = 1f;
+
+		// Token: 0x040023F0 RID: 9200
+		public float height = 0.3f;
+
+		// Token: 0x040023F1 RID: 9201
+		public float speed = 2f;
+
+		// Token: 0x040023F2 RID: 9202
+		public float curDist;
+
+		// Token: 0x040023F3 RID: 9203
+		public float extraLifeDistance;
+	}
+}

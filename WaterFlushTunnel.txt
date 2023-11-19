@@ -1,0 +1,355 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004AD RID: 1197
+public class WaterFlushTunnel : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001F5B RID: 8027 RVA: 0x0010C084 File Offset: 0x0010A284
+	public bool PreAwake(int callcount)
+	{
+		this.startSystem = SignalIn.Create("startSystem", base.gameObject, new Action(this.ActivateSystem));
+		this.startStream = SignalOut.Create("startStream", base.gameObject);
+		this.stopStream = SignalOut.Create("stopStream", base.gameObject);
+		this.sideTunnelEnter = SignalIn.Create("sideTunnelEnter", base.gameObject, delegate
+		{
+			this.boyInSideTunnel = true;
+		});
+		this.sideTunnelExit = SignalIn.Create("sideTunnelExit", base.gameObject, delegate
+		{
+			this.boyInSideTunnel = false;
+		});
+		return true;
+	}
+
+	// Token: 0x06001F5C RID: 8028 RVA: 0x0010C124 File Offset: 0x0010A324
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy;
+		if (this.DEBUG_autostart)
+		{
+			this.ActivateSystem();
+		}
+		this.state = WaterFlushTunnel.State.Idle;
+		this.scriptHasRunStart = true;
+	}
+
+	// Token: 0x06001F5D RID: 8029 RVA: 0x0010C15C File Offset: 0x0010A35C
+	private void IdleState()
+	{
+	}
+
+	// Token: 0x06001F5E RID: 8030 RVA: 0x0010C160 File Offset: 0x0010A360
+	private void OnEnable()
+	{
+		LevelGlobals.waterFlushTunnel = this;
+		this.masterPropellaAnim["Acc"].speed = 2f;
+		this.secondaryPropellaAnim["Acc"].speed = 2f;
+	}
+
+	// Token: 0x06001F5F RID: 8031 RVA: 0x0010C1A8 File Offset: 0x0010A3A8
+	private void OnDisable()
+	{
+		LevelGlobals.waterFlushTunnel = null;
+	}
+
+	// Token: 0x06001F60 RID: 8032 RVA: 0x0010C1B0 File Offset: 0x0010A3B0
+	private void ActivateSystem()
+	{
+		if (this.systemActive)
+		{
+			return;
+		}
+		this.systemActive = true;
+	}
+
+	// Token: 0x06001F61 RID: 8033 RVA: 0x0010C1C8 File Offset: 0x0010A3C8
+	private bool BoyIsAbove(Transform ofThis)
+	{
+		Vector3 vector = ofThis.InverseTransformPoint(ScriptGlobals.boy.pos3);
+		bool result = true;
+		if ((double)vector.y <= 0.0)
+		{
+			if ((double)vector.y < 0.0)
+			{
+				result = false;
+			}
+		}
+		return result;
+	}
+
+	// Token: 0x06001F62 RID: 8034 RVA: 0x0010C21C File Offset: 0x0010A41C
+	private bool BoyIsOnTheRightSide(Transform ofThis)
+	{
+		Vector3 vector = ofThis.InverseTransformPoint(ScriptGlobals.boy.pos3 + Vector3.right * 0.1f);
+		bool result = false;
+		if ((double)vector.x >= 0.0)
+		{
+			if ((double)vector.x > 0.0)
+			{
+				result = true;
+			}
+		}
+		return result;
+	}
+
+	// Token: 0x06001F63 RID: 8035 RVA: 0x0010C284 File Offset: 0x0010A484
+	public static float DistanceToLine(Ray ray, Vector3 point)
+	{
+		return Vector3.Cross(ray.direction, point - ray.origin).magnitude;
+	}
+
+	// Token: 0x06001F64 RID: 8036 RVA: 0x0010C2B4 File Offset: 0x0010A4B4
+	private float GetStreamModifier()
+	{
+		float result = 1f;
+		this.streamDirection.x = 1f;
+		this.streamDirection.y = 0f;
+		if (this.BoyIsOnTheRightSide(this.easyStreamEdge))
+		{
+			return result;
+		}
+		float magnitude = (this.easyStreamEdge.position - ScriptGlobals.boy.pos3).magnitude;
+		float num = Mathf.InverseLerp(0f, 25f, magnitude);
+		if (this.BoyIsAbove(this.easyStreamEdge.transform))
+		{
+			num *= -1f;
+		}
+		this.streamDirection.y = num;
+		Vector3 up = this.easyStreamEdge.up;
+		Ray ray;
+		ray..ctor(this.easyStreamEdge.position, up);
+		float magnitude2 = Vector3.Cross(ray.direction, ScriptGlobals.boy.pos3 - ray.origin).magnitude;
+		float num2 = Mathf.InverseLerp(13f, 0f, magnitude2);
+		if (this.BoyIsOnTheRightSide(this.pipeMouth))
+		{
+			return num2;
+		}
+		float y = this.streamScript.GetComponent<Collider>().bounds.extents.y;
+		float magnitude3 = (this.pipeMouth.position - ScriptGlobals.boy.pos3).magnitude;
+		float num3 = Mathf.InverseLerp(14f, 0f, magnitude3);
+		float num4 = Mathf.Lerp(0f, 0.5f, num3);
+		return num2 * num3;
+	}
+
+	// Token: 0x06001F65 RID: 8037 RVA: 0x0010C444 File Offset: 0x0010A644
+	public void SetStreamStartingOrFullOnState()
+	{
+		if (!this.scriptHasRunStart)
+		{
+			return;
+		}
+		if (!this.systemActive)
+		{
+			this.systemActive = true;
+		}
+		this.currentStrength = this.maxStrength * this.fullOnPeriod.Evaluate(this.timer) * this.streamModifier;
+		this.streamScript.strength.x = this.streamDirection.x * this.currentStrength;
+		this.streamScript.strength.y = this.streamDirection.y * this.currentStrength;
+		this.streamMode = StreamMode.Starting;
+		this.startStream.Signal();
+		this.masterPropellaAnim.Play("Acc");
+		this.masterPropellaAnim.PlayQueued("Run", 0);
+		this.secondaryPropellaAnim.Play("Acc");
+		this.secondaryPropellaAnim.PlayQueued("Run", 0);
+		this.timer = 0f;
+		this.state = WaterFlushTunnel.State.StreamStartingOrFullOn;
+	}
+
+	// Token: 0x06001F66 RID: 8038 RVA: 0x0010C544 File Offset: 0x0010A744
+	private void StreamStartingOrFullOnState()
+	{
+		this.timer += Time.deltaTime;
+		this.currentStrength = this.maxStrength * this.fadeIn.Evaluate(this.timer) * this.streamModifier;
+		if (!this.boyInSideTunnel)
+		{
+			this.streamScript.strength.x = this.streamDirection.x * this.currentStrength;
+			this.streamScript.strength.y = this.streamDirection.y * this.currentStrength;
+		}
+		else
+		{
+			this.streamScript.strength.x = this.streamDirection.x * this.currentStrength * 0.1f;
+			this.streamScript.strength.y = this.streamDirection.y * this.currentStrength * 0.1f;
+		}
+		if (this.timer >= this.masterPropellaAnim["Acc"].length && this.streamMode == StreamMode.Starting)
+		{
+			this.streamMode = StreamMode.FullOn;
+		}
+	}
+
+	// Token: 0x06001F67 RID: 8039 RVA: 0x0010C660 File Offset: 0x0010A860
+	public void SetStreamStoppingOrStoppedState()
+	{
+		if (!this.scriptHasRunStart)
+		{
+			return;
+		}
+		this.streamMode = StreamMode.Stopping;
+		this.masterPropellaAnim.Play("Dcc");
+		this.masterPropellaAnim.PlayQueued("Idle", 0);
+		this.secondaryPropellaAnim.Play("Dcc");
+		this.secondaryPropellaAnim.PlayQueued("Idle", 0);
+		this.stopStream.Signal();
+		this.timer = 0f;
+		this.state = WaterFlushTunnel.State.StreamStoppingOrStopped;
+	}
+
+	// Token: 0x06001F68 RID: 8040 RVA: 0x0010C6E4 File Offset: 0x0010A8E4
+	private void StreamStoppingOrStoppedState()
+	{
+		this.timer += Time.deltaTime;
+		this.currentStrength = this.maxStrength * this.fadeOut.Evaluate(this.timer) * this.streamModifier;
+		if (!this.boyInSideTunnel)
+		{
+			this.streamScript.strength.x = this.streamDirection.x * this.currentStrength;
+			this.streamScript.strength.y = this.streamDirection.y * this.currentStrength;
+		}
+		else
+		{
+			this.streamScript.strength.x = this.streamDirection.x * this.currentStrength * 0.1f;
+			this.streamScript.strength.y = this.streamDirection.y * this.currentStrength * 0.1f;
+		}
+		if (this.timer >= this.masterPropellaAnim["Dcc"].length * 0.5f && this.streamMode == StreamMode.Stopping)
+		{
+			this.streamMode = StreamMode.FullOff;
+			this.doModifyStream = false;
+		}
+	}
+
+	// Token: 0x06001F69 RID: 8041 RVA: 0x0010C80C File Offset: 0x0010AA0C
+	private void FixedUpdate()
+	{
+		if (!this.systemActive)
+		{
+			return;
+		}
+		if (this.state != WaterFlushTunnel.State.None)
+		{
+			this.streamModifier = this.GetStreamModifier();
+			switch (this.state)
+			{
+			case WaterFlushTunnel.State.Idle:
+				this.IdleState();
+				break;
+			case WaterFlushTunnel.State.StreamStartingOrFullOn:
+				this.StreamStartingOrFullOnState();
+				break;
+			case WaterFlushTunnel.State.StreamStoppingOrStopped:
+				this.StreamStoppingOrStoppedState();
+				break;
+			}
+		}
+	}
+
+	// Token: 0x04003A1B RID: 14875
+	public WaterStream streamScript;
+
+	// Token: 0x04003A1C RID: 14876
+	public float offTime;
+
+	// Token: 0x04003A1D RID: 14877
+	public float onTime;
+
+	// Token: 0x04003A1E RID: 14878
+	public AnimationCurve fadeIn;
+
+	// Token: 0x04003A1F RID: 14879
+	public AnimationCurve fullOnPeriod;
+
+	// Token: 0x04003A20 RID: 14880
+	public AnimationCurve fadeOut;
+
+	// Token: 0x04003A21 RID: 14881
+	public float maxStrength;
+
+	// Token: 0x04003A22 RID: 14882
+	public bool DEBUG_autostart;
+
+	// Token: 0x04003A23 RID: 14883
+	public Animation masterPropellaAnim;
+
+	// Token: 0x04003A24 RID: 14884
+	public Animation secondaryPropellaAnim;
+
+	// Token: 0x04003A25 RID: 14885
+	[HideInInspector]
+	public float currentStrength;
+
+	// Token: 0x04003A26 RID: 14886
+	public StreamMode streamMode;
+
+	// Token: 0x04003A27 RID: 14887
+	public Transform pipeMouth;
+
+	// Token: 0x04003A28 RID: 14888
+	public Transform easyStreamEdge;
+
+	// Token: 0x04003A29 RID: 14889
+	private SignalIn startSystem;
+
+	// Token: 0x04003A2A RID: 14890
+	private SignalOut startStream;
+
+	// Token: 0x04003A2B RID: 14891
+	private SignalOut stopStream;
+
+	// Token: 0x04003A2C RID: 14892
+	private SignalIn sideTunnelEnter;
+
+	// Token: 0x04003A2D RID: 14893
+	private SignalIn sideTunnelExit;
+
+	// Token: 0x04003A2E RID: 14894
+	private WaterFlushTunnel.State state;
+
+	// Token: 0x04003A2F RID: 14895
+	private float timer;
+
+	// Token: 0x04003A30 RID: 14896
+	private float scrollLerpFactor;
+
+	// Token: 0x04003A31 RID: 14897
+	private bool systemActive;
+
+	// Token: 0x04003A32 RID: 14898
+	private bool doModifyStream;
+
+	// Token: 0x04003A33 RID: 14899
+	private float streamModifier;
+
+	// Token: 0x04003A34 RID: 14900
+	private Vector2 uvOffset = Vector2.zero;
+
+	// Token: 0x04003A35 RID: 14901
+	private Vector2 streamDirection = Vector2.zero;
+
+	// Token: 0x04003A36 RID: 14902
+	private Boy boy;
+
+	// Token: 0x04003A37 RID: 14903
+	private bool doStopAnim;
+
+	// Token: 0x04003A38 RID: 14904
+	private bool boyInSideTunnel;
+
+	// Token: 0x04003A39 RID: 14905
+	private MusicEventChecker openCheck = new MusicEventChecker(0f);
+
+	// Token: 0x04003A3A RID: 14906
+	private MusicEventChecker closeCheck = new MusicEventChecker(7f);
+
+	// Token: 0x04003A3B RID: 14907
+	private bool scriptHasRunStart;
+
+	// Token: 0x020004AE RID: 1198
+	private enum State
+	{
+		// Token: 0x04003A3D RID: 14909
+		None,
+		// Token: 0x04003A3E RID: 14910
+		Idle,
+		// Token: 0x04003A3F RID: 14911
+		StreamStartingOrFullOn,
+		// Token: 0x04003A40 RID: 14912
+		StreamStoppingOrStopped
+	}
+}

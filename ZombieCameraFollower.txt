@@ -1,0 +1,153 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000427 RID: 1063
+public class ZombieCameraFollower : MonoBehaviour
+{
+	// Token: 0x06001BD1 RID: 7121 RVA: 0x000F3888 File Offset: 0x000F1A88
+	private void Awake()
+	{
+		this.initialXDist = this.objectToFollow.transform.position.x - base.transform.position.x;
+	}
+
+	// Token: 0x06001BD2 RID: 7122 RVA: 0x000F38C8 File Offset: 0x000F1AC8
+	public void TeleportToPosition(Vector3 newPos)
+	{
+		this.teleportedTimer = 1f;
+		float num = this.objectToFollow.transform.position.x - newPos.x;
+		Debug.DrawLine(this.objectToFollow.transform.position, this.objectToFollow.transform.position + Vector3.down, Color.blue, 10f);
+		Debug.DrawLine(newPos, newPos + Vector3.down, Color.red, 10f);
+		ConfigurableJoint configurableJoint = this.ropeBottom;
+		Vector3 position = base.transform.position;
+		while (configurableJoint != null)
+		{
+			Vector3 position2 = configurableJoint.transform.position;
+			float num2 = 1f - (position2.x - position.x) / this.initialXDist;
+			float num3 = num2 * num;
+			Vector3 vector = position2;
+			vector.x = this.objectToFollow.transform.position.x - num3;
+			Rigidbody component = configurableJoint.GetComponent<Rigidbody>();
+			component.MovePosition(vector);
+			if (!component.isKinematic)
+			{
+				component.velocity = Vector3.zero;
+				component.angularVelocity = Vector3.zero;
+			}
+			Rigidbody connectedBody = configurableJoint.connectedBody;
+			if (connectedBody != null)
+			{
+				configurableJoint = connectedBody.GetComponent<ConfigurableJoint>();
+			}
+			else
+			{
+				configurableJoint = null;
+			}
+		}
+		this.initialXDist = num;
+		base.transform.position = newPos;
+	}
+
+	// Token: 0x06001BD3 RID: 7123 RVA: 0x000F3A3C File Offset: 0x000F1C3C
+	private void DampenAllRope()
+	{
+		ConfigurableJoint configurableJoint = this.ropeBottom;
+		while (configurableJoint != null)
+		{
+			Rigidbody component = configurableJoint.GetComponent<Rigidbody>();
+			if (!component.isKinematic)
+			{
+				component.velocity *= 1f - this.teleportedTimer;
+				component.angularVelocity *= 1f - this.teleportedTimer;
+				component.drag = this.wantedRopeDrag + 5f * this.wantedRopeDrag * this.teleportedTimer;
+				component.angularDrag = this.wantedRopeAngularDrag + 5f * this.wantedRopeAngularDrag * this.teleportedTimer;
+			}
+			Rigidbody connectedBody = configurableJoint.connectedBody;
+			if (connectedBody != null)
+			{
+				configurableJoint = connectedBody.GetComponent<ConfigurableJoint>();
+			}
+			else
+			{
+				configurableJoint = null;
+			}
+		}
+	}
+
+	// Token: 0x06001BD4 RID: 7124 RVA: 0x000F3B10 File Offset: 0x000F1D10
+	private void FixedUpdate()
+	{
+		if (Time.deltaTime > 0f)
+		{
+			if (this.teleportedTimer > 0f)
+			{
+				this.teleportedTimer = Mathf.Max(this.teleportedTimer - Time.deltaTime, 0f);
+				this.DampenAllRope();
+			}
+			Vector3 position = this.objectToFollow.transform.position;
+			Vector3 vector = position - base.transform.position;
+			float magnitude = vector.magnitude;
+			float num = Mathf.Max(this.maxDist - this.springStart, 0f);
+			if (magnitude > num)
+			{
+				float num2 = Mathf.Min(1f, (magnitude - num) / this.springStart) * this.fullSpringWantedSpeed;
+				float num3 = this.vel;
+				if (num2 > this.vel)
+				{
+					this.vel = num2;
+				}
+			}
+			else if (magnitude < 0.5f)
+			{
+				this.vel = 0f;
+			}
+			Vector3 position2 = base.transform.position + this.vel / magnitude * Time.deltaTime * vector;
+			vector = position - base.transform.position;
+			magnitude = vector.magnitude;
+			if (magnitude > this.maxDist)
+			{
+				position2 = position - vector * (this.maxDist / magnitude);
+			}
+			this.rail.ClampToRail(ref position2);
+			this.vel = (position2.x - base.transform.position.x) / Time.deltaTime;
+			float num4 = Mathf.Min(this.dampingFactor * Time.deltaTime, 1f);
+			this.vel *= 1f - num4;
+			base.transform.position = position2;
+		}
+	}
+
+	// Token: 0x040032E4 RID: 13028
+	public GameObject objectToFollow;
+
+	// Token: 0x040032E5 RID: 13029
+	public ZombieMonitorCameraRail rail;
+
+	// Token: 0x040032E6 RID: 13030
+	public ConfigurableJoint ropeBottom;
+
+	// Token: 0x040032E7 RID: 13031
+	public float maxDist = 10f;
+
+	// Token: 0x040032E8 RID: 13032
+	public float springStart = 2f;
+
+	// Token: 0x040032E9 RID: 13033
+	public float fullSpringWantedSpeed = 2f;
+
+	// Token: 0x040032EA RID: 13034
+	public float dampingFactor = 1f;
+
+	// Token: 0x040032EB RID: 13035
+	public float wantedRopeDrag = 0.5f;
+
+	// Token: 0x040032EC RID: 13036
+	public float wantedRopeAngularDrag = 2f;
+
+	// Token: 0x040032ED RID: 13037
+	private float vel;
+
+	// Token: 0x040032EE RID: 13038
+	private float initialXDist;
+
+	// Token: 0x040032EF RID: 13039
+	private float teleportedTimer = 1f;
+}

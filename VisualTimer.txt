@@ -1,0 +1,108 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020005D2 RID: 1490
+public class VisualTimer : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060025C3 RID: 9667 RVA: 0x00134308 File Offset: 0x00132508
+	public bool PreAwake(int callcount)
+	{
+		this.doCharge = SignalIn.Create("doCharge", base.gameObject, delegate
+		{
+			this.setChargeState(true);
+		});
+		this.doUnCharge = SignalIn.Create("doUnCharge", base.gameObject, delegate
+		{
+			this.setChargeState(false);
+		});
+		this.depleted = SignalOut.Create("depleted", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060025C4 RID: 9668 RVA: 0x00134370 File Offset: 0x00132570
+	private void setChargeState(bool value)
+	{
+		this.isCharging = value;
+		if (this.isCharging)
+		{
+			this.hasBeenCharging = true;
+		}
+	}
+
+	// Token: 0x060025C5 RID: 9669 RVA: 0x0013438C File Offset: 0x0013258C
+	private void FixedUpdate()
+	{
+		float num = Mathf.InverseLerp(0f, (float)this.bulbs.Count, (float)this.counter);
+		float emissionRate = Mathf.Lerp(1f, 1000f, num);
+		float gravityModifier = Mathf.Lerp(-1f, -4f, num);
+		this.particles.emissionRate = emissionRate;
+		this.particles.gravityModifier = gravityModifier;
+		if (this.isCharging)
+		{
+			if (this.counter < this.bulbs.Count)
+			{
+				this.timer += Time.deltaTime;
+				if (this.timer >= 0.25f)
+				{
+					this.bulbs[this.counter].material.color = Color.green;
+					if (this.counter < this.bulbs.Count)
+					{
+						this.counter++;
+					}
+					this.maxCount = this.counter;
+					this.timer = 0f;
+				}
+			}
+		}
+		else if (this.counter >= 0 && this.hasBeenCharging)
+		{
+			this.timer += Time.deltaTime;
+			if (this.timer >= 0.5f)
+			{
+				if (this.counter > 0)
+				{
+					this.counter--;
+				}
+				this.bulbs[this.counter].material.color = Color.red;
+				this.timer = 0f;
+				if (this.counter == 0)
+				{
+					this.maxCount = 0;
+					this.depleted.Signal();
+					this.hasBeenCharging = false;
+				}
+			}
+		}
+	}
+
+	// Token: 0x040044EF RID: 17647
+	public List<Renderer> bulbs;
+
+	// Token: 0x040044F0 RID: 17648
+	public ParticleSystem particles;
+
+	// Token: 0x040044F1 RID: 17649
+	private SignalIn doCharge;
+
+	// Token: 0x040044F2 RID: 17650
+	private SignalIn doUnCharge;
+
+	// Token: 0x040044F3 RID: 17651
+	private SignalOut depleted;
+
+	// Token: 0x040044F4 RID: 17652
+	private bool isCharging;
+
+	// Token: 0x040044F5 RID: 17653
+	private int counter;
+
+	// Token: 0x040044F6 RID: 17654
+	private int maxCount;
+
+	// Token: 0x040044F7 RID: 17655
+	private float timer;
+
+	// Token: 0x040044F8 RID: 17656
+	private bool hasBeenCharging;
+}

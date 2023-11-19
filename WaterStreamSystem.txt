@@ -1,0 +1,107 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000276 RID: 630
+public class WaterStreamSystem : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600135D RID: 4957 RVA: 0x000B6624 File Offset: 0x000B4824
+	public bool PreAwake(int callcount)
+	{
+		this.stream = base.GetComponent<WaterStream>();
+		this.startStream = SignalIn.Create("startStream", base.gameObject, delegate
+		{
+			this.EnableStreamSystem();
+		});
+		this.stopStream = SignalIn.Create("stopStream", base.gameObject, delegate
+		{
+			this.DisableStreamSystem();
+		});
+		return true;
+	}
+
+	// Token: 0x0600135E RID: 4958 RVA: 0x000B6684 File Offset: 0x000B4884
+	public void EnableStreamSystem()
+	{
+		this.isStreamEnabled = true;
+		if (this.manageStreamZones)
+		{
+			this.stream.EnableStream();
+		}
+		this.streamEnabled.OnEvent(this);
+	}
+
+	// Token: 0x0600135F RID: 4959 RVA: 0x000B66B0 File Offset: 0x000B48B0
+	public void DisableStreamSystem()
+	{
+		this.isStreamEnabled = false;
+		if (this.manageStreamZones)
+		{
+			this.stream.DisableStream();
+		}
+		this.streamDisabled.OnEvent(this);
+	}
+
+	// Token: 0x06001360 RID: 4960 RVA: 0x000B66DC File Offset: 0x000B48DC
+	public void HookGrabbed()
+	{
+		this.isGrapping = true;
+	}
+
+	// Token: 0x06001361 RID: 4961 RVA: 0x000B66E8 File Offset: 0x000B48E8
+	public void HookReleased()
+	{
+		this.isGrapping = false;
+	}
+
+	// Token: 0x06001362 RID: 4962 RVA: 0x000B66F4 File Offset: 0x000B48F4
+	private void FixedUpdate()
+	{
+		if (ScriptGlobals.boy.isDead)
+		{
+			return;
+		}
+		BoySwimState boySwimState = ScriptGlobals.boy.state as BoySwimState;
+		if (boySwimState != null && this.isStreamEnabled && !this.isGrapping && !this.flushHardPlaying)
+		{
+			AnimClipNode component = this.flushHardAnim.GetComponent<AnimClipNode>();
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, component, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			component.transform.position = ScriptGlobals.boy.transform.position - Vector3.up * 0.5f;
+			this.flushHardPlaying = true;
+		}
+		else if (this.flushHardPlaying && !this.isStreamEnabled)
+		{
+			BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+			this.flushHardPlaying = false;
+		}
+	}
+
+	// Token: 0x040023B4 RID: 9140
+	public GameObject flushHardAnim;
+
+	// Token: 0x040023B5 RID: 9141
+	public bool manageStreamZones = true;
+
+	// Token: 0x040023B6 RID: 9142
+	private WaterStream stream;
+
+	// Token: 0x040023B7 RID: 9143
+	public SimpleEvent<WaterStreamSystem> streamEnabled = new SimpleEvent<WaterStreamSystem>("streamEnabled");
+
+	// Token: 0x040023B8 RID: 9144
+	public SimpleEvent<WaterStreamSystem> streamDisabled = new SimpleEvent<WaterStreamSystem>("streamDisabled");
+
+	// Token: 0x040023B9 RID: 9145
+	private SignalIn startStream;
+
+	// Token: 0x040023BA RID: 9146
+	private SignalIn stopStream;
+
+	// Token: 0x040023BB RID: 9147
+	private bool isStreamEnabled;
+
+	// Token: 0x040023BC RID: 9148
+	private bool isGrapping;
+
+	// Token: 0x040023BD RID: 9149
+	private bool flushHardPlaying;
+}

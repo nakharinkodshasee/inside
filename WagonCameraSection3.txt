@@ -1,0 +1,159 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000595 RID: 1429
+public class WagonCameraSection3 : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060024A2 RID: 9378 RVA: 0x0012DFD4 File Offset: 0x0012C1D4
+	public bool PreAwake(int callcount)
+	{
+		this.solved = SignalOut.Create("solved", base.gameObject);
+		this.unsolved = SignalOut.Create("unsolved", base.gameObject);
+		this.pressurePlateDown = SignalIn.Create("pressurePlateDown", base.gameObject, new Action(this.OnPressurePlateDown));
+		this.pressurePlateUp = SignalIn.Create("pressurePlateUp", base.gameObject, new Action(this.OnPressurePlateUp));
+		this.boyDropEnter = SignalIn.Create("boyDropEnter", base.gameObject, new Action(this.OnBoyDropEnter));
+		this.boyDropExit = SignalIn.Create("boyDropExit", base.gameObject, new Action(this.OnBoyDropExit));
+		this.loadSolved = SignalIn.Create("loadSolved", base.gameObject, new Action(this.OnLoadSolved));
+		return true;
+	}
+
+	// Token: 0x060024A3 RID: 9379 RVA: 0x0012E0B8 File Offset: 0x0012C2B8
+	private void Start()
+	{
+		this.state = WagonCameraSection3.State.Unsolved;
+	}
+
+	// Token: 0x060024A4 RID: 9380 RVA: 0x0012E0C4 File Offset: 0x0012C2C4
+	private void UnsolvedState()
+	{
+		if (this.dudeInHat && this.boyOverPillar && this.platePressed)
+		{
+			this.state = WagonCameraSection3.State.Progress;
+		}
+	}
+
+	// Token: 0x060024A5 RID: 9381 RVA: 0x0012E0FC File Offset: 0x0012C2FC
+	private void ProgressState()
+	{
+		if (!this.platePressed || !this.boyOverPillar)
+		{
+			this.state = WagonCameraSection3.State.Unsolved;
+		}
+		else if (!this.dudeInHat)
+		{
+			this.solved.Signal();
+			this.state = WagonCameraSection3.State.Solved;
+		}
+	}
+
+	// Token: 0x060024A6 RID: 9382 RVA: 0x0012E148 File Offset: 0x0012C348
+	private void SolvedState()
+	{
+		if (this.dudeInHat)
+		{
+			this.unsolved.Signal();
+			this.state = WagonCameraSection3.State.Unsolved;
+		}
+	}
+
+	// Token: 0x060024A7 RID: 9383 RVA: 0x0012E168 File Offset: 0x0012C368
+	private void Update()
+	{
+		if (this.mindhat != null)
+		{
+			this.dudeInHat = this.mindhat.GetBoyInHat();
+		}
+		switch (this.state)
+		{
+		case WagonCameraSection3.State.Unsolved:
+			this.UnsolvedState();
+			break;
+		case WagonCameraSection3.State.Progress:
+			this.ProgressState();
+			break;
+		case WagonCameraSection3.State.Solved:
+			this.SolvedState();
+			break;
+		}
+	}
+
+	// Token: 0x060024A8 RID: 9384 RVA: 0x0012E1EC File Offset: 0x0012C3EC
+	private void OnLoadSolved()
+	{
+		this.solved.Signal();
+		this.state = WagonCameraSection3.State.Solved;
+	}
+
+	// Token: 0x060024A9 RID: 9385 RVA: 0x0012E200 File Offset: 0x0012C400
+	private void OnPressurePlateDown()
+	{
+		this.platePressed = true;
+	}
+
+	// Token: 0x060024AA RID: 9386 RVA: 0x0012E20C File Offset: 0x0012C40C
+	private void OnPressurePlateUp()
+	{
+		this.platePressed = false;
+	}
+
+	// Token: 0x060024AB RID: 9387 RVA: 0x0012E218 File Offset: 0x0012C418
+	private void OnBoyDropEnter()
+	{
+		this.boyOverPillar = true;
+	}
+
+	// Token: 0x060024AC RID: 9388 RVA: 0x0012E224 File Offset: 0x0012C424
+	private void OnBoyDropExit()
+	{
+		this.boyOverPillar = false;
+	}
+
+	// Token: 0x04004347 RID: 17223
+	public MindHat mindhat;
+
+	// Token: 0x04004348 RID: 17224
+	private SignalOut solved;
+
+	// Token: 0x04004349 RID: 17225
+	private SignalOut unsolved;
+
+	// Token: 0x0400434A RID: 17226
+	private SignalIn pressurePlateDown;
+
+	// Token: 0x0400434B RID: 17227
+	private SignalIn pressurePlateUp;
+
+	// Token: 0x0400434C RID: 17228
+	private SignalIn boyDropEnter;
+
+	// Token: 0x0400434D RID: 17229
+	private SignalIn boyDropExit;
+
+	// Token: 0x0400434E RID: 17230
+	private SignalIn loadSolved;
+
+	// Token: 0x0400434F RID: 17231
+	public bool platePressed;
+
+	// Token: 0x04004350 RID: 17232
+	public bool boyOverPillar;
+
+	// Token: 0x04004351 RID: 17233
+	public bool dudeInHat;
+
+	// Token: 0x04004352 RID: 17234
+	private WagonCameraSection3.State state;
+
+	// Token: 0x02000596 RID: 1430
+	private enum State
+	{
+		// Token: 0x04004354 RID: 17236
+		None,
+		// Token: 0x04004355 RID: 17237
+		Unsolved,
+		// Token: 0x04004356 RID: 17238
+		Progress,
+		// Token: 0x04004357 RID: 17239
+		Solved
+	}
+}

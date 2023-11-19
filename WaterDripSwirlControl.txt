@@ -1,0 +1,149 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000518 RID: 1304
+public class WaterDripSwirlControl : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600220E RID: 8718 RVA: 0x0011D33C File Offset: 0x0011B53C
+	public bool PreAwake(int callcount)
+	{
+		SignalIn.Create("enableImpacts", base.gameObject, new Action(this.SetFadeInState));
+		SignalIn.Create("disableImpacts", base.gameObject, new Action(this.SetFadeOutState));
+		return true;
+	}
+
+	// Token: 0x0600220F RID: 8719 RVA: 0x0011D384 File Offset: 0x0011B584
+	private void Start()
+	{
+		this.waterImpact = this.waterImpactFX.GetComponent<Renderer>();
+		this.curColor = this.waterImpactFX.startColor;
+		this.orgAlpha = this.curColor.a;
+		this.curColor.a = 0f;
+		this.waterImpactFX.startColor = this.curColor;
+		this.SetIdleState();
+	}
+
+	// Token: 0x06002210 RID: 8720 RVA: 0x0011D3EC File Offset: 0x0011B5EC
+	private void SetFadeInState()
+	{
+		this.timer = this.fadeInTime - this.timer;
+		this.state = WaterDripSwirlControl.State.FadingIn;
+	}
+
+	// Token: 0x06002211 RID: 8721 RVA: 0x0011D408 File Offset: 0x0011B608
+	private void SetFadeOutState()
+	{
+		this.timer = this.fadeOutTime - this.timer;
+		this.state = WaterDripSwirlControl.State.FadingOut;
+	}
+
+	// Token: 0x06002212 RID: 8722 RVA: 0x0011D424 File Offset: 0x0011B624
+	private void SetIdleState()
+	{
+		this.state = WaterDripSwirlControl.State.Idle;
+	}
+
+	// Token: 0x06002213 RID: 8723 RVA: 0x0011D430 File Offset: 0x0011B630
+	private void IdleState()
+	{
+	}
+
+	// Token: 0x06002214 RID: 8724 RVA: 0x0011D434 File Offset: 0x0011B634
+	private void FadingOutState()
+	{
+		this.timer += Time.deltaTime;
+		this.curColor = this.waterImpactFX.startColor;
+		this.alphaLerp = Mathf.InverseLerp(0f, this.fadeOutTime, this.timer);
+		this.curColor.a = Mathf.Lerp(this.orgAlpha, 0f, this.alphaLerp);
+		this.waterImpactFX.startColor = this.curColor;
+		if (this.timer >= this.fadeOutTime)
+		{
+			this.state = WaterDripSwirlControl.State.SetIdle;
+		}
+	}
+
+	// Token: 0x06002215 RID: 8725 RVA: 0x0011D4CC File Offset: 0x0011B6CC
+	private void FadingInState()
+	{
+		this.timer += Time.deltaTime;
+		this.curColor = this.waterImpactFX.startColor;
+		this.alphaLerp = Mathf.InverseLerp(0f, this.fadeInTime, this.timer);
+		this.curColor.a = Mathf.Lerp(0f, this.orgAlpha, this.alphaLerp);
+		this.waterImpactFX.startColor = this.curColor;
+		if (this.timer >= this.fadeInTime)
+		{
+			this.state = WaterDripSwirlControl.State.SetIdle;
+		}
+	}
+
+	// Token: 0x06002216 RID: 8726 RVA: 0x0011D564 File Offset: 0x0011B764
+	private void Update()
+	{
+		switch (this.state)
+		{
+		case WaterDripSwirlControl.State.SetIdle:
+			this.SetIdleState();
+			break;
+		case WaterDripSwirlControl.State.Idle:
+			this.IdleState();
+			break;
+		case WaterDripSwirlControl.State.FadingIn:
+			this.FadingInState();
+			break;
+		case WaterDripSwirlControl.State.FadingOut:
+			this.FadingOutState();
+			break;
+		}
+	}
+
+	// Token: 0x04003F82 RID: 16258
+	public ParticleSystem waterImpactFX;
+
+	// Token: 0x04003F83 RID: 16259
+	public float fadeOutTime = 6f;
+
+	// Token: 0x04003F84 RID: 16260
+	public float fadeInTime = 6f;
+
+	// Token: 0x04003F85 RID: 16261
+	private SignalIn enableImpacts;
+
+	// Token: 0x04003F86 RID: 16262
+	private SignalIn disableImpacts;
+
+	// Token: 0x04003F87 RID: 16263
+	private float timer;
+
+	// Token: 0x04003F88 RID: 16264
+	private bool swirlIsOff;
+
+	// Token: 0x04003F89 RID: 16265
+	private Renderer waterImpact;
+
+	// Token: 0x04003F8A RID: 16266
+	private float orgAlpha;
+
+	// Token: 0x04003F8B RID: 16267
+	private Color curColor;
+
+	// Token: 0x04003F8C RID: 16268
+	private float alphaLerp;
+
+	// Token: 0x04003F8D RID: 16269
+	private WaterDripSwirlControl.State state;
+
+	// Token: 0x02000519 RID: 1305
+	private enum State
+	{
+		// Token: 0x04003F8F RID: 16271
+		None,
+		// Token: 0x04003F90 RID: 16272
+		SetIdle,
+		// Token: 0x04003F91 RID: 16273
+		Idle,
+		// Token: 0x04003F92 RID: 16274
+		FadingIn,
+		// Token: 0x04003F93 RID: 16275
+		FadingOut
+	}
+}

@@ -1,0 +1,72 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000562 RID: 1378
+public class WaterMineDormant : MonoBehaviour
+{
+	// Token: 0x060023CB RID: 9163 RVA: 0x0012974C File Offset: 0x0012794C
+	private void Start()
+	{
+		this.explosionSphere.SetActive(false);
+	}
+
+	// Token: 0x060023CC RID: 9164 RVA: 0x0012975C File Offset: 0x0012795C
+	private void OnCollisionEnter(Collision coll)
+	{
+		foreach (GameObject gameObject in this.exceptions)
+		{
+			if (gameObject == coll.gameObject)
+			{
+				return;
+			}
+		}
+		if (Mathf.Abs(coll.relativeVelocity.x) > this.minimumForce || Mathf.Abs(coll.relativeVelocity.y) > this.minimumForce || Mathf.Abs(coll.relativeVelocity.z) > this.minimumForce)
+		{
+			base.GetComponent<Rigidbody>().isKinematic = true;
+			this.mineBody.SetActive(false);
+			this.explosionSphere.SetActive(true);
+			this.count = 0f;
+			this.counting = true;
+		}
+	}
+
+	// Token: 0x060023CD RID: 9165 RVA: 0x00129864 File Offset: 0x00127A64
+	private void FixedUpdate()
+	{
+		if (this.counting)
+		{
+			if ((double)this.count > 1.25)
+			{
+				this.replacementSpawner.SendMessage("Spawn");
+				this.counting = false;
+				Object.Destroy(base.transform.parent.gameObject);
+			}
+			else
+			{
+				this.count += Time.deltaTime;
+			}
+		}
+	}
+
+	// Token: 0x04004237 RID: 16951
+	public GameObject explosionSphere;
+
+	// Token: 0x04004238 RID: 16952
+	public GameObject mineBody;
+
+	// Token: 0x04004239 RID: 16953
+	public List<GameObject> exceptions;
+
+	// Token: 0x0400423A RID: 16954
+	public float minimumForce;
+
+	// Token: 0x0400423B RID: 16955
+	public GameObject replacementSpawner;
+
+	// Token: 0x0400423C RID: 16956
+	private float count;
+
+	// Token: 0x0400423D RID: 16957
+	private bool counting;
+}

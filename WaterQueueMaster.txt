@@ -1,0 +1,369 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000378 RID: 888
+[ExecuteInEditMode]
+public class WaterQueueMaster : MonoBehaviour
+{
+	// Token: 0x0600182C RID: 6188 RVA: 0x000D2E80 File Offset: 0x000D1080
+	public void CacheTransformData()
+	{
+		Transform transform = base.transform;
+		this.cachedPosition = transform.position;
+		this.cachedLocalScale = transform.localScale;
+		if (!this.dataCached && !object.ReferenceEquals(this.reflectionAboveOutside, null) && !object.ReferenceEquals(this.refractionOutside, null))
+		{
+			this.mi_src_refl = this.reflectionAboveOutside.GetComponent<MaterialInstance>();
+			this.mi_src_refr = this.refractionOutside.GetComponent<MaterialInstance>();
+			if (!object.ReferenceEquals(this.mi_src_refl, null) && !object.ReferenceEquals(this.mi_src_refr, null))
+			{
+				this.src_bumpTiling = this.mi_src_refl.GetOrAddVectorProperty("_BumpTiling");
+				this.src_bumpSpeed = this.mi_src_refl.GetOrAddFloatProperty("_BumpSpeed");
+				this.src_bumpMap = this.mi_src_refl.GetOrAddTextureProperty("_BumpMap");
+				this.src_refractBump = this.mi_src_refr.GetOrAddFloatProperty("_RefractBump");
+				this.src_refractBlur = this.mi_src_refr.GetOrAddFloatProperty("_Blur");
+				this.src_refractDist = this.mi_src_refr.GetOrAddFloatProperty("_BumpDist");
+				this.src_fresnelBump = this.mi_src_refl.GetOrAddFloatProperty("_FresnelBump");
+				this.src_fresnelOutside = this.mi_src_refl.GetOrAddFloatProperty("_FresnelOutside");
+				this.src_fresnelInsideA = this.mi_src_refl.GetOrAddFloatProperty("_FresnelInsideA");
+				this.src_fresnelInsideB = this.mi_src_refl.GetOrAddFloatProperty("_FresnelInsideB");
+				this.src_reflectBump = this.mi_src_refl.GetOrAddFloatProperty("_ReflectBump");
+				this.src_boost = this.mi_src_refl.GetOrAddFloatProperty("_Boost");
+				this.src_boostTreshold = this.mi_src_refl.GetOrAddFloatProperty("_BoostTheshold");
+				this.src_vignette = this.mi_src_refl.GetOrAddFloatProperty("_Vignette");
+				this.src_vignetteLength = this.mi_src_refl.GetOrAddFloatProperty("_VignetteLength");
+				this.src_noise = this.mi_src_refl.GetOrAddFloatProperty("_Noise");
+				this.src_pdTime = this.mi_src_refl.GetOrAddFloatProperty("_PDTime");
+				this.src_bumpMultiplier = this.mi_src_refl.GetOrAddFloatProperty("_BumpMultiplier");
+				this.dataCached = true;
+			}
+		}
+		if (this.dataCached)
+		{
+			if (!object.ReferenceEquals(this.mi_src_refl, null))
+			{
+				this.cachedBumpTiling = this.mi_src_refl.GetVectorValue(this.src_bumpTiling);
+				this.cachedBumpSpeed = this.mi_src_refl.GetFloatValue(this.src_bumpSpeed);
+				this.cachedBumpMap = this.mi_src_refl.GetTextureValue(this.src_bumpMap);
+				this.cachedFresnelBump = this.mi_src_refl.GetFloatValue(this.src_fresnelBump);
+				this.cachedFresnelOutside = this.mi_src_refl.GetFloatValue(this.src_fresnelOutside);
+				this.cachedFresnelInsideA = this.mi_src_refl.GetFloatValue(this.src_fresnelInsideA);
+				this.cachedFresnelInsideB = this.mi_src_refl.GetFloatValue(this.src_fresnelInsideB);
+				this.cachedReflectBump = this.mi_src_refl.GetFloatValue(this.src_reflectBump);
+				this.cachedBoost = this.mi_src_refl.GetFloatValue(this.src_boost);
+				this.cachedBoostThreshold = this.mi_src_refl.GetFloatValue(this.src_boostTreshold);
+				this.cachedVignette = this.mi_src_refl.GetFloatValue(this.src_vignette);
+				this.cachedVignetteLength = this.mi_src_refl.GetFloatValue(this.src_vignetteLength);
+				this.cachedNoise = this.mi_src_refl.GetFloatValue(this.src_noise);
+				this.cachedPDTime = this.mi_src_refl.GetFloatValue(this.src_pdTime);
+				this.cachedBumpMultiplier = this.mi_src_refl.GetFloatValue(this.src_bumpMultiplier);
+			}
+			if (!object.ReferenceEquals(this.mi_src_refr, null))
+			{
+				this.cachedRefractBump = this.mi_src_refr.GetFloatValue(this.src_refractBump);
+				this.cachedRefractBlur = this.mi_src_refr.GetFloatValue(this.src_refractBlur);
+				this.cachedRefractDist = this.mi_src_refr.GetFloatValue(this.src_refractDist);
+			}
+		}
+	}
+
+	// Token: 0x0600182D RID: 6189 RVA: 0x000D327C File Offset: 0x000D147C
+	private void OnEnable()
+	{
+		WaterCameraRendering.AddToWaters(this);
+		this.CacheTransformData();
+	}
+
+	// Token: 0x0600182E RID: 6190 RVA: 0x000D328C File Offset: 0x000D148C
+	private void OnDisable()
+	{
+		WaterCameraRendering.RemoveFromWaters(this);
+	}
+
+	// Token: 0x0600182F RID: 6191 RVA: 0x000D3294 File Offset: 0x000D1494
+	private void Update()
+	{
+		this.CacheTransformData();
+	}
+
+	// Token: 0x06001830 RID: 6192 RVA: 0x000D329C File Offset: 0x000D149C
+	public void UpdateQueueUnderWater(int queueSort, int waterObjects)
+	{
+		this.waterObjects = waterObjects;
+		this.queueSort = queueSort;
+		this.currentIndex = 51;
+		this.SetQueueSingle(this.reflectionInsideEdge, 1);
+		this.SetQueueDouble(this.reflectionAboveInside, this.reflectionBelowInside, 1);
+		WaterCameraRendering.WaveQueue = this.currentIndex;
+		this.currentIndex += WaterCameraRendering.ReservedWaveQueues;
+		if (queueSort < 1)
+		{
+			this.SetQueueDouble(this.fogOutsideEdge, this.fogInsideEdge, 1);
+			this.SetQueueDouble(this.fogOutside, this.fogInside, 1);
+			this.currentIndex += queueSort * 2 + (waterObjects - queueSort) * 2 + 2;
+		}
+		else
+		{
+			this.currentIndex += queueSort * 2 + (waterObjects - queueSort) * 2 + 2;
+			this.SetQueueDouble(this.fogOutside, this.fogInside, 1);
+			this.SetQueueDouble(this.fogOutsideEdge, this.fogInsideEdge, 1);
+		}
+		WaterCameraRendering.TransparencyQueueRefract = this.currentIndex;
+		this.currentIndex += WaterCameraRendering.ReservedTransparencyQueues;
+		if (queueSort < 1)
+		{
+			this.SetQueueDouble(this.refractionOutsideEdge, this.refractionInsideEdge, 1);
+			this.SetQueueDouble(this.refractionOutside, this.refractionInside, 1);
+			this.currentIndex += queueSort * 2 + (waterObjects - queueSort) * 2 + 2;
+		}
+		else
+		{
+			this.currentIndex += queueSort * 2 + (waterObjects - queueSort) * 2 + 2;
+			this.SetQueueDouble(this.refractionOutside, this.refractionInside, 1);
+			this.SetQueueDouble(this.refractionOutsideEdge, this.refractionInsideEdge, 1);
+		}
+		WaterCameraRendering.TransparencyQueueNoRefract = this.currentIndex;
+		this.currentIndex += WaterCameraRendering.ReservedTransparencyQueues;
+		this.SetQueueSingle(this.reflectionOutsideEdge, 1);
+		this.SetQueueDouble(this.reflectionAboveOutside, this.reflectionBelowOutside, 1);
+	}
+
+	// Token: 0x06001831 RID: 6193 RVA: 0x000D3468 File Offset: 0x000D1668
+	public void UpdateQueueOverWater(int queueSort, int waterObjects)
+	{
+		this.waterObjects = waterObjects;
+		this.queueSort = queueSort;
+		this.currentIndex = -51 - waterObjects;
+		this.currentIndex -= WaterCameraRendering.ReservedWaveQueues;
+		WaterCameraRendering.WaveQueue = this.currentIndex;
+		this.SetQueueDouble(this.reflectionBelowOutside, this.reflectionAboveOutside, -1);
+		this.SetQueueSingle(this.reflectionOutsideEdge, -1);
+		this.currentIndex -= WaterCameraRendering.ReservedTransparencyQueues;
+		WaterCameraRendering.TransparencyQueueNoRefract = this.currentIndex;
+		this.SetQueueDouble(this.refractionInside, this.refractionOutside, -1);
+		this.SetQueueDouble(this.refractionInsideEdge, this.refractionOutsideEdge, -1);
+		this.currentIndex -= WaterCameraRendering.ReservedTransparencyQueues;
+		WaterCameraRendering.TransparencyQueueRefract = this.currentIndex;
+		this.SetQueueDouble(this.fogInside, this.fogOutside, -1);
+		this.SetQueueDouble(this.fogInsideEdge, this.fogOutsideEdge, -1);
+		this.SetQueueDouble(this.reflectionBelowInside, this.reflectionAboveInside, -1);
+		this.SetQueueSingle(this.reflectionInsideEdge, -1);
+	}
+
+	// Token: 0x06001832 RID: 6194 RVA: 0x000D3570 File Offset: 0x000D1770
+	private void SetQueueSingle(WaterQueue wQ, int dir = 1)
+	{
+		this.currentIndex += this.queueSort * dir;
+		if (wQ)
+		{
+			wQ.SetOrder(this.currentIndex);
+		}
+		this.currentIndex += (this.waterObjects - this.queueSort) * dir + dir;
+	}
+
+	// Token: 0x06001833 RID: 6195 RVA: 0x000D35C8 File Offset: 0x000D17C8
+	private void SetQueueDouble(WaterQueue wQ1, WaterQueue wQ2, int dir = 1)
+	{
+		this.currentIndex += this.queueSort * 2 * dir;
+		if (wQ1)
+		{
+			wQ1.SetOrder(this.currentIndex);
+		}
+		this.currentIndex += dir;
+		if (wQ2)
+		{
+			wQ2.SetOrder(this.currentIndex);
+		}
+		this.currentIndex += (this.waterObjects - this.queueSort) * dir * 2 + dir;
+	}
+
+	// Token: 0x04002B61 RID: 11105
+	[HideInInspector]
+	public float camDist;
+
+	// Token: 0x04002B62 RID: 11106
+	public WaterQueue fogOutside;
+
+	// Token: 0x04002B63 RID: 11107
+	public WaterQueue fogInside;
+
+	// Token: 0x04002B64 RID: 11108
+	public WaterQueue refractionOutside;
+
+	// Token: 0x04002B65 RID: 11109
+	public WaterQueue refractionInside;
+
+	// Token: 0x04002B66 RID: 11110
+	public WaterQueue reflectionAboveOutside;
+
+	// Token: 0x04002B67 RID: 11111
+	public WaterQueue reflectionAboveInside;
+
+	// Token: 0x04002B68 RID: 11112
+	public WaterQueue reflectionBelowOutside;
+
+	// Token: 0x04002B69 RID: 11113
+	public WaterQueue reflectionBelowInside;
+
+	// Token: 0x04002B6A RID: 11114
+	public WaterQueue wave;
+
+	// Token: 0x04002B6B RID: 11115
+	public WaterQueue fogOutsideEdge;
+
+	// Token: 0x04002B6C RID: 11116
+	public WaterQueue fogInsideEdge;
+
+	// Token: 0x04002B6D RID: 11117
+	public WaterQueue refractionOutsideEdge;
+
+	// Token: 0x04002B6E RID: 11118
+	public WaterQueue refractionInsideEdge;
+
+	// Token: 0x04002B6F RID: 11119
+	public WaterQueue reflectionOutsideEdge;
+
+	// Token: 0x04002B70 RID: 11120
+	public WaterQueue reflectionInsideEdge;
+
+	// Token: 0x04002B71 RID: 11121
+	public bool dynamicWater;
+
+	// Token: 0x04002B72 RID: 11122
+	public bool effectPost = true;
+
+	// Token: 0x04002B73 RID: 11123
+	private int currentIndex;
+
+	// Token: 0x04002B74 RID: 11124
+	private int queueSort;
+
+	// Token: 0x04002B75 RID: 11125
+	private int waterObjects;
+
+	// Token: 0x04002B76 RID: 11126
+	[NonSerialized]
+	public Vector3 cachedPosition;
+
+	// Token: 0x04002B77 RID: 11127
+	[NonSerialized]
+	public Vector3 cachedLocalScale;
+
+	// Token: 0x04002B78 RID: 11128
+	[NonSerialized]
+	public bool dataCached;
+
+	// Token: 0x04002B79 RID: 11129
+	private MaterialInstance mi_src_refl;
+
+	// Token: 0x04002B7A RID: 11130
+	private MaterialInstance mi_src_refr;
+
+	// Token: 0x04002B7B RID: 11131
+	private MaterialInstance.VectorProperty src_bumpTiling;
+
+	// Token: 0x04002B7C RID: 11132
+	public Vector4 cachedBumpTiling = Vector4.zero;
+
+	// Token: 0x04002B7D RID: 11133
+	private MaterialInstance.FloatProperty src_bumpSpeed;
+
+	// Token: 0x04002B7E RID: 11134
+	public float cachedBumpSpeed;
+
+	// Token: 0x04002B7F RID: 11135
+	private MaterialInstance.TextureProperty src_bumpMap;
+
+	// Token: 0x04002B80 RID: 11136
+	public Texture cachedBumpMap;
+
+	// Token: 0x04002B81 RID: 11137
+	private MaterialInstance.FloatProperty src_fresnelBump;
+
+	// Token: 0x04002B82 RID: 11138
+	public float cachedFresnelBump;
+
+	// Token: 0x04002B83 RID: 11139
+	private MaterialInstance.FloatProperty src_fresnelOutside;
+
+	// Token: 0x04002B84 RID: 11140
+	public float cachedFresnelOutside;
+
+	// Token: 0x04002B85 RID: 11141
+	private MaterialInstance.FloatProperty src_fresnelInsideA;
+
+	// Token: 0x04002B86 RID: 11142
+	public float cachedFresnelInsideA;
+
+	// Token: 0x04002B87 RID: 11143
+	private MaterialInstance.FloatProperty src_fresnelInsideB;
+
+	// Token: 0x04002B88 RID: 11144
+	public float cachedFresnelInsideB;
+
+	// Token: 0x04002B89 RID: 11145
+	private MaterialInstance.FloatProperty src_reflectBump;
+
+	// Token: 0x04002B8A RID: 11146
+	public float cachedReflectBump;
+
+	// Token: 0x04002B8B RID: 11147
+	private MaterialInstance.FloatProperty src_boost;
+
+	// Token: 0x04002B8C RID: 11148
+	public float cachedBoost;
+
+	// Token: 0x04002B8D RID: 11149
+	private MaterialInstance.FloatProperty src_boostTreshold;
+
+	// Token: 0x04002B8E RID: 11150
+	public float cachedBoostThreshold;
+
+	// Token: 0x04002B8F RID: 11151
+	private MaterialInstance.FloatProperty src_vignette;
+
+	// Token: 0x04002B90 RID: 11152
+	public float cachedVignette;
+
+	// Token: 0x04002B91 RID: 11153
+	private MaterialInstance.FloatProperty src_vignetteLength;
+
+	// Token: 0x04002B92 RID: 11154
+	public float cachedVignetteLength;
+
+	// Token: 0x04002B93 RID: 11155
+	private MaterialInstance.FloatProperty src_noise;
+
+	// Token: 0x04002B94 RID: 11156
+	public float cachedNoise;
+
+	// Token: 0x04002B95 RID: 11157
+	private MaterialInstance.FloatProperty src_refractBump;
+
+	// Token: 0x04002B96 RID: 11158
+	public float cachedRefractBump;
+
+	// Token: 0x04002B97 RID: 11159
+	private MaterialInstance.FloatProperty src_refractBlur;
+
+	// Token: 0x04002B98 RID: 11160
+	public float cachedRefractBlur;
+
+	// Token: 0x04002B99 RID: 11161
+	private MaterialInstance.FloatProperty src_refractDist;
+
+	// Token: 0x04002B9A RID: 11162
+	public float cachedRefractDist;
+
+	// Token: 0x04002B9B RID: 11163
+	private MaterialInstance.FloatProperty src_pdTime;
+
+	// Token: 0x04002B9C RID: 11164
+	public float cachedPDTime;
+
+	// Token: 0x04002B9D RID: 11165
+	private MaterialInstance.FloatProperty src_bumpMultiplier;
+
+	// Token: 0x04002B9E RID: 11166
+	public float cachedBumpMultiplier;
+}
