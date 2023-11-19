@@ -1,0 +1,45 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005A6 RID: 1446
+public class TorchSavepoint : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060024EF RID: 9455 RVA: 0x0012F854 File Offset: 0x0012DA54
+	public bool PreAwake(int callcount)
+	{
+		this.boySpawnedHere = SignalIn.Create("boySpawnedHere", base.gameObject, new Action(this.Loaded));
+		return true;
+	}
+
+	// Token: 0x060024F0 RID: 9456 RVA: 0x0012F87C File Offset: 0x0012DA7C
+	private void Start()
+	{
+		this.torch = LevelGlobals.torch;
+	}
+
+	// Token: 0x060024F1 RID: 9457 RVA: 0x0012F88C File Offset: 0x0012DA8C
+	private void Loaded()
+	{
+		if (this.torch != null)
+		{
+			this.torch.PickUpTorch();
+			if (this.onFire)
+			{
+				this.torch.TurnOn();
+			}
+			else
+			{
+				this.torch.TurnOff();
+			}
+		}
+	}
+
+	// Token: 0x040043B6 RID: 17334
+	public bool onFire = true;
+
+	// Token: 0x040043B7 RID: 17335
+	private SignalIn boySpawnedHere;
+
+	// Token: 0x040043B8 RID: 17336
+	private TorchMovement torch;
+}

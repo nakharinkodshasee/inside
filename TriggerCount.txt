@@ -1,0 +1,119 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200039A RID: 922
+public class TriggerCount : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060018D2 RID: 6354 RVA: 0x000D6F40 File Offset: 0x000D5140
+	public void countUp()
+	{
+		this.addProbe();
+	}
+
+	// Token: 0x060018D3 RID: 6355 RVA: 0x000D6F48 File Offset: 0x000D5148
+	public void countDown()
+	{
+		this.substractProbe();
+	}
+
+	// Token: 0x060018D4 RID: 6356 RVA: 0x000D6F50 File Offset: 0x000D5150
+	private void addProbe()
+	{
+		this.noOfProbesInside++;
+		this.countUpEvent.OnEvent(this);
+		if (this.noOfProbesInside == this.targetCount)
+		{
+			this.triggerEnter.OnEvent(this);
+			this.countReachedSignal.Signal();
+			this.countReached.OnEvent(this);
+		}
+	}
+
+	// Token: 0x060018D5 RID: 6357 RVA: 0x000D6FAC File Offset: 0x000D51AC
+	private void substractProbe()
+	{
+		this.noOfProbesInside--;
+		this.countDownEvent.OnEvent(this);
+		if (this.noOfProbesInside == this.targetCount - 1)
+		{
+			this.triggerExit.OnEvent(this);
+			this.countLostSignal.Signal();
+			this.countLost.OnEvent(this);
+		}
+	}
+
+	// Token: 0x060018D6 RID: 6358 RVA: 0x000D700C File Offset: 0x000D520C
+	public bool PreAwake(int callcount)
+	{
+		this.countReachedSignal = SignalOut.Create("countReachedSignal", base.gameObject);
+		this.countLostSignal = SignalOut.Create("countLostSignal", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060018D7 RID: 6359 RVA: 0x000D7048 File Offset: 0x000D5248
+	private bool IsValidCollider(Collider coll)
+	{
+		return this.anyNonTriggerProbes || (this.useBoyProbes && coll.GetComponent<BoyProbe>()) || (this.useHuddleProbe && coll.GetComponent<HuddleProbe>()) || this.targetProbes.Contains(coll);
+	}
+
+	// Token: 0x060018D8 RID: 6360 RVA: 0x000D70B0 File Offset: 0x000D52B0
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (this.IsValidCollider(collider))
+		{
+			this.addProbe();
+		}
+	}
+
+	// Token: 0x060018D9 RID: 6361 RVA: 0x000D70C4 File Offset: 0x000D52C4
+	private void OnTriggerExit(Collider collider)
+	{
+		if (this.IsValidCollider(collider))
+		{
+			this.substractProbe();
+		}
+	}
+
+	// Token: 0x04002CA1 RID: 11425
+	public List<Collider> targetProbes;
+
+	// Token: 0x04002CA2 RID: 11426
+	public bool useBoyProbes;
+
+	// Token: 0x04002CA3 RID: 11427
+	public bool useHuddleProbe;
+
+	// Token: 0x04002CA4 RID: 11428
+	public int targetCount = 1;
+
+	// Token: 0x04002CA5 RID: 11429
+	public bool anyNonTriggerProbes;
+
+	// Token: 0x04002CA6 RID: 11430
+	private SimpleEvent<TriggerCount> triggerEnter = new SimpleEvent<TriggerCount>("triggerEnter");
+
+	// Token: 0x04002CA7 RID: 11431
+	private SimpleEvent<TriggerCount> triggerExit = new SimpleEvent<TriggerCount>("triggerExit");
+
+	// Token: 0x04002CA8 RID: 11432
+	private SimpleEvent<TriggerCount> countUpEvent = new SimpleEvent<TriggerCount>("countUpEvent");
+
+	// Token: 0x04002CA9 RID: 11433
+	private SimpleEvent<TriggerCount> countDownEvent = new SimpleEvent<TriggerCount>("countDownEvent");
+
+	// Token: 0x04002CAA RID: 11434
+	private SimpleEvent<TriggerCount> countReached = new SimpleEvent<TriggerCount>("countReached");
+
+	// Token: 0x04002CAB RID: 11435
+	private SimpleEvent<TriggerCount> countLost = new SimpleEvent<TriggerCount>("countLost");
+
+	// Token: 0x04002CAC RID: 11436
+	private SignalOut countReachedSignal;
+
+	// Token: 0x04002CAD RID: 11437
+	private SignalOut countLostSignal;
+
+	// Token: 0x04002CAE RID: 11438
+	private int noOfProbesInside;
+}

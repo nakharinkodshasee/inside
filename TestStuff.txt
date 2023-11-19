@@ -1,0 +1,200 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+using UnitTest;
+using UnityEngine;
+
+// Token: 0x02000630 RID: 1584
+[Test]
+internal class TestStuff
+{
+	// Token: 0x06002759 RID: 10073 RVA: 0x0013CBA4 File Offset: 0x0013ADA4
+	[Test("Layer inversion")]
+	private bool LayerInversion()
+	{
+		this.layer = LayerMask.NameToLayer("Player");
+		this.layerMask = 1 << this.layer;
+		this.inverseLayerMask = ~this.layerMask;
+		return true;
+	}
+
+	// Token: 0x0600275A RID: 10074 RVA: 0x0013CBD8 File Offset: 0x0013ADD8
+	[CustomGUITest]
+	private bool FractionToInt()
+	{
+		this.fraction01 = GUILayout.HorizontalSlider(this.fraction01, 0f, 1f, new GUILayoutOption[0]);
+		this.index = MathUtils.Fraction01ToInt(this.fraction01, -1, 2);
+		return this.index >= -1 && this.index <= 2;
+	}
+
+	// Token: 0x0600275B RID: 10075 RVA: 0x0013CC34 File Offset: 0x0013AE34
+	[Test("StringBuilder")]
+	private bool TestStringBuilder()
+	{
+		this.sb = new StringBuilder(20, 20);
+		this.sb.AppendFormat("{0}{1}{2}", "hej", ", der", 23423423);
+		this.sb.Length = 0;
+		this.sb.AppendFormat("{0}{1}{2}", "test", " skinke ", 23423423);
+		return true;
+	}
+
+	// Token: 0x0600275C RID: 10076 RVA: 0x0013CCA8 File Offset: 0x0013AEA8
+	[Test("Log rotation")]
+	private bool TestLogRotation()
+	{
+		FileRotator fileRotator = new FileRotator(string.Empty, "file", "txt", 3);
+		List<string> list = new List<string>
+		{
+			"file-00.txt",
+			"file-01.txt",
+			"file-02.txt"
+		};
+		this.logRotatorInputFiles = string.Join("\n", list.ToArray());
+		this.logRotatorDelete = string.Empty;
+		this.logRotatorMove = string.Empty;
+		fileRotator.UpdateRotation(list, delegate(string a)
+		{
+			this.logRotatorDelete = this.logRotatorDelete + "\n" + a;
+		}, delegate(string a, string b)
+		{
+			this.logRotatorMove += string.Format("\n{0} => {1}", a, b);
+		});
+		return true;
+	}
+
+	// Token: 0x0600275D RID: 10077 RVA: 0x0013CD40 File Offset: 0x0013AF40
+	[Test("No Garbage Dictionary")]
+	private bool TestNoGarbageDictionary()
+	{
+		NoGarbageDictionary<int, string> noGarbageDictionary = new NoGarbageDictionary<int, string>(0, 1, true);
+		noGarbageDictionary[4] = "four";
+		noGarbageDictionary.Add(3, "three");
+		if (noGarbageDictionary.GetValueOrAdd(2, () => "two") != "two")
+		{
+			return false;
+		}
+		if (noGarbageDictionary.GetValueOrAdd(1, "one") != "one")
+		{
+			return false;
+		}
+		if (noGarbageDictionary.Count != 4)
+		{
+			return false;
+		}
+		this.dictionaryTest1 = string.Empty;
+		noGarbageDictionary.ForEach(delegate(int key, string value)
+		{
+			this.dictionaryTest1 = this.dictionaryTest1 + value + " ";
+		});
+		noGarbageDictionary[2] = "two";
+		if (noGarbageDictionary.GetValueOrAdd(3, "three") != "three")
+		{
+			return false;
+		}
+		if (noGarbageDictionary.Count != 4)
+		{
+			return false;
+		}
+		string a;
+		if (!noGarbageDictionary.TryGetValue(1, out a) || a != "one")
+		{
+			return false;
+		}
+		if (!noGarbageDictionary.TryGetValue(2, out a) || a != "two")
+		{
+			return false;
+		}
+		if (!noGarbageDictionary.TryGetValue(3, out a) || a != "three")
+		{
+			return false;
+		}
+		if (!noGarbageDictionary.TryGetValue(4, out a) || a != "four")
+		{
+			return false;
+		}
+		this.dictionaryTest2 = string.Empty;
+		noGarbageDictionary.ForEach(delegate(int key, string value)
+		{
+			this.dictionaryTest2 = this.dictionaryTest2 + value + " ";
+		});
+		this.dictionaryTest3 = string.Empty;
+		foreach (KeyValuePair<int, string> keyValuePair in noGarbageDictionary)
+		{
+			foreach (KeyValuePair<int, string> keyValuePair2 in noGarbageDictionary)
+			{
+				this.dictionaryTest3 += string.Format("({0},{1}) ", keyValuePair.Value, keyValuePair2.Value);
+			}
+			this.dictionaryTest3 += "\n";
+		}
+		return true;
+	}
+
+	// Token: 0x170000C8 RID: 200
+	// (get) Token: 0x0600275E RID: 10078 RVA: 0x0013CFA0 File Offset: 0x0013B1A0
+	[Test]
+	private string layerMaskBinary
+	{
+		get
+		{
+			return Convert.ToString(this.layerMask, 2);
+		}
+	}
+
+	// Token: 0x170000C9 RID: 201
+	// (get) Token: 0x0600275F RID: 10079 RVA: 0x0013CFB0 File Offset: 0x0013B1B0
+	[Test]
+	private string inverseLayerMaskBinary
+	{
+		get
+		{
+			return Convert.ToString(this.inverseLayerMask, 2);
+		}
+	}
+
+	// Token: 0x040046BC RID: 18108
+	private float fraction01;
+
+	// Token: 0x040046BD RID: 18109
+	[Test]
+	private string logRotatorInputFiles;
+
+	// Token: 0x040046BE RID: 18110
+	[Test]
+	private string logRotatorDelete;
+
+	// Token: 0x040046BF RID: 18111
+	[Test]
+	private string logRotatorMove;
+
+	// Token: 0x040046C0 RID: 18112
+	[Test]
+	private StringBuilder sb;
+
+	// Token: 0x040046C1 RID: 18113
+	[Test]
+	private int layer;
+
+	// Token: 0x040046C2 RID: 18114
+	[Test]
+	private int layerMask;
+
+	// Token: 0x040046C3 RID: 18115
+	[Test]
+	private int inverseLayerMask;
+
+	// Token: 0x040046C4 RID: 18116
+	[Test("Should be in [-1;2]")]
+	private int index;
+
+	// Token: 0x040046C5 RID: 18117
+	[Test("should contain {one, two, three, four} in any order")]
+	private string dictionaryTest1;
+
+	// Token: 0x040046C6 RID: 18118
+	[Test("should contain {one, two, three, four} in any order")]
+	private string dictionaryTest2;
+
+	// Token: 0x040046C7 RID: 18119
+	[Test("should contain all ordered pairs of {one, two, three, four} in any order")]
+	private string dictionaryTest3;
+}

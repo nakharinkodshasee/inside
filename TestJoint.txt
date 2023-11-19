@@ -1,0 +1,31 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000622 RID: 1570
+public class TestJoint : MonoBehaviour
+{
+	// Token: 0x0600270B RID: 9995 RVA: 0x0013B2A0 File Offset: 0x001394A0
+	private void Start()
+	{
+		this.joint = base.GetComponent<CharacterJoint>();
+	}
+
+	// Token: 0x0600270C RID: 9996 RVA: 0x0013B2B0 File Offset: 0x001394B0
+	private void OnDrawGizmos()
+	{
+		Vector3 vector = base.transform.TransformPoint(this.joint.anchor);
+		Gizmos.DrawLine(vector, vector + this.joint.axis);
+	}
+
+	// Token: 0x0600270D RID: 9997 RVA: 0x0013B2EC File Offset: 0x001394EC
+	private Vector3 GetAngle()
+	{
+		Rigidbody connectedBody = this.joint.connectedBody;
+		Vector3 anchor = this.joint.anchor;
+		Quaternion quaternion = (!connectedBody) ? Quaternion.identity : connectedBody.transform.rotation;
+		return (Quaternion.Inverse(quaternion) * this.joint.transform.rotation).eulerAngles;
+	}
+
+	// Token: 0x04004690 RID: 18064
+	private CharacterJoint joint;
+}

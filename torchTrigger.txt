@@ -1,0 +1,133 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200023C RID: 572
+public class torchTrigger : MonoBehaviour
+{
+	// Token: 0x060011AA RID: 4522 RVA: 0x000A62C0 File Offset: 0x000A44C0
+	private void Start()
+	{
+		this.torchEnter = SignalOut.Create("torchEnter", base.gameObject);
+		this.torchExit = SignalOut.Create("torchExit", base.gameObject);
+	}
+
+	// Token: 0x060011AB RID: 4523 RVA: 0x000A62FC File Offset: 0x000A44FC
+	private void sendEnterSignals()
+	{
+		this.torchEnter.Signal();
+		this.torchEnterFSM.OnEvent(this);
+		this.torchInside = true;
+	}
+
+	// Token: 0x060011AC RID: 4524 RVA: 0x000A631C File Offset: 0x000A451C
+	private void sendExitSignals()
+	{
+		this.torchExit.Signal();
+		this.torchExitFSM.OnEvent(this);
+		this.torchInside = false;
+	}
+
+	// Token: 0x060011AD RID: 4525 RVA: 0x000A633C File Offset: 0x000A453C
+	private void FixedUpdate()
+	{
+		if (this.tc != null)
+		{
+			if (this.torchInside && this.torchInsideLastFrame)
+			{
+				if (this.tc.flameOn && !this.torchOnLastFrame)
+				{
+					this.sendEnterSignals();
+				}
+				else if (!this.tc.flameOn && this.torchOnLastFrame)
+				{
+					this.sendExitSignals();
+				}
+			}
+			else if (this.torchInside && !this.torchInsideLastFrame)
+			{
+				if (this.tc.flameOn && !this.onlyTorchOff)
+				{
+					this.sendEnterSignals();
+				}
+				else if (!this.tc.flameOn && this.onlyTorchOff)
+				{
+					this.sendEnterSignals();
+				}
+			}
+			else if (!this.torchInside && this.torchInsideLastFrame)
+			{
+				if (this.tc.flameOn && !this.onlyTorchOff)
+				{
+					this.sendExitSignals();
+				}
+				else if (!this.tc.flameOn && this.onlyTorchOff)
+				{
+					this.sendExitSignals();
+				}
+			}
+			this.torchOnLastFrame = this.tc.flameOn;
+		}
+		this.torchInsideLastFrame = this.torchInside;
+	}
+
+	// Token: 0x060011AE RID: 4526 RVA: 0x000A6498 File Offset: 0x000A4698
+	private void OnTriggerEnter(Collider coll)
+	{
+		torchControl torchControl = null;
+		if (coll.attachedRigidbody != null && coll.attachedRigidbody.GetComponent<torchControl>())
+		{
+			torchControl = coll.attachedRigidbody.GetComponent<torchControl>();
+		}
+		if (!this.torchInside && torchControl != null)
+		{
+			this.tc = torchControl;
+			this.torchInside = true;
+		}
+	}
+
+	// Token: 0x060011AF RID: 4527 RVA: 0x000A6500 File Offset: 0x000A4700
+	private void OnTriggerExit(Collider coll)
+	{
+		torchControl torchControl = null;
+		if (coll.attachedRigidbody != null && coll.attachedRigidbody.GetComponent<torchControl>())
+		{
+			torchControl = coll.attachedRigidbody.GetComponent<torchControl>();
+		}
+		if (this.torchInside && torchControl != null)
+		{
+			this.torchInside = false;
+			this.sendExitSignals();
+			this.tc = null;
+		}
+	}
+
+	// Token: 0x0400205E RID: 8286
+	public bool onlyTorchOff;
+
+	// Token: 0x0400205F RID: 8287
+	private SimpleEvent<torchTrigger> torchEnterFSM = new SimpleEvent<torchTrigger>("torchEnterFSM");
+
+	// Token: 0x04002060 RID: 8288
+	private SimpleEvent<torchTrigger> torchExitFSM = new SimpleEvent<torchTrigger>("torchExitFSM");
+
+	// Token: 0x04002061 RID: 8289
+	private SignalOut torchEnter;
+
+	// Token: 0x04002062 RID: 8290
+	private SignalOut torchExit;
+
+	// Token: 0x04002063 RID: 8291
+	private bool torchOnLastFrame;
+
+	// Token: 0x04002064 RID: 8292
+	private bool torchInsideLastFrame;
+
+	// Token: 0x04002065 RID: 8293
+	private bool torchOn;
+
+	// Token: 0x04002066 RID: 8294
+	private bool torchInside;
+
+	// Token: 0x04002067 RID: 8295
+	private torchControl tc;
+}

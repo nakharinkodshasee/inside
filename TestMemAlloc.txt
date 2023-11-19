@@ -1,0 +1,31 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020005AC RID: 1452
+public class TestMemAlloc : MonoBehaviour
+{
+	// Token: 0x06002508 RID: 9480 RVA: 0x0012FF9C File Offset: 0x0012E19C
+	private void Update()
+	{
+		if ((Input.GetKey(304) && Input.GetKeyDown(57)) || (GameManager.controller.LB.Down && GameManager.controller.Y.Pressed))
+		{
+			this.allocEachFrame = !this.allocEachFrame;
+		}
+		if ((Input.GetKey(304) && Input.GetKeyDown(48)) || (GameManager.controller.LB.Down && GameManager.controller.B.Pressed))
+		{
+			this.data.Clear();
+			GC.Collect();
+		}
+		if (this.allocEachFrame)
+		{
+			this.data.Add(new byte[1048576]);
+		}
+	}
+
+	// Token: 0x040043D8 RID: 17368
+	private List<byte[]> data = new List<byte[]>();
+
+	// Token: 0x040043D9 RID: 17369
+	private bool allocEachFrame;
+}

@@ -1,0 +1,186 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000237 RID: 567
+public class TorchTrigger2 : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001191 RID: 4497 RVA: 0x000A5AE0 File Offset: 0x000A3CE0
+	public bool PreAwake(int callcount)
+	{
+		this.activate = SignalIn.Create("activate", base.gameObject, new Action(this.Activate));
+		this.deactivate = SignalIn.Create("deactivate", base.gameObject, new Action(this.Deactivate));
+		this.fireOn = SignalOut.Create("fireOn", base.gameObject);
+		this.fireOff = SignalOut.Create("fireOff", base.gameObject);
+		this.torchTurnedOn = SignalOut.Create("torchTurnedOn", base.gameObject);
+		this.torchTurnedOff = SignalOut.Create("torchTurnedOff", base.gameObject);
+		this.torchEnter = SignalOut.Create("torchEnter", base.gameObject);
+		this.torchExit = SignalOut.Create("torchExit", base.gameObject);
+		if (!this.on)
+		{
+			this.sendDelayDeactivate = true;
+		}
+		return true;
+	}
+
+	// Token: 0x06001192 RID: 4498 RVA: 0x000A5BC8 File Offset: 0x000A3DC8
+	private void Update()
+	{
+		if (this.torch == null || this.torchTrigger == null)
+		{
+			this.torch = LevelGlobals.torch;
+			if (this.torch != null)
+			{
+				this.torchTrigger = this.torch.triggerTorch.GetComponent<Collider>();
+			}
+		}
+		if (this.sendDelayDeactivate)
+		{
+			this.SendDeactivate();
+			this.sendDelayDeactivate = false;
+		}
+	}
+
+	// Token: 0x06001193 RID: 4499 RVA: 0x000A5C44 File Offset: 0x000A3E44
+	private void OnTriggerEnter(Collider c)
+	{
+		if (c == this.torchTrigger)
+		{
+			this.torchEnter.Signal();
+			this.torchEnterFSM.OnEvent(this);
+			if (this.type == TorchTrigger2.TriggerType.Water)
+			{
+				if (this.on)
+				{
+					this.torch.TurnOff();
+					this.torchTurnedOff.Signal();
+				}
+			}
+			else if (this.type == TorchTrigger2.TriggerType.Fire)
+			{
+				if (this.on)
+				{
+					this.torch.TurnOn();
+					this.torchTurnedOn.Signal();
+				}
+				else if (this.turnedOnByTorch && this.torch.flameOn)
+				{
+					this.Activate();
+				}
+			}
+			if (this.dropTorch)
+			{
+				this.torch.DropTorch(0.2f);
+			}
+		}
+	}
+
+	// Token: 0x06001194 RID: 4500 RVA: 0x000A5D18 File Offset: 0x000A3F18
+	private void OnTriggerExit(Collider c)
+	{
+		if (c == this.torchTrigger)
+		{
+			this.torchExit.Signal();
+			this.torchExitFSM.OnEvent(this);
+		}
+	}
+
+	// Token: 0x06001195 RID: 4501 RVA: 0x000A5D50 File Offset: 0x000A3F50
+	private void Activate()
+	{
+		if (!this.on)
+		{
+			this.SendActivate();
+		}
+	}
+
+	// Token: 0x06001196 RID: 4502 RVA: 0x000A5D64 File Offset: 0x000A3F64
+	private void SendActivate()
+	{
+		this.fireOn.Signal();
+		this.fireOnFSM.OnEvent(this);
+		this.on = true;
+	}
+
+	// Token: 0x06001197 RID: 4503 RVA: 0x000A5D84 File Offset: 0x000A3F84
+	private void Deactivate()
+	{
+		if (this.on)
+		{
+			this.SendDeactivate();
+		}
+	}
+
+	// Token: 0x06001198 RID: 4504 RVA: 0x000A5D98 File Offset: 0x000A3F98
+	private void SendDeactivate()
+	{
+		this.fireOff.Signal();
+		this.fireOffFSM.OnEvent(this);
+		this.on = false;
+	}
+
+	// Token: 0x0400202F RID: 8239
+	public TorchTrigger2.TriggerType type;
+
+	// Token: 0x04002030 RID: 8240
+	public bool on = true;
+
+	// Token: 0x04002031 RID: 8241
+	public bool turnedOnByTorch = true;
+
+	// Token: 0x04002032 RID: 8242
+	public bool dropTorch;
+
+	// Token: 0x04002033 RID: 8243
+	private TorchMovement torch;
+
+	// Token: 0x04002034 RID: 8244
+	private Collider torchTrigger;
+
+	// Token: 0x04002035 RID: 8245
+	private SignalIn deactivate;
+
+	// Token: 0x04002036 RID: 8246
+	private SignalIn activate;
+
+	// Token: 0x04002037 RID: 8247
+	private SimpleEvent<TorchTrigger2> fireOnFSM = new SimpleEvent<TorchTrigger2>("fireOn");
+
+	// Token: 0x04002038 RID: 8248
+	private SimpleEvent<TorchTrigger2> fireOffFSM = new SimpleEvent<TorchTrigger2>("fireOff");
+
+	// Token: 0x04002039 RID: 8249
+	private SignalOut fireOn;
+
+	// Token: 0x0400203A RID: 8250
+	private SignalOut fireOff;
+
+	// Token: 0x0400203B RID: 8251
+	private SignalOut torchTurnedOn;
+
+	// Token: 0x0400203C RID: 8252
+	private SignalOut torchTurnedOff;
+
+	// Token: 0x0400203D RID: 8253
+	private SignalOut torchEnter;
+
+	// Token: 0x0400203E RID: 8254
+	private SignalOut torchExit;
+
+	// Token: 0x0400203F RID: 8255
+	private SimpleEvent<TorchTrigger2> torchEnterFSM = new SimpleEvent<TorchTrigger2>("torchEnterFSM");
+
+	// Token: 0x04002040 RID: 8256
+	private SimpleEvent<TorchTrigger2> torchExitFSM = new SimpleEvent<TorchTrigger2>("torchExitFSM");
+
+	// Token: 0x04002041 RID: 8257
+	private bool sendDelayDeactivate;
+
+	// Token: 0x02000238 RID: 568
+	public enum TriggerType
+	{
+		// Token: 0x04002043 RID: 8259
+		Water,
+		// Token: 0x04002044 RID: 8260
+		Fire
+	}
+}

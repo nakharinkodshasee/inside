@@ -1,0 +1,16 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005A7 RID: 1447
+public class TV : MonoBehaviour
+{
+	// Token: 0x060024F3 RID: 9459 RVA: 0x0012F8E4 File Offset: 0x0012DAE4
+	private void Start()
+	{
+	}
+
+	// Token: 0x060024F4 RID: 9460 RVA: 0x0012F8E8 File Offset: 0x0012DAE8
+	private void Update()
+	{
+	}
+}

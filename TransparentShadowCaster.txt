@@ -1,0 +1,29 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000368 RID: 872
+[ExecuteInEditMode]
+[DisallowMultipleComponent]
+public class TransparentShadowCaster : MonoBehaviour
+{
+	// Token: 0x060017F2 RID: 6130 RVA: 0x000D122C File Offset: 0x000CF42C
+	private void Awake()
+	{
+		this.rend = base.GetComponent<Renderer>();
+	}
+
+	// Token: 0x060017F3 RID: 6131 RVA: 0x000D123C File Offset: 0x000CF43C
+	private void OnEnable()
+	{
+		TransparentShadow.casterList.Add(this.rend);
+	}
+
+	// Token: 0x060017F4 RID: 6132 RVA: 0x000D1250 File Offset: 0x000CF450
+	private void OnDisable()
+	{
+		TransparentShadow.casterList.Remove(this.rend);
+	}
+
+	// Token: 0x04002AF5 RID: 10997
+	private Renderer rend;
+}

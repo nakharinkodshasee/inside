@@ -1,0 +1,75 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003C8 RID: 968
+public class VehicleFSMEvents : MonoBehaviour
+{
+	// Token: 0x04002EE0 RID: 12000
+	public GameObject targetVehicle;
+
+	// Token: 0x04002EE1 RID: 12001
+	public bool useLabClubCar;
+
+	// Token: 0x04002EE2 RID: 12002
+	public float specificSpeed;
+
+	// Token: 0x04002EE3 RID: 12003
+	public bool startDeactivated;
+
+	// Token: 0x04002EE4 RID: 12004
+	public SimpleEvent<VehicleFSMEvents> boyEnterVehicleStart = new SimpleEvent<VehicleFSMEvents>("boyEnterVehicleStart");
+
+	// Token: 0x04002EE5 RID: 12005
+	public SimpleEvent<VehicleFSMEvents> boyEnterVehicleFinished = new SimpleEvent<VehicleFSMEvents>("boyEnterVehicleFinished");
+
+	// Token: 0x04002EE6 RID: 12006
+	public SimpleEvent<VehicleFSMEvents> boyExitVehicleStart = new SimpleEvent<VehicleFSMEvents>("boyExitVehicleStart");
+
+	// Token: 0x04002EE7 RID: 12007
+	public SimpleEvent<VehicleFSMEvents> boyExitVehicleFinished = new SimpleEvent<VehicleFSMEvents>("boyExitVehicleFinished");
+
+	// Token: 0x04002EE8 RID: 12008
+	public SimpleEvent<VehicleFSMEvents> boyGrabbedVehicle = new SimpleEvent<VehicleFSMEvents>("boyGrabbedVehicle");
+
+	// Token: 0x04002EE9 RID: 12009
+	public SimpleEvent<VehicleFSMEvents> boyStoppedGrabbingVehicle = new SimpleEvent<VehicleFSMEvents>("boyStoppedGrabbingVehicle");
+
+	// Token: 0x04002EEA RID: 12010
+	public SimpleEvent<VehicleFSMEvents> aboveSpecifiedSpeed = new SimpleEvent<VehicleFSMEvents>("aboveSpecifiedSpeed");
+
+	// Token: 0x04002EEB RID: 12011
+	public SimpleEvent<VehicleFSMEvents> belowSpecifiedSpeed = new SimpleEvent<VehicleFSMEvents>("belowSpecifiedSpeed");
+
+	// Token: 0x04002EEC RID: 12012
+	public SimpleEvent<VehicleFSMEvents> vehicleMovingLeft = new SimpleEvent<VehicleFSMEvents>("vehicleMovingLeft");
+
+	// Token: 0x04002EED RID: 12013
+	public SimpleEvent<VehicleFSMEvents> vehicleMovingRight = new SimpleEvent<VehicleFSMEvents>("vehicleMovingRight");
+
+	// Token: 0x04002EEE RID: 12014
+	public SimpleEvent<VehicleFSMEvents> vehicleStopped = new SimpleEvent<VehicleFSMEvents>("vehicleStopped");
+
+	// Token: 0x04002EEF RID: 12015
+	public SimpleEvent<VehicleFSMEvents> gasForward = new SimpleEvent<VehicleFSMEvents>("gasForward");
+
+	// Token: 0x04002EF0 RID: 12016
+	public SimpleEvent<VehicleFSMEvents> gasBackwards = new SimpleEvent<VehicleFSMEvents>("gasBackwards");
+
+	// Token: 0x04002EF1 RID: 12017
+	public SimpleEvent<VehicleFSMEvents> gasZero = new SimpleEvent<VehicleFSMEvents>("gasZero");
+
+	// Token: 0x020003C9 RID: 969
+	private enum BoyPosition
+	{
+		// Token: 0x04002EF3 RID: 12019
+		Outside,
+		// Token: 0x04002EF4 RID: 12020
+		Entering,
+		// Token: 0x04002EF5 RID: 12021
+		Inside,
+		// Token: 0x04002EF6 RID: 12022
+		Exiting,
+		// Token: 0x04002EF7 RID: 12023
+		Grabbing
+	}
+}

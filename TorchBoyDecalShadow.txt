@@ -1,0 +1,74 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003F3 RID: 1011
+public class TorchBoyDecalShadow : MonoBehaviour
+{
+	// Token: 0x06001ACD RID: 6861 RVA: 0x000EBB2C File Offset: 0x000E9D2C
+	private void Awake()
+	{
+		this.boy = ScriptGlobals.boy;
+		Actor actor = this.boy.visualBoy.actor;
+		ConstArray<Actor.Bone> bones = actor.bones;
+		ConstArray<int> ankles = actor.specificBones.ankles;
+		this.footLeft = bones[ankles[0]].transform;
+		this.footRight = bones[ankles[1]].transform;
+	}
+
+	// Token: 0x06001ACE RID: 6862 RVA: 0x000EBB9C File Offset: 0x000E9D9C
+	private void LateUpdate()
+	{
+		Vector3? groundPosWorld = this.boy.status.groundPosWorld;
+		if (groundPosWorld != null)
+		{
+			this.ground = this.boy.status.groundPosWorld.Value.y;
+		}
+		Vector3 position = this.torch.position;
+		float groundDiff = this.ground - position.y;
+		float fade = Vector3.Distance(position, this.boy.pos3) * 0.1f;
+		this.SetShadowTransform(this.footLeft, this.shadowLeft, position, groundDiff, fade);
+		this.SetShadowTransform(this.footRight, this.shadowRight, position, groundDiff, fade);
+	}
+
+	// Token: 0x06001ACF RID: 6863 RVA: 0x000EBC48 File Offset: 0x000E9E48
+	private void SetShadowTransform(Transform foot, Transform shadow, Vector3 posTorch, float groundDiff, float fade)
+	{
+		Vector3 position = foot.position;
+		Vector3 vector = Vector3.Normalize(position - posTorch);
+		float num = groundDiff / vector.y;
+		float num2 = vector.y * vector.y;
+		Vector3 localScale = Vector3.Lerp(this.scaleNarrow, this.scaleWide, num2 * num2);
+		Vector3 vector2;
+		vector2..ctor(posTorch.x + vector.x * num, position.y - localScale.y * fade, posTorch.z + vector.z * num);
+		Quaternion quaternion = Quaternion.LookRotation(new Vector3(vector.x, 0f, vector.z));
+		shadow.SetPositionRotation(vector2, quaternion);
+		shadow.localScale = localScale;
+	}
+
+	// Token: 0x0400309D RID: 12445
+	public Transform torch;
+
+	// Token: 0x0400309E RID: 12446
+	public Transform shadowLeft;
+
+	// Token: 0x0400309F RID: 12447
+	public Transform shadowRight;
+
+	// Token: 0x040030A0 RID: 12448
+	public Vector3 scaleWide;
+
+	// Token: 0x040030A1 RID: 12449
+	public Vector3 scaleNarrow;
+
+	// Token: 0x040030A2 RID: 12450
+	private Transform footLeft;
+
+	// Token: 0x040030A3 RID: 12451
+	private Transform footRight;
+
+	// Token: 0x040030A4 RID: 12452
+	private float ground;
+
+	// Token: 0x040030A5 RID: 12453
+	private Boy boy;
+}

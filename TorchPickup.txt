@@ -1,0 +1,358 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000235 RID: 565
+public class TorchPickup : Device, IPreAwake
+{
+	// Token: 0x06001183 RID: 4483 RVA: 0x000A525C File Offset: 0x000A345C
+	public bool PreAwake(int callcount)
+	{
+		this.torchFree = SignalOut.Create("torchFree", base.gameObject);
+		this.torchReleased = SignalOut.Create("torchReleased", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001184 RID: 4484 RVA: 0x000A5298 File Offset: 0x000A3498
+	protected override void Start()
+	{
+		base.Start();
+		this.SetIdleState();
+	}
+
+	// Token: 0x06001185 RID: 4485 RVA: 0x000A52A8 File Offset: 0x000A34A8
+	private void SetIdleState()
+	{
+		this.state = TorchPickup.State.Idle;
+	}
+
+	// Token: 0x06001186 RID: 4486 RVA: 0x000A52B4 File Offset: 0x000A34B4
+	private void IdleState()
+	{
+		if (this.regrabTimer > 0f)
+		{
+			this.regrabTimer -= Time.deltaTime;
+		}
+		if (this.releaseTimer > 0f)
+		{
+			this.releaseTimer -= Time.deltaTime;
+			return;
+		}
+		int i = 0;
+		int count = this.boysInside.Count;
+		while (i < count)
+		{
+			Boy boy = this.boysInside[i];
+			if (this.regrabTimer <= 0f || Mathf.Abs(boy.input.stick.x) <= 0.6f)
+			{
+				if (Device.GrabCheck(boy, true))
+				{
+					this.SetGrabState(boy);
+					break;
+				}
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06001187 RID: 4487 RVA: 0x000A5380 File Offset: 0x000A3580
+	private void SetGrabState(Boy boy)
+	{
+		this.boyGrabbing = boy;
+		if (this.boyHand == null)
+		{
+			Actor.Bone bone = boy.visualBoy.actor.bones[boy.visualBoy.actor.GetBone("RightWrist")];
+			this.boyHand = bone.transform.GetChild(0);
+		}
+		if (this.boyGrabbing.facing == 1f && this.animGrabLeft)
+		{
+			this.currentGrabAnim = this.animGrabLeft;
+		}
+		else if (this.animGrab)
+		{
+			this.currentGrabAnim = this.animGrab;
+		}
+		if (this.currentGrabAnim != null)
+		{
+			BoyUtils.StartCustomAnim(this.boyGrabbing, this.currentGrabAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		else
+		{
+			BoyUtils.StartCustomAnim(this.boyGrabbing, this.animBlend, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		this.grabTimer = this.grabDelay;
+		this.grabStunTimer = this.grabStunDelay;
+		this.pullTimer = 0f;
+		this.animBlend.currentBlendValue = 0f;
+		this.animPullBlend.currentBlendValue = 0f;
+		Device.SetVoicePassive();
+		this.state = TorchPickup.State.Grab;
+	}
+
+	// Token: 0x06001188 RID: 4488 RVA: 0x000A54D0 File Offset: 0x000A36D0
+	private void SetGrabStateNoTransition()
+	{
+		Device.SetVoicePassive();
+		this.state = TorchPickup.State.Grab;
+	}
+
+	// Token: 0x06001189 RID: 4489 RVA: 0x000A54E0 File Offset: 0x000A36E0
+	private void GrabState()
+	{
+		if (this.grabStunTimer > 0f)
+		{
+			this.grabStunTimer -= Time.deltaTime;
+			if (this.boyGrabbing.input.jump)
+			{
+				this.grabStunTimer = 0f;
+			}
+		}
+		if ((this.grabStunTimer <= 0f && !this.boyGrabbing.input.rawAction) || this.boyGrabbing.isDead)
+		{
+			this.Release();
+			return;
+		}
+		if (this.grabTimer > 0f)
+		{
+			this.grabTimer -= Time.deltaTime;
+			return;
+		}
+		BoyCustomAnimState boyCustomAnimState = this.boyGrabbing.state as BoyCustomAnimState;
+		if (this.currentGrabAnim && boyCustomAnimState != null && boyCustomAnimState.anim == this.currentGrabAnim && this.currentGrabAnim.frame >= this.currentGrabAnim.numFrames)
+		{
+			BoyUtils.StartCustomAnim(this.boyGrabbing, this.animBlend, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		vector2f stick = this.boyGrabbing.input.stick;
+		if (stick.magnitude > 0.4f && stick.y < 0.3f)
+		{
+			this.SetPullState();
+			return;
+		}
+		if (stick.y >= 0.3f && (boyCustomAnimState.anim != this.currentGrabAnim || this.currentGrabAnim.frame > 15f))
+		{
+			Device.SetVoiceActive();
+			this.SetSuccessState(this.animTakeIt);
+			return;
+		}
+		this.pullTimer -= Time.deltaTime * this.releasedBlendSpeed;
+		this.pullTimer = Mathf.Max(this.pullTimer, 0f);
+		this.animBlend.currentBlendValue = this.pullBlendCurve.Evaluate(this.pullTimer / this.totalPullTime);
+	}
+
+	// Token: 0x0600118A RID: 4490 RVA: 0x000A56DC File Offset: 0x000A38DC
+	private void SetPullState()
+	{
+		this.pullDownTimer = this.pullDownDelay;
+		Device.SetVoiceActive();
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animBlend, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.state = TorchPickup.State.Pull;
+	}
+
+	// Token: 0x0600118B RID: 4491 RVA: 0x000A5710 File Offset: 0x000A3910
+	private void PullState()
+	{
+		if (this.boyGrabbing.isDead || !this.boyGrabbing.input.rawAction)
+		{
+			this.Release();
+			return;
+		}
+		vector2f stick = this.boyGrabbing.input.stick;
+		if (stick.magnitude < 0.4f || stick.y > 0.3f)
+		{
+			this.SetGrabStateNoTransition();
+			return;
+		}
+		this.pullTimer += Time.deltaTime;
+		this.pullTimer = Mathf.Min(this.pullTimer, this.totalPullTime);
+		this.animBlend.currentBlendValue = this.pullBlendCurve.Evaluate(this.pullTimer / this.totalPullTime);
+		float num = stick.x * 1.25f;
+		if (stick.y > 0f || Mathf.Abs(num) > 1f)
+		{
+			num = Mathf.Sign(num);
+		}
+		this.currentDirBlend += (num - this.currentDirBlend) * Time.deltaTime * this.dirBlendSpeed;
+		this.animPullBlend.currentBlendValue = this.currentDirBlend;
+		if (this.pullTimer == this.totalPullTime)
+		{
+			AnimClipNode successState;
+			if (Mathf.Abs(this.currentDirBlend) > 0.5f)
+			{
+				successState = ((Mathf.Sign(this.currentDirBlend) != 1f) ? this.animSuccessLeft : this.animSuccessRight);
+			}
+			else
+			{
+				successState = this.animSuccessDown;
+			}
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.3f, 0.2f, 0, 0f);
+			this.SetSuccessState(successState);
+		}
+	}
+
+	// Token: 0x0600118C RID: 4492 RVA: 0x000A58B4 File Offset: 0x000A3AB4
+	private void SetSuccessState(AnimClipNode animSuccess)
+	{
+		BoyUtils.StartCustomAnim(this.boyGrabbing, animSuccess, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.torchReleased.Signal();
+		this.state = TorchPickup.State.Succes;
+	}
+
+	// Token: 0x0600118D RID: 4493 RVA: 0x000A58E8 File Offset: 0x000A3AE8
+	private void SuccessState()
+	{
+		this.torchTransform.rotation = this.boyHand.rotation;
+		this.torchTransform.position = this.boyHand.position;
+		if (!(this.boyGrabbing.state is BoyCustomAnimState))
+		{
+			this.torchFree.Signal();
+			Device.SetVoiceNone();
+			this.boyGrabbing = null;
+			this.state = TorchPickup.State.None;
+		}
+	}
+
+	// Token: 0x0600118E RID: 4494 RVA: 0x000A5954 File Offset: 0x000A3B54
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case TorchPickup.State.Idle:
+			this.IdleState();
+			break;
+		case TorchPickup.State.Grab:
+			this.GrabState();
+			break;
+		case TorchPickup.State.Pull:
+			this.PullState();
+			break;
+		case TorchPickup.State.Succes:
+			this.SuccessState();
+			break;
+		}
+	}
+
+	// Token: 0x0600118F RID: 4495 RVA: 0x000A59B4 File Offset: 0x000A3BB4
+	private void Release()
+	{
+		BoyCustomAnimState boyCustomAnimState = this.boyGrabbing.state as BoyCustomAnimState;
+		if (boyCustomAnimState != null && this.animRelease != null && this.grabTimer <= 0f && (boyCustomAnimState.anim != this.currentGrabAnim || this.currentGrabAnim.frame > 12f))
+		{
+			BoyUtils.StartCustomAnim(this.boyGrabbing, this.animRelease, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		else
+		{
+			BoyUtils.ClearState(this.boyGrabbing, 0.3f);
+		}
+		Device.SetVoiceNone();
+		this.boyGrabbing = null;
+		this.releaseTimer = this.releaseDelay;
+		this.regrabTimer = this.regrabDelay;
+		this.SetIdleState();
+	}
+
+	// Token: 0x0400200A RID: 8202
+	public AnimBlendNode animBlend;
+
+	// Token: 0x0400200B RID: 8203
+	public AnimBlendNode animPullBlend;
+
+	// Token: 0x0400200C RID: 8204
+	public AnimClipNode animGrab;
+
+	// Token: 0x0400200D RID: 8205
+	public AnimClipNode animGrabLeft;
+
+	// Token: 0x0400200E RID: 8206
+	public AnimClipNode animRelease;
+
+	// Token: 0x0400200F RID: 8207
+	public AnimClipNode animSuccessDown;
+
+	// Token: 0x04002010 RID: 8208
+	public AnimClipNode animSuccessLeft;
+
+	// Token: 0x04002011 RID: 8209
+	public AnimClipNode animSuccessRight;
+
+	// Token: 0x04002012 RID: 8210
+	public AnimClipNode animTakeIt;
+
+	// Token: 0x04002013 RID: 8211
+	public Transform torchTransform;
+
+	// Token: 0x04002014 RID: 8212
+	public float pullDownDelay = 1f;
+
+	// Token: 0x04002015 RID: 8213
+	public float grabDelay = 0.15f;
+
+	// Token: 0x04002016 RID: 8214
+	public float totalPullTime = 1.5f;
+
+	// Token: 0x04002017 RID: 8215
+	public float releasedBlendSpeed = 2f;
+
+	// Token: 0x04002018 RID: 8216
+	public float dirBlendSpeed = 5f;
+
+	// Token: 0x04002019 RID: 8217
+	public AnimationCurve pullBlendCurve;
+
+	// Token: 0x0400201A RID: 8218
+	private SignalOut torchFree;
+
+	// Token: 0x0400201B RID: 8219
+	private SignalOut torchReleased;
+
+	// Token: 0x0400201C RID: 8220
+	private TorchPickup.State state;
+
+	// Token: 0x0400201D RID: 8221
+	private Transform boyHand;
+
+	// Token: 0x0400201E RID: 8222
+	private float pullTimer;
+
+	// Token: 0x0400201F RID: 8223
+	private float pullDownTimer;
+
+	// Token: 0x04002020 RID: 8224
+	private float grabTimer;
+
+	// Token: 0x04002021 RID: 8225
+	private float releaseTimer;
+
+	// Token: 0x04002022 RID: 8226
+	private float releaseDelay = 0.12f;
+
+	// Token: 0x04002023 RID: 8227
+	private float grabStunTimer;
+
+	// Token: 0x04002024 RID: 8228
+	private float grabStunDelay = 0.13f;
+
+	// Token: 0x04002025 RID: 8229
+	private float regrabTimer;
+
+	// Token: 0x04002026 RID: 8230
+	private float regrabDelay = 0.4f;
+
+	// Token: 0x04002027 RID: 8231
+	private float currentDirBlend;
+
+	// Token: 0x04002028 RID: 8232
+	private AnimClipNode currentGrabAnim;
+
+	// Token: 0x02000236 RID: 566
+	private enum State
+	{
+		// Token: 0x0400202A RID: 8234
+		None,
+		// Token: 0x0400202B RID: 8235
+		Idle,
+		// Token: 0x0400202C RID: 8236
+		Grab,
+		// Token: 0x0400202D RID: 8237
+		Pull,
+		// Token: 0x0400202E RID: 8238
+		Succes
+	}
+}

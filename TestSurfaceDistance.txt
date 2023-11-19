@@ -1,0 +1,29 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000618 RID: 1560
+public class TestSurfaceDistance : MonoBehaviour
+{
+	// Token: 0x060026EB RID: 9963 RVA: 0x0013A480 File Offset: 0x00138680
+	private void Start()
+	{
+	}
+
+	// Token: 0x060026EC RID: 9964 RVA: 0x0013A484 File Offset: 0x00138684
+	private void Update()
+	{
+	}
+
+	// Token: 0x060026ED RID: 9965 RVA: 0x0013A488 File Offset: 0x00138688
+	private void OnDrawGizmos()
+	{
+		Vector3 vector = Vector3.down * 0.5f;
+		Vector3 vector2 = base.transform.TransformPoint(vector);
+		float num = base.transform.localScale.x * 0.5f;
+		float num2 = 0f;
+		Vector3 zero = Vector3.zero;
+		Quaternion.Euler(base.transform.localEulerAngles).ToAngleAxis(ref num2, ref zero);
+		float num3 = num2 / 360f * 3.1415927f * 2f * num;
+		Debug.DrawRay(vector2, Vector3.right * num3);
+	}
+}

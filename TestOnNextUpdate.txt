@@ -1,0 +1,47 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000575 RID: 1397
+public class TestOnNextUpdate : MonoBehaviour
+{
+	// Token: 0x06002425 RID: 9253 RVA: 0x0012B1F4 File Offset: 0x001293F4
+	private void Start()
+	{
+		OnNextUpdate.Do(delegate
+		{
+			Debug.Log("1");
+		});
+		OnNextUpdate.Do(delegate
+		{
+			Debug.Log("2");
+		});
+		OnNextUpdate.Do(new Action(TestOnNextUpdate.ThrowException));
+		OnNextUpdate.Do(delegate
+		{
+			Debug.Log("3");
+		});
+		OnNextUpdate.Do(delegate
+		{
+			Debug.Log("4");
+		});
+	}
+
+	// Token: 0x06002426 RID: 9254 RVA: 0x0012B29C File Offset: 0x0012949C
+	private static void ThrowException()
+	{
+		throw new Exception("Test Exception");
+	}
+
+	// Token: 0x04004278 RID: 17016
+	private int[] integers = new int[]
+	{
+		9,
+		4,
+		2,
+		7,
+		6,
+		4,
+		5,
+		1
+	};
+}

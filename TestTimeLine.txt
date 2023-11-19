@@ -1,0 +1,115 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200061C RID: 1564
+public class TestTimeLine : MonoBehaviour
+{
+	// Token: 0x060026F9 RID: 9977 RVA: 0x0013ABA4 File Offset: 0x00138DA4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, null);
+	}
+
+	// Token: 0x060026FA RID: 9978 RVA: 0x0013ABCC File Offset: 0x00138DCC
+	private void Start()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x060026FB RID: 9979 RVA: 0x0013ABD4 File Offset: 0x00138DD4
+	private void CreateFilters(TestTimeLine.FilterType filterType, int filterSize, float gaussSigma = 1f)
+	{
+		if (filterType == TestTimeLine.FilterType.ExponentialMovingAverage)
+		{
+			this.filter = new LowPassFilterFloat(filterSize);
+			this.squareFilter = new LowPassFilterFloat(filterSize);
+			this.stickFilter = new LowPassFilterFloat(filterSize);
+		}
+	}
+
+	// Token: 0x060026FC RID: 9980 RVA: 0x0013AC18 File Offset: 0x00138E18
+	private void FixedUpdate()
+	{
+		Boy boy = ScriptGlobals.boy;
+		Actor actor = boy.visualBoy.actor;
+		Transform transform = actor.bones[actor.specificBones.head].transform;
+		float num = (float)Math.Sin(Time.timeDbl);
+		float x = transform.transform.position.x;
+		if (this.filterType != this.currentFilterType || this.gaussSigma != this.currentGaussSigma)
+		{
+			this.CreateFilters(this.filterType, this.filterSize, this.gaussSigma);
+			this.currentGaussSigma = this.gaussSigma;
+			this.currentFilterType = this.filterType;
+		}
+		if (this.filterSize != this.filter.size)
+		{
+			this.filter.Resize(this.filterSize);
+			this.squareFilter.Resize(this.filterSize);
+			this.stickFilter.Resize(this.filterSize);
+		}
+		float value = Random.value;
+		float num2 = this.filter.Filter(value);
+		float input = Mathf.Sign((float)Math.Sin(Time.timeDbl * 6.28000020980835 * (double)this.squareFreq));
+		float num3 = this.squareFilter.Filter(input);
+		float x2 = GameManager.controller.LeftStick.Value.x;
+		float num4 = this.stickFilter.Filter(x2);
+		this.rtpcTest.Set01ClampedFast(x2 * 0.5f + 0.5f, this.akGameObj);
+	}
+
+	// Token: 0x0400465F RID: 18015
+	public int filterSize = 10;
+
+	// Token: 0x04004660 RID: 18016
+	public float squareFreq = 2f;
+
+	// Token: 0x04004661 RID: 18017
+	private IFloatFilter filter;
+
+	// Token: 0x04004662 RID: 18018
+	private IFloatFilter squareFilter;
+
+	// Token: 0x04004663 RID: 18019
+	private IFloatFilter stickFilter;
+
+	// Token: 0x04004664 RID: 18020
+	public TestTimeLine.FilterType filterType;
+
+	// Token: 0x04004665 RID: 18021
+	private TestTimeLine.FilterType currentFilterType = TestTimeLine.FilterType.None;
+
+	// Token: 0x04004666 RID: 18022
+	public float gaussSigma;
+
+	// Token: 0x04004667 RID: 18023
+	private float currentGaussSigma;
+
+	// Token: 0x04004668 RID: 18024
+	private RTPC rtpcTest = new RTPC("TestTimeLine RTPC (raw)", false);
+
+	// Token: 0x04004669 RID: 18025
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObj;
+
+	// Token: 0x0400466A RID: 18026
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x0200061D RID: 1565
+	public enum FilterType
+	{
+		// Token: 0x0400466C RID: 18028
+		SimpleMovingAverage,
+		// Token: 0x0400466D RID: 18029
+		ExponentialMovingAverage,
+		// Token: 0x0400466E RID: 18030
+		None
+	}
+}

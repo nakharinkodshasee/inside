@@ -1,0 +1,21 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000576 RID: 1398
+public class ToggleActive : MonoBehaviour
+{
+	// Token: 0x0600242C RID: 9260 RVA: 0x0012B2E0 File Offset: 0x001294E0
+	private void Update()
+	{
+		if (Input.anyKeyDown)
+		{
+			this.gameObjects.ForEach(delegate(GameObject go)
+			{
+				go.SetActive(!go.activeSelf);
+			});
+		}
+	}
+
+	// Token: 0x0400427D RID: 17021
+	public GameObject[] gameObjects;
+}

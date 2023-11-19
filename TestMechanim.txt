@@ -1,0 +1,72 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000636 RID: 1590
+public class TestMechanim : MonoBehaviour
+{
+	// Token: 0x06002774 RID: 10100 RVA: 0x0013D668 File Offset: 0x0013B868
+	private void DoTest()
+	{
+		Debug.Log("SET the animation. ");
+		AnimatorStateInfo currentAnimatorStateInfo = base.gameObject.GetComponent<Animator>().GetCurrentAnimatorStateInfo(0);
+		base.gameObject.GetComponent<Animator>().CrossFade("Running", this.crossFadeTime / currentAnimatorStateInfo.length);
+		this.timer = this.timeBetweenAnimations;
+		this.storedTime = Time.timeSinceLevelLoad;
+	}
+
+	// Token: 0x06002775 RID: 10101 RVA: 0x0013D6CC File Offset: 0x0013B8CC
+	private void Update()
+	{
+		AnimatorStateInfo currentAnimatorStateInfo = base.gameObject.GetComponent<Animator>().GetCurrentAnimatorStateInfo(0);
+		if (currentAnimatorStateInfo.shortNameHash != this.cachedNameHash)
+		{
+			Debug.Log("State info has been changed. Transition time detected is: " + (Time.timeSinceLevelLoad - this.storedTime));
+			this.cachedNameHash = currentAnimatorStateInfo.shortNameHash;
+			this.storedTime = Time.timeSinceLevelLoad;
+		}
+		if (this.initialTimer > 0f)
+		{
+			this.initialTimer -= Time.deltaTime;
+			if (this.initialTimer <= 0f)
+			{
+				this.DoTest();
+			}
+		}
+		else if (this.timer > 0f)
+		{
+			this.timer -= Time.deltaTime;
+			if (this.timer <= 0f)
+			{
+				Debug.Log("Set Stop anim.");
+				this.storedTime = Time.timeSinceLevelLoad;
+				Animator component = base.gameObject.GetComponent<Animator>();
+				component.CrossFade("BoyChase_AttackA", this.crossFadeTime / currentAnimatorStateInfo.length);
+				if (this.setTimeScale)
+				{
+					Time.timeScale = 0.05f;
+				}
+			}
+		}
+	}
+
+	// Token: 0x040046DD RID: 18141
+	public float crossFadeTime = 0.4f;
+
+	// Token: 0x040046DE RID: 18142
+	public float timeBetweenAnimations = 1.6f;
+
+	// Token: 0x040046DF RID: 18143
+	public bool setTimeScale;
+
+	// Token: 0x040046E0 RID: 18144
+	private float timer = -1f;
+
+	// Token: 0x040046E1 RID: 18145
+	private float storedTime;
+
+	// Token: 0x040046E2 RID: 18146
+	private float initialTimer = 1f;
+
+	// Token: 0x040046E3 RID: 18147
+	private int cachedNameHash;
+}

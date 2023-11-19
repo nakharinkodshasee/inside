@@ -1,0 +1,12 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003FF RID: 1023
+public class testObject : MonoBehaviour
+{
+	// Token: 0x06001AFB RID: 6907 RVA: 0x000ECA24 File Offset: 0x000EAC24
+	private void Awake()
+	{
+		LevelGlobals.testObject = this;
+	}
+}

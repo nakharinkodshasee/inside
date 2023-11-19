@@ -1,0 +1,32 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000646 RID: 1606
+[ExecuteInEditMode]
+public class TestParticleSystemMovement : MonoBehaviour
+{
+	// Token: 0x060027A9 RID: 10153 RVA: 0x0013E9AC File Offset: 0x0013CBAC
+	private void Update()
+	{
+		if (base.GetComponent<ParticleSystem>().isStopped)
+		{
+			base.GetComponent<ParticleSystem>().time = 0f;
+		}
+		float num = base.GetComponent<ParticleSystem>().time / base.GetComponent<ParticleSystem>().duration;
+		Vector3 vector;
+		vector..ctor(this.moveX.Evaluate(num), this.moveY.Evaluate(num), this.moveZ.Evaluate(num));
+		base.transform.localPosition = vector * this.multiplier;
+	}
+
+	// Token: 0x04004729 RID: 18217
+	public AnimationCurve moveX;
+
+	// Token: 0x0400472A RID: 18218
+	public AnimationCurve moveY;
+
+	// Token: 0x0400472B RID: 18219
+	public AnimationCurve moveZ;
+
+	// Token: 0x0400472C RID: 18220
+	public float multiplier = 1f;
+}

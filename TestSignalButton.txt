@@ -1,0 +1,80 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000614 RID: 1556
+internal class TestSignalButton : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060026D6 RID: 9942 RVA: 0x0013A048 File Offset: 0x00138248
+	public bool PreAwake(int callcount)
+	{
+		this.on = SignalIn.Create("on", base.gameObject, delegate
+		{
+			this.ison.Signal();
+		});
+		this.off = SignalIn.Create("off", base.gameObject, delegate
+		{
+			this.isoff.Signal();
+		});
+		this.selfDestruct = SignalIn.Create("selfDestruct", base.gameObject, delegate
+		{
+			Debug.Log("HELLO");
+			Object.Destroy(base.gameObject);
+		});
+		this.ison = SignalOut.Create("ison", base.gameObject);
+		this.isoff = SignalOut.Create("isoff", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060026D7 RID: 9943 RVA: 0x0013A0E8 File Offset: 0x001382E8
+	private void Start()
+	{
+		this.originalColor = base.GetComponent<Renderer>().material.color;
+	}
+
+	// Token: 0x060026D8 RID: 9944 RVA: 0x0013A100 File Offset: 0x00138300
+	private void OnMouseEnter()
+	{
+		base.GetComponent<Renderer>().material.color = Color.red;
+	}
+
+	// Token: 0x060026D9 RID: 9945 RVA: 0x0013A118 File Offset: 0x00138318
+	private void OnMouseExit()
+	{
+		base.GetComponent<Renderer>().material.color = this.originalColor;
+	}
+
+	// Token: 0x060026DA RID: 9946 RVA: 0x0013A130 File Offset: 0x00138330
+	private void OnMouseDown()
+	{
+		if (this.toggle)
+		{
+			this.ison.Signal();
+		}
+		else
+		{
+			this.isoff.Signal();
+		}
+		this.toggle = !this.toggle;
+	}
+
+	// Token: 0x04004642 RID: 17986
+	private SignalIn on;
+
+	// Token: 0x04004643 RID: 17987
+	private SignalIn off;
+
+	// Token: 0x04004644 RID: 17988
+	private SignalIn selfDestruct;
+
+	// Token: 0x04004645 RID: 17989
+	private SignalOut ison;
+
+	// Token: 0x04004646 RID: 17990
+	private SignalOut isoff;
+
+	// Token: 0x04004647 RID: 17991
+	private bool toggle = true;
+
+	// Token: 0x04004648 RID: 17992
+	private Color originalColor;
+}

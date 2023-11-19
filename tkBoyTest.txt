@@ -1,0 +1,153 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000658 RID: 1624
+public class tkBoyTest : MonoBehaviour
+{
+	// Token: 0x060027FB RID: 10235 RVA: 0x00142120 File Offset: 0x00140320
+	private void SetGravityShift()
+	{
+		Boy boy = ScriptGlobals.boy;
+		boy.properties.customGravity = new vector2fClass(0f, -Physics.gravity.y);
+		Physics.gravity = -Physics.gravity;
+	}
+
+	// Token: 0x060027FC RID: 10236 RVA: 0x00142168 File Offset: 0x00140368
+	private void EulerTest()
+	{
+		Quaternion quaternion = Quaternion.LookRotation(new Vector3(0.0383579f, 0.9989238f, 0.02607759f), new Vector3(-0.0355903f, -0.02471469f, 0.9990609f));
+		Quaternion quaternion2 = Quaternion.LookRotation(new Vector3(0.03569821f, 0.9990279f, 0.02586749f), new Vector3(-0.03535432f, -0.02460554f, 0.999072f));
+	}
+
+	// Token: 0x060027FD RID: 10237 RVA: 0x001421D4 File Offset: 0x001403D4
+	private void Start()
+	{
+		Boy boy = ScriptGlobals.boy;
+		BoyProperties component = base.GetComponent<BoyProperties>();
+		if (component)
+		{
+			boy.properties = component;
+			BoyProperties component2 = boy.GetComponent<BoyProperties>();
+			if (component2)
+			{
+				Object.Destroy(component2);
+			}
+		}
+	}
+
+	// Token: 0x060027FE RID: 10238 RVA: 0x00142218 File Offset: 0x00140418
+	private void FindNearbyGrabPlateauTest()
+	{
+		Boy boy = ScriptGlobals.boy;
+		CollisionUtils.Box box = boy.plane.CreateBox(boy.pos, boy.up, new vector2f(1f, 2f));
+		DebugPhysicsRendering.Draw(box, Color.blue, "tkSearchBox", (DebugRendering.Flags)0);
+		using (Plateau plateau = BoyUtils.FindNearbyGrabPlateau(boy, 1f, box, true, false, false, false))
+		{
+			if (plateau != null)
+			{
+				new DebugMesh(new Color?(Color.red)).AddSphere(plateau.pos, 0.2f).Draw("tkSphere", (DebugRendering.Flags)0);
+			}
+		}
+	}
+
+	// Token: 0x060027FF RID: 10239 RVA: 0x001422D4 File Offset: 0x001404D4
+	private void UpdateHeading()
+	{
+		Boy boy = ScriptGlobals.boy;
+		Vector3 normalized = (Vector3.right - Vector3.forward).normalized;
+		if (boy.input.looseDir.x < -0.5f)
+		{
+			normalized = (Vector3.right + Vector3.forward).normalized;
+		}
+		Vector3 normalized2 = Vector3.Lerp(boy.visualBoy.right, normalized, 0.1f).normalized;
+		boy.visualBoy.right = normalized2;
+	}
+
+	// Token: 0x06002800 RID: 10240 RVA: 0x00142364 File Offset: 0x00140564
+	private void FixedUpdate()
+	{
+		Boy boy = ScriptGlobals.boy;
+		VisualBoy visualBoy = boy.visualBoy;
+		if (PhysicsUtils.stepCount == 10L)
+		{
+			boy.visualBoy.theme = VisualBoyThemeController.GetTheme(visualBoy, this.theme);
+		}
+		boy.visualBoy.themeStrength = ((float)Math.Sin(Time.fixedTimeDbl * 2.0) + 1f) * 0.5f;
+	}
+
+	// Token: 0x06002801 RID: 10241 RVA: 0x001423D0 File Offset: 0x001405D0
+	private void StartDriverAnim()
+	{
+		Boy boy = ScriptGlobals.boy;
+		float num = 3f;
+		if (base.GetComponent<Rigidbody>() != null)
+		{
+			PhysicsUtils.ApplyImpulse(base.GetComponent<Rigidbody>(), Vector3.right * num * base.GetComponent<Rigidbody>().mass);
+		}
+		BoyUtils.StartCustomAnim(boy, this.vehicleAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+	}
+
+	// Token: 0x06002802 RID: 10242 RVA: 0x00142434 File Offset: 0x00140634
+	private void Update()
+	{
+		Boy boy = ScriptGlobals.boy;
+		VisualBoy visualBoy = boy.visualBoy;
+		if (Input.GetKeyDown(99))
+		{
+			BoyUtils.StartCustomAnim(boy, this.customAnim, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+		}
+		if (Input.GetKeyDown(118))
+		{
+			AnimClipNode.GotFocusArg gotFocusArg = new AnimClipNode.GotFocusArg(AnimClipNode.LoopingMode.FrozenEnding, (this.physicsAnim as AnimClipNode).numFrames * 0.25f);
+			BoyUtils.StartCustomAnim(boy, this.physicsAnim, gotFocusArg, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		if (Input.GetKeyDown(116))
+		{
+			boy.visualBoy.theme = VisualBoyThemeController.GetTheme(visualBoy, this.theme);
+		}
+		if (Input.GetKeyDown(104))
+		{
+			if (Input.GetKey(303))
+			{
+				boy.visualBoy.SetTheme(null, VisualBoy.ThemePriority.High);
+			}
+			else
+			{
+				boy.visualBoy.SetTheme(VisualBoyThemeController.GetTheme(visualBoy, this.themeHighPriority), VisualBoy.ThemePriority.High);
+			}
+		}
+		if (Input.GetKeyDown(105))
+		{
+			boy.input = this.boyInput;
+		}
+		if (Input.GetKeyDown(97))
+		{
+			visualBoy.additiveAnim = this.additiveAnim;
+		}
+		if (Input.GetKeyDown(107))
+		{
+			boy.Kill();
+		}
+	}
+
+	// Token: 0x040047A4 RID: 18340
+	public AnimNode customAnim;
+
+	// Token: 0x040047A5 RID: 18341
+	public AnimNode physicsAnim;
+
+	// Token: 0x040047A6 RID: 18342
+	public AnimNode additiveAnim;
+
+	// Token: 0x040047A7 RID: 18343
+	public AnimNode vehicleAnim;
+
+	// Token: 0x040047A8 RID: 18344
+	public string theme;
+
+	// Token: 0x040047A9 RID: 18345
+	public string themeHighPriority;
+
+	// Token: 0x040047AA RID: 18346
+	public BoyInput boyInput;
+}

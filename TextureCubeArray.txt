@@ -1,0 +1,109 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000365 RID: 869
+public class TextureCubeArray : MonoBehaviour
+{
+	// Token: 0x060017E7 RID: 6119 RVA: 0x000D0ACC File Offset: 0x000CECCC
+	private void Start()
+	{
+		if (this.go != null)
+		{
+			this.rt = new RenderTexture(this.width, this.height, 24);
+			this.tex = new Texture2D(this.rt.width, this.rt.height, 3, false);
+			this.goArray = new GameObject[this.x, this.y];
+			this.MIs = new MaterialInstance[this.x, this.y];
+			this.colorProperty = new MaterialInstance.ColorProperty[this.x, this.y];
+			for (int i = 0; i < this.x; i++)
+			{
+				for (int j = 0; j < this.y; j++)
+				{
+					if (this.y > 0 && this.x > 0)
+					{
+						Vector3 vector;
+						vector..ctor((float)i * (this.xSize / (float)this.x), (float)j * (this.ySize / (float)this.y), 0f);
+						vector += base.gameObject.transform.position;
+						this.goArray[i, j] = Object.Instantiate<GameObject>(this.go);
+						this.goArray[i, j].transform.position = vector;
+						this.MIs[i, j] = this.goArray[i, j].GetComponent<MaterialInstance>();
+						this.colorProperty[i, j] = this.MIs[i, j].GetOrAddColorProperty("_Color");
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x060017E8 RID: 6120 RVA: 0x000D0C6C File Offset: 0x000CEE6C
+	private void Update()
+	{
+		Camera camera = this.cam;
+		camera.targetTexture = this.rt;
+		camera.Render();
+		RenderTexture.active = this.rt;
+		this.tex.ReadPixels(new Rect(0f, 0f, (float)this.rt.width, (float)this.rt.height), 0, 0);
+		this.tex.Apply();
+		for (int i = 0; i < this.x; i++)
+		{
+			for (int j = 0; j < this.y; j++)
+			{
+				if (this.y > 0 && this.x > 0)
+				{
+					float num = (float)i / (float)this.x;
+					float num2 = (float)j / (float)this.y;
+					Color pixelBilinear = this.tex.GetPixelBilinear(num, num2);
+					float num3 = this.mul * (pixelBilinear.r + pixelBilinear.g + pixelBilinear.b);
+					Vector3 vector;
+					vector..ctor((float)i * (this.xSize / (float)this.x), (float)j * (this.ySize / (float)this.y), num3);
+					vector += base.gameObject.transform.position;
+					this.goArray[i, j].transform.position = vector;
+					this.MIs[i, j].SetColorProperty(this.colorProperty[i, j], pixelBilinear);
+				}
+			}
+		}
+	}
+
+	// Token: 0x04002ADA RID: 10970
+	public GameObject go;
+
+	// Token: 0x04002ADB RID: 10971
+	public int x = 10;
+
+	// Token: 0x04002ADC RID: 10972
+	public int y = 10;
+
+	// Token: 0x04002ADD RID: 10973
+	public int width = 256;
+
+	// Token: 0x04002ADE RID: 10974
+	public int height = 256;
+
+	// Token: 0x04002ADF RID: 10975
+	public float xSize = 10f;
+
+	// Token: 0x04002AE0 RID: 10976
+	public float ySize = 10f;
+
+	// Token: 0x04002AE1 RID: 10977
+	public float mul = 1f;
+
+	// Token: 0x04002AE2 RID: 10978
+	public bool grab = true;
+
+	// Token: 0x04002AE3 RID: 10979
+	private GameObject[,] goArray;
+
+	// Token: 0x04002AE4 RID: 10980
+	private Texture2D tex;
+
+	// Token: 0x04002AE5 RID: 10981
+	private RenderTexture rt;
+
+	// Token: 0x04002AE6 RID: 10982
+	public Camera cam;
+
+	// Token: 0x04002AE7 RID: 10983
+	private MaterialInstance[,] MIs;
+
+	// Token: 0x04002AE8 RID: 10984
+	private MaterialInstance.ColorProperty[,] colorProperty;
+}

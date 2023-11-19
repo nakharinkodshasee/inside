@@ -1,0 +1,115 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200005F RID: 95
+internal class Tweeter
+{
+	// Token: 0x0600031C RID: 796 RVA: 0x00024ADC File Offset: 0x00022CDC
+	public Tweeter(GameObject gameObject)
+	{
+		this.gameObject = gameObject;
+		this.tweetTimeNext = (double)(Random.value + 1f);
+		this.akGameObject = gameObject.GetComponent<AkGameObj>();
+		this.akGameObject.ToggleAutoUpdateTransform(false);
+	}
+
+	// Token: 0x0600031E RID: 798 RVA: 0x00024B40 File Offset: 0x00022D40
+	public void OnUpdate(double currentTime, float deltaTime, float boyDistance)
+	{
+		this.boyDistance = boyDistance;
+		if (boyDistance < 20f && currentTime >= this.tweetTimeNext)
+		{
+			this.Chirp(this.nextChirpIsFleeing);
+			this.nextChirpIsFleeing = this.isFleeingThisFrame;
+		}
+		if (this.chirpedThisFrame)
+		{
+			if (!this.isFleeingThisFrame)
+			{
+				this.tweetTimeNext = this.GetNextTweetTime(boyDistance);
+			}
+			else
+			{
+				this.tweetTimeNext = this.GetNextTweetTimeFleeing();
+			}
+		}
+		this.chirpedThisFrame = false;
+		this.isFleeingThisFrame = false;
+	}
+
+	// Token: 0x0600031F RID: 799 RVA: 0x00024BC8 File Offset: 0x00022DC8
+	public void OnFleeing()
+	{
+		this.isFleeingThisFrame = true;
+		this.nextChirpIsFleeing = true;
+	}
+
+	// Token: 0x06000320 RID: 800 RVA: 0x00024BD8 File Offset: 0x00022DD8
+	private double GetNextTweetTimeFleeing()
+	{
+		return Time.fixedTimeDbl + (double)(Random.value * 0f);
+	}
+
+	// Token: 0x06000321 RID: 801 RVA: 0x00024BEC File Offset: 0x00022DEC
+	private double GetNextTweetTime(float boyDistance)
+	{
+		float num = Mathf.Clamp01(boyDistance * 0.1f);
+		float num2 = Mathf.InverseLerp(20f, 1f, num);
+		return Time.fixedTimeDbl + (double)num2 + (double)(Random.value * 2f);
+	}
+
+	// Token: 0x06000322 RID: 802 RVA: 0x00024C2C File Offset: 0x00022E2C
+	public void Chirp(bool isFleeing = false)
+	{
+		if (Tweeter.tweetTimeLastGlobal < Time.fixedTimeDbl)
+		{
+			AkGameObjUmbrella.UpdateTransform(this.akGameObject, true);
+			if (isFleeing)
+			{
+				SoundEngine.Events.chickFlee.PostFast(this.akGameObject);
+			}
+			else
+			{
+				SoundEngine.Events.chickChirp.PostFast(this.akGameObject);
+			}
+			Tweeter.tweetTimeLastGlobal = Time.fixedTimeDbl;
+		}
+		this.chirpedThisFrame = true;
+	}
+
+	// Token: 0x04000509 RID: 1289
+	private const float range = 20f;
+
+	// Token: 0x0400050A RID: 1290
+	private const float chirpPeriodVariation = 2f;
+
+	// Token: 0x0400050B RID: 1291
+	private const float fleePeriodVariation = 0f;
+
+	// Token: 0x0400050C RID: 1292
+	private const float maxTweetPeriodClose = 20f;
+
+	// Token: 0x0400050D RID: 1293
+	private GameObject gameObject;
+
+	// Token: 0x0400050E RID: 1294
+	private float boyDistance;
+
+	// Token: 0x0400050F RID: 1295
+	private double tweetTimeNext = -1.0;
+
+	// Token: 0x04000510 RID: 1296
+	private bool isFleeingThisFrame;
+
+	// Token: 0x04000511 RID: 1297
+	private bool chirpedThisFrame;
+
+	// Token: 0x04000512 RID: 1298
+	private bool nextChirpIsFleeing;
+
+	// Token: 0x04000513 RID: 1299
+	private AkGameObj akGameObject;
+
+	// Token: 0x04000514 RID: 1300
+	private static double tweetTimeLastGlobal = -1.0;
+}

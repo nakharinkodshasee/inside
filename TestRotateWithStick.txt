@@ -1,0 +1,73 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200060D RID: 1549
+public class TestRotateWithStick : MonoBehaviour
+{
+	// Token: 0x060026B9 RID: 9913 RVA: 0x001390D0 File Offset: 0x001372D0
+	private void Start()
+	{
+		this.controller = new MixedGameController();
+		this.startPos = base.transform.position;
+		GameInput.Disable();
+		base.GetComponent<Rigidbody>().useGravity = false;
+		base.GetComponent<Rigidbody>().isKinematic = false;
+	}
+
+	// Token: 0x060026BA RID: 9914 RVA: 0x00139118 File Offset: 0x00137318
+	private void FixedUpdate()
+	{
+		this.controller.Update(Time.deltaTime);
+		this.leftStick = this.controller.LeftStick;
+		if (this.leftStick.magnitude > 0.1f)
+		{
+			Vector3 vector;
+			vector..ctor(this.controller.LeftStick.y * this.rotationB, 0f, -this.controller.LeftStick.x * this.rotationA);
+			this.UpdateAngularVelocity(Quaternion.Euler(vector));
+		}
+		else
+		{
+			this.UpdateAngularVelocity(Quaternion.identity);
+		}
+		if (this.controller.A.Down)
+		{
+			base.GetComponent<Rigidbody>().AddRelativeForce(Vector3.up * 10f * base.GetComponent<Rigidbody>().mass, 1);
+		}
+		else
+		{
+			Vector3 position = base.transform.position;
+			base.GetComponent<Rigidbody>().velocity = (this.startPos - position) * Time.deltaTime * 100f;
+		}
+	}
+
+	// Token: 0x060026BB RID: 9915 RVA: 0x00139234 File Offset: 0x00137434
+	private void UpdateAngularVelocity(Quaternion desiredOrientation)
+	{
+		Vector3 vector = Vector3.Cross(base.transform.forward.normalized, desiredOrientation * Vector3.forward);
+		Vector3 vector2 = Vector3.Cross(base.transform.up.normalized, desiredOrientation * Vector3.up);
+		float num = Mathf.Asin(vector.magnitude);
+		float num2 = Mathf.Asin(vector2.magnitude);
+		float fixedDeltaTime = Time.fixedDeltaTime;
+		Vector3 vector3 = vector.normalized * (num / fixedDeltaTime);
+		Vector3 vector4 = vector2.normalized * (num2 / fixedDeltaTime);
+		Quaternion quaternion = base.transform.rotation * base.GetComponent<Rigidbody>().inertiaTensorRotation;
+		Vector3 vector5 = quaternion * Vector3.Scale(base.GetComponent<Rigidbody>().inertiaTensor / base.GetComponent<Rigidbody>().mass, Quaternion.Inverse(quaternion) * (vector3 + vector4));
+		base.GetComponent<Rigidbody>().angularVelocity = vector5 * 0.0005f;
+		base.GetComponent<Rigidbody>().maxAngularVelocity = vector5.magnitude * 0.0005f;
+	}
+
+	// Token: 0x040045FE RID: 17918
+	private MixedGameController controller;
+
+	// Token: 0x040045FF RID: 17919
+	public Vector2 leftStick;
+
+	// Token: 0x04004600 RID: 17920
+	private Vector3 startPos;
+
+	// Token: 0x04004601 RID: 17921
+	public float rotationA = 45f;
+
+	// Token: 0x04004602 RID: 17922
+	public float rotationB = 45f;
+}

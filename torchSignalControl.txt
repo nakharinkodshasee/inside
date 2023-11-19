@@ -1,0 +1,78 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200023B RID: 571
+public class torchSignalControl : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060011A4 RID: 4516 RVA: 0x000A6148 File Offset: 0x000A4348
+	public bool PreAwake(int callcount)
+	{
+		this.moveUp = SignalIn.Create("moveUp", base.gameObject, new Action(this.MoveUp));
+		this.moveDown = SignalIn.Create("moveDown", base.gameObject, new Action(this.MoveDown));
+		this.moveCenter = SignalIn.Create("moveCenter", base.gameObject, new Action(this.MoveCenter));
+		return true;
+	}
+
+	// Token: 0x060011A5 RID: 4517 RVA: 0x000A61BC File Offset: 0x000A43BC
+	private void Update()
+	{
+		float num = 1f;
+		this.yPos = (float)this.input;
+		Vector3 localEulerAngles = this.torchController.localEulerAngles;
+		localEulerAngles.z = num * this.yPos * this.rotMax;
+		localEulerAngles.z += this.rotOffset * num;
+		this.torchController.localEulerAngles = localEulerAngles;
+		Vector3 localPosition = this.torchController.localPosition;
+		if (this.yPos < 0f)
+		{
+			this.yPos = 0f;
+		}
+		localPosition.y = this.yPos * this.upMovement;
+		this.torchController.localPosition = localPosition;
+	}
+
+	// Token: 0x060011A6 RID: 4518 RVA: 0x000A6268 File Offset: 0x000A4468
+	private void MoveUp()
+	{
+		this.input = 1;
+	}
+
+	// Token: 0x060011A7 RID: 4519 RVA: 0x000A6274 File Offset: 0x000A4474
+	private void MoveDown()
+	{
+		this.input = -1;
+	}
+
+	// Token: 0x060011A8 RID: 4520 RVA: 0x000A6280 File Offset: 0x000A4480
+	private void MoveCenter()
+	{
+		this.input = 0;
+	}
+
+	// Token: 0x04002055 RID: 8277
+	public Transform torchController;
+
+	// Token: 0x04002056 RID: 8278
+	private float yPos;
+
+	// Token: 0x04002057 RID: 8279
+	private float rotMax = 55f;
+
+	// Token: 0x04002058 RID: 8280
+	private float rotOffset = 20f;
+
+	// Token: 0x04002059 RID: 8281
+	private float upMovement = 0.6f;
+
+	// Token: 0x0400205A RID: 8282
+	private int input;
+
+	// Token: 0x0400205B RID: 8283
+	private SignalIn moveUp;
+
+	// Token: 0x0400205C RID: 8284
+	private SignalIn moveDown;
+
+	// Token: 0x0400205D RID: 8285
+	private SignalIn moveCenter;
+}

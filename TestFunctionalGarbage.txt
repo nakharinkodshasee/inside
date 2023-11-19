@@ -1,0 +1,27 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000621 RID: 1569
+public class TestFunctionalGarbage : MonoBehaviour
+{
+	// Token: 0x06002706 RID: 9990 RVA: 0x0013B24C File Offset: 0x0013944C
+	private void Update()
+	{
+		this.DoStuff(delegate
+		{
+			TestFunctionalGarbage.Method();
+		});
+		this.DoStuff(new Action(TestFunctionalGarbage.Method));
+	}
+
+	// Token: 0x06002707 RID: 9991 RVA: 0x0013B284 File Offset: 0x00139484
+	private static void Method()
+	{
+	}
+
+	// Token: 0x06002708 RID: 9992 RVA: 0x0013B288 File Offset: 0x00139488
+	private void DoStuff(Action a)
+	{
+		a();
+	}
+}

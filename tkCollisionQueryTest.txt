@@ -1,0 +1,25 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000659 RID: 1625
+public class tkCollisionQueryTest : MonoBehaviour
+{
+	// Token: 0x06002804 RID: 10244 RVA: 0x0014256C File Offset: 0x0014076C
+	private void Start()
+	{
+	}
+
+	// Token: 0x06002805 RID: 10245 RVA: 0x00142570 File Offset: 0x00140770
+	private void FixedUpdate()
+	{
+		Vector3 position = base.transform.position;
+		Vector3 b = position + base.transform.forward * this.rayLength;
+		DebugRendering.DrawArrow("raycast", position, b, null, (DebugRendering.Flags)0);
+		ColInfo3Buffer cs = CollisionUtils.RayIsect(position, b, CollisionUtils.Type.Solid, true);
+		Debug.Log(DebugUtils.ToStringLoop(cs.size, (int i) => string.Empty + cs.raw[i].distance));
+		ColInfo3Buffer.Release(ref cs);
+	}
+
+	// Token: 0x040047AB RID: 18347
+	public float rayLength = 20f;
+}

@@ -1,0 +1,246 @@
+using System;
+using UnitTest;
+
+// Token: 0x0200062C RID: 1580
+[Test]
+internal class TestMemoryValueAndClass
+{
+	// Token: 0x06002731 RID: 10033 RVA: 0x0013C338 File Offset: 0x0013A538
+	public TestMemoryValueAndClass()
+	{
+		this.mc = new MemoryClass<TestMemoryValueAndClass.DummyClass>(null);
+		this.dummy = new TestMemoryValueAndClass.DummyClass("dummy");
+		this.mv = MemoryValue<int>.CreateInt(0);
+		this.mf = MemoryValue<float>.CreateFloat(0f);
+		this.mb = MemoryValue<bool>.CreateBool(false);
+	}
+
+	// Token: 0x06002732 RID: 10034 RVA: 0x0013C398 File Offset: 0x0013A598
+	[Test("(Re)assign dummy")]
+	public bool ReassignMemoryClass()
+	{
+		this.mc.value = this.dummy;
+		return true;
+	}
+
+	// Token: 0x06002733 RID: 10035 RVA: 0x0013C3AC File Offset: 0x0013A5AC
+	[Test("(Re)assign = 7")]
+	public bool ReassignMemoryInt()
+	{
+		this.mv.value = 7;
+		return true;
+	}
+
+	// Token: 0x06002734 RID: 10036 RVA: 0x0013C3BC File Offset: 0x0013A5BC
+	[Test("(Re)assign = -0.7f")]
+	public bool ReassignMemoryFloat()
+	{
+		this.mf.value = -0.7f;
+		return true;
+	}
+
+	// Token: 0x06002735 RID: 10037 RVA: 0x0013C3D0 File Offset: 0x0013A5D0
+	[Test("(Re)assign = true")]
+	public bool ReassignMemoryBool()
+	{
+		this.mb.value = true;
+		return true;
+	}
+
+	// Token: 0x170000B4 RID: 180
+	// (get) Token: 0x06002736 RID: 10038 RVA: 0x0013C3E0 File Offset: 0x0013A5E0
+	[Test("Current class value")]
+	public string MemoryClassValue
+	{
+		get
+		{
+			return (this.mc.value != null) ? this.mc.value.name : "null";
+		}
+	}
+
+	// Token: 0x170000B5 RID: 181
+	// (get) Token: 0x06002737 RID: 10039 RVA: 0x0013C418 File Offset: 0x0013A618
+	[Test("Old class value")]
+	public string MemoryClassOldValue
+	{
+		get
+		{
+			return (this.mc.old != null) ? this.mc.old.name : "null";
+		}
+	}
+
+	// Token: 0x170000B6 RID: 182
+	// (get) Token: 0x06002738 RID: 10040 RVA: 0x0013C450 File Offset: 0x0013A650
+	[Test("Has changed?")]
+	public bool MemoryClassHasChanged
+	{
+		get
+		{
+			return this.mc.hasChanged;
+		}
+	}
+
+	// Token: 0x170000B7 RID: 183
+	// (get) Token: 0x06002739 RID: 10041 RVA: 0x0013C460 File Offset: 0x0013A660
+	[Test("Current int value")]
+	public int IntValue
+	{
+		get
+		{
+			return this.mv.value;
+		}
+	}
+
+	// Token: 0x170000B8 RID: 184
+	// (get) Token: 0x0600273A RID: 10042 RVA: 0x0013C470 File Offset: 0x0013A670
+	[Test("Old int value")]
+	public int IntOld
+	{
+		get
+		{
+			return this.mv.old;
+		}
+	}
+
+	// Token: 0x170000B9 RID: 185
+	// (get) Token: 0x0600273B RID: 10043 RVA: 0x0013C480 File Offset: 0x0013A680
+	[Test("Has int changed?")]
+	public bool IntHasChanged
+	{
+		get
+		{
+			return this.mv.hasChanged;
+		}
+	}
+
+	// Token: 0x170000BA RID: 186
+	// (get) Token: 0x0600273C RID: 10044 RVA: 0x0013C490 File Offset: 0x0013A690
+	[Test("int delta")]
+	public string IntDelta
+	{
+		get
+		{
+			return (!this.mv.hasDelta) ? "N/A" : this.mv.delta.ToString();
+		}
+	}
+
+	// Token: 0x170000BB RID: 187
+	// (get) Token: 0x0600273D RID: 10045 RVA: 0x0013C4CC File Offset: 0x0013A6CC
+	[Test("Current float value")]
+	public float FloatValue
+	{
+		get
+		{
+			return this.mf.value;
+		}
+	}
+
+	// Token: 0x170000BC RID: 188
+	// (get) Token: 0x0600273E RID: 10046 RVA: 0x0013C4DC File Offset: 0x0013A6DC
+	[Test("Old float value")]
+	public float FloatOld
+	{
+		get
+		{
+			return this.mf.old;
+		}
+	}
+
+	// Token: 0x170000BD RID: 189
+	// (get) Token: 0x0600273F RID: 10047 RVA: 0x0013C4EC File Offset: 0x0013A6EC
+	[Test("Has float changed?")]
+	public bool FloatHasChanged
+	{
+		get
+		{
+			return this.mf.hasChanged;
+		}
+	}
+
+	// Token: 0x170000BE RID: 190
+	// (get) Token: 0x06002740 RID: 10048 RVA: 0x0013C4FC File Offset: 0x0013A6FC
+	[Test("float delta")]
+	public string FloatDelta
+	{
+		get
+		{
+			return (!this.mf.hasDelta) ? "N/A" : this.mf.delta.ToString();
+		}
+	}
+
+	// Token: 0x170000BF RID: 191
+	// (get) Token: 0x06002741 RID: 10049 RVA: 0x0013C538 File Offset: 0x0013A738
+	[Test("Current bool value")]
+	public bool BoolValue
+	{
+		get
+		{
+			return this.mb.value;
+		}
+	}
+
+	// Token: 0x170000C0 RID: 192
+	// (get) Token: 0x06002742 RID: 10050 RVA: 0x0013C548 File Offset: 0x0013A748
+	[Test("Old bool value")]
+	public bool BoolOld
+	{
+		get
+		{
+			return this.mb.old;
+		}
+	}
+
+	// Token: 0x170000C1 RID: 193
+	// (get) Token: 0x06002743 RID: 10051 RVA: 0x0013C558 File Offset: 0x0013A758
+	[Test("Has bool changed?")]
+	public bool BoolHasChanged
+	{
+		get
+		{
+			return this.mb.hasChanged;
+		}
+	}
+
+	// Token: 0x170000C2 RID: 194
+	// (get) Token: 0x06002744 RID: 10052 RVA: 0x0013C568 File Offset: 0x0013A768
+	[Test("bool delta")]
+	public string BoolDelta
+	{
+		get
+		{
+			return (!this.mb.hasDelta) ? "N/A" : this.mb.delta.ToString();
+		}
+	}
+
+	// Token: 0x040046AB RID: 18091
+	private MemoryClass<TestMemoryValueAndClass.DummyClass> mc;
+
+	// Token: 0x040046AC RID: 18092
+	private MemoryValue<int> mv;
+
+	// Token: 0x040046AD RID: 18093
+	private MemoryValue<float> mf;
+
+	// Token: 0x040046AE RID: 18094
+	private MemoryValue<bool> mb;
+
+	// Token: 0x040046AF RID: 18095
+	private TestMemoryValueAndClass.DummyClass dummy;
+
+	// Token: 0x040046B0 RID: 18096
+	[Test("Just some dummy data")]
+	private int someValue = 8;
+
+	// Token: 0x0200062D RID: 1581
+	private class DummyClass
+	{
+		// Token: 0x06002745 RID: 10053 RVA: 0x0013C5A4 File Offset: 0x0013A7A4
+		public DummyClass(string name)
+		{
+			this.name = name;
+		}
+
+		// Token: 0x040046B1 RID: 18097
+		public string name;
+	}
+}

@@ -1,0 +1,55 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000603 RID: 1539
+public class TestFilteredStateSwitch : MonoBehaviour
+{
+	// Token: 0x06002695 RID: 9877 RVA: 0x00138740 File Offset: 0x00136940
+	private void Awake()
+	{
+		this.stateSwitch = new StateFilter(60, Enum.GetValues(typeof(TestFilteredStateSwitch.TestAction)) as int[]);
+	}
+
+	// Token: 0x06002696 RID: 9878 RVA: 0x00138764 File Offset: 0x00136964
+	private void FixedUpdate()
+	{
+		this.stateSwitch.RequestNewState((int)this.requestedState);
+		this.currentState = new TestFilteredStateSwitch.TestAction?((TestFilteredStateSwitch.TestAction)this.stateSwitch.currentFilteredState);
+	}
+
+	// Token: 0x06002697 RID: 9879 RVA: 0x00138790 File Offset: 0x00136990
+	private void OnGUI()
+	{
+		foreach (object obj in Enum.GetValues(typeof(TestFilteredStateSwitch.TestAction)))
+		{
+			if (GUILayout.Button(obj.ToString(), new GUILayoutOption[0]))
+			{
+				this.requestedState = (TestFilteredStateSwitch.TestAction)((int)obj);
+			}
+		}
+		GUILayout.Label("Current requested state = " + this.requestedState.ToString(), new GUILayoutOption[0]);
+		GUILayout.Label("Current filtered state = " + this.currentState.ToString(), new GUILayoutOption[0]);
+	}
+
+	// Token: 0x040045E1 RID: 17889
+	private TestFilteredStateSwitch.TestAction? currentState;
+
+	// Token: 0x040045E2 RID: 17890
+	private TestFilteredStateSwitch.TestAction requestedState;
+
+	// Token: 0x040045E3 RID: 17891
+	private StateFilter stateSwitch;
+
+	// Token: 0x02000604 RID: 1540
+	public enum TestAction
+	{
+		// Token: 0x040045E5 RID: 17893
+		Unknown,
+		// Token: 0x040045E6 RID: 17894
+		Dancing,
+		// Token: 0x040045E7 RID: 17895
+		Singing,
+		// Token: 0x040045E8 RID: 17896
+		Yodling
+	}
+}

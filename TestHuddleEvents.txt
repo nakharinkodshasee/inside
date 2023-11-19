@@ -1,0 +1,90 @@
+using System;
+using System.Collections.Generic;
+using UnitTest;
+
+// Token: 0x0200062B RID: 1579
+[Test("")]
+public class TestHuddleEvents
+{
+	// Token: 0x0600272C RID: 10028 RVA: 0x0013C0E8 File Offset: 0x0013A2E8
+	[Test("idle[1-2]")]
+	private bool TestEventIndexed()
+	{
+		bool flag = true;
+		this.inputString = "Idle[1-2]";
+		this.evt = HuddleVoiceEventList.CreateVoiceEventList(this.inputString);
+		if (this.evt.events.Count != 2)
+		{
+			flag = false;
+		}
+		else
+		{
+			flag &= (this.evt.events[0].type == "idle");
+			flag &= (this.evt.events[1].type == "idle");
+		}
+		return flag;
+	}
+
+	// Token: 0x0600272D RID: 10029 RVA: 0x0013C178 File Offset: 0x0013A378
+	[Test("Test multiple events")]
+	private bool TestEventIntensity()
+	{
+		bool flag = true;
+		this.inputString = "p,cu_mp,ff[1-2]_SUB";
+		this.evt = HuddleVoiceEventList.CreateVoiceEventList(this.inputString);
+		if (this.evt.events.Count != 4)
+		{
+			flag = false;
+		}
+		else
+		{
+			List<HuddleVoiceEvent> events = this.evt.events;
+			flag &= (string.IsNullOrEmpty(events[0].type) && events[0].intensity == Dynamic.p && string.IsNullOrEmpty(events[0].postfix));
+			flag &= (events[1].type == "cu" && events[1].intensity == Dynamic.mp && string.IsNullOrEmpty(events[1].postfix));
+			flag &= (string.IsNullOrEmpty(events[2].type) && events[2].intensity == Dynamic.ff && events[2].postfix == "SUB");
+		}
+		return flag;
+	}
+
+	// Token: 0x0600272E RID: 10030 RVA: 0x0013C294 File Offset: 0x0013A494
+	[Test("walk")]
+	private bool TestEventSimple()
+	{
+		bool result = true;
+		this.inputString = "WALK";
+		this.evt = HuddleVoiceEventList.CreateVoiceEventList(this.inputString);
+		if (this.evt.events.Count != 1)
+		{
+			result = false;
+		}
+		else if (this.evt.events[0].type != "walk")
+		{
+			result = false;
+		}
+		return result;
+	}
+
+	// Token: 0x0600272F RID: 10031 RVA: 0x0013C304 File Offset: 0x0013A504
+	private bool TestEventFull()
+	{
+		return true;
+	}
+
+	// Token: 0x170000B3 RID: 179
+	// (get) Token: 0x06002730 RID: 10032 RVA: 0x0013C308 File Offset: 0x0013A508
+	[Test("")]
+	private string parsedEvent
+	{
+		get
+		{
+			return (this.evt != null) ? this.evt.ToString() : "null";
+		}
+	}
+
+	// Token: 0x040046A9 RID: 18089
+	private HuddleVoiceEventList evt;
+
+	// Token: 0x040046AA RID: 18090
+	[Test("")]
+	private string inputString;
+}

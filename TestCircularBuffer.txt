@@ -1,0 +1,144 @@
+using System;
+using UnitTest;
+
+// Token: 0x02000628 RID: 1576
+[Test]
+internal class TestCircularBuffer
+{
+	// Token: 0x06002720 RID: 10016 RVA: 0x0013BB14 File Offset: 0x00139D14
+	public TestCircularBuffer()
+	{
+		this.intBuf = new CircularBuffer<int>(1);
+	}
+
+	// Token: 0x06002721 RID: 10017 RVA: 0x0013BB28 File Offset: 0x00139D28
+	[Test("Resize smaller")]
+	private bool ResizeSmaller()
+	{
+		bool flag = false;
+		this.intBuf = new CircularBuffer<int>(1000);
+		int i = 0;
+		int num = 500;
+		while (i < num)
+		{
+			this.intBuf.Add(7);
+			i++;
+		}
+		int j = 0;
+		int num2 = 1000;
+		while (j < num2)
+		{
+			this.intBuf.AddAndOverwrite(j);
+			j++;
+		}
+		this.before = this.intBuf.ToDebugString();
+		this.intBuf.Resize(10);
+		if (this.intBuf.capacity != 10)
+		{
+			flag = true;
+		}
+		if (this.intBuf.count != 10)
+		{
+			flag = true;
+		}
+		int k = 0;
+		int num3 = 10;
+		while (k < num3)
+		{
+			if (this.intBuf[k] != k)
+			{
+				flag = true;
+			}
+			k++;
+		}
+		this.after = this.intBuf.ToDebugString();
+		this.afterClear = "N/A";
+		return !flag;
+	}
+
+	// Token: 0x06002722 RID: 10018 RVA: 0x0013BC30 File Offset: 0x00139E30
+	[Test("Resize larger")]
+	private bool ResizeLarger()
+	{
+		bool flag = false;
+		this.intBuf = new CircularBuffer<int>(5);
+		int i = 0;
+		int num = 2;
+		while (i < num)
+		{
+			this.intBuf.Add(7);
+			i++;
+		}
+		int j = 0;
+		int num2 = 5;
+		while (j < num2)
+		{
+			this.intBuf.AddAndOverwrite(j);
+			j++;
+		}
+		this.before = this.intBuf.ToDebugString();
+		this.intBuf.Resize(10);
+		if (this.intBuf.capacity != 10)
+		{
+			flag = true;
+		}
+		if (this.intBuf.count != 5)
+		{
+			flag = true;
+		}
+		int k = 0;
+		int num3 = 5;
+		while (k < num3)
+		{
+			if (this.intBuf[k] != k)
+			{
+				flag = true;
+			}
+			k++;
+		}
+		this.after = this.intBuf.ToDebugString();
+		this.afterClear = "N/A";
+		return !flag;
+	}
+
+	// Token: 0x06002723 RID: 10019 RVA: 0x0013BD2C File Offset: 0x00139F2C
+	[Test("Remove")]
+	private bool Remove()
+	{
+		bool flag = false;
+		this.intBuf = new CircularBuffer<int>(10);
+		int i = 0;
+		int num = 10;
+		while (i < num)
+		{
+			this.intBuf.Add(i * i);
+			i++;
+		}
+		this.before = this.intBuf.ToDebugString();
+		this.intBuf.Remove();
+		this.intBuf.Remove();
+		this.intBuf.Remove();
+		this.intBuf.Remove();
+		this.intBuf.Remove();
+		this.after = this.intBuf.ToDebugString();
+		this.intBuf.Clear();
+		this.afterClear = this.intBuf.ToDebugString();
+		return !flag;
+	}
+
+	// Token: 0x0400469F RID: 18079
+	[Test]
+	private CircularBuffer<int> intBuf;
+
+	// Token: 0x040046A0 RID: 18080
+	[Test]
+	private string before;
+
+	// Token: 0x040046A1 RID: 18081
+	[Test]
+	private string after;
+
+	// Token: 0x040046A2 RID: 18082
+	[Test]
+	private string afterClear;
+}

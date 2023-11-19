@@ -1,0 +1,145 @@
+using System;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+// Token: 0x02000366 RID: 870
+[ExecuteInEditMode]
+[DisallowMultipleComponent]
+public class TransparentShadow : MonoBehaviour
+{
+	// Token: 0x060017EB RID: 6123 RVA: 0x000D0E0C File Offset: 0x000CF00C
+	private void OnEnable()
+	{
+		this.lit = base.GetComponent<Light>();
+		this.cam = base.GetComponent<Camera>();
+		this.cam.enabled = true;
+		this.tex = new RenderTexture((int)this.quality, (int)this.quality, 0);
+		this.tex.Create();
+		if (this.lit.cookie && this.lit.cookie.GetType() == typeof(Texture2D))
+		{
+			this.cookie = (Texture2D)this.lit.cookie;
+		}
+		this.cam.clearFlags = 4;
+		this.cam.cullingMask = 0;
+		this.cam.renderingPath = 1;
+		this.cam.depth = -2f;
+		this.cam.rect = new Rect(0f, 0f, 1f, 1f);
+		this.cam.useOcclusionCulling = false;
+		this.cam.hdr = false;
+		this.lit.cookie = this.tex;
+		this.SetCamera();
+		this.SetCommandBuffer();
+	}
+
+	// Token: 0x060017EC RID: 6124 RVA: 0x000D0F38 File Offset: 0x000CF138
+	private void OnDisable()
+	{
+		this.cam.enabled = false;
+		this.cam.hideFlags = 0;
+		this.cam.targetTexture = null;
+		this.lit.cookie = this.cookie;
+		this.tex.Release();
+		PDUtilities.Destroy(this.tex);
+		this.cam.RemoveAllCommandBuffers();
+	}
+
+	// Token: 0x060017ED RID: 6125 RVA: 0x000D0F9C File Offset: 0x000CF19C
+	private void Update()
+	{
+		if (this.dynamic)
+		{
+			this.SetCamera();
+		}
+		if (TransparentShadow.casterList.Count != this.oldCount)
+		{
+			this.SetCommandBuffer();
+		}
+	}
+
+	// Token: 0x060017EE RID: 6126 RVA: 0x000D0FD8 File Offset: 0x000CF1D8
+	private void OnValidate()
+	{
+		if (this.tex)
+		{
+			this.tex.Release();
+			this.tex = new RenderTexture((int)this.quality, (int)this.quality, 0);
+			this.tex.Create();
+			this.lit.cookie = this.tex;
+		}
+		if (this.cam)
+		{
+			this.SetCommandBuffer();
+		}
+	}
+
+	// Token: 0x060017EF RID: 6127 RVA: 0x000D104C File Offset: 0x000CF24C
+	private void SetCamera()
+	{
+		if (this.lit.type == 4)
+		{
+			this.cam.orthographic = true;
+			this.cam.orthographicSize = -this.lit.dirLocalScale.y * 0.5f;
+			this.cam.nearClipPlane = 0f;
+			this.cam.farClipPlane = this.lit.dirLocalScale.z;
+			this.cam.aspect = this.lit.dirLocalScale.x / this.lit.dirLocalScale.y;
+		}
+		else
+		{
+			this.cam.orthographic = false;
+			this.cam.fieldOfView = this.lit.spotAngle;
+			this.cam.nearClipPlane = 0.1f;
+			this.cam.farClipPlane = this.lit.range;
+			this.cam.aspect = 1f;
+		}
+	}
+
+	// Token: 0x060017F0 RID: 6128 RVA: 0x000D1158 File Offset: 0x000CF358
+	private void SetCommandBuffer()
+	{
+		this.cam.RemoveAllCommandBuffers();
+		CommandBuffer commandBuffer = new CommandBuffer();
+		commandBuffer.name = "Transparent Shadow " + base.gameObject.GetInstanceID();
+		commandBuffer.Blit((!this.cookie) ? Texture2D.whiteTexture : this.cookie, this.tex);
+		for (int i = 0; i < TransparentShadow.casterList.Count; i++)
+		{
+			commandBuffer.DrawRenderer(TransparentShadow.casterList[i], TransparentShadow.casterList[i].sharedMaterial, 0, 1);
+		}
+		this.oldCount = TransparentShadow.casterList.Count;
+		this.cam.AddCommandBuffer(16, commandBuffer);
+	}
+
+	// Token: 0x04002AE9 RID: 10985
+	public TransparentShadow.Quality quality = TransparentShadow.Quality.High;
+
+	// Token: 0x04002AEA RID: 10986
+	public Texture2D cookie;
+
+	// Token: 0x04002AEB RID: 10987
+	public bool dynamic;
+
+	// Token: 0x04002AEC RID: 10988
+	public static FastList<Renderer> casterList = new FastList<Renderer>(8, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04002AED RID: 10989
+	private Camera cam;
+
+	// Token: 0x04002AEE RID: 10990
+	private Light lit;
+
+	// Token: 0x04002AEF RID: 10991
+	private RenderTexture tex;
+
+	// Token: 0x04002AF0 RID: 10992
+	private int oldCount;
+
+	// Token: 0x02000367 RID: 871
+	public enum Quality
+	{
+		// Token: 0x04002AF2 RID: 10994
+		Low = 128,
+		// Token: 0x04002AF3 RID: 10995
+		Medium = 256,
+		// Token: 0x04002AF4 RID: 10996
+		High = 512
+	}
+}

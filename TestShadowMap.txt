@@ -1,0 +1,160 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000642 RID: 1602
+[ExecuteInEditMode]
+public class TestShadowMap : MonoBehaviour
+{
+	// Token: 0x0600279E RID: 10142 RVA: 0x0013E400 File Offset: 0x0013C600
+	private void OnEnable()
+	{
+		this.cam = base.GetComponent<Camera>();
+		this.cam.depth = -2f;
+		this.cam.orthographic = true;
+		this.cam.nearClipPlane = 0f;
+		this.cam.hideFlags = 2;
+		this.mi = base.transform.parent.GetComponent<MaterialInstance>();
+		this.propTex = this.mi.GetOrAddTextureProperty("_ShadowMap");
+		this.propPen = this.mi.GetOrAddTextureProperty("_PenumbraMap");
+		this.propSize = this.mi.GetOrAddVectorProperty("_ShadowSize");
+		this.propSoft = this.mi.GetOrAddFloatProperty("_Softness");
+		this.texShadow = new RenderTexture((int)this.shadowResolution, (int)this.shadowResolution, 16, 1);
+		this.texShadow.filterMode = 0;
+		this.texShadowMips = new RenderTexture((int)this.shadowResolution, (int)this.shadowResolution, 0, 15);
+		this.texShadowMips.filterMode = 0;
+		this.texShadowMips.generateMips = false;
+		this.texShadowMips.useMipMap = true;
+		this.texPenumbra = new RenderTexture((int)this.blurResolution, (int)this.blurResolution, 0, 16);
+	}
+
+	// Token: 0x0600279F RID: 10143 RVA: 0x0013E540 File Offset: 0x0013C740
+	private void OnDisable()
+	{
+		this.texShadow.Release();
+		this.texShadowMips.Release();
+		this.texPenumbra.Release();
+	}
+
+	// Token: 0x060027A0 RID: 10144 RVA: 0x0013E564 File Offset: 0x0013C764
+	private void OnPreCull()
+	{
+		base.transform.localPosition = new Vector3(0f, 0f, -0.5f);
+		base.transform.localRotation = Quaternion.identity;
+		base.transform.localScale = Vector3.one;
+		this.scale = base.transform.parent.localScale;
+		this.cam.orthographicSize = this.scale.y * 0.5f;
+		this.cam.farClipPlane = this.scale.z;
+		this.cam.targetTexture = this.texShadow;
+		this.cam.ResetProjectionMatrix();
+		Matrix4x4 projectionMatrix = this.cam.projectionMatrix;
+		projectionMatrix[0] = projectionMatrix[5] * (this.scale.y / this.scale.x);
+		this.cam.projectionMatrix = projectionMatrix;
+	}
+
+	// Token: 0x060027A1 RID: 10145 RVA: 0x0013E654 File Offset: 0x0013C854
+	private void OnPostRender()
+	{
+		Graphics.Blit(this.texShadow, this.texShadowMips);
+		int num = (int)this.Log2((float)this.texShadow.width) - 1;
+		for (int i = 1; i < num; i++)
+		{
+			Graphics.SetRenderTarget(this.texShadowMips, i);
+			float num2 = this.Exp2((float)i) / (float)this.texShadow.width * 0.25f;
+			this.mipMaterial.SetVector("_Ofs", new Vector3(num2, -num2, (float)(i - 1)));
+			Graphics.Blit(this.texShadowMips, this.mipMaterial);
+		}
+		float num3 = Mathf.Max(this.scale.x, this.scale.y);
+		float num4 = this.mi.GetFloatValue(this.propSoft) * 0.2f;
+		Vector2 vector;
+		vector..ctor(num4 / this.scale.x, num4 / this.scale.y);
+		float num5 = 5f / (float)this.texPenumbra.width;
+		this.softShadowMaterial.SetVector("_Ofs", new Vector3(vector.x, vector.y, this.scale.z * 0.25f));
+		this.blurMaterial.SetVector("_Ofs", new Vector3(num5, -num5, 0f));
+		RenderTexture temporary = RenderTexture.GetTemporary((int)this.penumbraResolution, (int)this.penumbraResolution, 0, 16);
+		RenderTexture temporary2 = RenderTexture.GetTemporary((int)this.blurResolution, (int)this.blurResolution, 0, 16);
+		Graphics.Blit(this.texShadowMips, temporary, this.softShadowMaterial);
+		Graphics.Blit(temporary, temporary2, this.blurMaterial, 0);
+		Graphics.Blit(temporary2, this.texPenumbra, this.blurMaterial, 1);
+		RenderTexture.ReleaseTemporary(temporary);
+		RenderTexture.ReleaseTemporary(temporary2);
+		this.mi.SetTextureProperty(this.propTex, this.texShadowMips);
+		this.mi.SetTextureProperty(this.propPen, this.texPenumbra);
+		this.mi.SetVectorProperty(this.propSize, new Vector4((float)this.texShadow.width, this.texShadow.texelSize.x, (float)num / this.Log2(num3), num3 / this.scale.z));
+	}
+
+	// Token: 0x060027A2 RID: 10146 RVA: 0x0013E8AC File Offset: 0x0013CAAC
+	private float Log2(float x)
+	{
+		return Mathf.Log(x) / Mathf.Log(2f);
+	}
+
+	// Token: 0x060027A3 RID: 10147 RVA: 0x0013E8C0 File Offset: 0x0013CAC0
+	private float Exp2(float x)
+	{
+		return Mathf.Pow(2f, x);
+	}
+
+	// Token: 0x04004711 RID: 18193
+	public float mipBlur;
+
+	// Token: 0x04004712 RID: 18194
+	public TestShadowMap.TextureResolution shadowResolution = TestShadowMap.TextureResolution.VeryHigh;
+
+	// Token: 0x04004713 RID: 18195
+	public TestShadowMap.TextureResolution blurResolution = TestShadowMap.TextureResolution.Medium;
+
+	// Token: 0x04004714 RID: 18196
+	public TestShadowMap.TextureResolution penumbraResolution = TestShadowMap.TextureResolution.Low;
+
+	// Token: 0x04004715 RID: 18197
+	public Material mipMaterial;
+
+	// Token: 0x04004716 RID: 18198
+	public Material softShadowMaterial;
+
+	// Token: 0x04004717 RID: 18199
+	public Material blurMaterial;
+
+	// Token: 0x04004718 RID: 18200
+	private RenderTexture texShadow;
+
+	// Token: 0x04004719 RID: 18201
+	private RenderTexture texShadowMips;
+
+	// Token: 0x0400471A RID: 18202
+	private RenderTexture texPenumbra;
+
+	// Token: 0x0400471B RID: 18203
+	private Camera cam;
+
+	// Token: 0x0400471C RID: 18204
+	private Vector3 scale;
+
+	// Token: 0x0400471D RID: 18205
+	private MaterialInstance mi;
+
+	// Token: 0x0400471E RID: 18206
+	private MaterialInstance.TextureProperty propTex;
+
+	// Token: 0x0400471F RID: 18207
+	private MaterialInstance.TextureProperty propPen;
+
+	// Token: 0x04004720 RID: 18208
+	private MaterialInstance.VectorProperty propSize;
+
+	// Token: 0x04004721 RID: 18209
+	private MaterialInstance.FloatProperty propSoft;
+
+	// Token: 0x02000643 RID: 1603
+	public enum TextureResolution
+	{
+		// Token: 0x04004723 RID: 18211
+		Low = 128,
+		// Token: 0x04004724 RID: 18212
+		Medium = 256,
+		// Token: 0x04004725 RID: 18213
+		High = 512,
+		// Token: 0x04004726 RID: 18214
+		VeryHigh = 1024
+	}
+}

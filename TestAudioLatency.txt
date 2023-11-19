@@ -1,0 +1,36 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000632 RID: 1586
+public class TestAudioLatency : MonoBehaviour
+{
+	// Token: 0x040046CC RID: 18124
+	public float timeUntilPlayAgain;
+
+	// Token: 0x040046CD RID: 18125
+	public bool InstantUpdate;
+
+	// Token: 0x040046CE RID: 18126
+	public AudioClip builtInTestClip;
+
+	// Token: 0x040046CF RID: 18127
+	public bool UseFMOD;
+
+	// Token: 0x040046D0 RID: 18128
+	public bool UseCollision = true;
+
+	// Token: 0x040046D1 RID: 18129
+	private bool isController = true;
+
+	// Token: 0x040046D2 RID: 18130
+	private GameObject cube1;
+
+	// Token: 0x040046D3 RID: 18131
+	private GameObject cube2;
+
+	// Token: 0x040046D4 RID: 18132
+	private TestAudioLatency cube1Test;
+
+	// Token: 0x040046D5 RID: 18133
+	private AudioSource source;
+}

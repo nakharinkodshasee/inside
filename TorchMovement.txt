@@ -1,0 +1,644 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000233 RID: 563
+public class TorchMovement : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001165 RID: 4453 RVA: 0x000A4364 File Offset: 0x000A2564
+	public bool PreAwake(int callcount)
+	{
+		this.turnFlameOn = SignalIn.Create("turnFlameOn", base.gameObject, new Action(this.TurnOn));
+		this.turnFlameOff = SignalIn.Create("turnFlameOff", base.gameObject, new Action(this.TurnOff));
+		this.releaseTorch = SignalIn.Create("releaseTorch", base.gameObject, new Action(this.SetReleaseState));
+		this.pickUpTorch = SignalIn.Create("pickUpTorch", base.gameObject, new Action(this.PickUpTorch));
+		this.dropTorch = SignalIn.Create("dropTorch", base.gameObject, delegate
+		{
+			this.DropTorch(0.2f);
+		});
+		this.torchTurnedOn = SignalOut.Create("torchTurnedOn", base.gameObject);
+		this.torchTurnedOff = SignalOut.Create("torchTurnedOff", base.gameObject);
+		this.torchDropped = SignalOut.Create("torchDropped", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001166 RID: 4454 RVA: 0x000A4460 File Offset: 0x000A2660
+	private void Awake()
+	{
+		LevelGlobals.torch = this;
+	}
+
+	// Token: 0x06001167 RID: 4455 RVA: 0x000A4468 File Offset: 0x000A2668
+	private void Start()
+	{
+		if (!this.boy)
+		{
+			this.boy = ScriptGlobals.boy;
+		}
+		if (!this.flameOn)
+		{
+			this.FireFxOff();
+		}
+		this.boyInput = base.gameObject.GetComponent<BoySetInput>();
+		Actor.Bone bone = this.boy.visualBoy.actor.bones[this.boy.visualBoy.actor.GetBone("RightWrist")];
+		this.boyHand = bone.transform.GetChild(0);
+		Transform childComponentAE = this.boy.visualBoy.transform.GetChildComponentAE("Themes");
+		this.torchTheme = childComponentAE.GetChildComponentAE("Torch");
+		this.torchThemeDef = childComponentAE.GetChildComponentAE("TorchDef");
+		this.animAdditive.fps = 0f;
+		this.torchRigidbody = this.torch.GetComponent<Rigidbody>();
+		if (this.pickedUp)
+		{
+			this.SetCarryState();
+		}
+		else
+		{
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x06001168 RID: 4456 RVA: 0x000A4578 File Offset: 0x000A2778
+	private void SetIdleState()
+	{
+		this.state = TorchMovement.State.Idle;
+	}
+
+	// Token: 0x06001169 RID: 4457 RVA: 0x000A4584 File Offset: 0x000A2784
+	private void IdleState()
+	{
+	}
+
+	// Token: 0x0600116A RID: 4458 RVA: 0x000A4588 File Offset: 0x000A2788
+	private void SetReleaseState()
+	{
+		this.state = TorchMovement.State.Release;
+	}
+
+	// Token: 0x0600116B RID: 4459 RVA: 0x000A4594 File Offset: 0x000A2794
+	private void ReleaseState()
+	{
+	}
+
+	// Token: 0x0600116C RID: 4460 RVA: 0x000A4598 File Offset: 0x000A2798
+	private void SetCarryState()
+	{
+		this.boyHasTorchInHand = true;
+		BoyUtils.ClearState(this.boy, -1f);
+		this.boyInput.activateScript();
+		this.currentAdditiveBlend = this.currentBlend;
+		this.boy.visualBoy.additiveAnim = this.animAdditive;
+		this.SetTheme(this.torchTheme);
+		this.state = TorchMovement.State.Carry;
+	}
+
+	// Token: 0x0600116D RID: 4461 RVA: 0x000A45FC File Offset: 0x000A27FC
+	private void CarryState()
+	{
+		if (this.boy.isDead)
+		{
+			this.SetDropInitState(this.dropDelay);
+			return;
+		}
+		this.RotateTorch(18f);
+		this.torch.position = this.boyHand.position;
+		float num = this.boy.input.stick.y / 0.7f;
+		BoyCustomAnimState boyCustomAnimState = this.boy.state as BoyCustomAnimState;
+		if (boyCustomAnimState != null)
+		{
+			num = 0f;
+		}
+		this.currentAdditiveBlend += (num - this.currentAdditiveBlend) * Time.deltaTime * 5f;
+		float num2 = Mathf.Clamp01((this.currentAdditiveBlend + 1f) * 0.5f);
+		float num3 = this.additiveDownOffset + num2 * this.additiveLength;
+		num3 = Mathf.Clamp(num3, 1f, this.animAdditive.numFrames);
+		this.animAdditive.frame = num3;
+		if (!this.boy.status.groundCollider)
+		{
+			return;
+		}
+		Vector3 vector = this.boy.velocity3;
+		if (this.boy.status.groundBody)
+		{
+			vector -= this.boy.status.groundBody.velocity;
+		}
+		if (vector.magnitude > 0.2f)
+		{
+			return;
+		}
+		if (Mathf.Abs(vector.x) > 0.2f)
+		{
+			return;
+		}
+		if (Mathf.Abs(this.input.x) < 0.5f && ScriptGlobals.boy.state is BoyRunState)
+		{
+			this.SetControllingState();
+		}
+	}
+
+	// Token: 0x0600116E RID: 4462 RVA: 0x000A47B0 File Offset: 0x000A29B0
+	private void SetControllingState()
+	{
+		if (this.boy.visualBoy.additiveAnim == this.animAdditive)
+		{
+			this.boy.visualBoy.additiveAnim = null;
+		}
+		BoyUtils.StartCustomAnim(this.boy, this.animBlend, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.currentBlend = 0f;
+		this.animBlend.currentBlendValue = 0f;
+		this.state = TorchMovement.State.Controlling;
+	}
+
+	// Token: 0x0600116F RID: 4463 RVA: 0x000A482C File Offset: 0x000A2A2C
+	private void ControllingState()
+	{
+		if (this.boy.isDead)
+		{
+			this.SetDropInitState(this.dropDelay);
+			return;
+		}
+		BoyCustomAnimState boyCustomAnimState = this.boy.state as BoyCustomAnimState;
+		if (boyCustomAnimState == null)
+		{
+			this.SetControllingState();
+		}
+		if (Mathf.Abs(this.input.x) >= 0.5f || this.boy.input.jump)
+		{
+			if (boyCustomAnimState == null || boyCustomAnimState.anim == this.animBlend)
+			{
+				this.SetCarryState();
+			}
+			else
+			{
+				this.torch.position = this.boyHand.position;
+			}
+		}
+		else
+		{
+			this.torch.position = this.boyHand.position;
+			float y = this.input.y;
+			float num;
+			float speed;
+			if (this.currentBlend < 0f)
+			{
+				if (y > this.currentBlend && y < 0.4f)
+				{
+					num = this.moveSpeedDownNeutral;
+					speed = this.rotSpeedDownnNeutral;
+				}
+				else
+				{
+					num = this.moveSpeedDown;
+					speed = this.rotSpeedDownn;
+				}
+			}
+			else
+			{
+				num = this.moveSpeedUp;
+				if (y < this.currentBlend && y < 0.4f)
+				{
+					speed = this.rotSpeedDownn;
+				}
+				else
+				{
+					speed = this.rotSpeedUp;
+				}
+			}
+			this.RotateTorch(speed);
+			this.currentBlend += (y - this.currentBlend) * Time.deltaTime * num;
+			this.animBlend.currentBlendValue = this.currentBlend;
+		}
+	}
+
+	// Token: 0x06001170 RID: 4464 RVA: 0x000A49BC File Offset: 0x000A2BBC
+	private void SetDropInitState(float d)
+	{
+		if (this.state == TorchMovement.State.Carry || this.state == TorchMovement.State.Controlling)
+		{
+			this.dropTimer = d;
+			this.state = TorchMovement.State.DropInit;
+		}
+	}
+
+	// Token: 0x06001171 RID: 4465 RVA: 0x000A49F0 File Offset: 0x000A2BF0
+	private void DropInitState()
+	{
+		this.RotateTorch(this.rotSpeedDownn);
+		this.torch.position = this.boyHand.position;
+		if (this.dropTimer > 0f)
+		{
+			this.dropTimer -= Time.deltaTime;
+			if (this.dropTimer <= 0f)
+			{
+				this.SetDropState();
+			}
+		}
+	}
+
+	// Token: 0x06001172 RID: 4466 RVA: 0x000A4A58 File Offset: 0x000A2C58
+	private void SetDropState()
+	{
+		if (this.boy.visualBoy.additiveAnim == this.animAdditive)
+		{
+			this.boy.visualBoy.additiveAnim = null;
+		}
+		BoyCustomAnimState boyCustomAnimState = this.boy.state as BoyCustomAnimState;
+		if (boyCustomAnimState != null && boyCustomAnimState.anim == this.animBlend)
+		{
+			BoyUtils.ClearState(this.boy, -1f);
+		}
+		this.torchRigidbody.isKinematic = false;
+		this.boy.visualBoy.theme = null;
+		this.currentTheme = null;
+		this.colliderPole.enabled = true;
+		this.colliderTip.enabled = true;
+		Vector3 vector;
+		vector..ctor(0.1f * this.boy.facing, 0.05f, this.boy.facing * -0.05f);
+		vector += this.boy.velocity3 / 22f;
+		this.torchRigidbody.AddForce(vector, 1);
+		this.torchRigidbody.AddRelativeTorque(Vector3.right * 0.03f * this.boy.facing, 1);
+		this.boyInput.deactivateScript();
+		this.torchDropped.Signal();
+		this.state = TorchMovement.State.Drop;
+	}
+
+	// Token: 0x06001173 RID: 4467 RVA: 0x000A4BB0 File Offset: 0x000A2DB0
+	private void DropState()
+	{
+	}
+
+	// Token: 0x06001174 RID: 4468 RVA: 0x000A4BB4 File Offset: 0x000A2DB4
+	private void LateUpdate()
+	{
+		if (this.boy != null && this.boy.input != null)
+		{
+			this.input = this.boy.input.stick;
+			if (this.state != TorchMovement.State.None)
+			{
+				switch (this.state)
+				{
+				case TorchMovement.State.Idle:
+					this.IdleState();
+					break;
+				case TorchMovement.State.Release:
+					this.ReleaseState();
+					break;
+				case TorchMovement.State.Carry:
+					this.CarryState();
+					break;
+				case TorchMovement.State.Drop:
+					this.DropState();
+					break;
+				case TorchMovement.State.Controlling:
+					this.ControllingState();
+					break;
+				case TorchMovement.State.DropInit:
+					this.DropInitState();
+					break;
+				}
+			}
+			if (this.currentMoveSpeed != this.moveSpeedTarget)
+			{
+				this.AdjustMoveSpeed();
+			}
+			this.triggerTorch.MovePosition(this.triggerPos.position);
+			if (this.state != TorchMovement.State.Idle)
+			{
+				this.MoveLightFx();
+			}
+		}
+	}
+
+	// Token: 0x06001175 RID: 4469 RVA: 0x000A4CB8 File Offset: 0x000A2EB8
+	private void MoveLightFx()
+	{
+		Vector3 position = this.lightFxTarget.position;
+		this.lightFxRay.origin = position + Vector3Fast.up;
+		this.lightFxRay.direction = Vector3Fast.down * 1.5f;
+		RaycastHit raycastHit;
+		if (this.groundCollider.Raycast(this.lightFxRay, ref raycastHit, 3f))
+		{
+			float num = raycastHit.point.y + 0.35f;
+			if (position.y < num)
+			{
+				position.y = num;
+			}
+		}
+		this.lightFx.position = position;
+	}
+
+	// Token: 0x06001176 RID: 4470 RVA: 0x000A4D58 File Offset: 0x000A2F58
+	public void HulvNearBy(int i)
+	{
+		this.hulvNearCount += i;
+		if (this.hulvNearCount == 0)
+		{
+			if (this.boyHasTorchInHand)
+			{
+				if (this.state == TorchMovement.State.Carry && this.boy.visualBoy.additiveAnim != this.animAdditive)
+				{
+					this.currentBlend = 0f;
+					this.currentAdditiveBlend = 0f;
+					this.boy.visualBoy.additiveAnim = this.animAdditive;
+				}
+				this.SetTheme(this.torchTheme);
+			}
+			this.moveSpeedTarget = 1f;
+		}
+		else
+		{
+			if (this.boyHasTorchInHand)
+			{
+				if (this.boy.visualBoy.additiveAnim == this.animAdditive)
+				{
+					this.boy.visualBoy.additiveAnim = null;
+				}
+				this.SetTheme(this.torchThemeDef);
+			}
+			this.moveSpeedTarget = this.defendingMoveSpeed;
+		}
+	}
+
+	// Token: 0x06001177 RID: 4471 RVA: 0x000A4E54 File Offset: 0x000A3054
+	private void AdjustMoveSpeed()
+	{
+		if (this.currentMoveSpeed < this.moveSpeedTarget)
+		{
+			this.currentMoveSpeed += Time.deltaTime * 2f;
+		}
+		else if (this.currentMoveSpeed > this.moveSpeedTarget)
+		{
+			this.currentMoveSpeed -= Time.deltaTime * 2f;
+		}
+		this.currentMoveSpeed = Mathf.Clamp(this.currentMoveSpeed, this.defendingMoveSpeed, 1f);
+		this.boyInput.posCapX = this.currentMoveSpeed;
+		this.boyInput.negCapX = -this.currentMoveSpeed;
+	}
+
+	// Token: 0x06001178 RID: 4472 RVA: 0x000A4EF8 File Offset: 0x000A30F8
+	private void SetTheme(Transform theme)
+	{
+		if (theme != this.currentTheme)
+		{
+			this.boy.visualBoy.theme = theme;
+			this.currentTheme = theme;
+		}
+	}
+
+	// Token: 0x06001179 RID: 4473 RVA: 0x000A4F24 File Offset: 0x000A3124
+	private void RotateTorch(float speed)
+	{
+		Quaternion rotation = this.torch.rotation;
+		Quaternion rotation2 = this.boyHand.rotation;
+		Quaternion rotation3 = Quaternion.Slerp(rotation, rotation2, Time.deltaTime * speed);
+		this.torch.transform.rotation = rotation3;
+	}
+
+	// Token: 0x0600117A RID: 4474 RVA: 0x000A4F6C File Offset: 0x000A316C
+	public bool GetFlameOn()
+	{
+		return this.flameOn;
+	}
+
+	// Token: 0x0600117B RID: 4475 RVA: 0x000A4F74 File Offset: 0x000A3174
+	public void PickUpTorch()
+	{
+		this.SetCarryState();
+	}
+
+	// Token: 0x0600117C RID: 4476 RVA: 0x000A4F7C File Offset: 0x000A317C
+	public void TurnOn()
+	{
+		if (!this.flameOn)
+		{
+			this.FireFxOn();
+			this.torchTurnedOn.Signal();
+		}
+	}
+
+	// Token: 0x0600117D RID: 4477 RVA: 0x000A4F9C File Offset: 0x000A319C
+	public void FireFxOn()
+	{
+		this.flameOn = true;
+		foreach (object obj in this.fireFx.transform)
+		{
+			Transform transform = (Transform)obj;
+			transform.GetComponent<ParticleSystem>().enableEmission = true;
+		}
+		foreach (Light light in this.lightFx.GetComponentsInChildren<Light>())
+		{
+			light.enabled = true;
+		}
+	}
+
+	// Token: 0x0600117E RID: 4478 RVA: 0x000A5050 File Offset: 0x000A3250
+	public void TurnOff()
+	{
+		if (this.flameOn)
+		{
+			this.FireFxOff();
+			this.torchTurnedOff.Signal();
+		}
+	}
+
+	// Token: 0x0600117F RID: 4479 RVA: 0x000A5070 File Offset: 0x000A3270
+	public void FireFxOff()
+	{
+		this.flameOn = false;
+		foreach (object obj in this.fireFx.transform)
+		{
+			Transform transform = (Transform)obj;
+			transform.GetComponent<ParticleSystem>().enableEmission = false;
+		}
+		foreach (object obj2 in this.smokeFx.transform)
+		{
+			Transform transform2 = (Transform)obj2;
+			transform2.GetComponent<ParticleSystem>().Stop();
+		}
+		base.GetComponentInChildren<FlameTrail>().KillFlame();
+		foreach (object obj3 in this.lightFx)
+		{
+			Transform transform3 = (Transform)obj3;
+			transform3.gameObject.SetActive(false);
+		}
+	}
+
+	// Token: 0x06001180 RID: 4480 RVA: 0x000A51D4 File Offset: 0x000A33D4
+	public void DropTorch(float delay)
+	{
+		this.SetDropInitState(delay);
+	}
+
+	// Token: 0x04001FCE RID: 8142
+	public bool flameOn;
+
+	// Token: 0x04001FCF RID: 8143
+	public bool pickedUp;
+
+	// Token: 0x04001FD0 RID: 8144
+	public Boy boy;
+
+	// Token: 0x04001FD1 RID: 8145
+	public Transform torch;
+
+	// Token: 0x04001FD2 RID: 8146
+	public Rigidbody triggerTorch;
+
+	// Token: 0x04001FD3 RID: 8147
+	public Transform triggerPos;
+
+	// Token: 0x04001FD4 RID: 8148
+	public GameObject fireFx;
+
+	// Token: 0x04001FD5 RID: 8149
+	public GameObject smokeFx;
+
+	// Token: 0x04001FD6 RID: 8150
+	public Transform lightFx;
+
+	// Token: 0x04001FD7 RID: 8151
+	public Transform lightFxTarget;
+
+	// Token: 0x04001FD8 RID: 8152
+	public Collider groundCollider;
+
+	// Token: 0x04001FD9 RID: 8153
+	public Collider colliderPole;
+
+	// Token: 0x04001FDA RID: 8154
+	public Collider colliderTip;
+
+	// Token: 0x04001FDB RID: 8155
+	public AnimBlendNode animBlend;
+
+	// Token: 0x04001FDC RID: 8156
+	public AnimClipNode animAdditive;
+
+	// Token: 0x04001FDD RID: 8157
+	public float additiveDownOffset = 10f;
+
+	// Token: 0x04001FDE RID: 8158
+	public float additiveLength = 30f;
+
+	// Token: 0x04001FDF RID: 8159
+	public float defendingMoveSpeed = 0.8f;
+
+	// Token: 0x04001FE0 RID: 8160
+	public bool debug;
+
+	// Token: 0x04001FE1 RID: 8161
+	private SignalIn turnFlameOn;
+
+	// Token: 0x04001FE2 RID: 8162
+	private SignalIn turnFlameOff;
+
+	// Token: 0x04001FE3 RID: 8163
+	private SignalIn releaseTorch;
+
+	// Token: 0x04001FE4 RID: 8164
+	private SignalIn pickUpTorch;
+
+	// Token: 0x04001FE5 RID: 8165
+	private SignalIn dropTorch;
+
+	// Token: 0x04001FE6 RID: 8166
+	private SignalOut torchTurnedOn;
+
+	// Token: 0x04001FE7 RID: 8167
+	private SignalOut torchTurnedOff;
+
+	// Token: 0x04001FE8 RID: 8168
+	private SignalOut torchDropped;
+
+	// Token: 0x04001FE9 RID: 8169
+	private TorchMovement.State state;
+
+	// Token: 0x04001FEA RID: 8170
+	private bool boyHasTorchInHand;
+
+	// Token: 0x04001FEB RID: 8171
+	private BoySetInput boyInput;
+
+	// Token: 0x04001FEC RID: 8172
+	private int hulvNearCount;
+
+	// Token: 0x04001FED RID: 8173
+	private Transform boyHand;
+
+	// Token: 0x04001FEE RID: 8174
+	private vector2f input;
+
+	// Token: 0x04001FEF RID: 8175
+	private float currentBlend;
+
+	// Token: 0x04001FF0 RID: 8176
+	private float currentAdditiveBlend;
+
+	// Token: 0x04001FF1 RID: 8177
+	private float moveSpeedUp = 7.6f;
+
+	// Token: 0x04001FF2 RID: 8178
+	private float rotSpeedUp = 8.5f;
+
+	// Token: 0x04001FF3 RID: 8179
+	private float moveSpeedDown = 9f;
+
+	// Token: 0x04001FF4 RID: 8180
+	private float rotSpeedDownn = 18f;
+
+	// Token: 0x04001FF5 RID: 8181
+	private float moveSpeedDownNeutral = 4f;
+
+	// Token: 0x04001FF6 RID: 8182
+	private float rotSpeedDownnNeutral = 17f;
+
+	// Token: 0x04001FF7 RID: 8183
+	private float moveSpeedTarget = 1f;
+
+	// Token: 0x04001FF8 RID: 8184
+	private float currentMoveSpeed = 1f;
+
+	// Token: 0x04001FF9 RID: 8185
+	private float dropTimer;
+
+	// Token: 0x04001FFA RID: 8186
+	private float dropDelay = 0.1f;
+
+	// Token: 0x04001FFB RID: 8187
+	private Transform currentTheme;
+
+	// Token: 0x04001FFC RID: 8188
+	private Transform torchTheme;
+
+	// Token: 0x04001FFD RID: 8189
+	private Transform torchThemeDef;
+
+	// Token: 0x04001FFE RID: 8190
+	private Rigidbody torchRigidbody;
+
+	// Token: 0x04001FFF RID: 8191
+	private Ray lightFxRay = default(Ray);
+
+	// Token: 0x04002000 RID: 8192
+	private Vector3 dropPos;
+
+	// Token: 0x04002001 RID: 8193
+	private float distToGround;
+
+	// Token: 0x02000234 RID: 564
+	private enum State
+	{
+		// Token: 0x04002003 RID: 8195
+		None,
+		// Token: 0x04002004 RID: 8196
+		Idle,
+		// Token: 0x04002005 RID: 8197
+		Release,
+		// Token: 0x04002006 RID: 8198
+		Carry,
+		// Token: 0x04002007 RID: 8199
+		Drop,
+		// Token: 0x04002008 RID: 8200
+		Controlling,
+		// Token: 0x04002009 RID: 8201
+		DropInit
+	}
+}

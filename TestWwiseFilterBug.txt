@@ -1,0 +1,180 @@
+using System;
+using Playdead.Audio;
+using UnityEngine;
+
+// Token: 0x0200061E RID: 1566
+public class TestWwiseFilterBug : MonoBehaviour
+{
+	// Token: 0x060026FE RID: 9982 RVA: 0x0013ADE4 File Offset: 0x00138FE4
+	private void Start()
+	{
+		this.eventA = new AudioEventSimple("test_impulse_cover_exit");
+		this.eventB = new AudioEventSimple("test_impulse_cover_enter");
+		this.eventASync = new AudioEventSimple("test_click2");
+		this.eventBSync = new AudioEventSimple("test_click1");
+		this.music = PersistentBehaviour<GlobalAudio>.instance.music;
+		this.UpdateTimes();
+		this.oldTime = -1f;
+		SoundEngine.LoadBank("test", OperationType.Sync);
+		this.eventB.Post(AudioKeyObject.global);
+	}
+
+	// Token: 0x060026FF RID: 9983 RVA: 0x0013AE70 File Offset: 0x00139070
+	private void Update()
+	{
+		if (Time.time > 1f)
+		{
+			if (!this.isLateInitialized)
+			{
+				this.music.ReplaceWithTestEvent("play_forcePush_test_music");
+				this.mode = TestWwiseFilterBug.Mode.WaitingForA;
+				this.isLateInitialized = true;
+				this.oldTime = 0f;
+			}
+			else
+			{
+				float musicPosition_s = this.music.GetMusicPosition_s();
+				if (this.mode == TestWwiseFilterBug.Mode.WaitingForLoop && this.oldTime > musicPosition_s)
+				{
+					this.mode = TestWwiseFilterBug.Mode.WaitingForA;
+				}
+				if (this.mode == TestWwiseFilterBug.Mode.WaitingForA || this.mode == TestWwiseFilterBug.Mode.WaitingForB)
+				{
+					if (this.mode == TestWwiseFilterBug.Mode.WaitingForA && AnimEventUtils.CheckTimeRangeLooped(this.timeA, musicPosition_s, this.oldTime))
+					{
+						this.eventA.Post(AudioKeyObject.global);
+						this.eventASync.Post(AudioKeyObject.global);
+						this.mode = TestWwiseFilterBug.Mode.WaitingForB;
+					}
+					if (this.mode == TestWwiseFilterBug.Mode.WaitingForB && AnimEventUtils.CheckTimeRangeLooped(this.timeB, musicPosition_s, this.oldTime))
+					{
+						this.eventB.Post(AudioKeyObject.global);
+						this.eventBSync.Post(AudioKeyObject.global);
+						this.mode = TestWwiseFilterBug.Mode.WaitingForLoop;
+						if (this.useStaticTest)
+						{
+							this.timeA = this.staticTestEventATime;
+							this.timeB = this.staticTestEventBTime;
+						}
+						else
+						{
+							this.testBIndex++;
+							if (this.testBIndex == this.subdivisions)
+							{
+								this.testAIndex++;
+								if (this.testAIndex == this.subdivisions)
+								{
+									this.testAIndex = 0;
+								}
+								this.testBIndex = this.testAIndex;
+							}
+							this.UpdateTimes();
+						}
+					}
+				}
+				this.oldTime = musicPosition_s;
+			}
+		}
+	}
+
+	// Token: 0x06002700 RID: 9984 RVA: 0x0013B024 File Offset: 0x00139224
+	private void UpdateTimes()
+	{
+		this.loopLength = this.music.GetLoopLength_s();
+		this.timeA = (float)this.testAIndex * this.loopLength / (float)this.subdivisions;
+		this.timeB = (float)this.testBIndex * this.loopLength / (float)this.subdivisions;
+	}
+
+	// Token: 0x06002701 RID: 9985 RVA: 0x0013B07C File Offset: 0x0013927C
+	private void OnGUI()
+	{
+		string text = string.Format("Mode: {0}\nmusic time: {5}/{6}\nindex A: {1} - time: {2}\nindex B: {3} - time: {4}\n", new object[]
+		{
+			this.mode,
+			this.testAIndex,
+			this.timeA,
+			this.testBIndex,
+			this.timeB,
+			this.oldTime,
+			this.loopLength
+		});
+		GUILayout.Label(text, new GUILayoutOption[0]);
+	}
+
+	// Token: 0x0400466F RID: 18031
+	private const string startEventName = "play_forcePush_test_music";
+
+	// Token: 0x04004670 RID: 18032
+	private const string eventAName = "test_impulse_cover_exit";
+
+	// Token: 0x04004671 RID: 18033
+	private const string eventASyncName = "test_click2";
+
+	// Token: 0x04004672 RID: 18034
+	private const string eventBName = "test_impulse_cover_enter";
+
+	// Token: 0x04004673 RID: 18035
+	private const string eventBSyncName = "test_click1";
+
+	// Token: 0x04004674 RID: 18036
+	public int subdivisions = 5;
+
+	// Token: 0x04004675 RID: 18037
+	public bool useStaticTest;
+
+	// Token: 0x04004676 RID: 18038
+	public float staticTestEventATime;
+
+	// Token: 0x04004677 RID: 18039
+	public float staticTestEventBTime = 2.1f;
+
+	// Token: 0x04004678 RID: 18040
+	private MusicManager music;
+
+	// Token: 0x04004679 RID: 18041
+	private float loopLength = -1f;
+
+	// Token: 0x0400467A RID: 18042
+	private float timeA = -1f;
+
+	// Token: 0x0400467B RID: 18043
+	private float timeB = -1f;
+
+	// Token: 0x0400467C RID: 18044
+	private float oldTime;
+
+	// Token: 0x0400467D RID: 18045
+	private int testAIndex;
+
+	// Token: 0x0400467E RID: 18046
+	private int testBIndex;
+
+	// Token: 0x0400467F RID: 18047
+	private AudioEventSimple eventA;
+
+	// Token: 0x04004680 RID: 18048
+	private AudioEventSimple eventB;
+
+	// Token: 0x04004681 RID: 18049
+	private AudioEventSimple eventASync;
+
+	// Token: 0x04004682 RID: 18050
+	private AudioEventSimple eventBSync;
+
+	// Token: 0x04004683 RID: 18051
+	public TestWwiseFilterBug.Mode mode;
+
+	// Token: 0x04004684 RID: 18052
+	private bool isLateInitialized;
+
+	// Token: 0x0200061F RID: 1567
+	public enum Mode
+	{
+		// Token: 0x04004686 RID: 18054
+		WaitingForLoop,
+		// Token: 0x04004687 RID: 18055
+		WaitingForA,
+		// Token: 0x04004688 RID: 18056
+		WaitingForB
+	}
+}

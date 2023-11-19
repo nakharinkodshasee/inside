@@ -1,0 +1,31 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000663 RID: 1635
+public class TestSequencerAppDomainUnloadCrash : MonoBehaviour
+{
+	// Token: 0x06002820 RID: 10272 RVA: 0x00143548 File Offset: 0x00141748
+	private void OnGUI()
+	{
+		if (GUILayout.Button("Sequence stuff", new GUILayoutOption[0]))
+		{
+			this.SequenceStuff();
+		}
+		if (GUILayout.Button("Play sound", new GUILayoutOption[0]))
+		{
+			this.PlaySound();
+		}
+	}
+
+	// Token: 0x06002821 RID: 10273 RVA: 0x0014358C File Offset: 0x0014178C
+	private void SequenceStuff()
+	{
+		uint num = AkSoundEngine.DynamicSequenceOpen(base.gameObject, 0U, null, null, DynamicSequenceType.DynamicSequenceType_SampleAccurate);
+	}
+
+	// Token: 0x06002822 RID: 10274 RVA: 0x001435AC File Offset: 0x001417AC
+	private void PlaySound()
+	{
+		AkSoundEngine.PostEvent("audiotest_start_sine_period_512_smp", base.gameObject);
+	}
+}

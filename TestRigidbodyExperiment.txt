@@ -1,0 +1,112 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200060B RID: 1547
+public class TestRigidbodyExperiment : MonoBehaviour
+{
+	// Token: 0x060026B1 RID: 9905 RVA: 0x00138DAC File Offset: 0x00136FAC
+	private static void InitializeAll()
+	{
+		if (!TestRigidbodyExperiment.isInitialized)
+		{
+			TestRigidbodyExperiment.instances.Sort((TestRigidbodyExperiment a, TestRigidbodyExperiment b) => a.transform.position.x.CompareTo(b.transform.position.x));
+			int num = 0;
+			foreach (TestRigidbodyExperiment testRigidbodyExperiment in TestRigidbodyExperiment.instances)
+			{
+				num = (testRigidbodyExperiment.testID = num + 1);
+			}
+		}
+		TestRigidbodyExperiment.isInitialized = true;
+	}
+
+	// Token: 0x060026B2 RID: 9906 RVA: 0x00138E50 File Offset: 0x00137050
+	private void Awake()
+	{
+		TestRigidbodyExperiment.instances.Add(this);
+	}
+
+	// Token: 0x060026B3 RID: 9907 RVA: 0x00138E60 File Offset: 0x00137060
+	private void Start()
+	{
+		TestRigidbodyExperiment.InitializeAll();
+		foreach (Rigidbody rigidbody in base.GetComponentsInChildren<Rigidbody>())
+		{
+			this.initialBodyState.Add(rigidbody, new TestRigidbodyExperiment.TransformData(rigidbody.transform));
+			rigidbody.gameObject.GetComponent<Renderer>().material.color = Color.blue;
+			rigidbody.isKinematic = true;
+		}
+	}
+
+	// Token: 0x060026B4 RID: 9908 RVA: 0x00138ECC File Offset: 0x001370CC
+	private void FixedUpdate()
+	{
+		if (Input.GetKeyDown(this.testID.ToString()))
+		{
+			this.ToggleRunning();
+		}
+	}
+
+	// Token: 0x060026B5 RID: 9909 RVA: 0x00138EEC File Offset: 0x001370EC
+	private void ToggleRunning()
+	{
+		if (!this.isRunning)
+		{
+			foreach (Rigidbody rigidbody in base.GetComponentsInChildren<Rigidbody>())
+			{
+				rigidbody.gameObject.GetComponent<Renderer>().material.color = Color.red;
+				rigidbody.isKinematic = false;
+				rigidbody.WakeUp();
+			}
+			this.isRunning = true;
+		}
+		else
+		{
+			foreach (KeyValuePair<Rigidbody, TestRigidbodyExperiment.TransformData> keyValuePair in this.initialBodyState)
+			{
+				keyValuePair.Key.transform.localPosition = keyValuePair.Value.localPosition;
+				keyValuePair.Key.transform.localRotation = keyValuePair.Value.localRotation;
+				keyValuePair.Key.transform.localScale = keyValuePair.Value.localScale;
+				keyValuePair.Key.gameObject.GetComponent<Renderer>().material.color = Color.blue;
+				keyValuePair.Key.isKinematic = true;
+			}
+			this.isRunning = false;
+		}
+	}
+
+	// Token: 0x040045F5 RID: 17909
+	private static List<TestRigidbodyExperiment> instances = new List<TestRigidbodyExperiment>();
+
+	// Token: 0x040045F6 RID: 17910
+	private int testID;
+
+	// Token: 0x040045F7 RID: 17911
+	private bool isRunning;
+
+	// Token: 0x040045F8 RID: 17912
+	private static bool isInitialized = false;
+
+	// Token: 0x040045F9 RID: 17913
+	private Dictionary<Rigidbody, TestRigidbodyExperiment.TransformData> initialBodyState = new Dictionary<Rigidbody, TestRigidbodyExperiment.TransformData>();
+
+	// Token: 0x0200060C RID: 1548
+	private struct TransformData
+	{
+		// Token: 0x060026B7 RID: 9911 RVA: 0x0013907C File Offset: 0x0013727C
+		public TransformData(Transform t)
+		{
+			this.localPosition = t.localPosition;
+			this.localRotation = t.localRotation;
+			this.localScale = t.localScale;
+		}
+
+		// Token: 0x040045FB RID: 17915
+		public Vector3 localPosition;
+
+		// Token: 0x040045FC RID: 17916
+		public Quaternion localRotation;
+
+		// Token: 0x040045FD RID: 17917
+		public Vector3 localScale;
+	}
+}

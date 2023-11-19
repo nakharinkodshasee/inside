@@ -1,0 +1,12 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200060A RID: 1546
+public class TestMusicTime : MonoBehaviour
+{
+	// Token: 0x040045F3 RID: 17907
+	private MusicEventChecker checker = new MusicEventChecker(5.99f);
+
+	// Token: 0x040045F4 RID: 17908
+	public string[] events;
+}

@@ -1,0 +1,15 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000662 RID: 1634
+public class TestAudioStuttering : MonoBehaviour
+{
+	// Token: 0x040047E6 RID: 18406
+	public int memoryToWasteEachFrame = 1048576;
+
+	// Token: 0x040047E7 RID: 18407
+	public int circularBufferSize = 100;
+
+	// Token: 0x040047E8 RID: 18408
+	public bool PostALotOfAKEvents = true;
+}

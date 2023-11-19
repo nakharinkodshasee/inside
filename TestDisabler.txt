@@ -1,0 +1,24 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000639 RID: 1593
+public class TestDisabler : MonoBehaviour
+{
+	// Token: 0x0600277D RID: 10109 RVA: 0x0013D8E4 File Offset: 0x0013BAE4
+	private void Update()
+	{
+		this.time += Time.deltaTime;
+		if (this.time > 3f)
+		{
+			this.objectToUnspawn.OnUnspawn();
+			this.objectToUnspawn.OnSpawnAlbino();
+			base.gameObject.SetActive(false);
+		}
+	}
+
+	// Token: 0x040046E5 RID: 18149
+	public AlbinoSpawner objectToUnspawn;
+
+	// Token: 0x040046E6 RID: 18150
+	private float time;
+}

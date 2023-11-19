@@ -1,0 +1,12 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005FA RID: 1530
+public class TestAudioOnlyDebugOutput : MonoBehaviour
+{
+	// Token: 0x0600266F RID: 9839 RVA: 0x00137CE0 File Offset: 0x00135EE0
+	private void OnGUI()
+	{
+		GUILayout.Label(string.Format("last load time: {0} ms", PersistentBehaviour<GlobalAudio>.instance.resourceLoader.lastLoadTime_ms), new GUILayoutOption[0]);
+	}
+}

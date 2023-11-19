@@ -1,0 +1,160 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000577 RID: 1399
+public class UTaskTest : MonoBehaviour
+{
+	// Token: 0x0600242F RID: 9263 RVA: 0x0012B398 File Offset: 0x00129598
+	private bool TryGetData(string key, out UTaskTest.UTaskTestDataClass dataClass)
+	{
+		return this.data.TryGetValue(key, out dataClass);
+	}
+
+	// Token: 0x06002430 RID: 9264 RVA: 0x0012B3A8 File Offset: 0x001295A8
+	private IEnumerator Start()
+	{
+		while (!Input.anyKeyDown)
+		{
+			yield return null;
+		}
+		yield return base.StartCoroutine(this.UnitTest());
+		yield break;
+	}
+
+	// Token: 0x06002431 RID: 9265 RVA: 0x0012B3C4 File Offset: 0x001295C4
+	private IEnumerator UnitTest()
+	{
+		UTask<string> t4 = UTask<string>.Factory.StartNew(() => UTaskTest.Log("1: T1 Finished", 1f)).ContinueWith((UTask<string> s) => UTaskTest.Log("3:" + s, 0f));
+		UTask t2 = new UTask(() => UTaskTest.Log("5: T2 Finished", 2f));
+		UTask t3 = new UTask(() => UTaskTest.Log("6: T3 Finished", 3f));
+		UTask taborted = new UTask(() => UTaskTest.Log("-: Should never be called!", 1f));
+		taborted.ContinueWith((UTask t) => UTaskTest.Log("2: aborted, expecting : Aborted == " + t.TaskStatus, 0f));
+		UTask tAny = UTask.WhenAny(new UTask[]
+		{
+			t4,
+			t2,
+			t3,
+			taborted
+		});
+		UTask tAll = UTask.WhenAll(new UTask[]
+		{
+			t4,
+			t2,
+			t3
+		});
+		tAny.ContinueWith((UTask t) => null);
+		tAll.ContinueWith((UTask t) => null);
+		UTask tseq = UTask.Parallel(new UTask[]
+		{
+			t2,
+			t3
+		});
+		taborted.Start();
+		tseq.Start();
+		taborted.Abort();
+		yield return tseq.Wait();
+		tseq.ContinueWith((UTask t) => UTaskTest.Log("8: ContinueWith on already completed UTask tseq", 0f));
+		this.counter++;
+		UTask counterTask = UTask.Factory.StartNew(delegate
+		{
+			this.counter += 10;
+			return UTaskTest.Log("11: Counter : " + this.counter, 0f);
+		});
+		UTask<UTaskTest.EResult> reloadLevelTask = new UTask<UTaskTest.EResult>(() => UTaskTest.LoadLevelAsync(Application.loadedLevelName));
+		string text = (Random.value <= 0.5f) ? "B" : "A";
+		UTask<UTaskTest.EResult> postLoadTask = reloadLevelTask.ContinueWith((UTask<UTaskTest.EResult> t) => UTaskTest.Log("13: Load Result : " + t.Result, 0f)).ContinueWith(delegate(UTask<UTaskTest.EResult> t)
+		{
+			this.counter += 100;
+			return null;
+		}).ContinueWith((UTask<UTaskTest.EResult> t) => UTaskTest.Log("14: Counter : " + this.counter, 1f)).ContinueWith(delegate(UTask<UTaskTest.EResult> t)
+		{
+			string dataKey;
+			UTaskTest.UTaskTestDataClass utaskTestDataClass;
+			if (this.TryGetData(dataKey, out utaskTestDataClass))
+			{
+				return UTaskTest.Log("15: Got Data : " + utaskTestDataClass.name, 0f);
+			}
+			return null;
+		}).ContinueWith((UTask<UTaskTest.EResult> t) => UTaskTest.Log("16: Test Finished!", 0f));
+		reloadLevelTask.Start();
+		yield return postLoadTask.Wait();
+		yield break;
+	}
+
+	// Token: 0x06002432 RID: 9266 RVA: 0x0012B3E0 File Offset: 0x001295E0
+	private static IEnumerator LoadLevelAsync(string levelname)
+	{
+		yield return Application.LoadLevelAsync(levelname);
+		yield return UTaskTest.EResult.Success;
+		yield break;
+	}
+
+	// Token: 0x06002433 RID: 9267 RVA: 0x0012B404 File Offset: 0x00129604
+	private static IEnumerator LoadLevelFinished(UTaskTest.EResult estate)
+	{
+		if (estate == UTaskTest.EResult.Success)
+		{
+		}
+		yield return null;
+		yield break;
+	}
+
+	// Token: 0x06002434 RID: 9268 RVA: 0x0012B428 File Offset: 0x00129628
+	private static IEnumerator Log(string s, float delayInSeconds = 0f)
+	{
+		if (delayInSeconds > 0f)
+		{
+			yield return new WaitForSeconds(delayInSeconds);
+		}
+		yield return "< " + s + " >";
+		yield break;
+	}
+
+	// Token: 0x0400427F RID: 17023
+	private int counter;
+
+	// Token: 0x04004280 RID: 17024
+	private Dictionary<string, UTaskTest.UTaskTestDataClass> data = new Dictionary<string, UTaskTest.UTaskTestDataClass>
+	{
+		{
+			"A",
+			new UTaskTest.UTaskTestDataClass(1, "Name: A")
+		},
+		{
+			"B",
+			new UTaskTest.UTaskTestDataClass(2, "Name: B")
+		},
+		{
+			"C",
+			new UTaskTest.UTaskTestDataClass(3, "Name: B")
+		}
+	};
+
+	// Token: 0x02000578 RID: 1400
+	public class UTaskTestDataClass
+	{
+		// Token: 0x06002435 RID: 9269 RVA: 0x0012B458 File Offset: 0x00129658
+		public UTaskTestDataClass(int counter, string name)
+		{
+			this.counter = counter;
+			this.name = name;
+		}
+
+		// Token: 0x04004281 RID: 17025
+		public int counter;
+
+		// Token: 0x04004282 RID: 17026
+		public string name = string.Empty;
+	}
+
+	// Token: 0x02000579 RID: 1401
+	private enum EResult
+	{
+		// Token: 0x04004284 RID: 17028
+		Success,
+		// Token: 0x04004285 RID: 17029
+		Failed
+	}
+}

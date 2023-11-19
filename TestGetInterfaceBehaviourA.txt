@@ -1,0 +1,16 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005F7 RID: 1527
+public class TestGetInterfaceBehaviourA : MonoBehaviour, ITestGetInterface1, ITestGetInterface2
+{
+	// Token: 0x06002664 RID: 9828 RVA: 0x00137CA8 File Offset: 0x00135EA8
+	public void DoStuff()
+	{
+	}
+
+	// Token: 0x06002665 RID: 9829 RVA: 0x00137CAC File Offset: 0x00135EAC
+	public void DoOtherStuff()
+	{
+	}
+}

@@ -1,0 +1,44 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005B8 RID: 1464
+public class Torpedo : MonoBehaviour
+{
+	// Token: 0x06002545 RID: 9541 RVA: 0x00131F24 File Offset: 0x00130124
+	private void Start()
+	{
+	}
+
+	// Token: 0x06002546 RID: 9542 RVA: 0x00131F28 File Offset: 0x00130128
+	private void FixedUpdate()
+	{
+		base.GetComponent<Rigidbody>().MovePosition(base.GetComponent<Rigidbody>().position + base.transform.forward * this.movementSpeed * Time.deltaTime);
+		Vector3 vector = ScriptGlobals.boy.pos3 - base.transform.position;
+		if (Vector3.Angle(base.transform.forward, vector) < this.visibilityAngle && vector.magnitude < this.visibilityRange)
+		{
+			Quaternion quaternion = Quaternion.LookRotation(vector);
+			base.GetComponent<Rigidbody>().MoveRotation(Quaternion.RotateTowards(base.GetComponent<Rigidbody>().rotation, quaternion, this.rotationSpeed * Time.deltaTime));
+		}
+	}
+
+	// Token: 0x06002547 RID: 9543 RVA: 0x00131FE8 File Offset: 0x001301E8
+	private void OnCollisionEnter(Collision aCollision)
+	{
+		if (!aCollision.collider.isTrigger)
+		{
+			Object.Destroy(base.gameObject);
+		}
+	}
+
+	// Token: 0x04004447 RID: 17479
+	public float movementSpeed = 3f;
+
+	// Token: 0x04004448 RID: 17480
+	public float rotationSpeed = 180f;
+
+	// Token: 0x04004449 RID: 17481
+	public float visibilityAngle = 50f;
+
+	// Token: 0x0400444A RID: 17482
+	public float visibilityRange = 10f;
+}

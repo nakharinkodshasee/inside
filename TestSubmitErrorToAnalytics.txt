@@ -1,0 +1,94 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005AD RID: 1453
+public class TestSubmitErrorToAnalytics : MonoBehaviour
+{
+	// Token: 0x0600250A RID: 9482 RVA: 0x00130078 File Offset: 0x0012E278
+	private void Update()
+	{
+		this.FuncA();
+	}
+
+	// Token: 0x0600250B RID: 9483 RVA: 0x00130080 File Offset: 0x0012E280
+	private void FuncA()
+	{
+		this.FuncB();
+	}
+
+	// Token: 0x0600250C RID: 9484 RVA: 0x00130088 File Offset: 0x0012E288
+	private void FuncB()
+	{
+		this.FuncC();
+	}
+
+	// Token: 0x0600250D RID: 9485 RVA: 0x00130090 File Offset: 0x0012E290
+	private void FuncC()
+	{
+		if (Input.GetKeyDown(49))
+		{
+			Debug.Log("This is a log");
+		}
+		if (Input.GetKeyDown(50))
+		{
+			Debug.LogWarning("This is a warning");
+		}
+		if (Input.GetKeyDown(50) && Input.GetKey(304))
+		{
+			this.spawnWarningSequence = !this.spawnWarningSequence;
+		}
+		if (Input.GetKeyDown(51))
+		{
+			Debug.LogError("This is an error");
+		}
+		if (Input.GetKeyDown(52))
+		{
+			throw new Exception("This is an exception");
+		}
+		if (Input.GetKeyDown(53))
+		{
+		}
+		if (Input.GetKeyDown(54))
+		{
+		}
+		if (Input.GetKeyDown(55))
+		{
+		}
+		if (Input.GetKeyDown(56))
+		{
+		}
+		if (Input.GetKeyDown(57))
+		{
+			this.throwExceptionEachFrame = !this.throwExceptionEachFrame;
+		}
+		if (Input.GetKeyDown(48))
+		{
+			this.throwExceptionEachFrame2 = !this.throwExceptionEachFrame2;
+		}
+		if (this.spawnWarningSequence)
+		{
+			Debug.LogWarning("Warning " + this.warningSequence);
+			this.warningSequence++;
+		}
+		if (this.throwExceptionEachFrame)
+		{
+			throw new Exception("throwExceptionEachFrame");
+		}
+		if (this.throwExceptionEachFrame2)
+		{
+			throw new Exception("throwExceptionEachFrame2");
+		}
+	}
+
+	// Token: 0x040043DA RID: 17370
+	private bool throwExceptionEachFrame;
+
+	// Token: 0x040043DB RID: 17371
+	private bool throwExceptionEachFrame2;
+
+	// Token: 0x040043DC RID: 17372
+	private bool spawnWarningSequence;
+
+	// Token: 0x040043DD RID: 17373
+	private int warningSequence;
+}

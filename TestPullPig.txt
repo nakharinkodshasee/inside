@@ -1,0 +1,155 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000446 RID: 1094
+public class TestPullPig : MonoBehaviour
+{
+	// Token: 0x06001CA0 RID: 7328 RVA: 0x000F9630 File Offset: 0x000F7830
+	private void SetStateIdle()
+	{
+		if (!this.animObject.IsPlaying("IdleA"))
+		{
+			this.animObject.CrossFade("IdleA", 0.25f);
+		}
+		this.myState = TestPullPig.MyState.idle;
+		this.stateTimer = 0f;
+	}
+
+	// Token: 0x06001CA1 RID: 7329 RVA: 0x000F967C File Offset: 0x000F787C
+	private void StateIdle()
+	{
+		if (BoyUtils.GetCurrentGrabBody(ScriptGlobals.boy) == base.GetComponent<Rigidbody>())
+		{
+			this.SetStateBoyGrapping();
+			return;
+		}
+		if (this.stateTimer > 0.5f && base.transform.position.x > this.idlePos.position.x + 0.25f)
+		{
+			this.SetStateMovingBack();
+		}
+	}
+
+	// Token: 0x06001CA2 RID: 7330 RVA: 0x000F96F4 File Offset: 0x000F78F4
+	private void SetStateBoyGrapping()
+	{
+		if (!this.animObject.IsPlaying("IdleA"))
+		{
+			this.animObject.CrossFade("IdleA", 0.25f);
+		}
+		this.myState = TestPullPig.MyState.boyGrapping;
+		this.stateTimer = 0f;
+	}
+
+	// Token: 0x06001CA3 RID: 7331 RVA: 0x000F9740 File Offset: 0x000F7940
+	private void StateBoyGrapping()
+	{
+		if (BoyUtils.GetCurrentGrabBody(ScriptGlobals.boy) != base.GetComponent<Rigidbody>())
+		{
+			this.SetStateIdle();
+		}
+		if (Mathf.Abs(ScriptGlobals.boy.input.stick.x) > 0.35f)
+		{
+			this.SetStateWalkForced();
+		}
+	}
+
+	// Token: 0x06001CA4 RID: 7332 RVA: 0x000F979C File Offset: 0x000F799C
+	private void SetStateWalkForced()
+	{
+		this.animObject.CrossFade("WalkForced", 0.25f);
+		this.myState = TestPullPig.MyState.walkForced;
+		this.stateTimer = 0f;
+	}
+
+	// Token: 0x06001CA5 RID: 7333 RVA: 0x000F97C8 File Offset: 0x000F79C8
+	private void StateWalkForced()
+	{
+		if (BoyUtils.GetCurrentGrabBody(ScriptGlobals.boy) != base.GetComponent<Rigidbody>())
+		{
+			this.SetStateIdle();
+			return;
+		}
+		if (Mathf.Abs(ScriptGlobals.boy.input.stick.x) < 0.25f)
+		{
+			this.SetStateBoyGrapping();
+			return;
+		}
+		base.GetComponent<Rigidbody>().AddForce(Vector3.right * ScriptGlobals.boy.input.stick.x * this.pullForce * base.GetComponent<Rigidbody>().mass, 0);
+		this.animObject["WalkForced"].speed = Mathf.InverseLerp(0f, 3f, Mathf.Abs(base.GetComponent<Rigidbody>().velocity.x) * 1.5f);
+	}
+
+	// Token: 0x06001CA6 RID: 7334 RVA: 0x000F98B0 File Offset: 0x000F7AB0
+	private void SetStateMovingBack()
+	{
+		this.animObject.CrossFade("WalkA", 0.2f);
+		this.myState = TestPullPig.MyState.movingBack;
+		this.stateTimer = 0f;
+	}
+
+	// Token: 0x06001CA7 RID: 7335 RVA: 0x000F98DC File Offset: 0x000F7ADC
+	private void StateMovingBack()
+	{
+		if (BoyUtils.GetCurrentGrabBody(ScriptGlobals.boy) == base.GetComponent<Rigidbody>())
+		{
+			this.SetStateBoyGrapping();
+			return;
+		}
+		base.GetComponent<Rigidbody>().velocity = Vector3.left * this.moveBackSpeed;
+		if (base.transform.position.x < this.idlePos.position.x + 0.25f)
+		{
+			this.SetStateIdle();
+		}
+	}
+
+	// Token: 0x06001CA8 RID: 7336 RVA: 0x000F995C File Offset: 0x000F7B5C
+	private void FixedUpdate()
+	{
+		this.stateTimer += Time.deltaTime;
+		switch (this.myState)
+		{
+		case TestPullPig.MyState.idle:
+			this.StateIdle();
+			break;
+		case TestPullPig.MyState.movingBack:
+			this.StateMovingBack();
+			break;
+		case TestPullPig.MyState.boyGrapping:
+			this.StateBoyGrapping();
+			break;
+		case TestPullPig.MyState.walkForced:
+			this.StateWalkForced();
+			break;
+		}
+	}
+
+	// Token: 0x04003474 RID: 13428
+	public Transform idlePos;
+
+	// Token: 0x04003475 RID: 13429
+	public Animation animObject;
+
+	// Token: 0x04003476 RID: 13430
+	public float pullForce = 10f;
+
+	// Token: 0x04003477 RID: 13431
+	public float moveBackSpeed = 1.5f;
+
+	// Token: 0x04003478 RID: 13432
+	private TestPullPig.MyState myState;
+
+	// Token: 0x04003479 RID: 13433
+	private float stateTimer;
+
+	// Token: 0x02000447 RID: 1095
+	private enum MyState
+	{
+		// Token: 0x0400347B RID: 13435
+		idle,
+		// Token: 0x0400347C RID: 13436
+		movingBack,
+		// Token: 0x0400347D RID: 13437
+		boyGrapping,
+		// Token: 0x0400347E RID: 13438
+		walkForced
+	}
+}

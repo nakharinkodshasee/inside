@@ -1,0 +1,45 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000605 RID: 1541
+public class TestHuddleAudioConfig : MonoBehaviour
+{
+	// Token: 0x06002699 RID: 9881 RVA: 0x0013886C File Offset: 0x00136A6C
+	private void OnGUI()
+	{
+		float num = (float)Math.Sin(Time.timeDbl * 3.1415927410125732 * 2.0 * 0.10000000149011612) * 0.5f + 0.5f;
+		int strain = Mathf.Clamp(Mathf.RoundToInt(num * 3f), 0, 3);
+		bool flag = GUILayout.Toggle(this.doOverride, "override status", new GUILayoutOption[0]);
+		bool flag2 = GUILayout.Toggle(this.doEngage, "override engagement", new GUILayoutOption[0]);
+		if (flag != this.doOverride)
+		{
+			if (flag)
+			{
+				ThemeUtils.OverrideHuddleAudioStatus(HuddleEffectState.Status.Swim);
+			}
+			else
+			{
+				ThemeUtils.DisableOverrideHuddleAudioStatus();
+			}
+			this.doOverride = flag;
+		}
+		if (flag2)
+		{
+			ThemeUtils.OverrideHuddleEngagement(HuddleEffectState.Engagement.Engaged, strain);
+		}
+		else if (this.doEngage)
+		{
+			ThemeUtils.DisableOverrideHuddleEngagement();
+		}
+		this.doEngage = flag2;
+	}
+
+	// Token: 0x040045E9 RID: 17897
+	private bool doOverride;
+
+	// Token: 0x040045EA RID: 17898
+	private bool doEngage;
+
+	// Token: 0x040045EB RID: 17899
+	private int lfo;
+}

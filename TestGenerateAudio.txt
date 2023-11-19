@@ -1,0 +1,193 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005FC RID: 1532
+public class TestGenerateAudio : MonoBehaviour
+{
+	// Token: 0x06002675 RID: 9845 RVA: 0x00137FF8 File Offset: 0x001361F8
+	public void OnEnable()
+	{
+		float frequency_hz = 4f;
+		this.carrier = new TestGenerateAudio.Oscillator(0f);
+		this.modulator0 = new TestGenerateAudio.Oscillator(this.modulator0Frequency);
+		this.modulator1 = new TestGenerateAudio.Oscillator(this.modulator1Frequency);
+		this.env = new TestGenerateAudio.Oscillator(frequency_hz);
+		float[] array = new float[this.sequence.Length];
+		int i = 0;
+		int num = this.sequence.Length;
+		while (i < num)
+		{
+			array[i] = this.midi2freq(this.sequence[i], 2);
+			i++;
+		}
+		this.sequencer = new TestGenerateAudio.StepOscillator(array, frequency_hz);
+		base.gameObject.AddComponent<AudioSource>();
+	}
+
+	// Token: 0x06002676 RID: 9846 RVA: 0x001380A0 File Offset: 0x001362A0
+	private void OnAudioFilterRead(float[] data, int channels)
+	{
+		int num = data.Length / channels;
+		for (int i = 0; i < num; i++)
+		{
+			this.env.Update();
+			this.sequencer.Update();
+			this.modulator0.SetFrequency(this.modulator0Frequency);
+			this.modulator0.Update();
+			this.modulator1.SetFrequency(this.modulator1Frequency);
+			this.modulator1.Update();
+			this.carrier.SetFrequency(this.sequencer.GetSequenceValue() + this.modulator1.Sine() * this.modulator1Amplitude * this.env.SawDown() + this.modulator0.Sine() * this.modulator0Amplitude * this.env.SawUp());
+			this.carrier.Update();
+			for (int j = 0; j < channels; j++)
+			{
+				data[i * channels + j] = this.carrier.Sine() * this.amplitude * this.env.SawDown();
+			}
+		}
+	}
+
+	// Token: 0x06002677 RID: 9847 RVA: 0x001381AC File Offset: 0x001363AC
+	private float midi2freq(int note, int octave)
+	{
+		return 32.703197f * Mathf.Pow(2f, (float)note / 12f + (float)octave);
+	}
+
+	// Token: 0x040045BF RID: 17855
+	private const float sampleRate = 48000f;
+
+	// Token: 0x040045C0 RID: 17856
+	public float amplitude = 0.1f;
+
+	// Token: 0x040045C1 RID: 17857
+	public float modulator0Frequency = 3f;
+
+	// Token: 0x040045C2 RID: 17858
+	public float modulator0Amplitude = 10f;
+
+	// Token: 0x040045C3 RID: 17859
+	public float modulator1Frequency = 172f;
+
+	// Token: 0x040045C4 RID: 17860
+	public float modulator1Amplitude = 430f;
+
+	// Token: 0x040045C5 RID: 17861
+	private float phase;
+
+	// Token: 0x040045C6 RID: 17862
+	private float modulatorPhase;
+
+	// Token: 0x040045C7 RID: 17863
+	private float envPhase;
+
+	// Token: 0x040045C8 RID: 17864
+	private int[] sequence = new int[]
+	{
+		0,
+		0,
+		12,
+		0,
+		0,
+		10,
+		3,
+		-2
+	};
+
+	// Token: 0x040045C9 RID: 17865
+	private TestGenerateAudio.Oscillator carrier;
+
+	// Token: 0x040045CA RID: 17866
+	private TestGenerateAudio.Oscillator modulator0;
+
+	// Token: 0x040045CB RID: 17867
+	private TestGenerateAudio.Oscillator modulator1;
+
+	// Token: 0x040045CC RID: 17868
+	private TestGenerateAudio.Oscillator env;
+
+	// Token: 0x040045CD RID: 17869
+	private TestGenerateAudio.StepOscillator sequencer;
+
+	// Token: 0x020005FD RID: 1533
+	private class Oscillator
+	{
+		// Token: 0x06002678 RID: 9848 RVA: 0x001381CC File Offset: 0x001363CC
+		public Oscillator(float frequency_hz)
+		{
+			this.SetFrequency(frequency_hz);
+			this.phase = 0f;
+		}
+
+		// Token: 0x06002679 RID: 9849 RVA: 0x001381E8 File Offset: 0x001363E8
+		public void Update()
+		{
+			this.phase = (this.phase + this.frequency_p_p_smp) % 1f;
+		}
+
+		// Token: 0x0600267A RID: 9850 RVA: 0x00138204 File Offset: 0x00136404
+		public void SetFrequency(float frequency_hz)
+		{
+			this.frequency_p_p_smp = frequency_hz / 48000f;
+		}
+
+		// Token: 0x0600267B RID: 9851 RVA: 0x00138214 File Offset: 0x00136414
+		public float Sine()
+		{
+			return Mathf.Sin(this.phase * 3.1415927f * 2f);
+		}
+
+		// Token: 0x0600267C RID: 9852 RVA: 0x00138230 File Offset: 0x00136430
+		public float SawDown()
+		{
+			return 1f - this.phase;
+		}
+
+		// Token: 0x0600267D RID: 9853 RVA: 0x00138240 File Offset: 0x00136440
+		public float SawUp()
+		{
+			return this.phase;
+		}
+
+		// Token: 0x040045CE RID: 17870
+		public float frequency_p_p_smp;
+
+		// Token: 0x040045CF RID: 17871
+		public float phase;
+	}
+
+	// Token: 0x020005FE RID: 1534
+	private class StepOscillator
+	{
+		// Token: 0x0600267E RID: 9854 RVA: 0x00138248 File Offset: 0x00136448
+		public StepOscillator(float[] sequence, float frequency_hz)
+		{
+			this.sequence = sequence;
+			this.SetFrequency(frequency_hz);
+		}
+
+		// Token: 0x0600267F RID: 9855 RVA: 0x00138260 File Offset: 0x00136460
+		public void SetFrequency(float frequency_hz)
+		{
+			this.frequency_p_p_smp = frequency_hz / 48000f;
+		}
+
+		// Token: 0x06002680 RID: 9856 RVA: 0x00138270 File Offset: 0x00136470
+		public void Update()
+		{
+			this.phase = (this.phase + this.frequency_p_p_smp) % (float)this.sequence.Length;
+		}
+
+		// Token: 0x06002681 RID: 9857 RVA: 0x00138290 File Offset: 0x00136490
+		public float GetSequenceValue()
+		{
+			return this.sequence[(int)this.phase];
+		}
+
+		// Token: 0x040045D0 RID: 17872
+		private float[] sequence;
+
+		// Token: 0x040045D1 RID: 17873
+		public float phase;
+
+		// Token: 0x040045D2 RID: 17874
+		public float frequency_p_p_smp;
+	}
+}

@@ -1,0 +1,64 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000606 RID: 1542
+public class TestHulvManualControl : MonoBehaviour
+{
+	// Token: 0x0600269B RID: 9883 RVA: 0x00138958 File Offset: 0x00136B58
+	private void Start()
+	{
+		this.player = base.GetComponent<HulvPlayer>();
+		this.player.SetConfiguration(new HulvPlayer.Config
+		{
+			emotionOverride = HulvPlayer.Config.EmotionOverride.Normal,
+			manualBarking = true
+		});
+	}
+
+	// Token: 0x0600269C RID: 9884 RVA: 0x00138998 File Offset: 0x00136B98
+	private void PostEvents()
+	{
+	}
+
+	// Token: 0x0600269D RID: 9885 RVA: 0x0013899C File Offset: 0x00136B9C
+	private void OnGUI()
+	{
+		if (GUILayout.Button("angry, manual", new GUILayoutOption[0]))
+		{
+			this.player.SetConfiguration(new HulvPlayer.Config
+			{
+				emotionOverride = HulvPlayer.Config.EmotionOverride.Angry,
+				manualBarking = true
+			});
+		}
+		if (GUILayout.Button("frustrated, manual", new GUILayoutOption[0]))
+		{
+			this.player.SetConfiguration(new HulvPlayer.Config
+			{
+				emotionOverride = HulvPlayer.Config.EmotionOverride.Frustrated,
+				manualBarking = true
+			});
+		}
+		if (GUILayout.Button("None, manual", new GUILayoutOption[0]))
+		{
+			this.player.SetConfiguration(new HulvPlayer.Config
+			{
+				manualBarking = true
+			});
+		}
+		if (GUILayout.Button("normal, manual", new GUILayoutOption[0]))
+		{
+			this.player.SetConfiguration(new HulvPlayer.Config
+			{
+				emotionOverride = HulvPlayer.Config.EmotionOverride.Normal,
+				manualBarking = true
+			});
+		}
+	}
+
+	// Token: 0x040045EC RID: 17900
+	private HulvPlayer player;
+
+	// Token: 0x040045ED RID: 17901
+	public string mood = "angry";
+}

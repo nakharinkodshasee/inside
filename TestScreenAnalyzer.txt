@@ -1,0 +1,91 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000612 RID: 1554
+public class TestScreenAnalyzer : MonoBehaviour
+{
+	// Token: 0x060026CF RID: 9935 RVA: 0x00139DF8 File Offset: 0x00137FF8
+	private void Start()
+	{
+		this.texture2D = new Texture2D(32, 32);
+		this.texture = new RenderTexture(32, 32, 24);
+		this.sources.Add(base.gameObject.AddComponent<AudioSource>());
+		this.sources.Add(base.gameObject.AddComponent<AudioSource>());
+		this.sources.Add(base.gameObject.AddComponent<AudioSource>());
+		this.sources[0].clip = this.lowClip;
+		this.sources[1].clip = this.midClip;
+		this.sources[2].clip = this.highClip;
+		this.sources.ForEach(delegate(AudioSource source)
+		{
+			source.loop = true;
+			source.volume = 0f;
+			source.Play();
+		});
+	}
+
+	// Token: 0x060026D0 RID: 9936 RVA: 0x00139ED4 File Offset: 0x001380D4
+	private void renderObject()
+	{
+		Camera.main.targetTexture = this.texture;
+		RenderTexture.active = this.texture;
+		Camera.main.Render();
+		this.texture2D.ReadPixels(new Rect(0f, 0f, 32f, 32f), 0, 0);
+		RenderTexture.active = null;
+		Camera.main.targetTexture = null;
+	}
+
+	// Token: 0x060026D1 RID: 9937 RVA: 0x00139F40 File Offset: 0x00138140
+	private Color GetPixel(int x, int y)
+	{
+		return this.texture2D.GetPixel(x, y);
+	}
+
+	// Token: 0x060026D2 RID: 9938 RVA: 0x00139F50 File Offset: 0x00138150
+	private void Update()
+	{
+		this.renderObject();
+		Color color = Color.black;
+		for (int i = 0; i < 32; i++)
+		{
+			for (int j = 0; j < 32; j++)
+			{
+				color += this.GetPixel(j, i);
+			}
+		}
+		color /= 1024f;
+		this.sources[0].volume = color.r;
+		this.sources[1].volume = color.g;
+		this.sources[2].volume = color.b;
+	}
+
+	// Token: 0x04004634 RID: 17972
+	private const int resolution = 32;
+
+	// Token: 0x04004635 RID: 17973
+	private Camera textureCamera;
+
+	// Token: 0x04004636 RID: 17974
+	public RenderTexture texture;
+
+	// Token: 0x04004637 RID: 17975
+	private Texture2D texture2D;
+
+	// Token: 0x04004638 RID: 17976
+	private int layer = 7;
+
+	// Token: 0x04004639 RID: 17977
+	private GameObject cube;
+
+	// Token: 0x0400463A RID: 17978
+	public AudioClip highClip;
+
+	// Token: 0x0400463B RID: 17979
+	public AudioClip midClip;
+
+	// Token: 0x0400463C RID: 17980
+	public AudioClip lowClip;
+
+	// Token: 0x0400463D RID: 17981
+	private List<AudioSource> sources = new List<AudioSource>();
+}

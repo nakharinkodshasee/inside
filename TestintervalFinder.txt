@@ -1,0 +1,109 @@
+
+using System;
+using UnitTest;
+
+// Token: 0x02000631 RID: 1585
+[Test]
+public class TestintervalFinder
+{
+	// Token: 0x06002766 RID: 10086 RVA: 0x0013D044 File Offset: 0x0013B244
+	[Test]
+	public bool TestCycle1()
+	{
+		this.tif = new VfxDecalController.TriggerIntervalFinder(1);
+		this.tif.OnTrigger(0.0);
+		this.tif.OnTrigger(1.0);
+		this.interval = this.tif.GetInterval(1.0);
+		if (!this.CheckInterval(1f, "check right after trigger"))
+		{
+			return false;
+		}
+		this.interval = this.tif.GetInterval(1.2000000476837158);
+		if (!this.CheckInterval(1f, "check shortly after trigger"))
+		{
+			return false;
+		}
+		this.interval = this.tif.GetInterval(2.0);
+		if (!this.CheckInterval(1f, "check (interval time) after last trigger"))
+		{
+			return false;
+		}
+		this.interval = this.tif.GetInterval(3.0);
+		return this.CheckInterval(2f, "check double trigger interval time after last trigger");
+	}
+
+	// Token: 0x06002767 RID: 10087 RVA: 0x0013D14C File Offset: 0x0013B34C
+	[Test]
+	public bool TestEvenCycle2()
+	{
+		this.tif = new VfxDecalController.TriggerIntervalFinder(2);
+		this.tif.OnTrigger(0.0);
+		this.tif.OnTrigger(1.0);
+		this.tif.OnTrigger(2.0);
+		this.interval = this.tif.GetInterval(2.0);
+		if (!this.CheckInterval(1f, "check right after trigger"))
+		{
+			return false;
+		}
+		this.interval = this.tif.GetInterval(2.4000000953674316);
+		if (!this.CheckInterval(1f, "check shortly after trigger"))
+		{
+			return false;
+		}
+		this.interval = this.tif.GetInterval(3.0);
+		return this.CheckInterval(1f, "check (interval time) after trigger");
+	}
+
+	// Token: 0x06002768 RID: 10088 RVA: 0x0013D238 File Offset: 0x0013B438
+	[Test]
+	public bool TestGallopCycle2()
+	{
+		this.tif = new VfxDecalController.TriggerIntervalFinder(2);
+		this.tif.OnTrigger(0.0);
+		this.tif.OnTrigger(0.0);
+		this.tif.OnTrigger(3.0);
+		this.interval = this.tif.GetInterval(3.0);
+		if (!this.CheckInterval(1.5f, "check right after gallop trigger 1"))
+		{
+			return false;
+		}
+		this.tif.OnTrigger(3.0);
+		this.interval = this.tif.GetInterval(3.0);
+		if (!this.CheckInterval(1.5f, "check right after gallop trigger 2"))
+		{
+			return false;
+		}
+		this.tif.OnTrigger(7.0);
+		this.interval = this.tif.GetInterval(7.0);
+		if (!this.CheckInterval(2f, "check right after extended gallop trigger 1"))
+		{
+			return false;
+		}
+		this.tif.OnTrigger(7.0);
+		this.interval = this.tif.GetInterval(7.0);
+		return this.CheckInterval(2f, "check right after extended gallop trigger 2");
+	}
+
+	// Token: 0x06002769 RID: 10089 RVA: 0x0013D390 File Offset: 0x0013B590
+	private bool CheckInterval(float expected, string message)
+	{
+		float num = this.interval;
+		if (num != expected)
+		{
+			this.output = string.Format("triggerInterval = {0}, expected {1}\n{2}", num, expected, message);
+			return false;
+		}
+		return true;
+	}
+
+	// Token: 0x040046C9 RID: 18121
+	private VfxDecalController.TriggerIntervalFinder tif;
+
+	// Token: 0x040046CA RID: 18122
+	[Test]
+	private string output;
+
+	// Token: 0x040046CB RID: 18123
+	[Test]
+	private float interval;
+}

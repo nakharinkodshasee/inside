@@ -1,0 +1,24 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000637 RID: 1591
+public class TestRigidBodyMovement : MonoBehaviour
+{
+	// Token: 0x06002777 RID: 10103 RVA: 0x0013D7FC File Offset: 0x0013B9FC
+	private void Start()
+	{
+	}
+
+	// Token: 0x06002778 RID: 10104 RVA: 0x0013D800 File Offset: 0x0013BA00
+	private void FixedUpdate()
+	{
+		this.counter += Time.deltaTime;
+		if (this.counter > 2f && base.gameObject.GetComponent<Rigidbody>() != null)
+		{
+			base.gameObject.GetComponent<Rigidbody>().MovePosition(Vector3.MoveTowards(base.gameObject.GetComponent<Rigidbody>().position, base.gameObject.GetComponent<Rigidbody>().position + Vector3.down, Time.deltaTime));
+		}
+	}
+
+	// Token: 0x040046E4 RID: 18148
+	private float counter;
+}

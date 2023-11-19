@@ -1,0 +1,24 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005F3 RID: 1523
+public class TestGetInterface : MonoBehaviour
+{
+	// Token: 0x0600265E RID: 9822 RVA: 0x00137C4C File Offset: 0x00135E4C
+	private void Start()
+	{
+		this.TestGetInterfaceStuff<ITestGetInterface1>();
+		this.TestGetInterfaceStuff<ITestGetInterface2>();
+		this.TestGetInterfaceStuff<ITestGetInterface3>();
+	}
+
+	// Token: 0x0600265F RID: 9823 RVA: 0x00137C60 File Offset: 0x00135E60
+	private void TestGetInterfaceStuff<T>() where T : class
+	{
+		T @interface = this.GetInterface<T>();
+		T[] interfaces = this.GetInterfaces<T>();
+		foreach (T t in interfaces)
+		{
+		}
+	}
+}

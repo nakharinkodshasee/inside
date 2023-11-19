@@ -1,0 +1,92 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000615 RID: 1557
+internal class TestSignalsDoor : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060026DF RID: 9951 RVA: 0x0013A1B4 File Offset: 0x001383B4
+	public bool PreAwake(int callcount)
+	{
+		this.opened = SignalOut.Create("opened", base.gameObject);
+		this.closed = SignalOut.Create("closed", base.gameObject);
+		this.open = SignalIn.Create("open", base.gameObject, new Action(this.Open));
+		this.close = SignalIn.Create("close", base.gameObject, new Action(this.Close));
+		return true;
+	}
+
+	// Token: 0x060026E0 RID: 9952 RVA: 0x0013A234 File Offset: 0x00138434
+	private void Start()
+	{
+		this.originalPosition = base.transform.position;
+		this.openPosition = base.transform.position + Vector3.up * 2f;
+	}
+
+	// Token: 0x060026E1 RID: 9953 RVA: 0x0013A278 File Offset: 0x00138478
+	private void Update()
+	{
+		if (this.currentOpennessProgress != this.targetOpennessProgress)
+		{
+			if (this.currentOpennessProgress < this.targetOpennessProgress)
+			{
+				this.currentOpennessProgress += Time.deltaTime * this.speed;
+				if (this.currentOpennessProgress > 1f)
+				{
+					this.currentOpennessProgress = 1f;
+					this.opened.Signal();
+				}
+			}
+			if (this.currentOpennessProgress > this.targetOpennessProgress)
+			{
+				this.currentOpennessProgress -= Time.deltaTime * this.speed;
+				if (this.currentOpennessProgress < 0f)
+				{
+					this.currentOpennessProgress = 0f;
+					this.closed.Signal();
+				}
+			}
+			base.transform.position = Vector3.Lerp(this.originalPosition, this.openPosition, this.currentOpennessProgress);
+		}
+	}
+
+	// Token: 0x060026E2 RID: 9954 RVA: 0x0013A358 File Offset: 0x00138558
+	private void Open()
+	{
+		this.targetOpennessProgress = 1f;
+	}
+
+	// Token: 0x060026E3 RID: 9955 RVA: 0x0013A368 File Offset: 0x00138568
+	private void Close()
+	{
+		this.targetOpennessProgress = 0f;
+	}
+
+	// Token: 0x04004649 RID: 17993
+	public float speed = 2f;
+
+	// Token: 0x0400464A RID: 17994
+	private SignalOut opened;
+
+	// Token: 0x0400464B RID: 17995
+	private SignalOut closed;
+
+	// Token: 0x0400464C RID: 17996
+	private SignalIn open;
+
+	// Token: 0x0400464D RID: 17997
+	private SignalIn close;
+
+	// Token: 0x0400464E RID: 17998
+	private Vector3 originalPosition;
+
+	// Token: 0x0400464F RID: 17999
+	private Vector3 openPosition;
+
+	// Token: 0x04004650 RID: 18000
+	private float currentOpennessProgress;
+
+	// Token: 0x04004651 RID: 18001
+	private float targetOpennessProgress;
+
+	// Token: 0x04004652 RID: 18002
+	private bool isInitialized;
+}

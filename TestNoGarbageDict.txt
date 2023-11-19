@@ -1,0 +1,139 @@
+using System;
+using System.Collections.Generic;
+using UnitTest;
+using UnityEngine;
+
+// Token: 0x0200062F RID: 1583
+[Test]
+internal class TestNoGarbageDict
+{
+	// Token: 0x06002750 RID: 10064 RVA: 0x0013C688 File Offset: 0x0013A888
+	public TestNoGarbageDict()
+	{
+		this.dict = new NoGarbageDictionary<int, string>(1, 1, true);
+		this.objDict = new NoGarbageObjectDictionary<GameObject, string>(0, 1);
+	}
+
+	// Token: 0x06002751 RID: 10065 RVA: 0x0013C6AC File Offset: 0x0013A8AC
+	[Test("Resize smaller")]
+	private bool ResizeSmaller()
+	{
+		this.dict[1] = "one";
+		this.dict[2] = "two";
+		this.dict[7] = "seven";
+		this.dict[3] = "three";
+		this.dict[20] = "twenty";
+		this.before = this.dict.ToDebugString();
+		this.dict.RemoveAt(this.dict.FindIndexOf(2));
+		this.dict.RemoveAt(this.dict.FindIndexOf(3));
+		this.dict.RemoveAt(this.dict.FindIndexOf(1));
+		this.after = this.dict.ToDebugString();
+		this.dict.Clear();
+		this.afterClear = this.dict.ToDebugString();
+		return false;
+	}
+
+	// Token: 0x06002752 RID: 10066 RVA: 0x0013C794 File Offset: 0x0013A994
+	[Test("RemoveAll( predicate )")]
+	private bool RemoveAll()
+	{
+		this.objDict.Clear();
+		GameObject gameObject = new GameObject("go1");
+		GameObject go2 = new GameObject("go2");
+		GameObject gameObject2 = new GameObject("go3");
+		GameObject gameObject3 = new GameObject("go4");
+		gameObject.hideFlags = 52;
+		go2.hideFlags = 52;
+		gameObject2.hideFlags = 52;
+		gameObject3.hideFlags = 52;
+		this.objDict[gameObject] = "go1";
+		this.objDict[go2] = "go2";
+		this.objDict[gameObject2] = "go3";
+		this.objDict[gameObject3] = "go4";
+		this.before = this.objDict.ToDebugString();
+		this.objDict.RemoveAll((KeyValuePair<GameObject, string> kv) => kv.Key == go2 || kv.Value == "go4");
+		this.after = this.objDict.ToDebugString();
+		PDUtilities.Destroy(gameObject);
+		PDUtilities.Destroy(go2);
+		PDUtilities.Destroy(gameObject2);
+		PDUtilities.Destroy(gameObject3);
+		return this.objDict.Count == 2;
+	}
+
+	// Token: 0x06002753 RID: 10067 RVA: 0x0013C8B8 File Offset: 0x0013AAB8
+	[Test("GetValueOrAdd( GameObject, Func )")]
+	private bool GetValueOrAdd()
+	{
+		this.objDict.Clear();
+		GameObject gameObject = new GameObject("go1");
+		GameObject gameObject2 = new GameObject("go2");
+		GameObject gameObject3 = new GameObject("go3");
+		GameObject gameObject4 = new GameObject("go4");
+		gameObject.hideFlags = 52;
+		gameObject2.hideFlags = 52;
+		gameObject3.hideFlags = 52;
+		gameObject4.hideFlags = 52;
+		this.objDict[gameObject2] = "go2";
+		this.objDict[gameObject4] = "go4";
+		this.before = this.objDict.ToDebugString();
+		this.objDict.GetValueOrAdd(gameObject, () => "go1 added");
+		this.objDict.GetValueOrAdd(gameObject2, () => "go2 added");
+		this.objDict.GetValueOrAdd(gameObject3, () => "go3 added");
+		this.objDict.GetValueOrAdd(gameObject4, () => "go4 added");
+		this.after = this.objDict.ToDebugString();
+		bool flag = true;
+		if (this.objDict.Count != 4)
+		{
+			flag = false;
+		}
+		int num = this.objDict.FindIndexOf(gameObject);
+		if (num == -1)
+		{
+			flag = false;
+		}
+		flag &= (this.objDict.GetKeyAt(num) == gameObject && this.objDict.GetValueAt(num) == "go1 added");
+		num = this.objDict.FindIndexOf(gameObject2);
+		if (num == -1)
+		{
+			flag = false;
+		}
+		flag &= (this.objDict.GetKeyAt(num) == gameObject2 && this.objDict.GetValueAt(num) == "go2");
+		num = this.objDict.FindIndexOf(gameObject3);
+		if (num == -1)
+		{
+			flag = false;
+		}
+		flag &= (this.objDict.GetKeyAt(num) == gameObject3 && this.objDict.GetValueAt(num) == "go3 added");
+		num = this.objDict.FindIndexOf(gameObject4);
+		if (num == -1)
+		{
+			flag = false;
+		}
+		flag &= (this.objDict.GetKeyAt(num) == gameObject4 && this.objDict.GetValueAt(num) == "go4");
+		PDUtilities.Destroy(gameObject);
+		PDUtilities.Destroy(gameObject2);
+		PDUtilities.Destroy(gameObject3);
+		PDUtilities.Destroy(gameObject4);
+		return flag;
+	}
+
+	// Token: 0x040046B3 RID: 18099
+	[Test]
+	private NoGarbageDictionary<int, string> dict;
+
+	// Token: 0x040046B4 RID: 18100
+	[Test]
+	private NoGarbageObjectDictionary<GameObject, string> objDict;
+
+	// Token: 0x040046B5 RID: 18101
+	[Test]
+	private string before;
+
+	// Token: 0x040046B6 RID: 18102
+	[Test]
+	private string after;
+
+	// Token: 0x040046B7 RID: 18103
+	[Test]
+	private string afterClear;
+}

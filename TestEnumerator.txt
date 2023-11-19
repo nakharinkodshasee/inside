@@ -1,0 +1,125 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000625 RID: 1573
+public class TestEnumerator : MonoBehaviour
+{
+	// Token: 0x06002713 RID: 10003 RVA: 0x0013B4B8 File Offset: 0x001396B8
+	private void Start()
+	{
+		this.list = new List<int>(this.count);
+		this.noGarbageDict = new NoGarbageDictionary<int, string>(this.count, 1, true);
+		this.normalDict = new Dictionary<int, string>();
+		this.fastList = new FastList<int>(0, FastListExpandMode.Exponential, 100);
+		this.array = new int[this.count];
+		int i = 0;
+		int capacity = this.noGarbageDict.Capacity;
+		while (i < capacity)
+		{
+			this.noGarbageDict[i] = string.Format("Element no. {0}", i);
+			this.normalDict[i] = string.Format("Element no. {0}", i);
+			this.list.Add(i);
+			this.fastList.Add(i);
+			this.array[i] = i;
+			i++;
+		}
+	}
+
+	// Token: 0x06002714 RID: 10004 RVA: 0x0013B58C File Offset: 0x0013978C
+	private void Update()
+	{
+		int num = 0;
+		int i = 0;
+		int num2 = this.list.Count;
+		while (i < num2)
+		{
+			num += this.array[i];
+			i++;
+		}
+		num = 0;
+		foreach (int num3 in this.array)
+		{
+			num += num3;
+		}
+		num = 0;
+		int k = 0;
+		int num4 = this.list.Count;
+		while (k < num4)
+		{
+			num += this.list[k];
+			k++;
+		}
+		num = 0;
+		int l = 0;
+		int num5 = this.fastList.Count;
+		while (l < num5)
+		{
+			num += this.fastList[l];
+			l++;
+		}
+		num = 0;
+		foreach (int num6 in this.list)
+		{
+			num += num6;
+		}
+		num = 0;
+		foreach (int num7 in this.fastList)
+		{
+			num += num7;
+		}
+		num = 0;
+		foreach (KeyValuePair<int, string> keyValuePair in this.normalDict)
+		{
+			num += keyValuePair.Key;
+		}
+		num = 0;
+		foreach (KeyValuePair<int, string> keyValuePair2 in this.noGarbageDict)
+		{
+			num += keyValuePair2.Key;
+		}
+		num = 0;
+		int m = 0;
+		int num8 = this.noGarbageDict.Count;
+		while (m < num8)
+		{
+			int keyAt = this.noGarbageDict.GetKeyAt(m);
+			string valueAt = this.noGarbageDict.GetValueAt(m);
+			num += keyAt;
+			m++;
+		}
+	}
+
+	// Token: 0x06002715 RID: 10005 RVA: 0x0013B814 File Offset: 0x00139A14
+	private void OnGUI()
+	{
+		GUILayout.Label(string.Format("noGarbageDict.Count = {0}", this.noGarbageDict.Count), new GUILayoutOption[0]);
+		int num = 0;
+		foreach (KeyValuePair<int, string> keyValuePair in this.noGarbageDict)
+		{
+			if (++num > 20)
+			{
+				break;
+			}
+			GUILayout.Label(string.Format("{0} -> {1}", keyValuePair.Key, keyValuePair.Value), new GUILayoutOption[0]);
+		}
+	}
+
+	// Token: 0x04004693 RID: 18067
+	public int count = 100;
+
+	// Token: 0x04004694 RID: 18068
+	private NoGarbageDictionary<int, string> noGarbageDict;
+
+	// Token: 0x04004695 RID: 18069
+	private Dictionary<int, string> normalDict;
+
+	// Token: 0x04004696 RID: 18070
+	private List<int> list;
+
+	// Token: 0x04004697 RID: 18071
+	private FastList<int> fastList;
+
+	// Token: 0x04004698 RID: 18072
+	private int[] array;
+}

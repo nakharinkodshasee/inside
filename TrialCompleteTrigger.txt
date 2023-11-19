@@ -1,0 +1,115 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000387 RID: 903
+public class TrialCompleteTrigger : MonoBehaviour
+{
+	// Token: 0x0600186B RID: 6251 RVA: 0x000D4C20 File Offset: 0x000D2E20
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (GameEventManager.IsTrialMode())
+		{
+			CharacterProbe component = collider.GetComponent<CharacterProbe>();
+			if (component && component.character == ScriptGlobals.mainCharacter)
+			{
+				this.StartTrialEnding();
+			}
+		}
+	}
+
+	// Token: 0x0600186C RID: 6252 RVA: 0x000D4C64 File Offset: 0x000D2E64
+	private void OnDisable()
+	{
+		this.FinishTrialEnding();
+	}
+
+	// Token: 0x0600186D RID: 6253 RVA: 0x000D4C6C File Offset: 0x000D2E6C
+	private void FixedUpdate()
+	{
+		this.UpdateTrialEnding();
+	}
+
+	// Token: 0x0600186E RID: 6254 RVA: 0x000D4C74 File Offset: 0x000D2E74
+	private void StartTrialEnding()
+	{
+		if (!this.trialEnding)
+		{
+			this.trialEnding = true;
+			this.boySetInput.activateScript();
+			SingletonBehaviour<MenuBackgroundManager>.instance.Add(this.background, this.slowdownDuration);
+			MenuManager.reserveMenu = true;
+			this.trialEndTimer = this.slowdownDuration;
+			this.startingInput = GameInput.stick.x;
+			this.boySetInput.stickVal.x = this.startingInput;
+		}
+	}
+
+	// Token: 0x0600186F RID: 6255 RVA: 0x000D4CF0 File Offset: 0x000D2EF0
+	private void FinishTrialEnding()
+	{
+		if (this.trialEnding)
+		{
+			this.trialEnding = false;
+			this.boySetInput.deactivateScript();
+			SingletonBehaviour<MenuBackgroundManager>.instance.Remove(this.background);
+			MenuManager.reserveMenu = false;
+		}
+	}
+
+	// Token: 0x06001870 RID: 6256 RVA: 0x000D4D28 File Offset: 0x000D2F28
+	private void UpdateTrialEnding()
+	{
+		if (!this.trialEnding)
+		{
+			return;
+		}
+		this.trialEndTimer = Mathf.Max(this.trialEndTimer - Time.deltaTime, 0f);
+		this.boySetInput.stickVal.x = Mathf.Lerp(this.startingInput, 0.1f, 1f - this.trialEndTimer / this.slowdownDuration);
+		if (this.trialEndTimer <= 0f)
+		{
+			this.FinishTrialEnding();
+			this.ShowMenu();
+		}
+	}
+
+	// Token: 0x06001871 RID: 6257 RVA: 0x000D4DAC File Offset: 0x000D2FAC
+	private void ShowMenu()
+	{
+		if (!ScriptGlobals.mainCharacter.isDead)
+		{
+			MenuManager.ShowUpsellMenu();
+		}
+	}
+
+	// Token: 0x04002C17 RID: 11287
+	public BoySetInput boySetInput;
+
+	// Token: 0x04002C18 RID: 11288
+	public float slowdownDuration = 2f;
+
+	// Token: 0x04002C19 RID: 11289
+	private float trialEndTimer;
+
+	// Token: 0x04002C1A RID: 11290
+	private float startingInput;
+
+	// Token: 0x04002C1B RID: 11291
+	private bool trialEnding;
+
+	// Token: 0x04002C1C RID: 11292
+	private TrialCompleteTrigger.Background background = new TrialCompleteTrigger.Background();
+
+	// Token: 0x02000388 RID: 904
+	private class Background : MenuBackgroundManager.IBackground
+	{
+		// Token: 0x1700006D RID: 109
+		// (get) Token: 0x06001873 RID: 6259 RVA: 0x000D4DCC File Offset: 0x000D2FCC
+		public float barHeight
+		{
+			get
+			{
+				return 1f;
+			}
+		}
+	}
+}

@@ -1,0 +1,47 @@
+using System;
+using HutongGames.PlayMaker;
+using UnityEngine;
+
+// Token: 0x02000616 RID: 1558
+public class TestStateMachineDebugging : MonoBehaviour
+{
+	// Token: 0x060026E5 RID: 9957 RVA: 0x0013A380 File Offset: 0x00138580
+	private void Awake()
+	{
+		this.playMaker = base.gameObject.AddComponent<PlayMakerFSM>();
+	}
+
+	// Token: 0x060026E6 RID: 9958 RVA: 0x0013A394 File Offset: 0x00138594
+	private void Start()
+	{
+		OnNextUpdate.Do(new Action(this.DoStuff));
+	}
+
+	// Token: 0x060026E7 RID: 9959 RVA: 0x0013A3A8 File Offset: 0x001385A8
+	private void DoStuff()
+	{
+		Fsm fsm = this.playMaker.Fsm;
+		fsm.States = new FsmState[3];
+		for (int i = 0; i < fsm.States.Length; i++)
+		{
+			FsmState fsmState = new FsmState(fsm);
+			fsmState.Name = string.Format("state{0}", i);
+			fsmState.ColorIndex = i;
+			fsmState.Position = new Rect((float)(i * 100), 20f, 80f, 20f);
+			fsmState.Fsm = fsm;
+			fsmState.Description = "descriptiorz";
+			fsmState.Actions = new FsmStateAction[0];
+			fsmState.Transitions = new FsmTransition[0];
+		}
+		fsm.StartState = "state0";
+		fsm.Init(this.playMaker);
+	}
+
+	// Token: 0x060026E8 RID: 9960 RVA: 0x0013A46C File Offset: 0x0013866C
+	private void Update()
+	{
+	}
+
+	// Token: 0x04004653 RID: 18003
+	private PlayMakerFSM playMaker;
+}

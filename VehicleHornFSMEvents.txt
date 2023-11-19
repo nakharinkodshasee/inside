@@ -1,0 +1,36 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003CA RID: 970
+public class VehicleHornFSMEvents : MonoBehaviour
+{
+	// Token: 0x06001A1B RID: 6683 RVA: 0x000E412C File Offset: 0x000E232C
+	private void Start()
+	{
+		this.horn.hornStarted.Event += this.HornStarted;
+		this.horn.hornStopped.Event += this.HornStopped;
+	}
+
+	// Token: 0x06001A1C RID: 6684 RVA: 0x000E4174 File Offset: 0x000E2374
+	private void HornStarted(WheeledVehicleHorn aHorn)
+	{
+		Debug.Log("HornStart");
+		this.hornStarted.OnEvent(this);
+	}
+
+	// Token: 0x06001A1D RID: 6685 RVA: 0x000E418C File Offset: 0x000E238C
+	private void HornStopped(WheeledVehicleHorn aHorn)
+	{
+		Debug.Log("HornStopped");
+		this.hornStopped.OnEvent(this);
+	}
+
+	// Token: 0x04002EF8 RID: 12024
+	public WheeledVehicleHorn horn;
+
+	// Token: 0x04002EF9 RID: 12025
+	public SimpleEvent<VehicleHornFSMEvents> hornStarted = new SimpleEvent<VehicleHornFSMEvents>("FSMEventHornStarted");
+
+	// Token: 0x04002EFA RID: 12026
+	public SimpleEvent<VehicleHornFSMEvents> hornStopped = new SimpleEvent<VehicleHornFSMEvents>("FSMEventHornStopped");
+}

@@ -1,0 +1,262 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000479 RID: 1145
+public class TriggerEndCredits : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001E16 RID: 7702 RVA: 0x00102424 File Offset: 0x00100624
+	public bool PreAwake(int callcount)
+	{
+		this.playEndCredits = SignalIn.Create("playEndCredits", base.gameObject, new Action(this.SetFadeState));
+		this.enter = SignalOut.Create("enter", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001E17 RID: 7703 RVA: 0x0010246C File Offset: 0x0010066C
+	private void Start()
+	{
+		this.limitInput = base.GetComponent<BoySetInput>();
+		this.textureRatio = (float)(this.texture.width / this.texture.height);
+	}
+
+	// Token: 0x06001E18 RID: 7704 RVA: 0x001024A4 File Offset: 0x001006A4
+	private void SetFadeState()
+	{
+		if (this.limitInput)
+		{
+			this.limitInput.activateScript();
+		}
+		this.pdpc = ((!(Camera.main != null)) ? null : Camera.main.gameObject.GetComponent<D11PDPostCombined>());
+		this.fadeInTimer = 0f;
+		this.state = TriggerEndCredits.State.Fade;
+	}
+
+	// Token: 0x06001E19 RID: 7705 RVA: 0x0010250C File Offset: 0x0010070C
+	private void FadeState()
+	{
+		this.fadeInTimer += Time.deltaTime;
+		this.currentFadeFraction = Mathf.Clamp01(this.fadeInTimer / this.fadeDuration);
+		if (this.currentFadeFraction >= 1f)
+		{
+			this.SetTextWait();
+		}
+	}
+
+	// Token: 0x06001E1A RID: 7706 RVA: 0x0010255C File Offset: 0x0010075C
+	private void SetTextWait()
+	{
+		this.textWaitTimer = this.textWaitDuration;
+		this.state = TriggerEndCredits.State.TextWait;
+	}
+
+	// Token: 0x06001E1B RID: 7707 RVA: 0x00102574 File Offset: 0x00100774
+	private void TextWaitState()
+	{
+		this.textWaitTimer -= Time.deltaTime;
+		if (this.textWaitTimer <= 0f)
+		{
+			this.SetTextShowState();
+		}
+	}
+
+	// Token: 0x06001E1C RID: 7708 RVA: 0x001025AC File Offset: 0x001007AC
+	private void SetTextShowState()
+	{
+		this.textFadeTimer = 0f;
+		this.restartTimer = 0f;
+		this.state = TriggerEndCredits.State.TextShow;
+	}
+
+	// Token: 0x06001E1D RID: 7709 RVA: 0x001025CC File Offset: 0x001007CC
+	private void ShowTextState()
+	{
+		if (this.textFadeTimer < this.textFadeInDuration)
+		{
+			this.textFadeTimer += Time.deltaTime;
+			float num = Mathf.Clamp01(this.textFadeTimer / this.textFadeInDuration);
+			this.currentTextColor = Color.Lerp(this.startTextColor, this.endTextColor, num);
+		}
+		this.restartTimer += Time.deltaTime;
+		if (this.restartTimer > this.autoRestartDuration || (this.restartTimer > this.restartAllowedDuration && (GameInput.rawAction || GameInput.rawJump)))
+		{
+			this.SetRestartState();
+		}
+	}
+
+	// Token: 0x06001E1E RID: 7710 RVA: 0x00102678 File Offset: 0x00100878
+	private void SetRestartState()
+	{
+		this.fadeOutTimer = this.textFadeOutDuration;
+		this.state = TriggerEndCredits.State.Restart;
+	}
+
+	// Token: 0x06001E1F RID: 7711 RVA: 0x00102690 File Offset: 0x00100890
+	private void RestartState()
+	{
+		this.fadeOutTimer -= Time.deltaTime;
+		float num = Mathf.Clamp01(this.fadeOutTimer / this.textFadeOutDuration);
+		this.currentTextColor = Color.Lerp(this.startTextColor, this.endTextColor, num);
+		if (num <= 0f)
+		{
+			GameEventManager.StartNewGame();
+			this.state = TriggerEndCredits.State.Complete;
+		}
+	}
+
+	// Token: 0x06001E20 RID: 7712 RVA: 0x001026F4 File Offset: 0x001008F4
+	private void Update()
+	{
+		switch (this.state)
+		{
+		case TriggerEndCredits.State.Fade:
+			this.FadeState();
+			break;
+		case TriggerEndCredits.State.TextWait:
+			this.TextWaitState();
+			break;
+		case TriggerEndCredits.State.TextShow:
+			this.ShowTextState();
+			break;
+		case TriggerEndCredits.State.Restart:
+			this.RestartState();
+			break;
+		}
+		if (this.currentFadeFraction > 0f && this.pdpc)
+		{
+			this.pdpc.fadeOut = this.currentFadeFraction;
+		}
+	}
+
+	// Token: 0x06001E21 RID: 7713 RVA: 0x00102784 File Offset: 0x00100984
+	public void OnGUI()
+	{
+		if (this.textFadeTimer > 0f && this.texture)
+		{
+			GUI.depth = 90;
+			float num = (float)Screen.width * this.textSize;
+			if (num > (float)this.texture.width)
+			{
+				num = (float)this.texture.width;
+			}
+			float num2 = num / this.textureRatio;
+			float num3 = ((float)Screen.width - num) * this.textX;
+			float num4 = ((float)Screen.height - num2) * this.textY;
+			this.textureRect = new Rect(num3, num4, num, num2);
+			GUI.color = this.currentTextColor;
+			GUI.DrawTexture(this.textureRect, this.texture, 2, true, 0f);
+		}
+	}
+
+	// Token: 0x06001E22 RID: 7714 RVA: 0x00102840 File Offset: 0x00100A40
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (this.state == TriggerEndCredits.State.None && (collider.GetComponent<HuddleProbe>() || collider.GetComponent<BoyProbe>()))
+		{
+			this.enter.Signal();
+		}
+	}
+
+	// Token: 0x0400374A RID: 14154
+	public float fadeDuration = 6f;
+
+	// Token: 0x0400374B RID: 14155
+	public float textWaitDuration = 0.5f;
+
+	// Token: 0x0400374C RID: 14156
+	public float textFadeInDuration = 2f;
+
+	// Token: 0x0400374D RID: 14157
+	public float textFadeOutDuration = 1f;
+
+	// Token: 0x0400374E RID: 14158
+	public float restartAllowedDuration = 10f;
+
+	// Token: 0x0400374F RID: 14159
+	public float autoRestartDuration = 15f;
+
+	// Token: 0x04003750 RID: 14160
+	public Texture texture;
+
+	// Token: 0x04003751 RID: 14161
+	public float textSize = 0.5f;
+
+	// Token: 0x04003752 RID: 14162
+	public float textX = 0.37f;
+
+	// Token: 0x04003753 RID: 14163
+	public float textY = 0.4f;
+
+	// Token: 0x04003754 RID: 14164
+	private SignalOut enter;
+
+	// Token: 0x04003755 RID: 14165
+	private BoySetInput limitInput;
+
+	// Token: 0x04003756 RID: 14166
+	private bool fadeToCredits;
+
+	// Token: 0x04003757 RID: 14167
+	private TriggerEndCredits.State state;
+
+	// Token: 0x04003758 RID: 14168
+	private D11PDPostCombined pdpc;
+
+	// Token: 0x04003759 RID: 14169
+	private float fadeInTimer;
+
+	// Token: 0x0400375A RID: 14170
+	private float fadeOutTimer;
+
+	// Token: 0x0400375B RID: 14171
+	private float textWaitTimer;
+
+	// Token: 0x0400375C RID: 14172
+	private float textFadeTimer;
+
+	// Token: 0x0400375D RID: 14173
+	private float restartTimer;
+
+	// Token: 0x0400375E RID: 14174
+	private float currentFadeFraction;
+
+	// Token: 0x0400375F RID: 14175
+	private Texture originalTexture;
+
+	// Token: 0x04003760 RID: 14176
+	private float textureRatio;
+
+	// Token: 0x04003761 RID: 14177
+	private static GUIContent labelContent = new GUIContent();
+
+	// Token: 0x04003762 RID: 14178
+	private Color currentTextColor;
+
+	// Token: 0x04003763 RID: 14179
+	private Rect textureRect;
+
+	// Token: 0x04003764 RID: 14180
+	private Color endTextColor = Color.white;
+
+	// Token: 0x04003765 RID: 14181
+	private Color startTextColor = Color.white.Alpha(0f);
+
+	// Token: 0x04003766 RID: 14182
+	public SignalIn playEndCredits;
+
+	// Token: 0x0200047A RID: 1146
+	private enum State
+	{
+		// Token: 0x04003768 RID: 14184
+		None,
+		// Token: 0x04003769 RID: 14185
+		Fade,
+		// Token: 0x0400376A RID: 14186
+		TextWait,
+		// Token: 0x0400376B RID: 14187
+		TextShow,
+		// Token: 0x0400376C RID: 14188
+		Restart,
+		// Token: 0x0400376D RID: 14189
+		Complete
+	}
+}

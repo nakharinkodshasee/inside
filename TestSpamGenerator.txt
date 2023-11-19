@@ -1,0 +1,72 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000609 RID: 1545
+public class TestSpamGenerator : MonoBehaviour
+{
+	// Token: 0x060026A9 RID: 9897 RVA: 0x00138C44 File Offset: 0x00136E44
+	private void Start()
+	{
+	}
+
+	// Token: 0x060026AA RID: 9898 RVA: 0x00138C48 File Offset: 0x00136E48
+	private void Update()
+	{
+		this.timeUntilSpam -= Time.deltaTime;
+		while (this.timeUntilSpam < 0f)
+		{
+			this.Spam("UPDATE");
+			this.timeUntilSpam += this.timeBetweenSpam;
+		}
+	}
+
+	// Token: 0x060026AB RID: 9899 RVA: 0x00138C9C File Offset: 0x00136E9C
+	private void FixedUpdate()
+	{
+		this.timeUntilSpam -= Time.deltaTime;
+		while (this.timeUntilSpam < 0f)
+		{
+			this.Spam("FIXED");
+			this.timeUntilSpam += this.timeBetweenSpam;
+		}
+	}
+
+	// Token: 0x060026AC RID: 9900 RVA: 0x00138CF0 File Offset: 0x00136EF0
+	private void Spam(string prefix)
+	{
+		float value = Random.value;
+		if (value >= 0.1f)
+		{
+			if (value >= 0.3f)
+			{
+				if (value >= 0.5f)
+				{
+					if (value < 0.7f)
+					{
+						Debug.Log("Hello, this is a built in message");
+					}
+					else
+					{
+						this.ThrowException();
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x060026AD RID: 9901 RVA: 0x00138D54 File Offset: 0x00136F54
+	private void ThrowException()
+	{
+		TestSpamGenerator testSpamGenerator = null;
+		testSpamGenerator.Update();
+	}
+
+	// Token: 0x040045F0 RID: 17904
+	public float timeBetweenSpam = 0.5f;
+
+	// Token: 0x040045F1 RID: 17905
+	private float timeUntilSpam;
+
+	// Token: 0x040045F2 RID: 17906
+	private static int count;
+}

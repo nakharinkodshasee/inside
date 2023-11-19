@@ -1,0 +1,47 @@
+using System;
+using System.Diagnostics;
+using UnityEngine;
+
+// Token: 0x02000661 RID: 1633
+public class TestLogSpam : MonoBehaviour
+{
+	// Token: 0x0600281A RID: 10266 RVA: 0x00143494 File Offset: 0x00141694
+	private void Start()
+	{
+	}
+
+	// Token: 0x0600281B RID: 10267 RVA: 0x00143498 File Offset: 0x00141698
+	private void Update()
+	{
+		int num = this.array[2];
+	}
+
+	// Token: 0x0600281C RID: 10268 RVA: 0x001434B0 File Offset: 0x001416B0
+	public void GenerateSpam()
+	{
+		Stopwatch stopwatch = new Stopwatch();
+		stopwatch.Start();
+		for (int i = 0; i < this.spamCount; i++)
+		{
+		}
+	}
+
+	// Token: 0x0600281D RID: 10269 RVA: 0x001434E0 File Offset: 0x001416E0
+	public void GenerateErrors()
+	{
+		Stopwatch stopwatch = new Stopwatch();
+		stopwatch.Start();
+		for (int i = 0; i < this.spamCount; i++)
+		{
+		}
+	}
+
+	// Token: 0x040047E4 RID: 18404
+	private int[] array = new int[]
+	{
+		7
+	};
+
+	// Token: 0x040047E5 RID: 18405
+	public int spamCount = 1000;
+}

@@ -1,0 +1,51 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020005B9 RID: 1465
+public class TorpedoCannon : MonoBehaviour
+{
+	// Token: 0x06002549 RID: 9545 RVA: 0x0013201C File Offset: 0x0013021C
+	private void Start()
+	{
+	}
+
+	// Token: 0x0600254A RID: 9546 RVA: 0x00132020 File Offset: 0x00130220
+	private void Update()
+	{
+		if (this.mTimer > this.minTimeBetweenShots && this.mActiveTorpedoes.Count < this.nrOfActiveTorpedoesAtOnce)
+		{
+			this.mTimer = 0f;
+			GameObject gameObject = Object.Instantiate<GameObject>(this.torpedoPrefab);
+			gameObject.transform.parent = base.transform;
+			gameObject.transform.localPosition = Vector3.zero;
+			gameObject.transform.localRotation = Quaternion.identity;
+			this.mActiveTorpedoes.Add(gameObject);
+		}
+		for (int i = 0; i < this.mActiveTorpedoes.Count; i++)
+		{
+			GameObject gameObject2 = this.mActiveTorpedoes[i];
+			if (gameObject2 == null)
+			{
+				this.mActiveTorpedoes.RemoveAt(i);
+				i--;
+			}
+		}
+		this.mTimer += Time.deltaTime;
+	}
+
+	// Token: 0x0400444B RID: 17483
+	public GameObject torpedoPrefab;
+
+	// Token: 0x0400444C RID: 17484
+	public int nrOfActiveTorpedoesAtOnce;
+
+	// Token: 0x0400444D RID: 17485
+	public float minTimeBetweenShots;
+
+	// Token: 0x0400444E RID: 17486
+	private float mTimer;
+
+	// Token: 0x0400444F RID: 17487
+	private List<GameObject> mActiveTorpedoes = new List<GameObject>();
+}

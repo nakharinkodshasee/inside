@@ -1,0 +1,146 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200059A RID: 1434
+public class TruckControl : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060024BE RID: 9406 RVA: 0x0012E734 File Offset: 0x0012C934
+	public bool PreAwake(int callcount)
+	{
+		this.startDriving = SignalIn.Create("startDriving", base.gameObject, new Action(this.StartDriving));
+		return true;
+	}
+
+	// Token: 0x060024BF RID: 9407 RVA: 0x0012E75C File Offset: 0x0012C95C
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x060024C0 RID: 9408 RVA: 0x0012E76C File Offset: 0x0012C96C
+	private void StartDriving()
+	{
+		this.driving = true;
+		this.target = this.targetChase;
+	}
+
+	// Token: 0x060024C1 RID: 9409 RVA: 0x0012E784 File Offset: 0x0012C984
+	private void FixedUpdate()
+	{
+		if (this.driving)
+		{
+			if (this.boy.isDead)
+			{
+				this.breaking = true;
+			}
+			Vector3 position = this.targetChase.position;
+			position.x = this.boy.transform.position.x;
+			if (position.x > this.max.position.x)
+			{
+				position.x = this.max.position.x;
+			}
+			else if (position.x < this.min.position.x)
+			{
+				position.x = this.min.position.x;
+			}
+			this.targetChase.position = position;
+			Vector3 vector = this.target.transform.position - base.transform.position;
+			vector.Normalize();
+			vector.x *= 3f;
+			if (this.breaking)
+			{
+				this.currentSpeed *= 0.94f;
+			}
+			else
+			{
+				this.currentSpeed += (this.currentSpeed - this.maxSpeed) * -Time.deltaTime * 0.033f;
+			}
+			Vector3 vector2 = vector * this.currentSpeed;
+			Vector3 vector3 = base.GetComponent<Rigidbody>().transform.position + vector2;
+			Ray ray;
+			ray..ctor(this.frontWheels.transform.position, -Vector3.up);
+			RaycastHit raycastHit;
+			if (Physics.Raycast(ray, ref raycastHit, 20f))
+			{
+				this.frontPos = raycastHit.point;
+			}
+			ray..ctor(this.backWheels.transform.position, -Vector3.up);
+			if (Physics.Raycast(ray, ref raycastHit, 20f))
+			{
+				this.backPos = raycastHit.point;
+			}
+			Vector3 vector4 = this.backPos - this.frontPos;
+			Vector3 vector5 = Vector3.Cross(Vector3.Cross(vector4, Vector3.up), vector4);
+			base.transform.rotation = Quaternion.FromToRotation(Vector3.up, vector5);
+			vector3.y = this.frontPos.y + vector4.y / 2f + this.wheelHeight;
+			base.GetComponent<Rigidbody>().MovePosition(vector3);
+			float num = Vector3.Distance(base.transform.position, this.target.transform.position);
+			if (num < 3f)
+			{
+				if (this.target == this.targetLeaveScene)
+				{
+					this.driving = false;
+					base.gameObject.SetActive(false);
+				}
+				else
+				{
+					Vector3 position2 = this.targetLeaveScene.transform.position;
+					position2.x = this.targetChase.transform.position.x;
+					this.targetLeaveScene.transform.position = position2;
+					this.target = this.targetLeaveScene;
+				}
+			}
+		}
+	}
+
+	// Token: 0x0400436B RID: 17259
+	public Transform min;
+
+	// Token: 0x0400436C RID: 17260
+	public Transform max;
+
+	// Token: 0x0400436D RID: 17261
+	public Transform targetChase;
+
+	// Token: 0x0400436E RID: 17262
+	public Transform targetLeaveScene;
+
+	// Token: 0x0400436F RID: 17263
+	public Transform frontWheels;
+
+	// Token: 0x04004370 RID: 17264
+	public Transform backWheels;
+
+	// Token: 0x04004371 RID: 17265
+	private Transform target;
+
+	// Token: 0x04004372 RID: 17266
+	private SignalIn startDriving;
+
+	// Token: 0x04004373 RID: 17267
+	private bool driving;
+
+	// Token: 0x04004374 RID: 17268
+	private Boy boy;
+
+	// Token: 0x04004375 RID: 17269
+	private bool breaking;
+
+	// Token: 0x04004376 RID: 17270
+	private float currentSpeed;
+
+	// Token: 0x04004377 RID: 17271
+	private float speedIncrease = 0.0005f;
+
+	// Token: 0x04004378 RID: 17272
+	private float maxSpeed = 3.3f;
+
+	// Token: 0x04004379 RID: 17273
+	private float wheelHeight = 0.4f;
+
+	// Token: 0x0400437A RID: 17274
+	private Vector3 frontPos;
+
+	// Token: 0x0400437B RID: 17275
+	private Vector3 backPos;
+}

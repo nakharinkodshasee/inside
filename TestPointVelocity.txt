@@ -1,0 +1,120 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000610 RID: 1552
+public class TestPointVelocity : MonoBehaviour
+{
+	// Token: 0x060026C8 RID: 9928 RVA: 0x00139AA8 File Offset: 0x00137CA8
+	private void Start()
+	{
+		if (!this.watchObject)
+		{
+			this.watchObject = base.gameObject;
+		}
+		this.watchTransform = this.watchObject.transform;
+		this.oldPos = this.watchTransform.position;
+		this.oldRot = this.watchTransform.rotation;
+	}
+
+	// Token: 0x060026C9 RID: 9929 RVA: 0x00139B04 File Offset: 0x00137D04
+	private void OnEnable()
+	{
+		this.matinstance = base.gameObject.GetComponent<MaterialInstance>();
+		this.prop_vel = this.matinstance.GetOrAddVectorProperty("_Velocity");
+		this.prop_angvel = this.matinstance.GetOrAddVectorProperty("_AngVelocity");
+	}
+
+	// Token: 0x060026CA RID: 9930 RVA: 0x00139B50 File Offset: 0x00137D50
+	private void FixedUpdate()
+	{
+		if (base.GetComponent<Renderer>() && !base.GetComponent<Renderer>().isVisible)
+		{
+			return;
+		}
+		Quaternion rotation = this.watchTransform.rotation;
+		Vector3 position = this.watchTransform.position;
+		float deltaTime = Time.deltaTime;
+		this.vel = (position - this.oldPos) / deltaTime;
+		this.wobble += this.vel;
+		this.wobble *= this.wobbleFalloff;
+		this.interpolatedVel = Vector3.Lerp(this.interpolatedVel, this.vel, deltaTime * this.lag);
+		float num = this.vel.x + this.vel.y + this.vel.z;
+		Vector3 vector = this.wobbleStrength * this.wobble * (float)Math.Sin(Time.timeDbl * (double)this.wobbleFreq * 6.28000020980835) + this.interpolatedVel;
+		Vector4 one = Vector4.one;
+		one.x = Mathf.Clamp(vector.x, -this.maxVelocity, this.maxVelocity);
+		one.y = Mathf.Clamp(vector.y, -this.maxVelocity, this.maxVelocity);
+		one.z = Mathf.Clamp(vector.z, -this.maxVelocity, this.maxVelocity);
+		this.matinstance.SetVectorProperty(this.prop_vel, one);
+		Quaternion q = rotation * Quaternion.Inverse(this.oldRot);
+		this.angVel = MathUtils.QuaternionToAngularVelocity(q) / deltaTime;
+		this.interpolatedAngVel = Vector3.Lerp(this.interpolatedAngVel, this.angVel, deltaTime * this.lag);
+		Vector3 vector2 = this.interpolatedAngVel * this.scaleAngularVelocity;
+		Vector4 one2 = Vector4.one;
+		one2.x = Mathf.Clamp(vector2.x, -this.maxAngVelocity, this.maxAngVelocity);
+		one2.y = Mathf.Clamp(vector2.y, -this.maxAngVelocity, this.maxAngVelocity);
+		one2.z = Mathf.Clamp(vector2.z, -this.maxAngVelocity, this.maxAngVelocity);
+		this.matinstance.SetVectorProperty(this.prop_angvel, one2);
+		this.oldPos = position;
+		this.oldRot = rotation;
+	}
+
+	// Token: 0x04004620 RID: 17952
+	public float lag = 10f;
+
+	// Token: 0x04004621 RID: 17953
+	public float wobbleFreq = 3f;
+
+	// Token: 0x04004622 RID: 17954
+	public float wobbleStrength = 0.05f;
+
+	// Token: 0x04004623 RID: 17955
+	public float wobbleFalloff = 0.9f;
+
+	// Token: 0x04004624 RID: 17956
+	public float maxVelocity = 9.78f;
+
+	// Token: 0x04004625 RID: 17957
+	public float maxAngVelocity = 10f;
+
+	// Token: 0x04004626 RID: 17958
+	public float scaleAngularVelocity = 1f;
+
+	// Token: 0x04004627 RID: 17959
+	public GameObject watchObject;
+
+	// Token: 0x04004628 RID: 17960
+	public bool debug;
+
+	// Token: 0x04004629 RID: 17961
+	private Vector3 oldPos;
+
+	// Token: 0x0400462A RID: 17962
+	private Quaternion oldRot;
+
+	// Token: 0x0400462B RID: 17963
+	private Vector3 vel;
+
+	// Token: 0x0400462C RID: 17964
+	private Vector3 angVel;
+
+	// Token: 0x0400462D RID: 17965
+	private Vector3 wobble;
+
+	// Token: 0x0400462E RID: 17966
+	private Vector3 interpolatedVel;
+
+	// Token: 0x0400462F RID: 17967
+	private Vector3 interpolatedAngVel;
+
+	// Token: 0x04004630 RID: 17968
+	private Transform watchTransform;
+
+	// Token: 0x04004631 RID: 17969
+	private MaterialInstance matinstance;
+
+	// Token: 0x04004632 RID: 17970
+	private MaterialInstance.VectorProperty prop_vel;
+
+	// Token: 0x04004633 RID: 17971
+	private MaterialInstance.VectorProperty prop_angvel;
+}

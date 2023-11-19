@@ -1,0 +1,19 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200023F RID: 575
+public class ThrowBombMaterialHelper : MonoBehaviour
+{
+	// Token: 0x060011C0 RID: 4544 RVA: 0x000A6A68 File Offset: 0x000A4C68
+	private void Start()
+	{
+	}
+
+	// Token: 0x060011C1 RID: 4545 RVA: 0x000A6A6C File Offset: 0x000A4C6C
+	private void Update()
+	{
+	}
+
+	// Token: 0x04002073 RID: 8307
+	public bool dontExplodeOnImpact;
+}

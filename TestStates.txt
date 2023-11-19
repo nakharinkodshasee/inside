@@ -1,0 +1,36 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000624 RID: 1572
+public class TestStates : MonoBehaviour
+{
+	// Token: 0x06002710 RID: 10000 RVA: 0x0013B368 File Offset: 0x00139568
+	private void Start()
+	{
+		SoundBankInfo soundBankInfo = SoundBankInfoManager.GetSoundBankInfo("init");
+		this.entries = soundBankInfo.GetEntries(SoundBankInfo.Entry.Type.StateGroup);
+	}
+
+	// Token: 0x06002711 RID: 10001 RVA: 0x0013B390 File Offset: 0x00139590
+	private void OnGUI()
+	{
+		if (GUILayout.Button("Reset all", new GUILayoutOption[0]))
+		{
+			foreach (SoundBankInfo.Entry entry in this.entries)
+			{
+				SoundEngine.SetState(SoundEngine.Name2ID(entry.name), entry.name, 0U, "[none]");
+			}
+		}
+		foreach (SoundBankInfo.Entry entry2 in this.entries)
+		{
+			string name = entry2.name;
+			uint maxValue = uint.MaxValue;
+			AkSoundEngine.GetState(name, out maxValue);
+			GUILayout.Label(string.Format("{0}: {1:X}", entry2.name, maxValue), new GUILayoutOption[0]);
+		}
+	}
+
+	// Token: 0x04004692 RID: 18066
+	public List<SoundBankInfo.Entry> entries;
+}
