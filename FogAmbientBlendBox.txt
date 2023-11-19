@@ -1,0 +1,91 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200032A RID: 810
+public class FogAmbientBlendBox : TransitionBox<FogAmbientBlendBox>
+{
+	// Token: 0x060016BC RID: 5820 RVA: 0x000C788C File Offset: 0x000C5A8C
+	protected static float smootherstep(float x)
+	{
+		return x * x * x * (x * (x * 6f - 15f) + 10f);
+	}
+
+	// Token: 0x060016BD RID: 5821 RVA: 0x000C78AC File Offset: 0x000C5AAC
+	public static void InterpolateValues(FogAmbientBlendValues a, FogAmbientBlendValues b, float t, ref FogAmbientBlendValues out_c)
+	{
+		out_c.AmbientColor = Color.Lerp(a.AmbientColor, b.AmbientColor, t);
+		out_c.FogColor = Color.Lerp(a.FogColor, b.FogColor, t);
+		out_c.FogStart = Mathf.Lerp(a.FogStart, b.FogStart, t);
+		out_c.FogEnd = Mathf.Lerp(a.FogEnd, b.FogEnd, t);
+		out_c.WaterFogColor = Color.Lerp(a.WaterFogColor, b.WaterFogColor, t);
+		out_c.WaterFogStart = Mathf.Lerp(a.WaterFogStart, b.WaterFogStart, t);
+		out_c.WaterFogEnd = Mathf.Lerp(a.WaterFogEnd, b.WaterFogEnd, t);
+		out_c.WaterFogOverride = Mathf.Lerp(a.WaterFogOverride, b.WaterFogOverride, t);
+		out_c.BloomIntensity = Mathf.Lerp(a.BloomIntensity, b.BloomIntensity, t);
+		out_c.BloomThreshold = Mathf.Lerp(a.BloomThreshold, b.BloomThreshold, t);
+		out_c.bloomSaturation = Mathf.Lerp(a.bloomSaturation, b.bloomSaturation, t);
+		out_c.BloomThresholdHDR = Mathf.Lerp(a.BloomThresholdHDR, b.BloomThresholdHDR, t);
+		out_c.bloomIntensity_2 = Mathf.Lerp(a.bloomIntensity_2, b.bloomIntensity_2, t);
+		out_c.bloomIntensity_4 = Mathf.Lerp(a.bloomIntensity_4, b.bloomIntensity_4, t);
+		out_c.bloomIntensity_8 = Mathf.Lerp(a.bloomIntensity_8, b.bloomIntensity_8, t);
+		out_c.bloomIntensity_16 = Mathf.Lerp(a.bloomIntensity_16, b.bloomIntensity_16, t);
+		out_c.bloomIntensity_32 = Mathf.Lerp(a.bloomIntensity_32, b.bloomIntensity_32, t);
+		out_c.BackgroundColor = Color.Lerp(a.BackgroundColor, b.BackgroundColor, t);
+	}
+
+	// Token: 0x060016BE RID: 5822 RVA: 0x000C7A7C File Offset: 0x000C5C7C
+	public override int GetAxis()
+	{
+		return (int)this.blendAxis;
+	}
+
+	// Token: 0x060016BF RID: 5823 RVA: 0x000C7A84 File Offset: 0x000C5C84
+	public override void ApplyDefaults()
+	{
+		Camera main = Camera.main;
+		if (main != null)
+		{
+			FogAmbientCameraBlend component = main.GetComponent<FogAmbientCameraBlend>();
+			if (component != null)
+			{
+				FogAmbientBlendBox.InterpolateValues(FogAmbientBlender.currentBlendVal, component.data.blendValues, 1f, ref FogAmbientBlender.currentBlendVal);
+			}
+		}
+	}
+
+	// Token: 0x060016C0 RID: 5824 RVA: 0x000C7AD8 File Offset: 0x000C5CD8
+	public override void ApplyTransition()
+	{
+		FogAmbientBlendBox.InterpolateValues(FogAmbientBlender.currentBlendVal, this.data.blendValues, 1f, ref FogAmbientBlender.currentBlendVal);
+	}
+
+	// Token: 0x060016C1 RID: 5825 RVA: 0x000C7AFC File Offset: 0x000C5CFC
+	public override void ApplyTransition(float value, FogAmbientBlendBox previous)
+	{
+		float t = FogAmbientBlendBox.smootherstep(value);
+		FogAmbientBlendBox.InterpolateValues(previous.data.blendValues, this.data.blendValues, t, ref FogAmbientBlender.currentBlendVal);
+	}
+
+	// Token: 0x060016C2 RID: 5826 RVA: 0x000C7B34 File Offset: 0x000C5D34
+	public override bool EqualTransitionValues(FogAmbientBlendBox other)
+	{
+		return this.data.blendValues.CalcChecksum() == other.data.blendValues.CalcChecksum();
+	}
+
+	// Token: 0x04002878 RID: 10360
+	public FogAmbientBlendBox.EBlendAxis blendAxis = FogAmbientBlendBox.EBlendAxis.X_Axis;
+
+	// Token: 0x04002879 RID: 10361
+	public FogAmbientBlender data = new FogAmbientBlender();
+
+	// Token: 0x0200032B RID: 811
+	public enum EBlendAxis
+	{
+		// Token: 0x0400287B RID: 10363
+		XY_Axis,
+		// Token: 0x0400287C RID: 10364
+		X_Axis,
+		// Token: 0x0400287D RID: 10365
+		Y_Axis
+	}
+}

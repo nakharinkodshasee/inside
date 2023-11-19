@@ -1,0 +1,64 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000185 RID: 389
+public class FadeSpecularOnDistance : MonoBehaviour
+{
+	// Token: 0x06000B70 RID: 2928 RVA: 0x00071104 File Offset: 0x0006F304
+	private void Start()
+	{
+		this.specularInstance = base.GetComponent<MaterialInstance>();
+		this.intensityProperty = this.specularInstance.GetFloatProperty("_Intensity");
+		this.startValue = this.specularInstance.GetFloatValue(this.intensityProperty);
+		if (this.specularObj == null)
+		{
+			this.specularObj = base.transform;
+		}
+	}
+
+	// Token: 0x06000B71 RID: 2929 RVA: 0x00071168 File Offset: 0x0006F368
+	private void Update()
+	{
+		float num;
+		if (this.direction == FadeSpecularOnDistance.Direction.Horizontal)
+		{
+			num = Mathf.Abs(this.target.position.x - this.specularObj.position.x);
+		}
+		else
+		{
+			num = Mathf.Abs(this.target.position.y - this.specularObj.position.y);
+		}
+		float num2 = Mathf.InverseLerp(this.fadeDistance, 0f, num);
+		this.specularInstance.SetFloatProperty(this.intensityProperty, num2 * this.startValue);
+	}
+
+	// Token: 0x040013D4 RID: 5076
+	public float fadeDistance;
+
+	// Token: 0x040013D5 RID: 5077
+	public Transform specularObj;
+
+	// Token: 0x040013D6 RID: 5078
+	public Transform target;
+
+	// Token: 0x040013D7 RID: 5079
+	public FadeSpecularOnDistance.Direction direction;
+
+	// Token: 0x040013D8 RID: 5080
+	private MaterialInstance specularInstance;
+
+	// Token: 0x040013D9 RID: 5081
+	private MaterialInstance.FloatProperty intensityProperty;
+
+	// Token: 0x040013DA RID: 5082
+	private float startValue;
+
+	// Token: 0x02000186 RID: 390
+	public enum Direction
+	{
+		// Token: 0x040013DC RID: 5084
+		Horizontal,
+		// Token: 0x040013DD RID: 5085
+		Vertical
+	}
+}

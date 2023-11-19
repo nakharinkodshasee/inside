@@ -1,0 +1,477 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020001D6 RID: 470
+public class Gate : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06000DED RID: 3565 RVA: 0x00084D40 File Offset: 0x00082F40
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioStartOpenEvent = new AudioEventSimpleLocal(this.audioPrefix + "_gateOpen", akGameObj);
+		this.audioStartCloseEvent = new AudioEventSimpleLocal(this.audioPrefix + "_gateClose", akGameObj);
+		this.audioClosedEvent = new AudioEventSimpleLocal(this.audioPrefix + "_gateClosed", akGameObj);
+		this.audioOpenedEvent = new AudioEventSimpleLocal(this.audioPrefix + "_gateOpened", akGameObj);
+		this.audioChangeToCloseEvent = new AudioEventSimpleLocal(this.audioPrefix + "_gateChangeToClose", akGameObj);
+		this.audioChangeToOpenEvent = new AudioEventSimpleLocal(this.audioPrefix + "_gateChangeToOpen", akGameObj);
+		this.audioBlockedEvent = new AudioEventSimpleLocal(this.audioPrefix + "_gateBlocked", akGameObj);
+		this.audioOpenWhenBlocked = new AudioEventSimpleLocal(this.audioPrefix + "_gateOpenFromBlocked", akGameObj);
+		this.audioCloseAfterBlock = new AudioEventSimpleLocal(this.audioPrefix + "_gateCloseAfterBlock", akGameObj);
+		this.gateRigidbody = base.GetComponent<Rigidbody>();
+	}
+
+	// Token: 0x06000DEE RID: 3566 RVA: 0x00084E78 File Offset: 0x00083078
+	public bool PreAwake(int callcount)
+	{
+		this.loadOpen = SignalIn.Create("loadOpen", base.gameObject, new Action(this.OnLoadOpen));
+		this.loadClosed = SignalIn.Create("loadClosed", base.gameObject, new Action(this.OnLoadClosed));
+		this.open = SignalIn.Create("open", base.gameObject, new Action(this.SetOpeningState));
+		this.close = SignalIn.Create("close", base.gameObject, new Action(this.SetClosingState));
+		return true;
+	}
+
+	// Token: 0x06000DEF RID: 3567 RVA: 0x00084F10 File Offset: 0x00083110
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.triggerCollision.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.triggerCollision.exitTrigger.Register(this, ref this.triggerExitHandle);
+		if (this.obj)
+		{
+			this.objRigidbody = this.obj.GetComponent<Rigidbody>();
+			this.originalConstraints = this.objRigidbody.constraints;
+			this.originalDrag = this.objRigidbody.drag;
+		}
+		this.state = Gate.State.Closed;
+	}
+
+	// Token: 0x06000DF0 RID: 3568 RVA: 0x00084F9C File Offset: 0x0008319C
+	private void SoundCheck(bool isOpening)
+	{
+		if (this.state == Gate.State.Closing)
+		{
+			this.audioChangeToOpenEvent.PostFast();
+		}
+		else if (this.state == Gate.State.Opening)
+		{
+			this.audioChangeToCloseEvent.PostFast();
+		}
+		else if (this.state == Gate.State.Opened)
+		{
+			this.audioStartCloseEvent.PostFast();
+		}
+		else if (this.state == Gate.State.Closed)
+		{
+			this.audioStartOpenEvent.PostFast();
+		}
+		else if (isOpening && this.state == Gate.State.Blocked)
+		{
+			this.audioOpenWhenBlocked.PostFast();
+		}
+	}
+
+	// Token: 0x06000DF1 RID: 3569 RVA: 0x0008503C File Offset: 0x0008323C
+	private void SetClosingState()
+	{
+		if (this.state == Gate.State.Closed || this.state == Gate.State.Closing)
+		{
+			return;
+		}
+		this.SoundCheck(false);
+		this.state = Gate.State.Closing;
+	}
+
+	// Token: 0x06000DF2 RID: 3570 RVA: 0x00085068 File Offset: 0x00083268
+	private void ClosingState()
+	{
+		this.MoveDoor(this.closePos);
+		float magnitude = (this.closePos.transform.position - base.transform.position).magnitude;
+		if (this.avoidClosing)
+		{
+			this.PushBoys(magnitude);
+		}
+		if (magnitude <= 0.05f)
+		{
+			this.audioClosedEvent.PostFast();
+			this.state = Gate.State.Closed;
+		}
+	}
+
+	// Token: 0x06000DF3 RID: 3571 RVA: 0x000850DC File Offset: 0x000832DC
+	private void ClosedState()
+	{
+	}
+
+	// Token: 0x06000DF4 RID: 3572 RVA: 0x000850E0 File Offset: 0x000832E0
+	private void SetOpeningState()
+	{
+		if (this.state == Gate.State.Opened || this.state == Gate.State.Opening)
+		{
+			return;
+		}
+		this.SoundCheck(true);
+		if (this.state == Gate.State.Blocked)
+		{
+			this.Unblock();
+		}
+		this.state = Gate.State.Opening;
+	}
+
+	// Token: 0x06000DF5 RID: 3573 RVA: 0x0008511C File Offset: 0x0008331C
+	private void OpeningState()
+	{
+		this.MoveDoor(this.openPos);
+		float magnitude = (this.openPos.transform.position - base.transform.position).magnitude;
+		if (this.avoidOpening)
+		{
+			this.PushBoys(magnitude);
+		}
+		if (magnitude <= 0.05f)
+		{
+			this.audioOpenedEvent.PostFast();
+			this.state = Gate.State.Opened;
+		}
+	}
+
+	// Token: 0x06000DF6 RID: 3574 RVA: 0x00085190 File Offset: 0x00083390
+	private void OpenedState()
+	{
+	}
+
+	// Token: 0x06000DF7 RID: 3575 RVA: 0x00085194 File Offset: 0x00083394
+	private void SetBlockedState()
+	{
+		if (this.objRigidbody)
+		{
+			this.objRigidbody.drag = this.stuckDrag;
+		}
+		this.audioBlockedEvent.PostFast();
+		if (this.mindHatWagon)
+		{
+			this.mindHatWagon.blockedInDoor = true;
+		}
+		this.state = Gate.State.Blocked;
+	}
+
+	// Token: 0x06000DF8 RID: 3576 RVA: 0x000851F4 File Offset: 0x000833F4
+	private void BlockedState()
+	{
+		float num = this.objRigidbody.position.x - base.transform.position.x;
+		if (this.alwaysPushLeft)
+		{
+			float num2 = -this.wagonForce * Time.deltaTime * ((num <= this.minPushLeftForce) ? this.minPushLeftForce : num);
+			this.objRigidbody.AddForce(num2, 0f, 0f, 5);
+		}
+		else if (Mathf.Abs(num) > 0.6f)
+		{
+			float num3 = num * this.wagonForce * Time.deltaTime;
+			this.objRigidbody.AddForce(num3, 0f, 0f, 5);
+		}
+		if (this.objectsInside == 0)
+		{
+			this.audioCloseAfterBlock.PostFast();
+			this.Unblock();
+			this.SetClosingState();
+		}
+	}
+
+	// Token: 0x06000DF9 RID: 3577 RVA: 0x000852D4 File Offset: 0x000834D4
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case Gate.State.Opening:
+			this.OpeningState();
+			break;
+		case Gate.State.Opened:
+			this.OpenedState();
+			break;
+		case Gate.State.Closing:
+			this.ClosingState();
+			break;
+		case Gate.State.Closed:
+			this.ClosedState();
+			break;
+		case Gate.State.Blocked:
+			this.BlockedState();
+			break;
+		}
+	}
+
+	// Token: 0x06000DFA RID: 3578 RVA: 0x00085340 File Offset: 0x00083540
+	private void Unblock()
+	{
+		if (this.mindHatWagon)
+		{
+			this.mindHatWagon.blockedInDoor = false;
+		}
+		if (this.objRigidbody)
+		{
+			this.objRigidbody.drag = this.originalDrag;
+		}
+	}
+
+	// Token: 0x06000DFB RID: 3579 RVA: 0x00085380 File Offset: 0x00083580
+	private void MoveDoor(GameObject target)
+	{
+		this.gateRigidbody.MovePosition(Vector3.MoveTowards(base.transform.position, target.transform.position, this.speed * Time.deltaTime));
+	}
+
+	// Token: 0x06000DFC RID: 3580 RVA: 0x000853C0 File Offset: 0x000835C0
+	private void PushBoys(float distToTarget)
+	{
+		if (distToTarget < 1f)
+		{
+			return;
+		}
+		int i = 0;
+		int count = this.boysInside.Count;
+		while (i < count)
+		{
+			Boy boy = this.boysInside[i];
+			if (!(boy.state is BoyCustomAnimState))
+			{
+				bool flag = boy.pos.x > this.centerPos.position.x;
+				if (boy.facing == -1f)
+				{
+					flag = !flag;
+				}
+				BoyUtils.StartCustomAnim(boy, (!flag) ? this.stuckBackAnim : this.stuckForwardAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06000DFD RID: 3581 RVA: 0x0008547C File Offset: 0x0008367C
+	private void OnLoadOpen()
+	{
+		this.gateRigidbody.transform.position = this.openPos.transform.position;
+		this.state = Gate.State.Opened;
+	}
+
+	// Token: 0x06000DFE RID: 3582 RVA: 0x000854B0 File Offset: 0x000836B0
+	private void OnLoadClosed()
+	{
+		this.gateRigidbody.transform.position = this.closePos.transform.position;
+		this.state = Gate.State.Closed;
+	}
+
+	// Token: 0x06000DFF RID: 3583 RVA: 0x000854E4 File Offset: 0x000836E4
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.triggerCollision.enterTrigger)
+		{
+			this.TriggerEnter(collider);
+		}
+		else if (sender == this.triggerCollision.exitTrigger)
+		{
+			this.TriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06000E00 RID: 3584 RVA: 0x00085520 File Offset: 0x00083720
+	private void TriggerEnter(Collider c)
+	{
+		Rigidbody attachedRigidbody = c.attachedRigidbody;
+		if (attachedRigidbody && attachedRigidbody.gameObject == this.obj)
+		{
+			if (this.state == Gate.State.Closing)
+			{
+				this.objectsInside++;
+				this.SetBlockedState();
+			}
+			return;
+		}
+		MindHatReceiverProbe component = c.GetComponent<MindHatReceiverProbe>();
+		if (component)
+		{
+			Boy boy = component.boy;
+			if (!this.boysInside.Contains(boy))
+			{
+				this.boysInside.Add(boy);
+			}
+		}
+	}
+
+	// Token: 0x06000E01 RID: 3585 RVA: 0x000855AC File Offset: 0x000837AC
+	private void TriggerExit(Collider c)
+	{
+		Rigidbody attachedRigidbody = c.attachedRigidbody;
+		if (attachedRigidbody && attachedRigidbody.gameObject == this.obj)
+		{
+			if (this.objectsInside > 0)
+			{
+				this.objectsInside--;
+			}
+			return;
+		}
+		MindHatReceiverProbe component = c.GetComponent<MindHatReceiverProbe>();
+		if (component)
+		{
+			this.boysInside.Remove(component.boy);
+		}
+	}
+
+	// Token: 0x040018D9 RID: 6361
+	private SignalIn close;
+
+	// Token: 0x040018DA RID: 6362
+	private SignalIn open;
+
+	// Token: 0x040018DB RID: 6363
+	private SignalIn loadOpen;
+
+	// Token: 0x040018DC RID: 6364
+	private SignalIn loadClosed;
+
+	// Token: 0x040018DD RID: 6365
+	public GameObject openPos;
+
+	// Token: 0x040018DE RID: 6366
+	public GameObject closePos;
+
+	// Token: 0x040018DF RID: 6367
+	public float speed = 4f;
+
+	// Token: 0x040018E0 RID: 6368
+	public float stuckDrag = 0.3f;
+
+	// Token: 0x040018E1 RID: 6369
+	public float wagonForce = 8f;
+
+	// Token: 0x040018E2 RID: 6370
+	public bool alwaysPushLeft;
+
+	// Token: 0x040018E3 RID: 6371
+	public float minPushLeftForce = 0.3f;
+
+	// Token: 0x040018E4 RID: 6372
+	public GameObject obj;
+
+	// Token: 0x040018E5 RID: 6373
+	public CollisionEvents triggerCollision;
+
+	// Token: 0x040018E6 RID: 6374
+	public AnimClipNode stuckBackAnim;
+
+	// Token: 0x040018E7 RID: 6375
+	public AnimClipNode stuckForwardAnim;
+
+	// Token: 0x040018E8 RID: 6376
+	public string audioPrefix = string.Empty;
+
+	// Token: 0x040018E9 RID: 6377
+	public Transform centerPos;
+
+	// Token: 0x040018EA RID: 6378
+	public bool avoidClosing = true;
+
+	// Token: 0x040018EB RID: 6379
+	public bool avoidOpening;
+
+	// Token: 0x040018EC RID: 6380
+	public MindHatWagon mindHatWagon;
+
+	// Token: 0x040018ED RID: 6381
+	private Gate.State state;
+
+	// Token: 0x040018EE RID: 6382
+	private float originalDrag;
+
+	// Token: 0x040018EF RID: 6383
+	private RigidbodyConstraints originalConstraints;
+
+	// Token: 0x040018F0 RID: 6384
+	private List<Boy> boysInside = new List<Boy>();
+
+	// Token: 0x040018F1 RID: 6385
+	private int objectsInside;
+
+	// Token: 0x040018F2 RID: 6386
+	private Rigidbody objRigidbody;
+
+	// Token: 0x040018F3 RID: 6387
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x040018F4 RID: 6388
+	private int triggerExitHandle = -1;
+
+	// Token: 0x040018F5 RID: 6389
+	[SerializeField]
+	[HideInInspector]
+	private Rigidbody gateRigidbody;
+
+	// Token: 0x040018F6 RID: 6390
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x040018F7 RID: 6391
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStartOpenEvent;
+
+	// Token: 0x040018F8 RID: 6392
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStartCloseEvent;
+
+	// Token: 0x040018F9 RID: 6393
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioClosedEvent;
+
+	// Token: 0x040018FA RID: 6394
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioOpenedEvent;
+
+	// Token: 0x040018FB RID: 6395
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioChangeToCloseEvent;
+
+	// Token: 0x040018FC RID: 6396
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioChangeToOpenEvent;
+
+	// Token: 0x040018FD RID: 6397
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioBlockedEvent;
+
+	// Token: 0x040018FE RID: 6398
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioOpenWhenBlocked;
+
+	// Token: 0x040018FF RID: 6399
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioCloseAfterBlock;
+
+	// Token: 0x020001D7 RID: 471
+	private enum State
+	{
+		// Token: 0x04001901 RID: 6401
+		None,
+		// Token: 0x04001902 RID: 6402
+		Opening,
+		// Token: 0x04001903 RID: 6403
+		Opened,
+		// Token: 0x04001904 RID: 6404
+		Closing,
+		// Token: 0x04001905 RID: 6405
+		Closed,
+		// Token: 0x04001906 RID: 6406
+		Blocked
+	}
+}

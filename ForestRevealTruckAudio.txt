@@ -1,0 +1,275 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200044D RID: 1101
+public class ForestRevealTruckAudio : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001CDF RID: 7391 RVA: 0x000FABD0 File Offset: 0x000F8DD0
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.audioObject.gameObject, this);
+		this.audioTruckStarted = new AudioEventSimpleLocal("env_forest_forestReveal_truckStarted", akGameObj);
+		this.audioTruckStop = new AudioEventSimpleLocal("env_forest_forestReveal_truckStop", akGameObj);
+	}
+
+	// Token: 0x06001CE0 RID: 7392 RVA: 0x000FAC24 File Offset: 0x000F8E24
+	public bool PreAwake(int callcount)
+	{
+		this.firstDriveOff = SignalIn.Create("firstDriveOff", base.gameObject, new Action(this.SetFollowFirstTruckState));
+		this.firstContinue = SignalIn.Create("firstContinue", base.gameObject, new Action(this.SetFirstContinueState));
+		this.secondDriveOffPrepare = SignalIn.Create("secondDriveOffPrepare", base.gameObject, new Action(this.SetPrepareSecondTruckState));
+		this.secondDriveOff = SignalIn.Create("secondDriveOff", base.gameObject, new Action(this.SetFollowSecondTruckState));
+		this.secondContinue = SignalIn.Create("secondContinue", base.gameObject, new Action(this.SetSecondContinueState));
+		this.loadAtEndOneTarget = SignalIn.Create("loadAtEndOneTarget", base.gameObject, new Action(this.SetLoadAtEndOneTargetState));
+		this.loadFinished = SignalIn.Create("loadFinished", base.gameObject, new Action(this.SetFinished));
+		return true;
+	}
+
+	// Token: 0x06001CE1 RID: 7393 RVA: 0x000FAD20 File Offset: 0x000F8F20
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.audioObject.MovePosition(this.followTargetOne.position);
+		this.state = ForestRevealTruckAudio.State.None;
+	}
+
+	// Token: 0x06001CE2 RID: 7394 RVA: 0x000FAD48 File Offset: 0x000F8F48
+	private void OnDisable()
+	{
+		if (this.state != ForestRevealTruckAudio.State.None && this.state != ForestRevealTruckAudio.State.Finished)
+		{
+			this.SetFinished();
+		}
+	}
+
+	// Token: 0x06001CE3 RID: 7395 RVA: 0x000FAD68 File Offset: 0x000F8F68
+	private void SetFollowFirstTruckState()
+	{
+		this.currentFollowTarget = this.followTargetOne;
+		this.state = ForestRevealTruckAudio.State.Follow;
+	}
+
+	// Token: 0x06001CE4 RID: 7396 RVA: 0x000FAD80 File Offset: 0x000F8F80
+	private void SetFirstContinueState()
+	{
+		this.timeMoving = 0f;
+		this.maxSpeed = 8f;
+		this.timeToMax = 5f;
+		this.currentTarget = this.followTargetTwo;
+		this.state = ForestRevealTruckAudio.State.MoveTowards;
+	}
+
+	// Token: 0x06001CE5 RID: 7397 RVA: 0x000FADC4 File Offset: 0x000F8FC4
+	private void SetPrepareSecondTruckState()
+	{
+	}
+
+	// Token: 0x06001CE6 RID: 7398 RVA: 0x000FADC8 File Offset: 0x000F8FC8
+	private void SetFollowSecondTruckState()
+	{
+		this.currentFollowTarget = this.followTargetTwo;
+		this.audioObject.position = this.followTargetTwo.position;
+		this.state = ForestRevealTruckAudio.State.Follow;
+	}
+
+	// Token: 0x06001CE7 RID: 7399 RVA: 0x000FADF4 File Offset: 0x000F8FF4
+	private void SetSecondContinueState()
+	{
+		this.timeMoving = 0f;
+		this.currentTarget = this.endTargetTwo;
+		this.maxSpeed = 5f;
+		this.timeToMax = 10f;
+		this.state = ForestRevealTruckAudio.State.MoveTowards;
+	}
+
+	// Token: 0x06001CE8 RID: 7400 RVA: 0x000FAE38 File Offset: 0x000F9038
+	private void SetLoadAtEndOneTargetState()
+	{
+		this.audioObject.position = this.followTargetTwo.position;
+		this.audioTruckStarted.PostFast();
+		this.state = ForestRevealTruckAudio.State.None;
+	}
+
+	// Token: 0x06001CE9 RID: 7401 RVA: 0x000FAE64 File Offset: 0x000F9064
+	private void SetFinished()
+	{
+		this.audioTruckStop.PostFast();
+		this.state = ForestRevealTruckAudio.State.Finished;
+	}
+
+	// Token: 0x06001CEA RID: 7402 RVA: 0x000FAE7C File Offset: 0x000F907C
+	private void MoveTowardsState()
+	{
+		this.timeMoving += Time.deltaTime;
+		float magnitude = (this.audioObject.transform.position - this.currentTarget.position).magnitude;
+		float num = Mathf.InverseLerp(0f, this.timeToMax, this.timeMoving);
+		float num2 = Mathf.Lerp(this.curVel, this.maxSpeed, num);
+		float num3 = 1f;
+		if (!(this.currentTarget == this.endTargetOne))
+		{
+			if (this.currentTarget == this.followTargetTwo)
+			{
+				float num4 = Mathf.InverseLerp(7f, 0.25f, magnitude);
+				num3 = Mathf.Lerp(1f, 0.15f, num4);
+			}
+		}
+		this.audioObject.MovePosition(Vector3.MoveTowards(this.audioObject.transform.position, this.currentTarget.position, num2 * num3 * Time.fixedDeltaTime));
+		if (magnitude <= 0.25f)
+		{
+			if (this.currentTarget == this.endTargetOne)
+			{
+				this.currentTarget = this.followTargetTwo;
+				this.state = ForestRevealTruckAudio.State.MoveTowards;
+			}
+			else if (this.currentTarget == this.endTargetTwo)
+			{
+				this.SetFinished();
+			}
+		}
+	}
+
+	// Token: 0x06001CEB RID: 7403 RVA: 0x000FAFD4 File Offset: 0x000F91D4
+	private void FollowState()
+	{
+		Vector3 zero = Vector3.zero;
+		zero.x = Mathf.SmoothDamp(this.audioObject.transform.position.x, this.currentFollowTarget.transform.position.x, ref this.velocity.x, this.smoothTime);
+		zero.y = Mathf.SmoothDamp(this.audioObject.transform.position.y, this.currentFollowTarget.transform.position.y, ref this.velocity.y, this.smoothTime);
+		zero.z = Mathf.SmoothDamp(this.audioObject.transform.position.z, this.currentFollowTarget.transform.position.z, ref this.velocity.z, this.smoothTime);
+		this.audioObject.transform.position = zero;
+		this.curVel = ((this.audioObject.transform.position - this.oldPosition) / Time.deltaTime).magnitude;
+		this.oldPosition = this.audioObject.transform.position;
+	}
+
+	// Token: 0x06001CEC RID: 7404 RVA: 0x000FB12C File Offset: 0x000F932C
+	private void FinishedState()
+	{
+	}
+
+	// Token: 0x06001CED RID: 7405 RVA: 0x000FB130 File Offset: 0x000F9330
+	private void AtFirstTargetState()
+	{
+	}
+
+	// Token: 0x06001CEE RID: 7406 RVA: 0x000FB134 File Offset: 0x000F9334
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case ForestRevealTruckAudio.State.Follow:
+			this.FollowState();
+			break;
+		case ForestRevealTruckAudio.State.MoveTowards:
+			this.MoveTowardsState();
+			break;
+		case ForestRevealTruckAudio.State.Finished:
+			this.FinishedState();
+			break;
+		}
+	}
+
+	// Token: 0x040034FA RID: 13562
+	public Rigidbody audioObject;
+
+	// Token: 0x040034FB RID: 13563
+	public Transform followTargetOne;
+
+	// Token: 0x040034FC RID: 13564
+	public Transform endTargetOne;
+
+	// Token: 0x040034FD RID: 13565
+	public Transform followTargetTwo;
+
+	// Token: 0x040034FE RID: 13566
+	public Transform endTargetTwo;
+
+	// Token: 0x040034FF RID: 13567
+	private float maxSpeed = 5f;
+
+	// Token: 0x04003500 RID: 13568
+	private float timeToMax = 10f;
+
+	// Token: 0x04003501 RID: 13569
+	private SignalIn firstDriveOff;
+
+	// Token: 0x04003502 RID: 13570
+	private SignalIn firstContinue;
+
+	// Token: 0x04003503 RID: 13571
+	private SignalIn secondDriveOffPrepare;
+
+	// Token: 0x04003504 RID: 13572
+	private SignalIn secondDriveOff;
+
+	// Token: 0x04003505 RID: 13573
+	private SignalIn secondContinue;
+
+	// Token: 0x04003506 RID: 13574
+	private SignalIn loadAtEndOneTarget;
+
+	// Token: 0x04003507 RID: 13575
+	private SignalIn loadFinished;
+
+	// Token: 0x04003508 RID: 13576
+	private ForestRevealTruckAudio.State state;
+
+	// Token: 0x04003509 RID: 13577
+	private Transform currentFollowTarget;
+
+	// Token: 0x0400350A RID: 13578
+	private Transform currentTarget;
+
+	// Token: 0x0400350B RID: 13579
+	private float currentSpeed;
+
+	// Token: 0x0400350C RID: 13580
+	private float curVel;
+
+	// Token: 0x0400350D RID: 13581
+	private Vector3 oldPosition;
+
+	// Token: 0x0400350E RID: 13582
+	private Vector3 velocity = new Vector3(0.5f, 0.5f, 0.5f);
+
+	// Token: 0x0400350F RID: 13583
+	private float smoothTime = 0.5f;
+
+	// Token: 0x04003510 RID: 13584
+	private float timeMoving;
+
+	// Token: 0x04003511 RID: 13585
+	private float loadWait = 2f;
+
+	// Token: 0x04003512 RID: 13586
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioTruckStarted;
+
+	// Token: 0x04003513 RID: 13587
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioTruckStop;
+
+	// Token: 0x04003514 RID: 13588
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x0200044E RID: 1102
+	private enum State
+	{
+		// Token: 0x04003516 RID: 13590
+		None,
+		// Token: 0x04003517 RID: 13591
+		Follow,
+		// Token: 0x04003518 RID: 13592
+		MoveTowards,
+		// Token: 0x04003519 RID: 13593
+		Finished
+	}
+}

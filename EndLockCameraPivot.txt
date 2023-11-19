@@ -1,0 +1,25 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200045F RID: 1119
+public class EndLockCameraPivot : MonoBehaviour
+{
+	// Token: 0x06001D77 RID: 7543 RVA: 0x000FE3F4 File Offset: 0x000FC5F4
+	private void Start()
+	{
+	}
+
+	// Token: 0x06001D78 RID: 7544 RVA: 0x000FE3F8 File Offset: 0x000FC5F8
+	private void Update()
+	{
+		float num = Mathf.InverseLerp(this.left.position.x, this.right.position.x, ScriptGlobals.huddle.pos.x);
+		Vector3 position = Vector3.Lerp(this.left.position, this.right.position, num);
+		base.transform.position = position;
+	}
+
+	// Token: 0x0400362E RID: 13870
+	public Transform left;
+
+	// Token: 0x0400362F RID: 13871
+	public Transform right;
+}

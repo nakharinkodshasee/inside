@@ -1,0 +1,97 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200023D RID: 573
+public class ForestSwingTrap : MonoBehaviour
+{
+	// Token: 0x060011B1 RID: 4529 RVA: 0x000A6574 File Offset: 0x000A4774
+	private void Start()
+	{
+		this.addForceComponent = base.gameObject.AddComponent<AddForceToRagdoll>();
+	}
+
+	// Token: 0x060011B2 RID: 4530 RVA: 0x000A6588 File Offset: 0x000A4788
+	private void FixedUpdate()
+	{
+		if (this.addForceNextFrame)
+		{
+			this.addForceComponent.force = new Vector3(base.GetComponent<Rigidbody>().velocity.x, base.GetComponent<Rigidbody>().velocity.y, 0f) * 0.02f;
+			this.addForceComponent.AddForce();
+			this.addForceNextFrame = false;
+		}
+	}
+
+	// Token: 0x060011B3 RID: 4531 RVA: 0x000A65F8 File Offset: 0x000A47F8
+	private void PlayBoyAnimation(AnimClipNode animNode)
+	{
+		if (ScriptGlobals.boy.facing > 0f)
+		{
+			animNode.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+		}
+		else
+		{
+			animNode.transform.rotation = Quaternion.Euler(0f, -90f, 0f);
+		}
+		Vector3 position = ScriptGlobals.boy.transform.position;
+		position.y = animNode.transform.position.y;
+		animNode.transform.position = position;
+		BoyUtils.StartCustomAnim(ScriptGlobals.boy, animNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+	}
+
+	// Token: 0x060011B4 RID: 4532 RVA: 0x000A66A8 File Offset: 0x000A48A8
+	private void ImpactKill()
+	{
+		ScriptGlobals.boy.Kill();
+		this.addForceNextFrame = true;
+	}
+
+	// Token: 0x060011B5 RID: 4533 RVA: 0x000A66BC File Offset: 0x000A48BC
+	private void TestImpact()
+	{
+		if (ScriptGlobals.boy.transform.position.y > base.transform.position.y + 0.4f)
+		{
+			this.PlayBoyAnimation(this.jumpOverAnimation);
+		}
+		else
+		{
+			this.ImpactKill();
+		}
+	}
+
+	// Token: 0x060011B6 RID: 4534 RVA: 0x000A6718 File Offset: 0x000A4918
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.attachedRigidbody != null && coll.attachedRigidbody.GetComponent<Boy>() == ScriptGlobals.boy)
+		{
+			this.TestImpact();
+		}
+	}
+
+	// Token: 0x060011B7 RID: 4535 RVA: 0x000A6758 File Offset: 0x000A4958
+	private void OnDrawGizmos()
+	{
+		if (!this.backgroundSwing)
+		{
+			Gizmos.DrawWireCube(base.transform.position + Vector3.down * 10.5f + Vector3.left * 10f, new Vector3(0.5f, 0.5f, 0.5f));
+		}
+		else
+		{
+			Gizmos.DrawWireCube(base.transform.position + Vector3.down * 10.5f + new Vector3(0f, 0f, -10f), new Vector3(0.5f, 0.5f, 0.5f));
+		}
+	}
+
+	// Token: 0x04002068 RID: 8296
+	public AnimClipNode jumpOverAnimation;
+
+	// Token: 0x04002069 RID: 8297
+	public bool backgroundSwing;
+
+	// Token: 0x0400206A RID: 8298
+	private AddForceToRagdoll addForceComponent;
+
+	// Token: 0x0400206B RID: 8299
+	private bool addForceNextFrame;
+
+	// Token: 0x0400206C RID: 8300
+	private float addForceTimer;
+}

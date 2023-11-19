@@ -1,0 +1,172 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001AB RID: 427
+public class ForcePushReceiver : MonoBehaviour, IFastEventListener, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06000C82 RID: 3202 RVA: 0x00079018 File Offset: 0x00077218
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.areaTrigger)
+		{
+			this.enterExitEvents = this.areaTrigger.GetComponent<CollisionEvents>();
+			if (!this.enterExitEvents)
+			{
+				this.enterExitEvents = this.areaTrigger.AddComponent<CollisionEvents>();
+			}
+		}
+	}
+
+	// Token: 0x06000C83 RID: 3203 RVA: 0x0007907C File Offset: 0x0007727C
+	public bool PreAwake(int callcount)
+	{
+		this.warning = SignalOut.Create("warning", base.gameObject);
+		this.blow = SignalOut.Create("blow", base.gameObject);
+		this.makeDistant = SignalIn.Create("makeDistant", base.gameObject, new Action(this.EnableDistant));
+		this.makeNonDistant = SignalIn.Create("makeNonDistant", base.gameObject, new Action(this.DisableDistant));
+		return true;
+	}
+
+	// Token: 0x06000C84 RID: 3204 RVA: 0x000790FC File Offset: 0x000772FC
+	private void Start()
+	{
+		ForcePushManager.warningEvent.Register(this, ref this.warningEvent);
+		ForcePushManager.blowEvent.Register(this, ref this.blowHandle);
+		if (this.areaTrigger)
+		{
+			this.enterExitEvents.enterTrigger.Register(this, ref this.areaTriggerEnterHandle);
+			this.enterExitEvents.exitTrigger.Register(this, ref this.areaTriggerExitHandle);
+		}
+	}
+
+	// Token: 0x06000C85 RID: 3205 RVA: 0x0007916C File Offset: 0x0007736C
+	private void OnDestroy()
+	{
+		ForcePushManager.removeActiveZone(this);
+		ForcePushManager.warningEvent.Unregister(ref this.warningEvent);
+		ForcePushManager.blowEvent.Unregister(ref this.blowHandle);
+	}
+
+	// Token: 0x06000C86 RID: 3206 RVA: 0x000791A0 File Offset: 0x000773A0
+	public void OnFastEvent(FastEvent sender)
+	{
+		if (sender == ForcePushManager.warningEvent)
+		{
+			this.warning.Signal();
+		}
+		else if (sender == ForcePushManager.blowEvent)
+		{
+			this.blow.Signal();
+		}
+	}
+
+	// Token: 0x06000C87 RID: 3207 RVA: 0x000791D4 File Offset: 0x000773D4
+	private void EnableDistant()
+	{
+		this.distant = true;
+	}
+
+	// Token: 0x06000C88 RID: 3208 RVA: 0x000791E0 File Offset: 0x000773E0
+	private void DisableDistant()
+	{
+		this.distant = false;
+	}
+
+	// Token: 0x06000C89 RID: 3209 RVA: 0x000791EC File Offset: 0x000773EC
+	private void OnDisable()
+	{
+		this.boyInsideArea = false;
+		ForcePushManager.removeActiveZone(this);
+	}
+
+	// Token: 0x06000C8A RID: 3210 RVA: 0x000791FC File Offset: 0x000773FC
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.enterExitEvents.enterTrigger)
+		{
+			this.OnBoyEnterArea(collider);
+		}
+		else if (sender == this.enterExitEvents.exitTrigger)
+		{
+			this.OnBoyExitArea(collider);
+		}
+	}
+
+	// Token: 0x06000C8B RID: 3211 RVA: 0x00079238 File Offset: 0x00077438
+	private void OnBoyEnterArea(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyInsideArea = true;
+			ForcePushManager.addActiveZone(this);
+		}
+	}
+
+	// Token: 0x06000C8C RID: 3212 RVA: 0x00079258 File Offset: 0x00077458
+	private void OnBoyExitArea(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyInsideArea = false;
+			ForcePushManager.removeActiveZone(this);
+		}
+	}
+
+	// Token: 0x040015C1 RID: 5569
+	public GameObject areaTrigger;
+
+	// Token: 0x040015C2 RID: 5570
+	public bool deadly = true;
+
+	// Token: 0x040015C3 RID: 5571
+	public bool shakeWhenNotDeadly;
+
+	// Token: 0x040015C4 RID: 5572
+	public bool distant;
+
+	// Token: 0x040015C5 RID: 5573
+	public bool visualizeWave = true;
+
+	// Token: 0x040015C6 RID: 5574
+	private SignalOut warning;
+
+	// Token: 0x040015C7 RID: 5575
+	private SignalOut blow;
+
+	// Token: 0x040015C8 RID: 5576
+	private SignalIn makeDistant;
+
+	// Token: 0x040015C9 RID: 5577
+	private SignalIn makeNonDistant;
+
+	// Token: 0x040015CA RID: 5578
+	private bool boyInsideArea;
+
+	// Token: 0x040015CB RID: 5579
+	private int blowHandle = -1;
+
+	// Token: 0x040015CC RID: 5580
+	private int warningEvent = -1;
+
+	// Token: 0x040015CD RID: 5581
+	private int areaTriggerEnterHandle = -1;
+
+	// Token: 0x040015CE RID: 5582
+	private int areaTriggerExitHandle = -1;
+
+	// Token: 0x040015CF RID: 5583
+	[SerializeField]
+	[HideInInspector]
+	private CollisionEvents enterExitEvents;
+
+	// Token: 0x040015D0 RID: 5584
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

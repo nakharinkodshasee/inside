@@ -1,0 +1,225 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000328 RID: 808
+[Serializable]
+public class FogAmbientBlendValues
+{
+	// Token: 0x060016AE RID: 5806 RVA: 0x000C7170 File Offset: 0x000C5370
+	public FogAmbientBlendValues()
+	{
+	}
+
+	// Token: 0x060016AF RID: 5807 RVA: 0x000C729C File Offset: 0x000C549C
+	public FogAmbientBlendValues(FogAmbientBlendValues b)
+	{
+		this.InitFrom(b);
+	}
+
+	// Token: 0x060016B1 RID: 5809 RVA: 0x000C73E0 File Offset: 0x000C55E0
+	public int GetChecksum()
+	{
+		if (!Application.isPlaying)
+		{
+			return this.CalcChecksum();
+		}
+		if (this.checksum == 0)
+		{
+			this.checksum = this.CalcChecksum();
+		}
+		return this.checksum;
+	}
+
+	// Token: 0x060016B2 RID: 5810 RVA: 0x000C741C File Offset: 0x000C561C
+	public int CalcChecksum()
+	{
+		int hash = 17;
+		hash = PDUtilities.AccumulateHash<Color>(this.AmbientColor, hash);
+		hash = PDUtilities.AccumulateHash<Color>(this.FogColor, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.FogStart, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.FogEnd, hash);
+		hash = PDUtilities.AccumulateHash<Color>(this.WaterFogColor, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.WaterFogStart, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.WaterFogEnd, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.WaterFogOverride, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.BloomIntensity, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.BloomThreshold, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.BloomThresholdHDR, hash);
+		hash = PDUtilities.AccumulateHash<int>(4, hash);
+		hash = PDUtilities.AccumulateHash<Color>(this.BackgroundColor, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.bloomSize_2, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.bloomSize_4, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.bloomSize_8, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.bloomSize_16, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.bloomIntensity_2, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.bloomIntensity_4, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.bloomIntensity_8, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.bloomIntensity_16, hash);
+		hash = PDUtilities.AccumulateHash<float>(this.bloomIntensity_32, hash);
+		return PDUtilities.AccumulateHash<float>(this.bloomSaturation, hash);
+	}
+
+	// Token: 0x060016B3 RID: 5811 RVA: 0x000C7554 File Offset: 0x000C5754
+	public void InitFrom(FogAmbientBlendValues b)
+	{
+		this.AmbientColor = b.AmbientColor;
+		this.FogColor = b.FogColor;
+		this.FogStart = b.FogStart;
+		this.FogEnd = b.FogEnd;
+		this.WaterFogColor = b.WaterFogColor;
+		this.WaterFogStart = b.WaterFogStart;
+		this.WaterFogEnd = b.WaterFogEnd;
+		this.WaterFogOverride = b.WaterFogOverride;
+		this.BloomIntensity = b.BloomIntensity;
+		this.BloomThreshold = b.BloomThreshold;
+		this.BloomThresholdHDR = b.BloomThresholdHDR;
+		this.bloomSize_2 = b.bloomSize_2;
+		this.bloomSize_4 = b.bloomSize_4;
+		this.bloomSize_8 = b.bloomSize_8;
+		this.bloomSize_16 = b.bloomSize_16;
+		this.bloomIntensity_2 = b.bloomIntensity_2;
+		this.bloomIntensity_4 = b.bloomIntensity_4;
+		this.bloomIntensity_8 = b.bloomIntensity_8;
+		this.bloomIntensity_16 = b.bloomIntensity_16;
+		this.bloomIntensity_32 = b.bloomIntensity_32;
+		this.bloomSaturation = b.bloomSaturation;
+		this.BackgroundColor = b.BackgroundColor;
+	}
+
+	// Token: 0x060016B4 RID: 5812 RVA: 0x000C766C File Offset: 0x000C586C
+	public static void ApplyToRenderSettings(FogAmbientBlendValues values, bool fogenable)
+	{
+		RenderSettings.fog = fogenable;
+		RenderSettings.ambientLight = values.AmbientColor;
+		RenderSettings.fogColor = values.FogColor;
+		RenderSettings.fogStartDistance = values.FogStart;
+		RenderSettings.fogEndDistance = values.FogEnd;
+	}
+
+	// Token: 0x060016B5 RID: 5813 RVA: 0x000C76AC File Offset: 0x000C58AC
+	public static void ApplyToCombined(D11PDPostCombined combined, FogAmbientBlendValues values)
+	{
+		combined.wideparm_bloomIntensity = values.BloomIntensity;
+		combined.wideparm_bloomThreshold = values.BloomThreshold;
+		combined.hdrparm_bloomThreshold = values.BloomThresholdHDR;
+		FogAmbientBlendValues.combined_hdrparm_bloomIntensity[0] = values.bloomIntensity_2;
+		FogAmbientBlendValues.combined_hdrparm_bloomIntensity[1] = values.bloomIntensity_4;
+		FogAmbientBlendValues.combined_hdrparm_bloomIntensity[2] = values.bloomIntensity_8;
+		FogAmbientBlendValues.combined_hdrparm_bloomIntensity[3] = values.bloomIntensity_16;
+		FogAmbientBlendValues.combined_hdrparm_bloomIntensity[4] = values.bloomIntensity_32;
+		combined.hdrparm_bloomIntensity = FogAmbientBlendValues.combined_hdrparm_bloomIntensity;
+		combined.bloomSaturation = values.bloomSaturation;
+	}
+
+	// Token: 0x060016B6 RID: 5814 RVA: 0x000C7738 File Offset: 0x000C5938
+	public static void ApplyToCombined(PDPostCombined combined, FogAmbientBlendValues values)
+	{
+		combined.wideparm_bloomIntensity = values.BloomIntensity;
+		combined.wideparm_bloomThreshold = values.BloomThreshold;
+		combined.hdrparm_bloomThreshold = values.BloomThresholdHDR;
+		combined.hdrparm_bloomIntensity[0] = values.bloomIntensity_2;
+		combined.hdrparm_bloomIntensity[1] = values.bloomIntensity_4;
+		combined.hdrparm_bloomIntensity[2] = values.bloomIntensity_8;
+		combined.hdrparm_bloomIntensity[3] = values.bloomIntensity_16;
+		combined.hdrparm_bloomIntensity[4] = values.bloomIntensity_32;
+		combined.bloomSaturation = values.bloomSaturation;
+	}
+
+	// Token: 0x060016B7 RID: 5815 RVA: 0x000C77BC File Offset: 0x000C59BC
+	public static void ApplyToReflectionCuller(PDReflectionCuller pdrc, FogAmbientBlendValues values)
+	{
+		pdrc.WaterFogColor = values.WaterFogColor;
+		pdrc.WaterFogStart = values.WaterFogStart;
+		pdrc.WaterFogEnd = values.WaterFogEnd;
+		pdrc.WaterFogOverride = values.WaterFogOverride;
+		pdrc.d11.WaterFogColor = values.WaterFogColor;
+		pdrc.d11.WaterFogStart = values.WaterFogStart;
+		pdrc.d11.WaterFogEnd = values.WaterFogEnd;
+		pdrc.d11.WaterFogOverride = values.WaterFogOverride;
+	}
+
+	// Token: 0x060016B8 RID: 5816 RVA: 0x000C7840 File Offset: 0x000C5A40
+	public static void ApplyToCameraSettings(Camera cam, FogAmbientBlendValues values)
+	{
+		cam.backgroundColor = values.BackgroundColor;
+	}
+
+	// Token: 0x0400285C RID: 10332
+	private const int BloomBlurIterations = 4;
+
+	// Token: 0x0400285D RID: 10333
+	private const int BloomHQBlurIterations = 2;
+
+	// Token: 0x0400285E RID: 10334
+	public Color AmbientColor = Color.black;
+
+	// Token: 0x0400285F RID: 10335
+	public Color FogColor = new Color(0.15294118f, 0.18431373f, 0.19215687f, 0.9607843f);
+
+	// Token: 0x04002860 RID: 10336
+	public float FogStart;
+
+	// Token: 0x04002861 RID: 10337
+	public float FogEnd = 100f;
+
+	// Token: 0x04002862 RID: 10338
+	public Color WaterFogColor = new Color(0.15294118f, 0.18431373f, 0.19215687f, 0.9607843f);
+
+	// Token: 0x04002863 RID: 10339
+	public float WaterFogStart;
+
+	// Token: 0x04002864 RID: 10340
+	public float WaterFogEnd = 100f;
+
+	// Token: 0x04002865 RID: 10341
+	public float WaterFogOverride = 1f;
+
+	// Token: 0x04002866 RID: 10342
+	public float BloomIntensity = 1f;
+
+	// Token: 0x04002867 RID: 10343
+	public float BloomThreshold = 0.02f;
+
+	// Token: 0x04002868 RID: 10344
+	public float BloomThresholdHDR = 1f;
+
+	// Token: 0x04002869 RID: 10345
+	public float bloomSize_2 = 1f;
+
+	// Token: 0x0400286A RID: 10346
+	public float bloomSize_4 = 1f;
+
+	// Token: 0x0400286B RID: 10347
+	public float bloomSize_8 = 2f;
+
+	// Token: 0x0400286C RID: 10348
+	public float bloomSize_16 = 2f;
+
+	// Token: 0x0400286D RID: 10349
+	public float bloomIntensity_2 = 1f;
+
+	// Token: 0x0400286E RID: 10350
+	public float bloomIntensity_4 = 1f;
+
+	// Token: 0x0400286F RID: 10351
+	public float bloomIntensity_8 = 1f;
+
+	// Token: 0x04002870 RID: 10352
+	public float bloomIntensity_16 = 1f;
+
+	// Token: 0x04002871 RID: 10353
+	public float bloomIntensity_32 = 1f;
+
+	// Token: 0x04002872 RID: 10354
+	public float bloomSaturation = 1f;
+
+	// Token: 0x04002873 RID: 10355
+	public Color BackgroundColor = new Color(0.2784314f, 0.3137255f, 0.3647059f, 0f);
+
+	// Token: 0x04002874 RID: 10356
+	[NonSerialized]
+	private int checksum;
+
+	// Token: 0x04002875 RID: 10357
+	private static float[] combined_hdrparm_bloomIntensity = new float[5];
+}

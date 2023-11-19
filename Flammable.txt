@@ -1,0 +1,47 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005AB RID: 1451
+public class Flammable : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002504 RID: 9476 RVA: 0x0012FEA8 File Offset: 0x0012E0A8
+	public bool PreAwake(int callcount)
+	{
+		this.onFire = SignalOut.Create("onFire", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06002505 RID: 9477 RVA: 0x0012FEC4 File Offset: 0x0012E0C4
+	private void OnTriggerEnter(Collider c)
+	{
+		if (this.burning)
+		{
+			return;
+		}
+		if (c.attachedRigidbody == null || !c.attachedRigidbody.gameObject.GetComponent<DynamiteSpark>())
+		{
+			return;
+		}
+		this.Fire();
+	}
+
+	// Token: 0x06002506 RID: 9478 RVA: 0x0012FF10 File Offset: 0x0012E110
+	private void Fire()
+	{
+		Transform transform = Object.Instantiate<Transform>(this.firePrefab);
+		base.transform.GetComponent<Renderer>().material.color = Color.yellow;
+		transform.position = base.transform.position;
+		transform.transform.localEulerAngles = new Vector3(-90f, 0f, 0f);
+		this.onFire.Signal();
+		this.burning = true;
+	}
+
+	// Token: 0x040043D5 RID: 17365
+	private bool burning;
+
+	// Token: 0x040043D6 RID: 17366
+	public Transform firePrefab;
+
+	// Token: 0x040043D7 RID: 17367
+	private SignalOut onFire;
+}

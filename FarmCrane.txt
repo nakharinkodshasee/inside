@@ -1,0 +1,94 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000439 RID: 1081
+public class FarmCrane : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001C45 RID: 7237 RVA: 0x000F79C4 File Offset: 0x000F5BC4
+	public bool PreAwake(int callcount)
+	{
+		this.SwapToLongRope = SignalIn.Create("SwapToLongRope", base.gameObject, new Action(this.DoSwapToLongRope));
+		this.SwapToShortRope = SignalIn.Create("SwapToShortRope", base.gameObject, new Action(this.DoSwapToShortRope));
+		return true;
+	}
+
+	// Token: 0x06001C46 RID: 7238 RVA: 0x000F7A18 File Offset: 0x000F5C18
+	private void Start()
+	{
+		this.longRopeRenderers = this.ropeRoot.GetComponentsInChildren<Renderer>();
+		this.shortRopeRenderers = this.shortRopeRoot.GetComponentsInChildren<Renderer>();
+		this.SetLongRopeEnable(false);
+		this.SetShortRopeEnable(true);
+	}
+
+	// Token: 0x06001C47 RID: 7239 RVA: 0x000F7A58 File Offset: 0x000F5C58
+	private void SetLongRopeEnable(bool b)
+	{
+		this.ropeRoot.GetComponent<Rope>().enabled = b;
+		for (int i = 0; i < this.longRopeRenderers.Length; i++)
+		{
+			this.longRopeRenderers[i].enabled = b;
+		}
+	}
+
+	// Token: 0x06001C48 RID: 7240 RVA: 0x000F7AA0 File Offset: 0x000F5CA0
+	private void SetShortRopeEnable(bool b)
+	{
+		this.shortRopeRoot.GetComponent<Rope>().enabled = b;
+		for (int i = 0; i < this.shortRopeRenderers.Length; i++)
+		{
+			this.shortRopeRenderers[i].enabled = b;
+		}
+	}
+
+	// Token: 0x06001C49 RID: 7241 RVA: 0x000F7AE8 File Offset: 0x000F5CE8
+	private void DoSwapToLongRope()
+	{
+		this.SetLongRopeEnable(true);
+		this.SetShortRopeEnable(false);
+	}
+
+	// Token: 0x06001C4A RID: 7242 RVA: 0x000F7AF8 File Offset: 0x000F5CF8
+	private void DoSwapToShortRope()
+	{
+		this.SetLongRopeEnable(false);
+		this.SetShortRopeEnable(true);
+	}
+
+	// Token: 0x06001C4B RID: 7243 RVA: 0x000F7B08 File Offset: 0x000F5D08
+	private void FixedUpdate()
+	{
+		float num = Mathf.InverseLerp(this.Left.position.x, this.Right.position.x, base.transform.position.x);
+		Vector3 position = base.transform.position;
+		position.z = this.ropeStaticBody.position.z;
+		position.y += 4.5f * num;
+		this.ropeStaticBody.MovePosition(position);
+	}
+
+	// Token: 0x040033E3 RID: 13283
+	public Transform Left;
+
+	// Token: 0x040033E4 RID: 13284
+	public Transform Right;
+
+	// Token: 0x040033E5 RID: 13285
+	public Transform ropeRoot;
+
+	// Token: 0x040033E6 RID: 13286
+	public Transform shortRopeRoot;
+
+	// Token: 0x040033E7 RID: 13287
+	public Rigidbody ropeStaticBody;
+
+	// Token: 0x040033E8 RID: 13288
+	private Renderer[] longRopeRenderers;
+
+	// Token: 0x040033E9 RID: 13289
+	private Renderer[] shortRopeRenderers;
+
+	// Token: 0x040033EA RID: 13290
+	private SignalIn SwapToLongRope;
+
+	// Token: 0x040033EB RID: 13291
+	private SignalIn SwapToShortRope;
+}

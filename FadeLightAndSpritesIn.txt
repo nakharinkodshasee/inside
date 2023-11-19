@@ -1,0 +1,191 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000184 RID: 388
+public class FadeLightAndSpritesIn : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000B68 RID: 2920 RVA: 0x00070D04 File Offset: 0x0006EF04
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.blendPos1 != null && this.blendPos2 != null)
+		{
+			this.blendDistance = Vector3.Distance(this.blendPos1.position, this.blendPos2.position);
+		}
+		this.lightSourceStartIntensities = new float[this.lightSources.Count];
+		for (int i = 0; i < this.lightSources.Count; i++)
+		{
+			this.lightSourceStartIntensities[i] = this.lightSources[i].intensity;
+			this.lightSources[i].intensity = 0f;
+		}
+		List<MaterialInstance> list = new List<MaterialInstance>();
+		for (int j = 0; j < this.sprites.Count; j++)
+		{
+			Renderer renderer = this.sprites[j];
+			if (renderer)
+			{
+				MaterialInstance component = renderer.GetComponent<MaterialInstance>();
+				if (!(component == null))
+				{
+					list.Add(component);
+				}
+			}
+		}
+		this.spritesMaterialInstance = list.ToArray();
+	}
+
+	// Token: 0x06000B69 RID: 2921 RVA: 0x00070E38 File Offset: 0x0006F038
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		this.startFade = SignalIn.Create("startFade", base.gameObject, new Action(this.StartFade));
+		this.startFadeOut = SignalIn.Create("startFadeOut", base.gameObject, new Action(this.StartFadeOut));
+		int num = this.spritesMaterialInstance.Length;
+		this.spritesMaterialInstanceColor = new MaterialInstance.ColorProperty[num];
+		this.spritesStartColors = new Color[num];
+		for (int i = 0; i < num; i++)
+		{
+			MaterialInstance materialInstance = this.spritesMaterialInstance[i];
+			MaterialInstance.ColorProperty colorProperty = materialInstance.GetColorProperty("_Color");
+			if (colorProperty == null)
+			{
+				colorProperty = materialInstance.GetColorProperty("_MainCol");
+			}
+			this.spritesMaterialInstanceColor[i] = colorProperty;
+			Color colorValue = materialInstance.GetColorValue(colorProperty);
+			this.spritesStartColors[i] = colorValue;
+		}
+		return true;
+	}
+
+	// Token: 0x06000B6A RID: 2922 RVA: 0x00070F10 File Offset: 0x0006F110
+	private void Start()
+	{
+		for (int i = 0; i < this.sprites.Count; i++)
+		{
+			Color color = this.spritesStartColors[i];
+			this.spritesMaterialInstance[i].SetColorProperty(this.spritesMaterialInstanceColor[i], color.Alpha(0f));
+		}
+	}
+
+	// Token: 0x06000B6B RID: 2923 RVA: 0x00070F6C File Offset: 0x0006F16C
+	private void StartFade()
+	{
+		this.fadeStarted = true;
+		this.fadeTimer = 0f;
+	}
+
+	// Token: 0x06000B6C RID: 2924 RVA: 0x00070F80 File Offset: 0x0006F180
+	private void StartFadeOut()
+	{
+		this.fadeOutStarted = true;
+		this.fadeTimer = 0f;
+	}
+
+	// Token: 0x06000B6D RID: 2925 RVA: 0x00070F94 File Offset: 0x0006F194
+	private void Update()
+	{
+		if (this.blendTransform)
+		{
+			this.DoFade(Mathf.Clamp01(Vector3.Distance(this.blendTransform.position, this.blendPos2.position) / this.blendDistance));
+			return;
+		}
+		if (!this.fadeStarted && !this.fadeOutStarted)
+		{
+			return;
+		}
+		this.fadeTimer = Mathf.Clamp01(this.fadeTimer + Time.deltaTime / this.fadeTime);
+		if (this.fadeStarted)
+		{
+			this.DoFade(this.fadeTimer);
+		}
+		else if (this.fadeOutStarted)
+		{
+			this.DoFade(1f - this.fadeTimer);
+		}
+		if (this.fadeTimer == 1f)
+		{
+			this.fadeStarted = false;
+		}
+	}
+
+	// Token: 0x06000B6E RID: 2926 RVA: 0x00071064 File Offset: 0x0006F264
+	private void DoFade(float intensity)
+	{
+		for (int i = 0; i < this.lightSources.Count; i++)
+		{
+			this.lightSources[i].intensity = this.lightSourceStartIntensities[i] * intensity;
+		}
+		for (int j = 0; j < this.sprites.Count; j++)
+		{
+			Color value = this.spritesStartColors[j];
+			value.a *= intensity;
+			this.spritesMaterialInstance[j].SetColorProperty(this.spritesMaterialInstanceColor[j], value);
+		}
+	}
+
+	// Token: 0x040013C3 RID: 5059
+	public float fadeTime = 1f;
+
+	// Token: 0x040013C4 RID: 5060
+	public List<Light> lightSources;
+
+	// Token: 0x040013C5 RID: 5061
+	public List<Renderer> sprites;
+
+	// Token: 0x040013C6 RID: 5062
+	public Transform blendTransform;
+
+	// Token: 0x040013C7 RID: 5063
+	public Transform blendPos1;
+
+	// Token: 0x040013C8 RID: 5064
+	public Transform blendPos2;
+
+	// Token: 0x040013C9 RID: 5065
+	private SignalIn startFade;
+
+	// Token: 0x040013CA RID: 5066
+	private SignalIn startFadeOut;
+
+	// Token: 0x040013CB RID: 5067
+	private MaterialInstance.ColorProperty[] spritesMaterialInstanceColor;
+
+	// Token: 0x040013CC RID: 5068
+	private Color[] spritesStartColors;
+
+	// Token: 0x040013CD RID: 5069
+	private bool fadeStarted;
+
+	// Token: 0x040013CE RID: 5070
+	private bool fadeOutStarted;
+
+	// Token: 0x040013CF RID: 5071
+	private float fadeTimer;
+
+	// Token: 0x040013D0 RID: 5072
+	[SerializeField]
+	[HideInInspector]
+	private MaterialInstance[] spritesMaterialInstance;
+
+	// Token: 0x040013D1 RID: 5073
+	[SerializeField]
+	[HideInInspector]
+	private float[] lightSourceStartIntensities;
+
+	// Token: 0x040013D2 RID: 5074
+	[HideInInspector]
+	[SerializeField]
+	private float blendDistance;
+
+	// Token: 0x040013D3 RID: 5075
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

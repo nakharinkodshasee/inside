@@ -1,0 +1,24 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200059C RID: 1436
+public class ElevatorTestSync : MonoBehaviour
+{
+	// Token: 0x060024C5 RID: 9413 RVA: 0x0012EB1C File Offset: 0x0012CD1C
+	private void Start()
+	{
+		this.platformRigidbody = base.GetComponent<Rigidbody>();
+	}
+
+	// Token: 0x060024C6 RID: 9414 RVA: 0x0012EB2C File Offset: 0x0012CD2C
+	private void FixedUpdate()
+	{
+		this.platformRigidbody.MovePosition(this.target.position);
+	}
+
+	// Token: 0x0400437C RID: 17276
+	public Transform target;
+
+	// Token: 0x0400437D RID: 17277
+	private Rigidbody platformRigidbody;
+}

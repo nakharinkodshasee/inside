@@ -1,0 +1,1135 @@
+using System;
+using SceneVerification;
+using UnityEngine;
+
+// Token: 0x02000330 RID: 816
+public class ForceFlicker : MonoBehaviour, IFastEventListener, IPreAwake
+{
+	// Token: 0x060016CD RID: 5837 RVA: 0x000C7FA4 File Offset: 0x000C61A4
+	[ContextMenu("PreProcessTest")]
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.postBlinkAudioEvents)
+		{
+			this.blinkEventSend = new bool[this.blinkEvents.Length];
+		}
+		int num = this.lightObject.Length;
+		this.lightStoredValue = new float[num];
+		for (int i = 0; i < num; i++)
+		{
+			if (!(this.lightObject[i] == null))
+			{
+				this.lightStoredValue[i] = this.lightObject[i].intensity;
+			}
+		}
+		int num2 = this.vfxConfig.Length;
+		this.vfxStoredColor = new Color[num2];
+		for (int j = 0; j < num2; j++)
+		{
+			if (!(this.vfxConfig[j] == null))
+			{
+				this.vfxStoredColor[j] = this.vfxConfig[j].visualConfig.color;
+			}
+		}
+		int num3 = this.lensFlare.Length;
+		this.flareStoredColor = new Color[num3];
+		for (int k = 0; k < num3; k++)
+		{
+			if (!(this.lensFlare[k] == null))
+			{
+				this.flareStoredColor[k] = this.lensFlare[k].color;
+			}
+		}
+		int l = 0;
+		int num4 = this.miBlendBox.Length;
+		while (l < num4)
+		{
+			if (!(this.miBlendBox[l] == null))
+			{
+				this.miBlendBox[l].isFlickering = true;
+				this.miBlendBox[l].flickerInput = 1f;
+			}
+			l++;
+		}
+		if (this.audioObject == null && this.lightObject.Length >= 1 && this.lightObject[0] != null)
+		{
+			this.audioObject = this.lightObject[0].gameObject;
+		}
+		if (this.audioObject == null)
+		{
+			this.audioObject = base.gameObject;
+		}
+		this.akGameObjAudio = AudioUtils.EnsureAkGameObj(this.audioObject, null);
+		this.audioBlinkEvent = new AudioEventSimple(this.audioPrefix + "_lightFlickerBlink");
+		this.audioPlainEvent = new AudioEventSimple(this.audioPrefix + "_lightFlicker");
+		this.audioStartRtpc = new AudioEventSimple(this.audioPrefix + "_lightFlicker_rtpcStart");
+		this.audioStopRtpc = new AudioEventSimple(this.audioPrefix + "_lightFlicker_rtpcStop");
+		this.rtpcFlicker = new RTPC("rtpc_flicker", false);
+	}
+
+	// Token: 0x060016CE RID: 5838 RVA: 0x000C824C File Offset: 0x000C644C
+	public bool PreAwake(int callcount)
+	{
+		switch (callcount)
+		{
+		case 0:
+			if (this.postAudioEvents)
+			{
+				this.flickerPlayer = new RangedSoundPlayer(null);
+			}
+			return false;
+		case 1:
+			if (this.audioObject && this.audioObject.GetComponent<RTPCCapsule>())
+			{
+				this.usingCapsule = true;
+			}
+			this.noiseTimer = base.transform.position.x;
+			this.fogBoxTurnOffExist = (this.fogBoxToTurnOff != null);
+			return false;
+		case 2:
+			this.flicker = SignalIn.Create("flicker", base.gameObject, new Action(this.OnFlicker));
+			this.fadeOut = SignalIn.Create("fadeOut", base.gameObject, new Action(this.OnFadeOut));
+			this.loadFaded = SignalIn.Create("loadFaded", base.gameObject, new Action(this.OnLoadFaded));
+			this.enableAutoFlicker = SignalIn.Create("enableAutoFlicker", base.gameObject, new Action(this.OnEnableAutoFlicker));
+			this.enableReadyForBlow = SignalIn.Create("enableReadyForBlow", base.gameObject, new Action(this.OnEnableReadyForBlow));
+			this.disableReadyForBlow = SignalIn.Create("disableReadyForBlow", base.gameObject, new Action(this.OnDisableReadyForBlow));
+			return false;
+		case 3:
+			this.disableAutoFlicker = SignalIn.Create("disableAutoFlicker", base.gameObject, new Action(this.OnDisableAutoFlicker));
+			this.startFlicker = SignalIn.Create("startFlicker", base.gameObject, new Action(this.OnStartFlicker));
+			this.stopFlicker = SignalIn.Create("stopFlicker", base.gameObject, new Action(this.OnStopFlicker));
+			return false;
+		case 4:
+			this.PreAwakeMaterialInstances();
+			break;
+		}
+		return true;
+	}
+
+	// Token: 0x060016CF RID: 5839 RVA: 0x000C8430 File Offset: 0x000C6630
+	private void PreAwakeMaterialInstances()
+	{
+		this.OnPreProcess();
+		int i = 0;
+		int num = this.lampMaterialInstances.Length;
+		while (i < num)
+		{
+			MaterialInstance materialInstance = this.lampMaterialInstances[i];
+			if (!(materialInstance == null))
+			{
+				Material sharedMaterial = materialInstance.gameObject.GetComponent<Renderer>().sharedMaterial;
+				for (int j = 0; j < this.colorNames.Length; j++)
+				{
+					if (sharedMaterial.HasProperty(this.colorNames[j]))
+					{
+						this.lampMatInstanceSupported.Add(materialInstance);
+						MaterialInstance.ColorProperty orAddColorProperty = materialInstance.GetOrAddColorProperty(this.colorNames[j]);
+						this.lampColorProperty.Add(orAddColorProperty);
+						Color colorValue = materialInstance.GetColorValue(orAddColorProperty);
+						this.lampStoredColor.Add(colorValue);
+						break;
+					}
+				}
+			}
+			i++;
+		}
+		if (this.startActivated)
+		{
+			this.OnStartFlicker();
+		}
+		else
+		{
+			this.OnStopFlicker();
+		}
+		int k = 0;
+		int num2 = this.glowMaterialInstances.Length;
+		while (k < num2)
+		{
+			MaterialInstance materialInstance2 = this.glowMaterialInstances[k];
+			if (!(materialInstance2 == null))
+			{
+				Material sharedMaterial2 = materialInstance2.gameObject.GetComponent<Renderer>().sharedMaterial;
+				for (int l = 0; l < this.colorNames.Length; l++)
+				{
+					if (sharedMaterial2.HasProperty(this.colorNames[l]))
+					{
+						this.glowMatInstanceSupported.Add(materialInstance2);
+						MaterialInstance.ColorProperty orAddColorProperty2 = materialInstance2.GetOrAddColorProperty(this.colorNames[l]);
+						this.glowColorProperty.Add(orAddColorProperty2);
+						Color colorValue2 = materialInstance2.GetColorValue(orAddColorProperty2);
+						this.glowStoredColor.Add(colorValue2);
+						break;
+					}
+				}
+			}
+			k++;
+		}
+		int m = 0;
+		int num3 = this.floatMaterialInstances.Length;
+		while (m < num3)
+		{
+			MaterialInstance materialInstance3 = this.floatMaterialInstances[m];
+			if (!(materialInstance3 == null))
+			{
+				Material sharedMaterial3 = materialInstance3.gameObject.GetComponent<Renderer>().sharedMaterial;
+				for (int n = 0; n < this.floatNames.Length; n++)
+				{
+					if (sharedMaterial3.HasProperty(this.floatNames[n]))
+					{
+						this.floatMatInstanceSupported.Add(materialInstance3);
+						MaterialInstance.FloatProperty orAddFloatProperty = materialInstance3.GetOrAddFloatProperty(this.floatNames[n]);
+						this.floatProperty.Add(orAddFloatProperty);
+						float floatValue = materialInstance3.GetFloatValue(orAddFloatProperty);
+						this.floatStoredValue.Add(floatValue);
+						break;
+					}
+				}
+			}
+			m++;
+		}
+		this.RestoreValues();
+	}
+
+	// Token: 0x060016D0 RID: 5840 RVA: 0x000C86BC File Offset: 0x000C68BC
+	private void Start()
+	{
+		if (!this.preProcessed)
+		{
+			this.OnPreProcess();
+		}
+		if (this.autoFlicker)
+		{
+			this.SetFlickerState();
+		}
+		else if (this.syncToBlow)
+		{
+			ForcePushManager.blowEvent.Register(this, ref this.blowHandle);
+		}
+		if (this.postAudioEvents)
+		{
+			AkGameObjUmbrella.PrepareAkGameObj(this.akGameObjAudio);
+		}
+	}
+
+	// Token: 0x060016D1 RID: 5841 RVA: 0x000C8724 File Offset: 0x000C6924
+	private void OnEnable()
+	{
+		if (this.postAudioEvents && this.isActivated && !this.sendingRTPC)
+		{
+			float num = this.flickerCurve.Evaluate(this.sampleTime);
+			float lightVal = num * this.lightMultiplier;
+			float glowVal = num * this.glowMultiplier;
+			float lampVal = num * this.lampMultiplier;
+			float vfxVal = num * this.vfxConfigMultiplier;
+			this.DoUpdateRTPC(0f, lightVal, glowVal, lampVal, vfxVal);
+			this.audioStartRtpc.PostFast(this.akGameObjAudio);
+			this.sendingRTPC = true;
+		}
+		if (this.startActivated && !this.isActivated)
+		{
+			this.isActivated = true;
+		}
+		if (this.syncToBlow)
+		{
+			this.OnBlow();
+		}
+	}
+
+	// Token: 0x060016D2 RID: 5842 RVA: 0x000C87E0 File Offset: 0x000C69E0
+	private void OnStartFlicker()
+	{
+		this.isActivated = true;
+		this.OnEnable();
+	}
+
+	// Token: 0x060016D3 RID: 5843 RVA: 0x000C87F0 File Offset: 0x000C69F0
+	private void OnStopFlicker()
+	{
+		this.isActivated = false;
+		this.OnDisable();
+	}
+
+	// Token: 0x060016D4 RID: 5844 RVA: 0x000C8800 File Offset: 0x000C6A00
+	private void OnDisable()
+	{
+		if (this.postAudioEvents)
+		{
+			if (this.isActivated && this.sendingRTPC)
+			{
+				this.audioStopRtpc.PostFast(this.akGameObjAudio);
+				this.sendingRTPC = false;
+			}
+			this.flickerPlayer.OnDisable(this.akGameObjAudio, this.audioPlainEvent.eventName);
+		}
+	}
+
+	// Token: 0x060016D5 RID: 5845 RVA: 0x000C8864 File Offset: 0x000C6A64
+	private void OnDestroy()
+	{
+		if (this.postAudioEvents)
+		{
+			this.flickerPlayer.OnDestroy();
+		}
+		ForcePushManager.blowEvent.Unregister(ref this.blowHandle);
+	}
+
+	// Token: 0x060016D6 RID: 5846 RVA: 0x000C8898 File Offset: 0x000C6A98
+	private void SetFlickerState()
+	{
+		if (this.timesToFlicker == 0)
+		{
+			this.autoFlicker = false;
+			this.SetDelayState();
+			return;
+		}
+		if (this.timesToFlicker > 0)
+		{
+			this.timesToFlicker--;
+		}
+		this.time = 0f;
+		this.flickerTime = Random.Range(this.flickerTimeMin, this.flickerTimeMax);
+		if (!this.sendingRTPC && this.postAudioEvents)
+		{
+			this.audioStartRtpc.PostFast(this.akGameObjAudio);
+			this.sendingRTPC = true;
+		}
+		this.isActivated = true;
+		this.state = ForceFlicker.State.Flicker;
+	}
+
+	// Token: 0x060016D7 RID: 5847 RVA: 0x000C8938 File Offset: 0x000C6B38
+	public float GetSampleTime()
+	{
+		return this.sampleTime;
+	}
+
+	// Token: 0x060016D8 RID: 5848 RVA: 0x000C8940 File Offset: 0x000C6B40
+	private void FlickerState()
+	{
+		if (this.time < this.flickerTime)
+		{
+			this.time += Time.deltaTime;
+			if (this.flickerTime == 0f)
+			{
+				return;
+			}
+			this.sampleTime = this.time / this.flickerTime;
+			if (this.fogBoxTurnOffExist && !this.fogBoxTurnedOff && this.sampleTime > this.timeToTurnOff)
+			{
+				this.fogBoxTurnedOff = true;
+				Color fogColor = this.fogBoxToTurnOff.data.blendValues.FogColor;
+				fogColor.r *= 0.66f;
+				fogColor.g *= 0.66f;
+				fogColor.b *= 0.66f;
+				this.fogBoxToTurnOff.data.blendValues.FogColor = fogColor;
+				Color waterFogColor = this.fogBoxToTurnOff.data.blendValues.WaterFogColor;
+				waterFogColor.r *= 0.66f;
+				waterFogColor.g *= 0.66f;
+				waterFogColor.b *= 0.66f;
+				this.fogBoxToTurnOff.data.blendValues.WaterFogColor = waterFogColor;
+			}
+			float num = this.flickerCurve.Evaluate(this.sampleTime);
+			this.noiseTimer += Time.deltaTime * this.noiseFrequency;
+			float num2 = 1f + Mathf.PerlinNoise(this.noiseTimer, 0f) * (this.noiseMax - this.noiseMin) + this.noiseMin;
+			num2 *= ((!this.useNoiseMultiplierCurve) ? this.noiseMultiplier : this.noiseMultiplierCurve.Evaluate(this.sampleTime));
+			float num3 = num2 + num * this.lightMultiplier;
+			float num4 = num2 + num * this.glowMultiplier;
+			float num5 = num2 + num * this.lampMultiplier;
+			float num6 = num2 + num * this.vfxConfigMultiplier;
+			this.SetFlickerValues(num, num2, num3, num4, num5, num6);
+			if (this.postBlinkAudioEvents)
+			{
+				this.DoCheckBlink(this.sampleTime);
+			}
+			if (this.postAudioEvents)
+			{
+				this.DoUpdateRTPC(num2, num3, num4, num5, num6);
+			}
+		}
+		else
+		{
+			this.isActivated = false;
+			if (!this.keepLastValue)
+			{
+				this.RestoreValues();
+			}
+			this.SetDelayState();
+		}
+	}
+
+	// Token: 0x060016D9 RID: 5849 RVA: 0x000C8BA4 File Offset: 0x000C6DA4
+	private void SetDelayState()
+	{
+		if (!this.autoFlicker)
+		{
+			this.state = ForceFlicker.State.None;
+		}
+		else
+		{
+			this.waitDelay = Random.Range(this.waitDelayMin, this.waitDelayMax);
+			if (this.waitDelay <= 0f)
+			{
+				this.SetFlickerState();
+			}
+			else
+			{
+				this.waitTimer = this.waitDelay;
+				this.state = ForceFlicker.State.Delay;
+			}
+		}
+	}
+
+	// Token: 0x060016DA RID: 5850 RVA: 0x000C8C10 File Offset: 0x000C6E10
+	private void DelayState()
+	{
+		if (this.waitTimer > 0f)
+		{
+			this.waitTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.SetFlickerState();
+		}
+	}
+
+	// Token: 0x060016DB RID: 5851 RVA: 0x000C8C40 File Offset: 0x000C6E40
+	private void SetCapsule()
+	{
+		if (Time.frameCount > 120)
+		{
+			this.audioObject = this.audioObject.GetComponent<RTPCCapsule>().audioSourceGameObject;
+			this.akGameObjAudio = AudioUtils.EnsureAkGameObj(this.audioObject, null);
+			AkGameObjUmbrella.PrepareAkGameObj(this.akGameObjAudio);
+			this.capsuleSet = true;
+		}
+	}
+
+	// Token: 0x060016DC RID: 5852 RVA: 0x000C8C94 File Offset: 0x000C6E94
+	private void Update()
+	{
+		if (this.usingCapsule && !this.capsuleSet)
+		{
+			this.SetCapsule();
+		}
+		if (!this.isActivated && !this.autoFlicker)
+		{
+			return;
+		}
+		if (this.state != ForceFlicker.State.None)
+		{
+			ForceFlicker.State state = this.state;
+			if (state != ForceFlicker.State.Flicker)
+			{
+				if (state == ForceFlicker.State.Delay)
+				{
+					this.DelayState();
+				}
+			}
+			else
+			{
+				this.FlickerState();
+			}
+			this.UpdateFadeOut();
+		}
+		if (this.postAudioEvents && !object.ReferenceEquals(this.akGameObjAudio, null) && this.akGameObjAudio.isActiveAndEnabled)
+		{
+			if (object.ReferenceEquals(this.akGameObjAudio.transformCached, null))
+			{
+				this.akGameObjAudio.transformCached = this.akGameObjAudio.transform;
+			}
+			Vector3 position = this.akGameObjAudio.transformCached.position;
+			int i = 0;
+			int num = this.lightObject.Length;
+			while (i < num)
+			{
+				if (!object.ReferenceEquals(this.lightObject[i], null))
+				{
+					this.flickerPlayer.PostRangeEventsAndDistanceRTPC(this.akGameObjAudio, ref position, this.audioPlainEvent.eventName, 20f, true, true);
+				}
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x060016DD RID: 5853 RVA: 0x000C8DD8 File Offset: 0x000C6FD8
+	private void UpdateFadeOut()
+	{
+		if (this.fadeOutTimer > 0f)
+		{
+			this.fadeOutTimer -= Time.deltaTime;
+			this.currentFadeOut = this.fadeOutTimer * this.fadeOutSlope + this.fadeOutIntensity;
+		}
+	}
+
+	// Token: 0x060016DE RID: 5854 RVA: 0x000C8E24 File Offset: 0x000C7024
+	private void RestoreValues()
+	{
+		float num;
+		float glowFlicker;
+		float lightFlicker;
+		float lampFlicker;
+		if (this.initialCurveValue)
+		{
+			num = this.flickerCurve.Evaluate(0f);
+			glowFlicker = num * this.glowMultiplier;
+			lightFlicker = num * this.lightMultiplier;
+			lampFlicker = num * this.lampMultiplier;
+		}
+		else
+		{
+			num = 0f;
+			glowFlicker = 1f;
+			lightFlicker = 1f;
+			lampFlicker = 1f;
+		}
+		if (this.postBlinkAudioEvents)
+		{
+			Array.Clear(this.blinkEventSend, 0, this.blinkEventSend.Length);
+		}
+		this.SetFlickerValues(num, 0f, lightFlicker, glowFlicker, lampFlicker, 1f);
+		if (this.postAudioEvents)
+		{
+			this.rtpcFlicker.SetFast(this.rtpcResetValue, this.akGameObjAudio, 0f);
+			if (this.debugFlickerValue)
+			{
+			}
+		}
+	}
+
+	// Token: 0x060016DF RID: 5855 RVA: 0x000C8EEC File Offset: 0x000C70EC
+	private void DoCheckBlink(float sampleFlickerValue)
+	{
+		int num = 0;
+		foreach (float num2 in this.blinkEvents)
+		{
+			if (sampleFlickerValue >= num2 && !this.blinkEventSend[num])
+			{
+				this.audioBlinkEvent.PostFast(this.akGameObjAudio);
+				this.blinkEventSend[num] = true;
+			}
+			num++;
+		}
+	}
+
+	// Token: 0x060016E0 RID: 5856 RVA: 0x000C8F50 File Offset: 0x000C7150
+	private void DoUpdateRTPC(float noise, float lightVal, float glowVal, float lampVal, float vfxVal)
+	{
+		float num = 0f;
+		if (this.rtpcBase == ForceFlicker.RTPCBase.lightBased)
+		{
+			num = noise + this.lightMultiplier * lightVal;
+		}
+		else if (this.rtpcBase == ForceFlicker.RTPCBase.vfxBased)
+		{
+			num = noise + this.vfxConfigMultiplier * vfxVal;
+		}
+		else if (this.rtpcBase == ForceFlicker.RTPCBase.lampBased)
+		{
+			num = noise + this.lampMultiplier * lampVal;
+		}
+		else if (this.rtpcBase == ForceFlicker.RTPCBase.glowBased)
+		{
+			num = noise + this.glowMultiplier * glowVal;
+		}
+		num *= this.currentFadeOut;
+		float num2 = Mathf.InverseLerp(this.minFlickerValue, this.maxFlickerValue, num);
+		float num3 = this.rtpcFlickerLastValue - num2;
+		if (num3 < 0f)
+		{
+			num3 = -num3;
+		}
+		if (num3 > 0.05f && SoundEngine.AreEngineUpdatesEnabled())
+		{
+			this.rtpcFlicker.Set01ClampedFast(num2, this.akGameObjAudio);
+			this.rtpcFlickerLastValue = num2;
+		}
+		if (this.debugFlickerValue)
+		{
+			if (num > this.flickerDebugMaxValue)
+			{
+				this.flickerDebugMaxValue = num;
+			}
+			if (num < this.flickerDebugMinValue)
+			{
+				this.flickerDebugMinValue = num;
+			}
+			if (!this.firstExecution)
+			{
+				this.flickerDebugMaxValue = float.MinValue;
+				this.flickerDebugMinValue = float.MaxValue;
+			}
+			this.firstExecution = true;
+		}
+	}
+
+	// Token: 0x060016E1 RID: 5857 RVA: 0x000C908C File Offset: 0x000C728C
+	public void SetFlickerValues(float sampleFlicker, float noiseRandom, float lightFlicker, float glowFlicker, float lampFlicker, float vfxFlicker)
+	{
+		int i = 0;
+		int size = this.lampMatInstanceSupported.size;
+		while (i < size)
+		{
+			if (!object.ReferenceEquals(this.lampMatInstanceSupported.raw[i], null))
+			{
+				float num = lampFlicker * this.currentFadeOut;
+				Color value = this.lampStoredColor.raw[i];
+				value.r *= num;
+				value.g *= num;
+				value.b *= num;
+				value.a *= num;
+				this.lampMatInstanceSupported.raw[i].SetColorProperty(this.lampColorProperty.raw[i], value);
+			}
+			i++;
+		}
+		int j = 0;
+		int num2 = this.lightObject.Length;
+		while (j < num2)
+		{
+			if (!object.ReferenceEquals(this.lightObject[j], null))
+			{
+				float intensity = this.lightStoredValue[j] * lightFlicker * this.currentFadeOut;
+				this.lightObject[j].intensity = intensity;
+			}
+			j++;
+		}
+		int k = 0;
+		int size2 = this.glowMatInstanceSupported.size;
+		while (k < size2)
+		{
+			if (!object.ReferenceEquals(this.glowMatInstanceSupported.raw[k], null))
+			{
+				Color value2 = this.glowStoredColor.raw[k];
+				float num3 = 1f - this.glowFlickScale + glowFlicker * this.currentFadeOut * this.glowFlickScale;
+				value2.r *= num3;
+				value2.g *= num3;
+				value2.b *= num3;
+				value2.a *= num3;
+				this.glowMatInstanceSupported.raw[k].SetColorProperty(this.glowColorProperty.raw[k], value2);
+			}
+			k++;
+		}
+		int l = 0;
+		int size3 = this.floatMatInstanceSupported.size;
+		while (l < size3)
+		{
+			if (!object.ReferenceEquals(this.floatMatInstanceSupported.raw[l], null))
+			{
+				float value3 = this.floatStoredValue.raw[l] * lightFlicker * this.currentFadeOut;
+				this.floatMatInstanceSupported.raw[l].SetFloatProperty(this.floatProperty.raw[l], value3);
+			}
+			l++;
+		}
+		int m = 0;
+		int num4 = this.vfxConfig.Length;
+		while (m < num4)
+		{
+			if (!object.ReferenceEquals(this.vfxConfig[m], null))
+			{
+				Color color = this.vfxStoredColor[m];
+				float num5 = vfxFlicker * this.currentFadeOut;
+				color.r *= num5;
+				color.g *= num5;
+				color.b *= num5;
+				color.a = this.vfxStoredColor[m].a;
+				this.vfxConfig[m].visualConfig.color = color;
+			}
+			m++;
+		}
+		int n = 0;
+		int num6 = this.lensFlare.Length;
+		while (n < num6)
+		{
+			if (!object.ReferenceEquals(this.lensFlare[n], null))
+			{
+				Color color2 = this.flareStoredColor[n];
+				float num7 = glowFlicker * this.currentFadeOut;
+				color2.r *= num7;
+				color2.g *= num7;
+				color2.b *= num7;
+				color2.a *= num7;
+				this.lensFlare[n].color = color2;
+			}
+			n++;
+		}
+		int num8 = 0;
+		int num9 = this.miBlendBox.Length;
+		while (num8 < num9)
+		{
+			if (!object.ReferenceEquals(this.miBlendBox[num8], null))
+			{
+				float flickerInput = lightFlicker * this.currentFadeOut;
+				this.miBlendBox[num8].flickerInput = flickerInput;
+			}
+			num8++;
+		}
+	}
+
+	// Token: 0x060016E2 RID: 5858 RVA: 0x000C94C0 File Offset: 0x000C76C0
+	public void OnFlicker()
+	{
+		this.SetFlickerState();
+	}
+
+	// Token: 0x060016E3 RID: 5859 RVA: 0x000C94C8 File Offset: 0x000C76C8
+	public void OnFadeOut()
+	{
+		this.fadeOutSlope = (1f - this.fadeOutIntensity) / this.fadeOutTime;
+		this.fadeOutTimer = this.fadeOutTime;
+	}
+
+	// Token: 0x060016E4 RID: 5860 RVA: 0x000C94F0 File Offset: 0x000C76F0
+	private void OnLoadFaded()
+	{
+		this.currentFadeOut = this.fadeOutIntensity;
+	}
+
+	// Token: 0x060016E5 RID: 5861 RVA: 0x000C9500 File Offset: 0x000C7700
+	private void OnEnableReadyForBlow()
+	{
+		this.readyToReceiveBlowEvents = true;
+	}
+
+	// Token: 0x060016E6 RID: 5862 RVA: 0x000C950C File Offset: 0x000C770C
+	private void OnDisableReadyForBlow()
+	{
+		this.readyToReceiveBlowEvents = false;
+		this.isActivated = false;
+	}
+
+	// Token: 0x060016E7 RID: 5863 RVA: 0x000C951C File Offset: 0x000C771C
+	private void OnBlow()
+	{
+		if (!this.readyToReceiveBlowEvents)
+		{
+			return;
+		}
+		if (base.gameObject && base.gameObject.activeInHierarchy)
+		{
+			this.SetFlickerState();
+		}
+	}
+
+	// Token: 0x060016E8 RID: 5864 RVA: 0x000C955C File Offset: 0x000C775C
+	public void OnFastEvent(FastEvent sender)
+	{
+		if (sender == ForcePushManager.blowEvent)
+		{
+			this.OnBlow();
+		}
+	}
+
+	// Token: 0x060016E9 RID: 5865 RVA: 0x000C9570 File Offset: 0x000C7770
+	private void OnDisableAutoFlicker()
+	{
+		this.autoFlicker = false;
+		this.RestoreValues();
+		this.state = ForceFlicker.State.None;
+		if (this.sendingRTPC)
+		{
+			this.audioStopRtpc.PostFast(this.akGameObjAudio);
+			this.sendingRTPC = false;
+		}
+	}
+
+	// Token: 0x060016EA RID: 5866 RVA: 0x000C95AC File Offset: 0x000C77AC
+	private void OnEnableAutoFlicker()
+	{
+		this.autoFlicker = true;
+		this.SetDelayState();
+	}
+
+	// Token: 0x060016EB RID: 5867 RVA: 0x000C95BC File Offset: 0x000C77BC
+	[ContextMenu("Dump supported colors to console")]
+	private void DumpSupportedColorNames()
+	{
+		int i = 0;
+		int num = this.colorNames.Length;
+		while (i < num)
+		{
+			i++;
+		}
+	}
+
+	// Token: 0x060016EC RID: 5868 RVA: 0x000C95E4 File Offset: 0x000C77E4
+	[Verify("ForceFlicker/Using GameObject References", "Check if ForceFlicker is referencing anything", new string[]
+	{
+		"CleanUp"
+	})]
+	public void VerifyUsingGameObjectReference(Form form)
+	{
+		if (this.lightObject.Length == 0 && this.glowMaterialInstances.Length == 0 && this.lampMaterialInstances.Length == 0 && this.vfxConfig.Length == 0 && this.lensFlare.Length == 0)
+		{
+			form.ReportWarning(this, "ForceFlicker script has no objects to flicker, please disable or consider removing script!");
+		}
+	}
+
+	// Token: 0x0400288E RID: 10382
+	public bool startActivated = true;
+
+	// Token: 0x0400288F RID: 10383
+	public bool syncToBlow;
+
+	// Token: 0x04002890 RID: 10384
+	public bool autoFlicker;
+
+	// Token: 0x04002891 RID: 10385
+	public int timesToFlicker = -1;
+
+	// Token: 0x04002892 RID: 10386
+	public bool initialCurveValue;
+
+	// Token: 0x04002893 RID: 10387
+	public bool keepLastValue;
+
+	// Token: 0x04002894 RID: 10388
+	public AnimationCurve flickerCurve;
+
+	// Token: 0x04002895 RID: 10389
+	[Space(15f)]
+	public float flickerTimeMin = 0.75f;
+
+	// Token: 0x04002896 RID: 10390
+	public float flickerTimeMax = 0.95f;
+
+	// Token: 0x04002897 RID: 10391
+	public float fadeOutIntensity = 0.5f;
+
+	// Token: 0x04002898 RID: 10392
+	public float fadeOutTime = 1f;
+
+	// Token: 0x04002899 RID: 10393
+	public float waitDelayMin = 1f;
+
+	// Token: 0x0400289A RID: 10394
+	public float waitDelayMax = 3f;
+
+	// Token: 0x0400289B RID: 10395
+	[Space(15f)]
+	public float lightMultiplier = 1f;
+
+	// Token: 0x0400289C RID: 10396
+	public float lampMultiplier = 1f;
+
+	// Token: 0x0400289D RID: 10397
+	public float vfxConfigMultiplier = 1f;
+
+	// Token: 0x0400289E RID: 10398
+	public float glowMultiplier = 1f;
+
+	// Token: 0x0400289F RID: 10399
+	public float glowFlickScale = 1f;
+
+	// Token: 0x040028A0 RID: 10400
+	public bool debugPlotIntensity;
+
+	// Token: 0x040028A1 RID: 10401
+	[Space(5f)]
+	[Header("--- Components ---")]
+	[Space(5f)]
+	public Light[] lightObject = new Light[0];
+
+	// Token: 0x040028A2 RID: 10402
+	public MaterialInstance[] glowMaterialInstances = new MaterialInstance[0];
+
+	// Token: 0x040028A3 RID: 10403
+	public MaterialInstance[] lampMaterialInstances = new MaterialInstance[0];
+
+	// Token: 0x040028A4 RID: 10404
+	public MaterialInstance[] floatMaterialInstances = new MaterialInstance[0];
+
+	// Token: 0x040028A5 RID: 10405
+	public VfxConfig[] vfxConfig = new VfxConfig[0];
+
+	// Token: 0x040028A6 RID: 10406
+	public LensFlareSimple[] lensFlare = new LensFlareSimple[0];
+
+	// Token: 0x040028A7 RID: 10407
+	public MaterialInstanceBlendBox[] miBlendBox = new MaterialInstanceBlendBox[0];
+
+	// Token: 0x040028A8 RID: 10408
+	[Space(5f)]
+	[Header("--- Noise ---")]
+	[Space(5f)]
+	public float noiseMin = -0.5f;
+
+	// Token: 0x040028A9 RID: 10409
+	public float noiseMax = 0.5f;
+
+	// Token: 0x040028AA RID: 10410
+	public float noiseFrequency = 7f;
+
+	// Token: 0x040028AB RID: 10411
+	public bool useNoiseMultiplierCurve;
+
+	// Token: 0x040028AC RID: 10412
+	public AnimationCurve noiseMultiplierCurve;
+
+	// Token: 0x040028AD RID: 10413
+	public float noiseMultiplier = 1f;
+
+	// Token: 0x040028AE RID: 10414
+	[Header("--- Fog ---")]
+	[Space(5f)]
+	[Space(5f)]
+	public FogAmbientBlendBox fogBoxToTurnOff;
+
+	// Token: 0x040028AF RID: 10415
+	private bool fogBoxTurnOffExist;
+
+	// Token: 0x040028B0 RID: 10416
+	public float timeToTurnOff = 0.65f;
+
+	// Token: 0x040028B1 RID: 10417
+	[Space(5f)]
+	[Header("--- Audio ---")]
+	[Space(5f)]
+	public bool postAudioEvents;
+
+	// Token: 0x040028B2 RID: 10418
+	public GameObject audioObject;
+
+	// Token: 0x040028B3 RID: 10419
+	public string audioPrefix = "lightflicker";
+
+	// Token: 0x040028B4 RID: 10420
+	public bool postBlinkAudioEvents;
+
+	// Token: 0x040028B5 RID: 10421
+	public float[] blinkEvents;
+
+	// Token: 0x040028B6 RID: 10422
+	public ForceFlicker.RTPCBase rtpcBase;
+
+	// Token: 0x040028B7 RID: 10423
+	public float rtpcResetValue = 100f;
+
+	// Token: 0x040028B8 RID: 10424
+	public float minFlickerValue;
+
+	// Token: 0x040028B9 RID: 10425
+	public float maxFlickerValue = 8f;
+
+	// Token: 0x040028BA RID: 10426
+	public bool debugFlickerValue;
+
+	// Token: 0x040028BB RID: 10427
+	public SignalIn flicker;
+
+	// Token: 0x040028BC RID: 10428
+	public SignalIn fadeOut;
+
+	// Token: 0x040028BD RID: 10429
+	public SignalIn loadFaded;
+
+	// Token: 0x040028BE RID: 10430
+	public SignalIn enableAutoFlicker;
+
+	// Token: 0x040028BF RID: 10431
+	public SignalIn disableAutoFlicker;
+
+	// Token: 0x040028C0 RID: 10432
+	private SignalIn startFlicker;
+
+	// Token: 0x040028C1 RID: 10433
+	private SignalIn stopFlicker;
+
+	// Token: 0x040028C2 RID: 10434
+	public SignalIn disableReadyForBlow;
+
+	// Token: 0x040028C3 RID: 10435
+	public SignalIn enableReadyForBlow;
+
+	// Token: 0x040028C4 RID: 10436
+	private ForceFlicker.State state;
+
+	// Token: 0x040028C5 RID: 10437
+	private float flickerTime = 1f;
+
+	// Token: 0x040028C6 RID: 10438
+	private float time;
+
+	// Token: 0x040028C7 RID: 10439
+	private float waitDelay = 1f;
+
+	// Token: 0x040028C8 RID: 10440
+	private float fadeOutTimer;
+
+	// Token: 0x040028C9 RID: 10441
+	private float fadeOutSlope;
+
+	// Token: 0x040028CA RID: 10442
+	private float currentFadeOut = 1f;
+
+	// Token: 0x040028CB RID: 10443
+	private float waitTimer;
+
+	// Token: 0x040028CC RID: 10444
+	private float noiseTimer;
+
+	// Token: 0x040028CD RID: 10445
+	private float sampleTime;
+
+	// Token: 0x040028CE RID: 10446
+	private FastList<Color> glowStoredColor = new FastList<Color>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040028CF RID: 10447
+	private FastList<Color> lampStoredColor = new FastList<Color>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040028D0 RID: 10448
+	private FastList<float> floatStoredValue = new FastList<float>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040028D1 RID: 10449
+	private FastList<MaterialInstance> glowMatInstanceSupported = new FastList<MaterialInstance>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040028D2 RID: 10450
+	private FastList<MaterialInstance> lampMatInstanceSupported = new FastList<MaterialInstance>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040028D3 RID: 10451
+	private FastList<MaterialInstance> floatMatInstanceSupported = new FastList<MaterialInstance>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040028D4 RID: 10452
+	private FastList<MaterialInstance.ColorProperty> glowColorProperty = new FastList<MaterialInstance.ColorProperty>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040028D5 RID: 10453
+	private FastList<MaterialInstance.ColorProperty> lampColorProperty = new FastList<MaterialInstance.ColorProperty>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040028D6 RID: 10454
+	private FastList<MaterialInstance.FloatProperty> floatProperty = new FastList<MaterialInstance.FloatProperty>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040028D7 RID: 10455
+	private bool isActivated;
+
+	// Token: 0x040028D8 RID: 10456
+	private bool sendingRTPC;
+
+	// Token: 0x040028D9 RID: 10457
+	private bool usingCapsule;
+
+	// Token: 0x040028DA RID: 10458
+	private bool capsuleSet;
+
+	// Token: 0x040028DB RID: 10459
+	private bool fogBoxTurnedOff;
+
+	// Token: 0x040028DC RID: 10460
+	private bool firstExecution;
+
+	// Token: 0x040028DD RID: 10461
+	private int blowHandle = -1;
+
+	// Token: 0x040028DE RID: 10462
+	private float rtpcFlickerLastValue = -1f;
+
+	// Token: 0x040028DF RID: 10463
+	private string[] colorNames = new string[]
+	{
+		"_IllumTint",
+		"_TintColor",
+		"_MainColor",
+		"_Color",
+		"_MainCol"
+	};
+
+	// Token: 0x040028E0 RID: 10464
+	private string[] floatNames = new string[]
+	{
+		"_Intensity"
+	};
+
+	// Token: 0x040028E1 RID: 10465
+	private RangedSoundPlayer flickerPlayer;
+
+	// Token: 0x040028E2 RID: 10466
+	[HideInInspector]
+	[SerializeField]
+	private bool[] blinkEventSend;
+
+	// Token: 0x040028E3 RID: 10467
+	[HideInInspector]
+	[SerializeField]
+	private Color[] flareStoredColor;
+
+	// Token: 0x040028E4 RID: 10468
+	[HideInInspector]
+	[SerializeField]
+	private Color[] vfxStoredColor;
+
+	// Token: 0x040028E5 RID: 10469
+	[HideInInspector]
+	[SerializeField]
+	private float[] lightStoredValue;
+
+	// Token: 0x040028E6 RID: 10470
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x040028E7 RID: 10471
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioBlinkEvent;
+
+	// Token: 0x040028E8 RID: 10472
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioPlainEvent;
+
+	// Token: 0x040028E9 RID: 10473
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioStartRtpc;
+
+	// Token: 0x040028EA RID: 10474
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioStopRtpc;
+
+	// Token: 0x040028EB RID: 10475
+	[SerializeField]
+	[HideInInspector]
+	private AkGameObj akGameObjAudio;
+
+	// Token: 0x040028EC RID: 10476
+	[HideInInspector]
+	[SerializeField]
+	private RTPC rtpcFlicker;
+
+	// Token: 0x040028ED RID: 10477
+	private float flickerDebugMaxValue = float.MinValue;
+
+	// Token: 0x040028EE RID: 10478
+	private float flickerDebugMinValue = float.MaxValue;
+
+	// Token: 0x040028EF RID: 10479
+	private bool readyToReceiveBlowEvents = true;
+
+	// Token: 0x02000331 RID: 817
+	public enum RTPCBase
+	{
+		// Token: 0x040028F1 RID: 10481
+		lightBased,
+		// Token: 0x040028F2 RID: 10482
+		glowBased,
+		// Token: 0x040028F3 RID: 10483
+		lampBased,
+		// Token: 0x040028F4 RID: 10484
+		vfxBased
+	}
+
+	// Token: 0x02000332 RID: 818
+	private enum State
+	{
+		// Token: 0x040028F6 RID: 10486
+		None,
+		// Token: 0x040028F7 RID: 10487
+		Flicker,
+		// Token: 0x040028F8 RID: 10488
+		Delay
+	}
+}

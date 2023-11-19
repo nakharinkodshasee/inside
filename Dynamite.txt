@@ -1,0 +1,36 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200019C RID: 412
+public class Dynamite : MonoBehaviour
+{
+	// Token: 0x04001519 RID: 5401
+	public CollisionEvents ropeTrigger;
+
+	// Token: 0x0400151A RID: 5402
+	public Transform explosionPrefab;
+
+	// Token: 0x0400151B RID: 5403
+	public Transform explosionOrigin;
+
+	// Token: 0x0400151C RID: 5404
+	public Transform visuals;
+
+	// Token: 0x0400151D RID: 5405
+	public string explosionSound;
+
+	// Token: 0x0400151E RID: 5406
+	private SignalOut explodeSignal;
+
+	// Token: 0x0400151F RID: 5407
+	private SignalIn explodeIn;
+
+	// Token: 0x04001520 RID: 5408
+	public float explodeDelay = 1.5f;
+
+	// Token: 0x04001521 RID: 5409
+	public float explosionDiameter = 13.00565f;
+
+	// Token: 0x04001522 RID: 5410
+	public bool debugExplodeSphereRender = true;
+}

@@ -1,0 +1,17 @@
+using System;
+
+// Token: 0x020001AA RID: 426
+public class ForcePushObjectUmbrella : Umbrella<ForcePushObject>
+{
+	// Token: 0x06000C80 RID: 3200 RVA: 0x00078FA4 File Offset: 0x000771A4
+	public override void DispatchUpdate()
+	{
+		int num = 0;
+		int size = this.size;
+		while (num != size)
+		{
+			this.targets[num].UmbrellaUpdate();
+			num++;
+		}
+	}
+}

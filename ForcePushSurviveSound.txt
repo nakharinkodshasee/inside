@@ -1,0 +1,379 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004C8 RID: 1224
+public class ForcePushSurviveSound : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001FFB RID: 8187 RVA: 0x0010F8E0 File Offset: 0x0010DAE0
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioSureDeathMusic = new AudioEventSimple("music_mines_forcePushRotator_sureDeath");
+		this.audioSureDeathAmb = new AudioEventSimple("amb_sws_mines_forcePushRotator_sureDeath");
+		this.audioPreDeath = new AudioEventSimple("music_mines_forcePushRotator_preDeath");
+		this.audioFirstSurviveMusic = new AudioEventSimple("music_mines_forcePushRotator_firstSurvive");
+		this.audioFirstSurviveAmb = new AudioEventSimple("amb_sws_mines_forcePushRotator_firstSurvive");
+		this.audioSecondSurviveMusic = new AudioEventSimple("music_mines_forcePushRotator_secondSurvive");
+		this.audioSecondSurviveAmb = new AudioEventSimple("amb_sws_mines_forcePushRotator_secondSurvive");
+		this.audioThirdSurviveMusic = new AudioEventSimple("music_mines_forcePushRotator_thirdSurvive");
+		this.audioThirdSurviveAmb = new AudioEventSimple("amb_sws_mines_forcePushRotator_thirdSurvive");
+		this.audioFourthSurviveMusic = new AudioEventSimple("music_mines_forcePushRotator_fourthSurvive");
+		this.audioFourthSurviveAmb = new AudioEventSimple("amb_sws_mines_forcePushRotator_fourthSurvive");
+	}
+
+	// Token: 0x06001FFC RID: 8188 RVA: 0x0010F9B0 File Offset: 0x0010DBB0
+	public bool PreAwake(int callcount)
+	{
+		this.checkIfForceSurvival = SignalIn.Create("checkIfForceSurvival", base.gameObject, new Action(this.CheckForSurvival));
+		this.pointOfNoReturn = SignalIn.Create("pointOfNoReturn", base.gameObject, delegate
+		{
+			this.checkForSureDeath = true;
+		});
+		this.cancelSureDeathCheck = SignalIn.Create("cancelSureDeathCheck", base.gameObject, delegate
+		{
+			this.checkForSureDeath = false;
+		});
+		this.landDeathCheck = SignalIn.Create("landDeathCheck", base.gameObject, new Action(this.DoLandDeathCheck));
+		this.resetLogic = SignalIn.Create("resetLogic", base.gameObject, new Action(this.DoResetLogic));
+		this.savepointReached = SignalIn.Create("savepointReached", base.gameObject, new Action(this.SetCompleteState));
+		this.rotateStart = SignalIn.Create("rotateStart", base.gameObject, delegate
+		{
+			this.isRotating = true;
+		});
+		this.rotateStop = SignalIn.Create("rotateStop", base.gameObject, delegate
+		{
+			this.isRotating = false;
+		});
+		this.firstSurvive = SignalOut.Create("firstSurvive", base.gameObject);
+		this.thirdSurvive = SignalOut.Create("thirdSurvive", base.gameObject);
+		this.sureDeathLand = SignalOut.Create("sureDeathLand", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001FFD RID: 8189 RVA: 0x0010FB10 File Offset: 0x0010DD10
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.state = ForcePushSurviveSound.State.Ladder;
+		this.animRotateState = this.anim[this.animRotate.name];
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x06001FFE RID: 8190 RVA: 0x0010FB54 File Offset: 0x0010DD54
+	private void Update()
+	{
+		if (!this.preDeathEventSent && this.state != ForcePushSurviveSound.State.None && this.state != ForcePushSurviveSound.State.Ladder && this.state != ForcePushSurviveSound.State.Complete && LevelGlobals.forcePushManager)
+		{
+			float killTimer = LevelGlobals.forcePushManager.GetKillTimer();
+			if (killTimer > 0f)
+			{
+				this.audioPreDeath.PostFast(AudioKeyObject.AkGameObjs.global);
+				this.preDeathEventSent = true;
+			}
+		}
+	}
+
+	// Token: 0x06001FFF RID: 8191 RVA: 0x0010FBCC File Offset: 0x0010DDCC
+	private void DoLandDeathCheck()
+	{
+		if (this.landCheckPerformed)
+		{
+			return;
+		}
+		this.landCheckPerformed = true;
+		float musicPosition_s = PersistentBehaviour<GlobalAudio>.instance.music.GetMusicPosition_s();
+		float num = 6f - musicPosition_s;
+		Vector3 vector = this.rotatingCover.GetComponent<Collider>().ClosestPointOnBounds(this.boy.pos3);
+		Vector3 vector2 = this.boy.pos3 - vector;
+		Vector3 normalized = vector2.normalized;
+		float magnitude = vector2.magnitude;
+		bool flag = this.rotatingCover.isInsideThisTrigger();
+		bool flag2 = magnitude / this.assummedCoverSpeed < num;
+		if (flag || (magnitude > 0f && flag2 && normalized.y < 0f))
+		{
+			this.sureDeathLand.Signal();
+		}
+	}
+
+	// Token: 0x06002000 RID: 8192 RVA: 0x0010FC98 File Offset: 0x0010DE98
+	private void DoResetLogic()
+	{
+		if (this.state != ForcePushSurviveSound.State.Ladder)
+		{
+			this.isRotating = true;
+			this.soundEventSend = false;
+			this.checkForSureDeath = false;
+			this.landCheckPerformed = false;
+			this.state = ForcePushSurviveSound.State.Ladder;
+		}
+	}
+
+	// Token: 0x06002001 RID: 8193 RVA: 0x0010FCCC File Offset: 0x0010DECC
+	private void SureDeathCheck()
+	{
+		Vector3 vector = this.rotatingCover.GetComponent<Collider>().ClosestPointOnBounds(this.boy.pos3);
+		float magnitude = (vector - this.boy.pos3).magnitude;
+		if (!this.rotatingCover.isInsideThisTrigger() && magnitude > 1f)
+		{
+			this.audioSureDeathMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioSureDeathAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+		}
+	}
+
+	// Token: 0x06002002 RID: 8194 RVA: 0x0010FD4C File Offset: 0x0010DF4C
+	private void LadderState()
+	{
+		bool flag = this.rotatingCover.isInsideThisTrigger();
+		bool flag2 = this.LadderCheck();
+		if (this.isRotating && flag2 && flag)
+		{
+			this.audioFirstSurviveMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioFirstSurviveAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.firstSurvive.Signal();
+			this.state = ForcePushSurviveSound.State.TopPlatform;
+		}
+	}
+
+	// Token: 0x06002003 RID: 8195 RVA: 0x0010FDB8 File Offset: 0x0010DFB8
+	private void TopPlatformState()
+	{
+		bool flag = this.topPlatformCover.isInsideThisTrigger();
+		if (this.isRotating && flag)
+		{
+			this.audioSecondSurviveMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioSecondSurviveAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.state = ForcePushSurviveSound.State.PointLeft;
+		}
+	}
+
+	// Token: 0x06002004 RID: 8196 RVA: 0x0010FE0C File Offset: 0x0010E00C
+	private void PointLeftState()
+	{
+		bool flag = this.rotatingCover.isInsideThisTrigger();
+		bool flag2 = this.boy.pos.x > this.rotatorPos.position.x;
+		if (flag && this.isRotating && flag2)
+		{
+			this.audioThirdSurviveMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioThirdSurviveAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.thirdSurvive.Signal();
+			this.state = ForcePushSurviveSound.State.CliffCover;
+		}
+	}
+
+	// Token: 0x06002005 RID: 8197 RVA: 0x0010FE98 File Offset: 0x0010E098
+	private void CliffCoverState()
+	{
+		bool flag = this.cliffCover.isInsideThisTrigger();
+		if (flag)
+		{
+			this.audioFourthSurviveMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioFourthSurviveAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.state = ForcePushSurviveSound.State.BehindCover;
+		}
+	}
+
+	// Token: 0x06002006 RID: 8198 RVA: 0x0010FEE0 File Offset: 0x0010E0E0
+	private void SetCompleteState()
+	{
+		this.state = ForcePushSurviveSound.State.Complete;
+	}
+
+	// Token: 0x06002007 RID: 8199 RVA: 0x0010FEEC File Offset: 0x0010E0EC
+	private void CheckForSurvival()
+	{
+		if (this.checkForSureDeath)
+		{
+			this.SureDeathCheck();
+		}
+		switch (this.state)
+		{
+		case ForcePushSurviveSound.State.Ladder:
+			this.LadderState();
+			break;
+		case ForcePushSurviveSound.State.PointLeft:
+			this.PointLeftState();
+			break;
+		case ForcePushSurviveSound.State.CliffCover:
+			this.CliffCoverState();
+			break;
+		case ForcePushSurviveSound.State.TopPlatform:
+			this.TopPlatformState();
+			break;
+		}
+	}
+
+	// Token: 0x06002008 RID: 8200 RVA: 0x0010FF5C File Offset: 0x0010E15C
+	private bool LadderCheck()
+	{
+		BoyLadderState boyLadderState = this.boy.state as BoyLadderState;
+		return boyLadderState != null && boyLadderState.ladder == this.ladder;
+	}
+
+	// Token: 0x04003B41 RID: 15169
+	public ForcePushCover rotatingCover;
+
+	// Token: 0x04003B42 RID: 15170
+	public ForcePushCover topPlatformCover;
+
+	// Token: 0x04003B43 RID: 15171
+	public ForcePushCover cliffCover;
+
+	// Token: 0x04003B44 RID: 15172
+	public Transform rotatorPos;
+
+	// Token: 0x04003B45 RID: 15173
+	public Ladder ladder;
+
+	// Token: 0x04003B46 RID: 15174
+	public Animation anim;
+
+	// Token: 0x04003B47 RID: 15175
+	public AnimationClip animRotate;
+
+	// Token: 0x04003B48 RID: 15176
+	public float assummedCoverSpeed = 3.9f;
+
+	// Token: 0x04003B49 RID: 15177
+	private bool isRotating = true;
+
+	// Token: 0x04003B4A RID: 15178
+	private bool soundEventSend;
+
+	// Token: 0x04003B4B RID: 15179
+	private bool checkForSureDeath;
+
+	// Token: 0x04003B4C RID: 15180
+	private SignalIn checkIfForceSurvival;
+
+	// Token: 0x04003B4D RID: 15181
+	private SignalIn pointOfNoReturn;
+
+	// Token: 0x04003B4E RID: 15182
+	private SignalIn cancelSureDeathCheck;
+
+	// Token: 0x04003B4F RID: 15183
+	private SignalIn landDeathCheck;
+
+	// Token: 0x04003B50 RID: 15184
+	private SignalIn rotateStart;
+
+	// Token: 0x04003B51 RID: 15185
+	private SignalIn rotateStop;
+
+	// Token: 0x04003B52 RID: 15186
+	private SignalIn resetLogic;
+
+	// Token: 0x04003B53 RID: 15187
+	private SignalIn savepointReached;
+
+	// Token: 0x04003B54 RID: 15188
+	private SignalOut firstSurvive;
+
+	// Token: 0x04003B55 RID: 15189
+	private SignalOut thirdSurvive;
+
+	// Token: 0x04003B56 RID: 15190
+	private SignalOut sureDeathLand;
+
+	// Token: 0x04003B57 RID: 15191
+	private ForcePushSurviveSound.State state;
+
+	// Token: 0x04003B58 RID: 15192
+	private Boy boy;
+
+	// Token: 0x04003B59 RID: 15193
+	private AnimationState animRotateState;
+
+	// Token: 0x04003B5A RID: 15194
+	private bool checkingSureDeath;
+
+	// Token: 0x04003B5B RID: 15195
+	private bool landCheckPerformed;
+
+	// Token: 0x04003B5C RID: 15196
+	private bool preDeathEventSent;
+
+	// Token: 0x04003B5D RID: 15197
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioSureDeathMusic;
+
+	// Token: 0x04003B5E RID: 15198
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioFirstSurviveMusic;
+
+	// Token: 0x04003B5F RID: 15199
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioSecondSurviveMusic;
+
+	// Token: 0x04003B60 RID: 15200
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioThirdSurviveMusic;
+
+	// Token: 0x04003B61 RID: 15201
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioFourthSurviveMusic;
+
+	// Token: 0x04003B62 RID: 15202
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioPreDeath;
+
+	// Token: 0x04003B63 RID: 15203
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioSureDeathAmb;
+
+	// Token: 0x04003B64 RID: 15204
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioFirstSurviveAmb;
+
+	// Token: 0x04003B65 RID: 15205
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioSecondSurviveAmb;
+
+	// Token: 0x04003B66 RID: 15206
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioThirdSurviveAmb;
+
+	// Token: 0x04003B67 RID: 15207
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioFourthSurviveAmb;
+
+	// Token: 0x04003B68 RID: 15208
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x020004C9 RID: 1225
+	private enum State
+	{
+		// Token: 0x04003B6A RID: 15210
+		None,
+		// Token: 0x04003B6B RID: 15211
+		Ladder,
+		// Token: 0x04003B6C RID: 15212
+		PointLeft,
+		// Token: 0x04003B6D RID: 15213
+		CliffCover,
+		// Token: 0x04003B6E RID: 15214
+		TopPlatform,
+		// Token: 0x04003B6F RID: 15215
+		BehindCover,
+		// Token: 0x04003B70 RID: 15216
+		Complete
+	}
+}

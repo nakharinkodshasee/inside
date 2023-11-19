@@ -1,0 +1,373 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001AE RID: 430
+public class GateCrush : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000C9E RID: 3230 RVA: 0x00079AA0 File Offset: 0x00077CA0
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.gate.gameObject, this);
+		this.audioStartOpenEvent = new AudioEventSimpleLocal(this.audioPrefix + "_gateOpen", akGameObj);
+		this.audioStartCloseEvent = new AudioEventSimpleLocal(this.audioPrefix + "_gateClose", akGameObj);
+		this.audioClosedEvent = new AudioEventSimpleLocal(this.audioPrefix + "_gateClosed", akGameObj);
+		this.audioOpenedEvent = new AudioEventSimpleLocal(this.audioPrefix + "_gateOpened", akGameObj);
+		this.audioChangeToCloseEvent = new AudioEventSimpleLocal(this.audioPrefix + "_gateChangeToClose", akGameObj);
+		this.audioChangeToOpenEvent = new AudioEventSimpleLocal(this.audioPrefix + "_gateChangeToOpen", akGameObj);
+		this.audioBoyCrushEvent = new AudioEventSimpleLocal(this.audioPrefix + "_gateBoyCrush", akGameObj);
+	}
+
+	// Token: 0x06000C9F RID: 3231 RVA: 0x00079B98 File Offset: 0x00077D98
+	public bool PreAwake(int callcount)
+	{
+		this.close = SignalIn.Create("close", base.gameObject, new Action(this.SetClosingState));
+		this.open = SignalIn.Create("open", base.gameObject, new Action(this.SetOpeningState));
+		this.loadClosed = SignalIn.Create("loadClosed", base.gameObject, new Action(this.OnLoadClosed));
+		this.loadOpen = SignalIn.Create("loadOpen", base.gameObject, new Action(this.OnLoadOpen));
+		this.crushed = SignalOut.Create("crushed", base.gameObject);
+		this.closed = SignalOut.Create("closed", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000CA0 RID: 3232 RVA: 0x00079C5C File Offset: 0x00077E5C
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.boy = ScriptGlobals.boy;
+		this.SetInitialState();
+	}
+
+	// Token: 0x06000CA1 RID: 3233 RVA: 0x00079C78 File Offset: 0x00077E78
+	private void SoundCheck()
+	{
+		if (this.state == GateCrush.State.Closing)
+		{
+			this.audioChangeToOpenEvent.PostFast();
+		}
+		else if (this.state == GateCrush.State.Opening)
+		{
+			this.audioChangeToCloseEvent.PostFast();
+		}
+		else if (this.state == GateCrush.State.Opened)
+		{
+			this.audioStartCloseEvent.PostFast();
+		}
+		else if (this.state == GateCrush.State.Closed)
+		{
+			this.audioStartOpenEvent.PostFast();
+		}
+	}
+
+	// Token: 0x06000CA2 RID: 3234 RVA: 0x00079CF4 File Offset: 0x00077EF4
+	private void SetInitialState()
+	{
+		float magnitude = (this.gate.position - this.posOpen.position).magnitude;
+		float magnitude2 = (this.gate.position - this.posClose.position).magnitude;
+		if (magnitude < magnitude2)
+		{
+			this.state = GateCrush.State.Opened;
+		}
+		else
+		{
+			this.state = GateCrush.State.Closed;
+		}
+	}
+
+	// Token: 0x06000CA3 RID: 3235 RVA: 0x00079D64 File Offset: 0x00077F64
+	private void IdleState()
+	{
+	}
+
+	// Token: 0x06000CA4 RID: 3236 RVA: 0x00079D68 File Offset: 0x00077F68
+	private void OpenedState()
+	{
+	}
+
+	// Token: 0x06000CA5 RID: 3237 RVA: 0x00079D6C File Offset: 0x00077F6C
+	private void ClosedState()
+	{
+	}
+
+	// Token: 0x06000CA6 RID: 3238 RVA: 0x00079D70 File Offset: 0x00077F70
+	private void SetOpeningState()
+	{
+		this.SoundCheck();
+		this.state = GateCrush.State.Opening;
+	}
+
+	// Token: 0x06000CA7 RID: 3239 RVA: 0x00079D80 File Offset: 0x00077F80
+	private void OpeningState()
+	{
+		Vector3 vector = Vector3.MoveTowards(this.gate.position, this.posOpen.position, Time.deltaTime * this.openSpeed);
+		this.gate.MovePosition(vector);
+		float num = Vector3.Distance(this.gate.position, this.posOpen.position);
+		if (num <= 0f)
+		{
+			this.audioOpenedEvent.PostFast();
+			this.state = GateCrush.State.Opened;
+		}
+	}
+
+	// Token: 0x06000CA8 RID: 3240 RVA: 0x00079DFC File Offset: 0x00077FFC
+	private void SetClosingState()
+	{
+		this.SoundCheck();
+		this.state = GateCrush.State.Closing;
+	}
+
+	// Token: 0x06000CA9 RID: 3241 RVA: 0x00079E0C File Offset: 0x0007800C
+	private void ClosingState()
+	{
+		Vector3 vector = Vector3.MoveTowards(this.gate.position, this.posClose.position, Time.deltaTime * this.closeSpeed);
+		this.gate.MovePosition(vector);
+		this.dist = Vector3.Distance(this.gate.position, this.posClose.position);
+		if (this.dist <= 0f)
+		{
+			this.closed.Signal();
+			this.audioClosedEvent.PostFast();
+			this.state = GateCrush.State.Closed;
+		}
+		else if (this.dist < this.doorCrushDist)
+		{
+			Vector3 vector2 = this.crushPos.position - this.boy.pos3;
+			vector2.z = 0f;
+			if (vector2.magnitude < this.boyCrushDist)
+			{
+				this.audioBoyCrushEvent.PostFast();
+				this.SetCrushState();
+			}
+		}
+	}
+
+	// Token: 0x06000CAA RID: 3242 RVA: 0x00079F00 File Offset: 0x00078100
+	private void SetCrushState()
+	{
+		this.crushed.Signal();
+		this.boy.Kill();
+		float num = this.crushPos.position.x - this.boy.pos.x;
+		AnimClipNode animClipNode = this.animCrushed;
+		this.killDelayTimer = 2f;
+		if (Mathf.Abs(num) > this.boyCrushHalfDist)
+		{
+			if (num * this.boy.facing > 0f)
+			{
+				this.killDelayTimer = 0.5f;
+				animClipNode = this.animCrushedFront;
+			}
+			else
+			{
+				this.killDelayTimer = 3f;
+				animClipNode = this.animCrushedBack;
+			}
+			animClipNode = ((num * this.boy.facing <= 0f) ? this.animCrushedBack : this.animCrushedFront);
+		}
+		if (DrowningEffectRenderer.instance)
+		{
+			DrowningEffectRenderer.instance.DrownEffect();
+		}
+		animClipNode.transform.rotation = Quaternion.Euler(0f, (this.boy.facing != 1f) ? -90f : 90f, 0f);
+		Vector3 position = animClipNode.transform.position;
+		position.z = 0f;
+		animClipNode.transform.position = position;
+		if (animClipNode == this.animCrushedBack)
+		{
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.3f, 0.4f, 0, 0.55f);
+		}
+		else
+		{
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.6f, 0.4f, 0, 0.55f);
+		}
+		BoyUtils.StartCustomAnim(this.boy, animClipNode, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+		this.state = GateCrush.State.Crush;
+	}
+
+	// Token: 0x06000CAB RID: 3243 RVA: 0x0007A0BC File Offset: 0x000782BC
+	private void CrushState()
+	{
+		if (this.killDelayTimer > 0f)
+		{
+			this.killDelayTimer -= Time.deltaTime;
+			PersistentBehaviour<GameManager>.instance.deathManager.ResetTimeElapsed();
+		}
+		Vector3 position = this.posClose.position;
+		position.y += this.doorCrushStopOffset;
+		Vector3 vector = Vector3.MoveTowards(this.gate.position, position, Time.deltaTime * this.closeSpeed);
+		this.gate.MovePosition(vector);
+	}
+
+	// Token: 0x06000CAC RID: 3244 RVA: 0x0007A144 File Offset: 0x00078344
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case GateCrush.State.Opened:
+			this.OpenedState();
+			break;
+		case GateCrush.State.Closed:
+			this.ClosedState();
+			break;
+		case GateCrush.State.Opening:
+			this.OpeningState();
+			break;
+		case GateCrush.State.Closing:
+			this.ClosingState();
+			break;
+		case GateCrush.State.Crush:
+			this.CrushState();
+			break;
+		}
+	}
+
+	// Token: 0x06000CAD RID: 3245 RVA: 0x0007A1B0 File Offset: 0x000783B0
+	private void OnLoadOpen()
+	{
+		this.gate.position = this.posOpen.position;
+	}
+
+	// Token: 0x06000CAE RID: 3246 RVA: 0x0007A1C8 File Offset: 0x000783C8
+	private void OnLoadClosed()
+	{
+		this.gate.position = this.posClose.position;
+	}
+
+	// Token: 0x040015FE RID: 5630
+	public Rigidbody gate;
+
+	// Token: 0x040015FF RID: 5631
+	public Transform posOpen;
+
+	// Token: 0x04001600 RID: 5632
+	public Transform posClose;
+
+	// Token: 0x04001601 RID: 5633
+	public float openSpeed = 1f;
+
+	// Token: 0x04001602 RID: 5634
+	public float closeSpeed = 1f;
+
+	// Token: 0x04001603 RID: 5635
+	public AnimClipNode animCrushed;
+
+	// Token: 0x04001604 RID: 5636
+	public AnimClipNode animCrushedBack;
+
+	// Token: 0x04001605 RID: 5637
+	public AnimClipNode animCrushedFront;
+
+	// Token: 0x04001606 RID: 5638
+	public Transform crushPos;
+
+	// Token: 0x04001607 RID: 5639
+	public float doorCrushDist = 0.7f;
+
+	// Token: 0x04001608 RID: 5640
+	public float boyCrushDist = 1.1f;
+
+	// Token: 0x04001609 RID: 5641
+	public float boyCrushHalfDist = 0.3f;
+
+	// Token: 0x0400160A RID: 5642
+	public float doorCrushStopOffset = 0.12f;
+
+	// Token: 0x0400160B RID: 5643
+	public string audioPrefix = string.Empty;
+
+	// Token: 0x0400160C RID: 5644
+	private SignalIn close;
+
+	// Token: 0x0400160D RID: 5645
+	private SignalIn open;
+
+	// Token: 0x0400160E RID: 5646
+	private SignalIn loadClosed;
+
+	// Token: 0x0400160F RID: 5647
+	private SignalIn loadOpen;
+
+	// Token: 0x04001610 RID: 5648
+	private SignalOut crushed;
+
+	// Token: 0x04001611 RID: 5649
+	private SignalOut closed;
+
+	// Token: 0x04001612 RID: 5650
+	private GateCrush.State state;
+
+	// Token: 0x04001613 RID: 5651
+	private Vector3 currentTarget;
+
+	// Token: 0x04001614 RID: 5652
+	private Boy boy;
+
+	// Token: 0x04001615 RID: 5653
+	private float dist;
+
+	// Token: 0x04001616 RID: 5654
+	private float boyDist;
+
+	// Token: 0x04001617 RID: 5655
+	private float killDelayTimer;
+
+	// Token: 0x04001618 RID: 5656
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04001619 RID: 5657
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStartOpenEvent;
+
+	// Token: 0x0400161A RID: 5658
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStartCloseEvent;
+
+	// Token: 0x0400161B RID: 5659
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioClosedEvent;
+
+	// Token: 0x0400161C RID: 5660
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioOpenedEvent;
+
+	// Token: 0x0400161D RID: 5661
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioChangeToCloseEvent;
+
+	// Token: 0x0400161E RID: 5662
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioChangeToOpenEvent;
+
+	// Token: 0x0400161F RID: 5663
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioBoyCrushEvent;
+
+	// Token: 0x020001AF RID: 431
+	private enum State
+	{
+		// Token: 0x04001621 RID: 5665
+		None,
+		// Token: 0x04001622 RID: 5666
+		Opened,
+		// Token: 0x04001623 RID: 5667
+		Closed,
+		// Token: 0x04001624 RID: 5668
+		Opening,
+		// Token: 0x04001625 RID: 5669
+		Closing,
+		// Token: 0x04001626 RID: 5670
+		Crush
+	}
+}

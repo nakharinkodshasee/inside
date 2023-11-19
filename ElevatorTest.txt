@@ -1,0 +1,47 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200064B RID: 1611
+public class ElevatorTest : MonoBehaviour
+{
+	// Token: 0x060027BB RID: 10171 RVA: 0x0013F240 File Offset: 0x0013D440
+	private void Start()
+	{
+		this.mCurrentFrequency = this.m_frequency;
+		Transform parent = base.transform.parent;
+		this.localToWorldMatrix = ((!(parent != null)) ? Matrix4x4.identity : parent.localToWorldMatrix);
+		if (!base.GetComponent<Rigidbody>().isKinematic)
+		{
+			base.GetComponent<Rigidbody>().useGravity = false;
+		}
+	}
+
+	// Token: 0x060027BC RID: 10172 RVA: 0x0013F2A4 File Offset: 0x0013D4A4
+	private void FixedUpdate()
+	{
+		if (!base.GetComponent<Rigidbody>().isKinematic)
+		{
+			Vector3 vector = (float)Math.Cos(Time.fixedTimeDbl * (double)this.mCurrentFrequency) * Vector3.up * base.GetComponent<Rigidbody>().mass * Time.fixedDeltaTime * 4f;
+			vector = this.localToWorldMatrix.MultiplyVector(vector);
+			base.GetComponent<Rigidbody>().AddForce(vector, 1);
+			return;
+		}
+		float num = 0.01f;
+		this.mCurrentFrequency = this.m_frequency * num + this.mCurrentFrequency * (1f - num);
+		Vector3 vector2 = new Vector3(0f, (float)Math.Sin(Time.fixedTimeDbl * (double)this.mCurrentFrequency), 0f) * this.amplitude;
+		vector2 = this.localToWorldMatrix.MultiplyPoint(vector2);
+		base.GetComponent<Rigidbody>().MovePosition(vector2);
+	}
+
+	// Token: 0x0400473B RID: 18235
+	public float m_frequency = 1f;
+
+	// Token: 0x0400473C RID: 18236
+	public float amplitude = 1f;
+
+	// Token: 0x0400473D RID: 18237
+	private float mCurrentFrequency;
+
+	// Token: 0x0400473E RID: 18238
+	private Matrix4x4 localToWorldMatrix;
+}

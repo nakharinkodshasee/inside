@@ -1,0 +1,284 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020003DA RID: 986
+public class FlameTrail : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001A6B RID: 6763 RVA: 0x000E6BF0 File Offset: 0x000E4DF0
+	public bool PreAwake(int callcount)
+	{
+		this.killFlame = SignalIn.Create("killFlame", base.gameObject, new Action(this.OnKillFlame));
+		this.startFlame = SignalIn.Create("startFlame", base.gameObject, new Action(this.OnStartFlame));
+		return true;
+	}
+
+	// Token: 0x06001A6C RID: 6764 RVA: 0x000E6C44 File Offset: 0x000E4E44
+	private void Start()
+	{
+		if (this.lineRenderer == null)
+		{
+			return;
+		}
+		this.lineRenderer.SetVertexCount(this.numberTrailPoints + 1);
+		this.lineRenderer.SetPosition(0, Vector3.zero);
+		this.lineRenderer.SetWidth(this.trailWidth, this.trailWidth);
+		this.lastVelocity = Vector3.zero;
+		this.lastPos = base.transform.position;
+		this.matInstance = this.lineRenderer.GetComponent<MaterialInstance>();
+		if (this.matInstance != null)
+		{
+			this.timeProperty = this.matInstance.GetOrAddFloatProperty("_PDTime");
+			this.colorProperty = this.matInstance.GetOrAddColorProperty("_Color");
+			this.initialColor = this.matInstance.GetColorValue(this.colorProperty);
+		}
+		if (!this.startActive)
+		{
+			base.gameObject.SetActive(false);
+		}
+	}
+
+	// Token: 0x06001A6D RID: 6765 RVA: 0x000E6D3C File Offset: 0x000E4F3C
+	public void KillFlame()
+	{
+		this.OnKillFlame();
+	}
+
+	// Token: 0x06001A6E RID: 6766 RVA: 0x000E6D44 File Offset: 0x000E4F44
+	private void OnKillFlame()
+	{
+		this.killTime = 0f;
+		this.killTheFlame = true;
+	}
+
+	// Token: 0x06001A6F RID: 6767 RVA: 0x000E6D58 File Offset: 0x000E4F58
+	private void OnStartFlame()
+	{
+		this.killTheFlame = false;
+		this.killTime = 0f;
+		base.gameObject.SetActive(true);
+		if (this.matInstance != null)
+		{
+			this.initialColor = this.matInstance.GetColorValue(this.colorProperty);
+		}
+		this.oldTrailPoints.Clear();
+		this.sampleCounter = 1000f;
+	}
+
+	// Token: 0x06001A70 RID: 6768 RVA: 0x000E6DC4 File Offset: 0x000E4FC4
+	private void UpdateTrailPoints(float dt, float scale)
+	{
+		float num = 1f / scale;
+		for (int i = this.oldTrailPoints.Count - 1; i >= 0; i--)
+		{
+			FlameTrail.TrailPointClass trailPointClass = this.oldTrailPoints[i];
+			trailPointClass.timeCounter += dt * scale;
+			float num2 = Mathf.Max(0f, Mathf.Abs(this.lastVelocity.x) * num - 0.4f);
+			float num3 = Mathf.Max(0f, 1f - num2 * 0.8f);
+			FlameTrail.TrailPointClass trailPointClass2 = trailPointClass;
+			trailPointClass2.position.y = trailPointClass2.position.y + dt * 1.5f * num3 * scale;
+			if (trailPointClass.timeCounter > this.lifeTime + this.sampleInterval * 2f)
+			{
+				this.oldTrailPoints.RemoveAt(i);
+			}
+		}
+		this.sampleCounter += dt * scale;
+		if (this.sampleCounter > this.sampleInterval)
+		{
+			this.sampleCounter = 0f;
+			FlameTrail.TrailPointClass trailPointClass3 = new FlameTrail.TrailPointClass();
+			trailPointClass3.position = base.transform.position + this.lastVelocity * dt;
+			this.oldTrailPoints.Add(trailPointClass3);
+		}
+	}
+
+	// Token: 0x06001A71 RID: 6769 RVA: 0x000E6F04 File Offset: 0x000E5104
+	private Vector3 SampleValue(float sampleTime)
+	{
+		Vector3 vector = base.transform.position + this.lastVelocity * Time.deltaTime;
+		float num = 0f;
+		int i = this.oldTrailPoints.Count - 1;
+		while (i >= 0)
+		{
+			FlameTrail.TrailPointClass trailPointClass = this.oldTrailPoints[i];
+			if (trailPointClass.timeCounter < sampleTime)
+			{
+				num = trailPointClass.timeCounter;
+				vector = trailPointClass.position;
+				i--;
+			}
+			else
+			{
+				if (trailPointClass.timeCounter == num)
+				{
+					return trailPointClass.position;
+				}
+				float num2 = trailPointClass.timeCounter - num;
+				float num3 = (sampleTime - num) / num2;
+				return trailPointClass.position * num3 + vector * (1f - num3);
+			}
+		}
+		return vector;
+	}
+
+	// Token: 0x06001A72 RID: 6770 RVA: 0x000E6FCC File Offset: 0x000E51CC
+	private void Update()
+	{
+		if (this.lineRenderer == null)
+		{
+			return;
+		}
+		float deltaTime = Time.deltaTime;
+		if (deltaTime > 0f)
+		{
+			Vector3 position = base.transform.position;
+			float num = Mathf.Min(Time.deltaTime * 20f, 1f);
+			this.lastVelocity = 0.5f * (position - this.lastPos) / Time.deltaTime + 0.5f * this.lastVelocity;
+			this.lastPos = position;
+			this.velMag = this.lastVelocity.magnitude;
+			float num2 = 1f;
+			if (this.velMag > 2.5f)
+			{
+				num2 = Mathf.Max(0.5f, 1f - (this.velMag - 2.5f) * 0.2f);
+			}
+			if (num2 < this.speedScale)
+			{
+				this.speedScale += (num2 - this.speedScale) * 7f * Time.deltaTime;
+			}
+			else
+			{
+				this.speedScale += (num2 - this.speedScale) * 3f * Time.deltaTime;
+			}
+			this.lineRenderer.SetWidth(this.trailWidth, this.trailWidth * this.speedScale);
+			this.UpdateTrailPoints(deltaTime, this.trailSpeedScale);
+			float num3 = 1f / (float)this.numberTrailPoints;
+			float num4 = Mathf.Abs(this.lastVelocity.x) * this.horizAnimSpeedScale;
+			float num5 = Mathf.Max(-this.lastVelocity.y, 0f) * this.vertAnimSpeedScale;
+			float num6 = this.restAnimSpeedFactor + Mathf.Max(num4, num5);
+			this.animCounter += deltaTime * num6;
+			if (this.matInstance != null)
+			{
+				this.matInstance.SetFloatProperty(this.timeProperty, this.animCounter);
+			}
+			float num7 = Mathf.Min(this.killTime * 3f, 1f);
+			Vector3 vector = this.SampleValue(this.lifeTime * this.speedScale);
+			Vector3 vector2 = (vector - base.transform.position) * num7;
+			this.lineRenderer.SetPosition(0, base.transform.position + vector2);
+			for (int i = 1; i <= this.numberTrailPoints; i++)
+			{
+				float sampleTime = (float)i * this.lifeTime * num3 * this.speedScale;
+				Vector3 vector3 = this.SampleValue(sampleTime);
+				this.lineRenderer.SetPosition(i, vector3 + (1f - (float)i * num3) * vector2);
+			}
+			if (this.killTheFlame)
+			{
+				this.killTime += deltaTime;
+				num7 = this.killTime * 3f;
+				if (num7 >= 1f)
+				{
+					base.gameObject.SetActive(false);
+					if (this.matInstance != null)
+					{
+						this.matInstance.SetColorProperty(this.colorProperty, this.initialColor);
+					}
+				}
+				else
+				{
+					Color value = this.initialColor * (1f - num7) * (1f - num7);
+					if (this.matInstance != null)
+					{
+						this.matInstance.SetColorProperty(this.colorProperty, value);
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x04002F9B RID: 12187
+	public float lifeTime = 0.3f;
+
+	// Token: 0x04002F9C RID: 12188
+	public float sampleInterval = 0.03f;
+
+	// Token: 0x04002F9D RID: 12189
+	public LineRenderer lineRenderer;
+
+	// Token: 0x04002F9E RID: 12190
+	public int numberTrailPoints = 10;
+
+	// Token: 0x04002F9F RID: 12191
+	public float trailWidth = 0.3f;
+
+	// Token: 0x04002FA0 RID: 12192
+	public float restAnimSpeedFactor = 0.35f;
+
+	// Token: 0x04002FA1 RID: 12193
+	public float horizAnimSpeedScale = 0.1f;
+
+	// Token: 0x04002FA2 RID: 12194
+	public float vertAnimSpeedScale = 0.4f;
+
+	// Token: 0x04002FA3 RID: 12195
+	public float trailSpeedScale = 1f;
+
+	// Token: 0x04002FA4 RID: 12196
+	public bool startActive = true;
+
+	// Token: 0x04002FA5 RID: 12197
+	private Vector3 lastVelocity;
+
+	// Token: 0x04002FA6 RID: 12198
+	private Vector3 lastPos;
+
+	// Token: 0x04002FA7 RID: 12199
+	private float velMag;
+
+	// Token: 0x04002FA8 RID: 12200
+	private float speedScale = 1f;
+
+	// Token: 0x04002FA9 RID: 12201
+	private float sampleCounter = 1000f;
+
+	// Token: 0x04002FAA RID: 12202
+	private MaterialInstance matInstance;
+
+	// Token: 0x04002FAB RID: 12203
+	private MaterialInstance.FloatProperty timeProperty;
+
+	// Token: 0x04002FAC RID: 12204
+	private MaterialInstance.ColorProperty colorProperty;
+
+	// Token: 0x04002FAD RID: 12205
+	private List<FlameTrail.TrailPointClass> oldTrailPoints = new List<FlameTrail.TrailPointClass>();
+
+	// Token: 0x04002FAE RID: 12206
+	private SignalIn killFlame;
+
+	// Token: 0x04002FAF RID: 12207
+	private SignalIn startFlame;
+
+	// Token: 0x04002FB0 RID: 12208
+	private bool killTheFlame;
+
+	// Token: 0x04002FB1 RID: 12209
+	private float killTime;
+
+	// Token: 0x04002FB2 RID: 12210
+	private Color initialColor;
+
+	// Token: 0x04002FB3 RID: 12211
+	private float animCounter;
+
+	// Token: 0x020003DB RID: 987
+	private class TrailPointClass
+	{
+		// Token: 0x04002FB4 RID: 12212
+		public Vector3 position;
+
+		// Token: 0x04002FB5 RID: 12213
+		public float timeCounter;
+
+		// Token: 0x04002FB6 RID: 12214
+		public float sineOffset;
+	}
+}

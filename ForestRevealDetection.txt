@@ -1,0 +1,157 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200044C RID: 1100
+public class ForestRevealDetection : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001CD1 RID: 7377 RVA: 0x000FA8C8 File Offset: 0x000F8AC8
+	public bool PreAwake(int callcount)
+	{
+		this.startCheck = SignalIn.Create("startCheck", base.gameObject, new Action(this.DoStartChecking));
+		this.enterCoverLeft = SignalIn.Create("enterCoverLeft", base.gameObject, new Action(this.DoEnterCoverLeft));
+		this.exitCoverLeft = SignalIn.Create("exitCoverLeft", base.gameObject, new Action(this.DoExitCoverLeft));
+		this.enterCoverRight = SignalIn.Create("enterCoverRight", base.gameObject, new Action(this.DoEnterCoverRight));
+		this.exitCoverRight = SignalIn.Create("exitCoverRight", base.gameObject, new Action(this.DoExitCoverRight));
+		this.guardLookAway = SignalIn.Create("guardLookAway", base.gameObject, new Action(this.DoGuardLookingAway));
+		this.guardLookBack = SignalIn.Create("guardLookBack", base.gameObject, new Action(this.DoGuardLookingBack));
+		this.stopChecking = SignalIn.Create("stopChecking", base.gameObject, delegate
+		{
+			this.isChecking = false;
+		});
+		this.boyDetected = SignalOut.Create("boyDetected", base.gameObject);
+		this.boySafeRight = SignalOut.Create("boySafeRight", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001CD2 RID: 7378 RVA: 0x000FAA14 File Offset: 0x000F8C14
+	private void Awake()
+	{
+		this.coverTriggerEnd.gameObject.SetActive(false);
+	}
+
+	// Token: 0x06001CD3 RID: 7379 RVA: 0x000FAA28 File Offset: 0x000F8C28
+	private void DoEnterCoverLeft()
+	{
+		this.boyInCoverLeft = true;
+	}
+
+	// Token: 0x06001CD4 RID: 7380 RVA: 0x000FAA34 File Offset: 0x000F8C34
+	private void DoExitCoverLeft()
+	{
+		this.boyInCoverLeft = false;
+	}
+
+	// Token: 0x06001CD5 RID: 7381 RVA: 0x000FAA40 File Offset: 0x000F8C40
+	private void DoEnterCoverRight()
+	{
+		this.boyInCoverRight = true;
+	}
+
+	// Token: 0x06001CD6 RID: 7382 RVA: 0x000FAA4C File Offset: 0x000F8C4C
+	private void DoExitCoverRight()
+	{
+		this.boyInCoverRight = false;
+	}
+
+	// Token: 0x06001CD7 RID: 7383 RVA: 0x000FAA58 File Offset: 0x000F8C58
+	private void DoStartChecking()
+	{
+		this.isChecking = true;
+	}
+
+	// Token: 0x06001CD8 RID: 7384 RVA: 0x000FAA64 File Offset: 0x000F8C64
+	private void DoGuardLookingAway()
+	{
+		this.guardLooking = false;
+		this.coverTriggerEnd.gameObject.SetActive(true);
+	}
+
+	// Token: 0x06001CD9 RID: 7385 RVA: 0x000FAA80 File Offset: 0x000F8C80
+	private void DoGuardLookingBack()
+	{
+		if (this.boyInCoverRight)
+		{
+			this.boySafeRight.Signal();
+			this.isChecking = false;
+		}
+		this.guardLooking = true;
+	}
+
+	// Token: 0x06001CDA RID: 7386 RVA: 0x000FAAB4 File Offset: 0x000F8CB4
+	private bool IsInCover()
+	{
+		return this.boyInCoverLeft || this.boyInCoverRight;
+	}
+
+	// Token: 0x06001CDB RID: 7387 RVA: 0x000FAAD0 File Offset: 0x000F8CD0
+	private bool IsGuardClose()
+	{
+		float magnitude = (ScriptGlobals.boy.pos3 - this.guard.position).magnitude;
+		return magnitude < 15.5f;
+	}
+
+	// Token: 0x06001CDC RID: 7388 RVA: 0x000FAB10 File Offset: 0x000F8D10
+	private void Update()
+	{
+		if (!this.isChecking)
+		{
+			return;
+		}
+		if (this.guardLooking && !this.IsInCover() && !this.alertSent && this.IsGuardClose())
+		{
+			this.boyDetected.Signal();
+			this.isChecking = false;
+		}
+	}
+
+	// Token: 0x040034E9 RID: 13545
+	public Collider coverTriggerEnd;
+
+	// Token: 0x040034EA RID: 13546
+	public Transform guard;
+
+	// Token: 0x040034EB RID: 13547
+	private SignalIn startCheck;
+
+	// Token: 0x040034EC RID: 13548
+	private SignalIn enterCoverLeft;
+
+	// Token: 0x040034ED RID: 13549
+	private SignalIn exitCoverLeft;
+
+	// Token: 0x040034EE RID: 13550
+	private SignalIn enterCoverRight;
+
+	// Token: 0x040034EF RID: 13551
+	private SignalIn exitCoverRight;
+
+	// Token: 0x040034F0 RID: 13552
+	private SignalIn guardLookAway;
+
+	// Token: 0x040034F1 RID: 13553
+	private SignalIn guardLookBack;
+
+	// Token: 0x040034F2 RID: 13554
+	private SignalIn stopChecking;
+
+	// Token: 0x040034F3 RID: 13555
+	private SignalOut boyDetected;
+
+	// Token: 0x040034F4 RID: 13556
+	private SignalOut boySafeRight;
+
+	// Token: 0x040034F5 RID: 13557
+	private bool boyInCoverLeft;
+
+	// Token: 0x040034F6 RID: 13558
+	private bool boyInCoverRight;
+
+	// Token: 0x040034F7 RID: 13559
+	private bool guardLooking = true;
+
+	// Token: 0x040034F8 RID: 13560
+	private bool alertSent;
+
+	// Token: 0x040034F9 RID: 13561
+	private bool isChecking;
+}

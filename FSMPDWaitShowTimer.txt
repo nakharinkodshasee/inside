@@ -1,0 +1,17 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003FD RID: 1021
+public class FSMPDWaitShowTimer : MonoBehaviour
+{
+	// Token: 0x06001AF5 RID: 6901 RVA: 0x000EC9D4 File Offset: 0x000EABD4
+	public void OnGUI()
+	{
+	}
+
+	// Token: 0x040030E4 RID: 12516
+	public float timerValue;
+
+	// Token: 0x040030E5 RID: 12517
+	public float orgValue;
+}

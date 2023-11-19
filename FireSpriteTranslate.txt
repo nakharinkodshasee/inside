@@ -1,0 +1,63 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000325 RID: 805
+public class FireSpriteTranslate : MonoBehaviour
+{
+	// Token: 0x060016A8 RID: 5800 RVA: 0x000C6DE8 File Offset: 0x000C4FE8
+	private void OnEnable()
+	{
+		this.mi = base.GetComponent<MaterialInstance>();
+		if (this.mi)
+		{
+			this.alphaPorp = this.mi.GetOrAddFloatProperty("_RotOpacity");
+		}
+	}
+
+	// Token: 0x060016A9 RID: 5801 RVA: 0x000C6E28 File Offset: 0x000C5028
+	public void SetTranslation(bool x, bool y, float blend)
+	{
+		FireSpriteTranslate.FireTranslation fireTranslation = (!x) ? this.left : this.right;
+		FireSpriteTranslate.FireTranslation fireTranslation2 = (!y) ? this.down : this.up;
+		base.transform.localPosition = Vector3.Lerp(fireTranslation.position, fireTranslation2.position, blend);
+		base.transform.localRotation = Quaternion.Lerp(Quaternion.Euler(0f, 0f, fireTranslation.rotation), Quaternion.Euler(0f, 0f, fireTranslation2.rotation), blend);
+		if (this.mi)
+		{
+			this.mi.SetFloatProperty(this.alphaPorp, Mathf.Lerp(fireTranslation.opcaity, fireTranslation2.opcaity, blend));
+		}
+	}
+
+	// Token: 0x04002849 RID: 10313
+	public FireSpriteTranslate.FireTranslation up;
+
+	// Token: 0x0400284A RID: 10314
+	public FireSpriteTranslate.FireTranslation down;
+
+	// Token: 0x0400284B RID: 10315
+	public FireSpriteTranslate.FireTranslation left;
+
+	// Token: 0x0400284C RID: 10316
+	public FireSpriteTranslate.FireTranslation right;
+
+	// Token: 0x0400284D RID: 10317
+	private MaterialInstance mi;
+
+	// Token: 0x0400284E RID: 10318
+	private MaterialInstance.FloatProperty alphaPorp;
+
+	// Token: 0x02000326 RID: 806
+	[Serializable]
+	public class FireTranslation
+	{
+		// Token: 0x0400284F RID: 10319
+		public Vector2 position = Vector2.zero;
+
+		// Token: 0x04002850 RID: 10320
+		[Range(0f, 360f)]
+		public float rotation;
+
+		// Token: 0x04002851 RID: 10321
+		[Range(0f, 1f)]
+		public float opcaity = 1f;
+	}
+}

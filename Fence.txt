@@ -1,0 +1,532 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001A0 RID: 416
+public class Fence : DefaultBoyInput, IFastEventListener, IFastEventExListener<Collider>
+{
+	// Token: 0x17000047 RID: 71
+	// (get) Token: 0x06000C21 RID: 3105 RVA: 0x000762AC File Offset: 0x000744AC
+	public override vector2f stick
+	{
+		get
+		{
+			switch (this.killStickInput)
+			{
+			case Fence.KillInputType.ForceZero:
+				return new vector2f(base.stick.x, 0f);
+			case Fence.KillInputType.ForceLeft:
+				return new vector2f(-1f, 0f);
+			case Fence.KillInputType.ForceRight:
+				return new vector2f(1f, 0f);
+			default:
+				return base.stick;
+			}
+		}
+	}
+
+	// Token: 0x06000C22 RID: 3106 RVA: 0x00076318 File Offset: 0x00074518
+	public void OnFastEvent(FastEvent sender)
+	{
+		if (sender == GameManager.scenesLoaded && this.camMultiBox != null)
+		{
+			float num = ScriptGlobals.boy.pos.x - base.transform.position.x;
+			bool flag = num >= 0f;
+			if (flag)
+			{
+				this.camMultiBox.value = 1f;
+			}
+			else
+			{
+				this.camMultiBox.value = 0f;
+			}
+		}
+	}
+
+	// Token: 0x06000C23 RID: 3107 RVA: 0x000763A0 File Offset: 0x000745A0
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.TopTrigger.enterTrigger)
+		{
+			this.OnTopTriggerEnter(collider);
+		}
+		else if (sender == this.TopTrigger.exitTrigger)
+		{
+			this.OnTopTriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06000C24 RID: 3108 RVA: 0x000763DC File Offset: 0x000745DC
+	private void OnEnable()
+	{
+		GameManager.scenesLoaded.Register(this, ref this.scenesLoadedHandle);
+	}
+
+	// Token: 0x06000C25 RID: 3109 RVA: 0x000763F0 File Offset: 0x000745F0
+	private void OnDisable()
+	{
+		GameManager.scenesLoaded.Unregister(ref this.scenesLoadedHandle);
+	}
+
+	// Token: 0x06000C26 RID: 3110 RVA: 0x00076404 File Offset: 0x00074604
+	private void Start()
+	{
+		this.TopTrigger.enterTrigger.Register(this, ref this.topTriggerEnterHandle);
+		this.TopTrigger.exitTrigger.Register(this, ref this.topTriggerExitHandle);
+		if (base.GetComponent<Collider>() != null && this.TopTrigger != null)
+		{
+			Vector3 position = this.TopTrigger.transform.position;
+			position.y = base.GetComponent<Collider>().bounds.max.y + 0.15285f;
+			this.TopTrigger.transform.position = position;
+		}
+		if (this.climbRightAnim != null)
+		{
+			this.originalFps = this.climbRightAnim.fps;
+			this.leftSidePos = this.climbRightAnim.transform.position;
+		}
+		if (this.climbLeftAnim != null)
+		{
+			this.rightSidePos = this.climbLeftAnim.transform.position;
+		}
+		this.leftLadderInitPos = this.leftLadder.transform.localPosition;
+		this.rightLadderInitPos = this.rightLadder.transform.localPosition;
+		this.defaultLocalRotz = base.transform.parent.localEulerAngles.z;
+		if (ScriptGlobals.boy.transform.position.x > base.transform.position.x)
+		{
+			this.camMultiBox.value = 1f;
+		}
+		this.wantedFenceAngle = this.jumpOnTiltAngle;
+	}
+
+	// Token: 0x06000C27 RID: 3111 RVA: 0x000765A4 File Offset: 0x000747A4
+	private void OnTopTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.topTriggerInsideCount++;
+			ScriptGlobals.boy.input = this;
+			this.justEntered = true;
+		}
+	}
+
+	// Token: 0x06000C28 RID: 3112 RVA: 0x000765E4 File Offset: 0x000747E4
+	private void OnTopTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.topTriggerInsideCount--;
+			if (this.topTriggerInsideCount == 0)
+			{
+				ScriptGlobals.boy.input = null;
+			}
+		}
+	}
+
+	// Token: 0x06000C29 RID: 3113 RVA: 0x00076628 File Offset: 0x00074828
+	private void SetActiveLadder()
+	{
+		float num = ScriptGlobals.boy.pos.x - base.transform.position.x;
+		if (num * this.lastBoySide <= 0f && (this.topTriggerInsideCount <= 0 || this.currentAnim != null))
+		{
+			bool flag = num >= 0f;
+			this.rightLadder.gameObject.SetActive(flag);
+			this.leftLadder.gameObject.SetActive(!flag);
+			this.lastBoySide = num;
+		}
+	}
+
+	// Token: 0x06000C2A RID: 3114 RVA: 0x000766C4 File Offset: 0x000748C4
+	private Ladder GetActiveLadder()
+	{
+		return (!this.rightLadder.gameObject.activeSelf) ? this.leftLadder : this.rightLadder;
+	}
+
+	// Token: 0x06000C2B RID: 3115 RVA: 0x000766F8 File Offset: 0x000748F8
+	private Ladder PrepareForNextClimb()
+	{
+		Ladder result = (!this.rightLadder.gameObject.activeSelf) ? this.leftLadder : this.rightLadder;
+		this.currentAnim = null;
+		this.climbingDir = 0f;
+		Device.SetVoiceNone();
+		return result;
+	}
+
+	// Token: 0x06000C2C RID: 3116 RVA: 0x00076744 File Offset: 0x00074944
+	public void AddTiltSpeed(float speedToAdd)
+	{
+		this.currentTiltSpeed += speedToAdd;
+	}
+
+	// Token: 0x06000C2D RID: 3117 RVA: 0x00076754 File Offset: 0x00074954
+	private void FixedUpdate()
+	{
+		if (ScriptGlobals.boy == null || ScriptGlobals.boy.input == null)
+		{
+			this.lastBoyState = null;
+			return;
+		}
+		this.stepDeadzone -= Time.deltaTime;
+		this.SetActiveLadder();
+		this.killStickInput = Fence.KillInputType.KeepInput;
+		if (ScriptGlobals.boy.input.stick.y < 0.2f)
+		{
+			this.stickHasBeenDown = true;
+		}
+		if (!ScriptGlobals.boy.input.rawJump || !(ScriptGlobals.boy.state is BoyJumpState))
+		{
+			this.isJumpingWithButtonDown = false;
+		}
+		if (this.currentAnim != null)
+		{
+			float x = ScriptGlobals.boy.input.looseDir.x;
+			bool flag = (ScriptGlobals.boy.pos.x - base.transform.position.x) * x <= 0f;
+			bool flag2 = ScriptGlobals.boy.input.rawJump && !flag;
+			float num = Mathf.Clamp((this.currentAnim.frame - 20f) / 7f, 0f, 1f);
+			num = MathUtils.SmoothFraction(num);
+			Vector3 zero = Vector3.zero;
+			if (this.climbingDir > 0.5f)
+			{
+				if (this.currentAnim.frame > 20f)
+				{
+					this.wantedFenceAngle = -this.jumpOnTiltAngle;
+				}
+				zero = this.leftSidePos;
+				zero.x += this.extrasliding * num;
+			}
+			else
+			{
+				if (this.currentAnim.frame > 20f)
+				{
+					this.wantedFenceAngle = this.jumpOnTiltAngle;
+				}
+				zero = this.rightSidePos;
+				zero.x -= this.extrasliding * num;
+			}
+			this.currentAnim.transform.position = zero;
+			if (this.currentAnim.frame > 40f)
+			{
+				if (Device.IsVoiceActive())
+				{
+					Device.SetVoicePassive();
+				}
+			}
+			else if (!Device.IsVoiceActive())
+			{
+				Device.SetVoiceActive();
+			}
+			if (this.currentAnim.frame < 20f)
+			{
+				if (flag2 && Mathf.Abs(ScriptGlobals.boy.input.stick.x) > 0.5f && this.currentAnim.frame < 15f)
+				{
+					this.currentAnim = null;
+					Device.SetVoiceNone();
+					this.climbingDir = 0f;
+					ScriptGlobals.boy.visualBoy.additiveAnim = null;
+					ScriptGlobals.boy.SpawnExternalState(new BoyJumpState(ScriptGlobals.boy, BoyJumpState.State.JumpForward, this.GetActiveLadder().GetComponent<Collider>()), Boy.AffectMode.Default);
+				}
+				else
+				{
+					if ((ScriptGlobals.boy.input.stick.y < 0.07f && this.currentAnim.frame < 7f) || (ScriptGlobals.boy.input.stick.y < -0.2f && ScriptGlobals.boy.input.stick.x * this.climbingDir < 0.25f))
+					{
+						if (!this.goingBackwards)
+						{
+							this.goingBackwards = true;
+							this.currentAnim.fps = -this.originalFps;
+						}
+					}
+					else if (this.goingBackwards && ScriptGlobals.boy.input.stick.y > 0.2f)
+					{
+						this.goingBackwards = false;
+						this.currentAnim.fps = this.originalFps;
+					}
+					if (this.currentAnim.frame < 2f && this.goingBackwards)
+					{
+						this.currentAnim = null;
+						Device.SetVoiceNone();
+						if (this.climbingDir > 0.5f)
+						{
+							ScriptGlobals.boy.SpawnExternalState(new BoyLadderState(ScriptGlobals.boy, this.leftLadder, 0f, null), Boy.AffectMode.Default);
+						}
+						else
+						{
+							ScriptGlobals.boy.SpawnExternalState(new BoyLadderState(ScriptGlobals.boy, this.rightLadder, 0f, null), Boy.AffectMode.Default);
+						}
+						this.climbingDir = 0f;
+					}
+				}
+			}
+			else if (this.currentAnim.frame > 34f && !this.goingBackwards)
+			{
+				if (flag2)
+				{
+					Ladder ladder = this.PrepareForNextClimb();
+					ScriptGlobals.boy.visualBoy.additiveAnim = null;
+					ScriptGlobals.boy.SpawnExternalState(new BoyJumpState(ScriptGlobals.boy, BoyJumpState.State.JumpForward, ladder.gameObject.GetComponent<Collider>()), Boy.AffectMode.Default);
+				}
+				else if (Mathf.Abs(ScriptGlobals.boy.input.stick.y) > 0.2f || this.currentAnim.frame > this.currentAnim.numFrames - 5f || ScriptGlobals.boy.input.stick.x * this.climbingDir > 0.5f)
+				{
+					Ladder ladderArg = this.PrepareForNextClimb();
+					ScriptGlobals.boy.SpawnExternalState(new BoyLadderState(ScriptGlobals.boy, ladderArg, 0f, null), Boy.AffectMode.Default);
+					ScriptGlobals.boy.visualBoy.additiveAnim = null;
+				}
+			}
+		}
+		else if (this.topTriggerInsideCount > 0 && !(ScriptGlobals.boy.state is BoyJumpState))
+		{
+			bool flag3 = ((ScriptGlobals.boy.pos.x - base.transform.position.x) * ScriptGlobals.boy.input.stick.x < 0f && Mathf.Abs(ScriptGlobals.boy.input.stick.x) > 0.2f) || this.justEntered;
+			if ((ScriptGlobals.boy.input.stick.y > 0.8f || (ScriptGlobals.boy.input.stick.y > 0.1f && flag3)) && (this.stickHasBeenDown || (flag3 && Mathf.Abs(ScriptGlobals.boy.input.stick.x) > 0.5f)))
+			{
+				this.stickHasBeenDown = false;
+				this.justEntered = false;
+				if (ScriptGlobals.boy.pos.x < base.transform.position.x)
+				{
+					if (this.climbingDir == 0f)
+					{
+						this.climbingDir = 1f;
+						this.climbRightAnim.transform.position = this.leftSidePos;
+						this.currentAnim = this.climbRightAnim;
+						BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.climbRightAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+						this.goingBackwards = false;
+						Device.SetVoiceActive();
+					}
+				}
+				else if (this.climbingDir == 0f)
+				{
+					this.climbingDir = -1f;
+					this.climbLeftAnim.transform.position = this.rightSidePos;
+					this.currentAnim = this.climbLeftAnim;
+					BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.climbLeftAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+					this.goingBackwards = false;
+					Device.SetVoiceActive();
+				}
+				this.currentAnim.fps = this.originalFps;
+			}
+			else if (!ScriptGlobals.boy.input.jump || Mathf.Abs(ScriptGlobals.boy.input.stick.x) <= 0.5f)
+			{
+				if ((double)ScriptGlobals.boy.input.stick.y > 0.0)
+				{
+					this.killStickInput = Fence.KillInputType.ForceZero;
+				}
+			}
+		}
+		else if (this.wireDeformer != null)
+		{
+			BoyLadderState boyLadderState = ScriptGlobals.boy.state as BoyLadderState;
+			bool flag4 = false;
+			if (boyLadderState != null)
+			{
+				if (boyLadderState.ladder == this.leftLadder || boyLadderState.ladder == this.rightLadder)
+				{
+					this.wantedFenceAngle = -this.jumpOnTiltAngle * Mathf.Sign(this.lastBoySide);
+					if (!this.climbingLastFrame && ScriptGlobals.boy.history.ElapsedSince(BoyHistory.Event.Jump) < 0.1f)
+					{
+						float x2 = BoyUtils.GetRelativeLandVelocity(ScriptGlobals.boy).x;
+						this.currentTiltSpeed -= x2 * 5f;
+						float x3 = this.wireDeformer.transform.TransformDirection(Vector3.up).x;
+						this.wireDeformer.StartPushEffect(ScriptGlobals.boy.pos3, Mathf.Sign(x3 * x2), true, false);
+					}
+					flag4 = true;
+					if (this.stepDeadzone < 0f && Mathf.Abs(ScriptGlobals.boy.velocity.y) > 0.5f)
+					{
+						this.wireDeformer.DoFootStep();
+						this.stepDeadzone = 0.4f;
+					}
+				}
+			}
+			else if (this.climbingLastFrame && ScriptGlobals.boy.state is BoyJumpState)
+			{
+				float num2 = 1f;
+				if ((ScriptGlobals.boy.state as BoyJumpState).state == BoyJumpState.State.JumpDown)
+				{
+					num2 = 0.5f;
+				}
+				if (this.lastBoyState != null)
+				{
+					BoyLadderState boyLadderState2 = this.lastBoyState as BoyLadderState;
+					if (boyLadderState2 != null && !boyLadderState2.jumpedOff)
+					{
+						num2 = 0.3f;
+					}
+				}
+				float x4 = this.wireDeformer.transform.TransformDirection(Vector3.up).x;
+				this.wireDeformer.StartPushEffect(ScriptGlobals.boy.pos3, Mathf.Sign(-x4 * ScriptGlobals.boy.velocity.x) * num2, false, false);
+				this.currentTiltSpeed += ScriptGlobals.boy.velocity.x * 5f;
+			}
+			this.climbingLastFrame = flag4;
+		}
+		if (this.wireDeformer != null && (this.currentFenceAngle != this.wantedFenceAngle || this.currentTiltSpeed != 0f))
+		{
+			float num3 = this.wantedFenceAngle - this.currentFenceAngle;
+			float num4 = this.currentFenceAngle;
+			this.currentFenceAngle += this.currentTiltSpeed * Time.deltaTime;
+			if (Mathf.Abs(this.currentFenceAngle) > Mathf.Abs(this.wantedFenceAngle))
+			{
+				this.currentFenceAngle = Mathf.Sign(this.currentFenceAngle) * Mathf.Abs(this.wantedFenceAngle);
+				if (Mathf.Abs(this.currentTiltSpeed) < 0.4f)
+				{
+					this.currentTiltSpeed = 0f;
+				}
+				else
+				{
+					if (Mathf.Abs(this.currentTiltSpeed) > 3f)
+					{
+						this.wireDeformer.DoFootStep();
+						this.wireDeformer.StartSmallEffectOnly(ScriptGlobals.boy.pos3);
+						this.stepDeadzone = 0.4f;
+					}
+					this.currentTiltSpeed = -this.currentTiltSpeed * 0.25f;
+				}
+			}
+			this.currentTiltSpeed += num3 * Time.deltaTime * this.jumpOnSpringPower;
+			this.currentTiltSpeed *= 1f - Time.deltaTime * this.damping;
+			Vector3 localEulerAngles = base.transform.parent.localEulerAngles;
+			localEulerAngles.z = this.defaultLocalRotz + this.currentFenceAngle;
+			base.transform.parent.localEulerAngles = localEulerAngles;
+		}
+		if (this.wireDeformer != null && this.wireDeformer.IsEffectRunning())
+		{
+			float num5 = this.wireDeformer.GetCurrentOffset() * (1f - Mathf.Abs(this.wireDeformer.GetPosOffsetX()) * 0.5f);
+			Vector3 vector = this.wireDeformer.transform.InverseTransformPoint(ScriptGlobals.boy.pos3);
+			if (vector.x > 0f)
+			{
+				num5 *= Mathf.Max(1f - vector.x, 0.05f);
+			}
+			this.leftLadder.transform.localPosition = this.leftLadderInitPos - this.leftLadder.transform.TransformDirection(Vector3.forward * num5);
+			this.rightLadder.transform.localPosition = this.rightLadderInitPos + this.rightLadder.transform.TransformDirection(Vector3.forward * num5);
+		}
+		BoyCustomAnimState boyCustomAnimState = ScriptGlobals.boy.state as BoyCustomAnimState;
+		if (boyCustomAnimState != null && this.camMultiBox != null)
+		{
+			if (boyCustomAnimState.anim == this.climbLeftAnim)
+			{
+				AnimFrameNode animFrameNode = this.climbLeftAnim;
+				float value = 1f - Mathf.InverseLerp(0f, 30f, animFrameNode.frame / animFrameNode.numFrames * 100f);
+				this.camMultiBox.value = value;
+			}
+			else if (boyCustomAnimState.anim == this.climbRightAnim)
+			{
+				AnimFrameNode animFrameNode2 = this.climbRightAnim;
+				float value2 = Mathf.InverseLerp(0f, 30f, animFrameNode2.frame / animFrameNode2.numFrames * 100f);
+				this.camMultiBox.value = value2;
+			}
+		}
+		this.lastBoyState = ScriptGlobals.boy.state;
+	}
+
+	// Token: 0x04001534 RID: 5428
+	public CollisionEvents TopTrigger;
+
+	// Token: 0x04001535 RID: 5429
+	public AnimClipNode climbRightAnim;
+
+	// Token: 0x04001536 RID: 5430
+	public AnimClipNode climbLeftAnim;
+
+	// Token: 0x04001537 RID: 5431
+	public float extrasliding;
+
+	// Token: 0x04001538 RID: 5432
+	public Ladder leftLadder;
+
+	// Token: 0x04001539 RID: 5433
+	private Vector3 leftLadderInitPos;
+
+	// Token: 0x0400153A RID: 5434
+	public Ladder rightLadder;
+
+	// Token: 0x0400153B RID: 5435
+	private Vector3 rightLadderInitPos;
+
+	// Token: 0x0400153C RID: 5436
+	public WireFenceDeformer wireDeformer;
+
+	// Token: 0x0400153D RID: 5437
+	public float jumpOnTiltAngle = 3f;
+
+	// Token: 0x0400153E RID: 5438
+	public float jumpOnSpringPower = 30f;
+
+	// Token: 0x0400153F RID: 5439
+	public float damping;
+
+	// Token: 0x04001540 RID: 5440
+	private float defaultLocalRotz;
+
+	// Token: 0x04001541 RID: 5441
+	public CameraMultiBox camMultiBox;
+
+	// Token: 0x04001542 RID: 5442
+	private Vector3 leftSidePos;
+
+	// Token: 0x04001543 RID: 5443
+	private Vector3 rightSidePos;
+
+	// Token: 0x04001544 RID: 5444
+	private int topTriggerInsideCount;
+
+	// Token: 0x04001545 RID: 5445
+	private Fence.KillInputType killStickInput;
+
+	// Token: 0x04001546 RID: 5446
+	private float originalFps = 30f;
+
+	// Token: 0x04001547 RID: 5447
+	private BoyState lastBoyState;
+
+	// Token: 0x04001548 RID: 5448
+	private int scenesLoadedHandle = -1;
+
+	// Token: 0x04001549 RID: 5449
+	private int topTriggerEnterHandle = -1;
+
+	// Token: 0x0400154A RID: 5450
+	private int topTriggerExitHandle = -1;
+
+	// Token: 0x0400154B RID: 5451
+	private bool justEntered = true;
+
+	// Token: 0x0400154C RID: 5452
+	private float lastBoySide;
+
+	// Token: 0x0400154D RID: 5453
+	private float climbingDir;
+
+	// Token: 0x0400154E RID: 5454
+	private AnimClipNode currentAnim;
+
+	// Token: 0x0400154F RID: 5455
+	private bool stickHasBeenDown = true;
+
+	// Token: 0x04001550 RID: 5456
+	private bool isJumpingWithButtonDown;
+
+	// Token: 0x04001551 RID: 5457
+	private bool goingBackwards;
+
+	// Token: 0x04001552 RID: 5458
+	private bool climbingLastFrame;
+
+	// Token: 0x04001553 RID: 5459
+	private float wantedFenceAngle;
+
+	// Token: 0x04001554 RID: 5460
+	private float stepDeadzone;
+
+	// Token: 0x04001555 RID: 5461
+	private float currentTiltSpeed;
+
+	// Token: 0x04001556 RID: 5462
+	private float currentFenceAngle;
+
+	// Token: 0x020001A1 RID: 417
+	private enum KillInputType
+	{
+		// Token: 0x04001558 RID: 5464
+		KeepInput,
+		// Token: 0x04001559 RID: 5465
+		ForceZero,
+		// Token: 0x0400155A RID: 5466
+		ForceLeft,
+		// Token: 0x0400155B RID: 5467
+		ForceRight
+	}
+}

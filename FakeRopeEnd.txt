@@ -1,0 +1,85 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000257 RID: 599
+public class FakeRopeEnd : MonoBehaviour
+{
+	// Token: 0x06001280 RID: 4736 RVA: 0x000AD83C File Offset: 0x000ABA3C
+	private void Start()
+	{
+		if (this.jointsList.Count == 0)
+		{
+			Transform transform = base.gameObject.transform;
+			while (transform.childCount > 0)
+			{
+				transform = transform.GetChild(0);
+				this.jointsList.Add(transform);
+			}
+		}
+		this.RecalcFractions();
+	}
+
+	// Token: 0x06001281 RID: 4737 RVA: 0x000AD890 File Offset: 0x000ABA90
+	private void RecalcFractions()
+	{
+		this.fractionToUse = 1f;
+		this.jointFractionToUse = 0f;
+		int count = this.jointsList.Count;
+		if (count > 0)
+		{
+			this.fractionToUse = Mathf.Clamp(this.firstJointFraction, 0f, 1f);
+			this.jointFractionToUse = (1f - this.fractionToUse) / (float)count;
+		}
+	}
+
+	// Token: 0x06001282 RID: 4738 RVA: 0x000AD8F8 File Offset: 0x000ABAF8
+	private void DebugDrawRope()
+	{
+		Transform transform = base.transform;
+		int i = 0;
+		int count = this.jointsList.Count;
+		while (i < count)
+		{
+			Transform transform2 = this.jointsList[i];
+			Debug.DrawLine(transform.position, transform2.position);
+			transform = transform2;
+			i++;
+		}
+	}
+
+	// Token: 0x06001283 RID: 4739 RVA: 0x000AD94C File Offset: 0x000ABB4C
+	private void SetJointPositions()
+	{
+		this.RecalcFractions();
+		base.transform.localRotation = Quaternion.Euler(0f, 0f, this.fractionToUse * this.angle);
+		int i = 0;
+		int count = this.jointsList.Count;
+		while (i < count)
+		{
+			this.jointsList[i].localRotation = Quaternion.Euler(0f, 0f, this.jointFractionToUse * this.angle);
+			i++;
+		}
+	}
+
+	// Token: 0x06001284 RID: 4740 RVA: 0x000AD9D4 File Offset: 0x000ABBD4
+	private void Update()
+	{
+		this.SetJointPositions();
+	}
+
+	// Token: 0x040021FE RID: 8702
+	public float angle;
+
+	// Token: 0x040021FF RID: 8703
+	public float firstJointFraction = 0.5f;
+
+	// Token: 0x04002200 RID: 8704
+	public List<Transform> jointsList = new List<Transform>();
+
+	// Token: 0x04002201 RID: 8705
+	private float fractionToUse;
+
+	// Token: 0x04002202 RID: 8706
+	private float jointFractionToUse;
+}

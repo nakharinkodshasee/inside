@@ -1,0 +1,680 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000084 RID: 132
+public class FishFriend : UmbrellaBehaviour<FishFriend>, IPreAwake
+{
+	// Token: 0x0600045C RID: 1116 RVA: 0x00031384 File Offset: 0x0002F584
+	public Quaternion GetRotation(ref Matrix4x4 matrix)
+	{
+		return Quaternion.LookRotation(matrix.GetColumn(2), matrix.GetColumn(1));
+	}
+
+	// Token: 0x0600045D RID: 1117 RVA: 0x000313B0 File Offset: 0x0002F5B0
+	[LateProcessBuild(0)]
+	public void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		base.transform.localScale = Vector3.one * Random.Range(0.5f, 1f);
+		this.fishTransform = new FishFriend.FishTransform(base.transform);
+		this.idlePos = this.fishTransform.position + Vector3.right;
+		this.targetOffset = new Vector3(Random.value / 3f, Random.value - 0.5f, 0f) * 0.75f;
+		this.offsetTimer = this.offsetDelay * Random.Range(0.8f, 1.2f);
+		this.parentWorldToLocalMatrix = base.transform.parent.worldToLocalMatrix;
+		this.parentWorldToLocalRotation = this.GetRotation(ref this.parentWorldToLocalMatrix);
+	}
+
+	// Token: 0x0600045E RID: 1118 RVA: 0x00031494 File Offset: 0x0002F694
+	public void Setup(FishManager fishManager)
+	{
+		this.fishManager = fishManager;
+	}
+
+	// Token: 0x0600045F RID: 1119 RVA: 0x000314A0 File Offset: 0x0002F6A0
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		this.followBoy = SignalIn.Create("followBoy", base.gameObject, new Action(this.OnFollowBoy));
+		this.swimSpeed = Random.Range(this.minSwimSpeed, this.maxSwimSpeed);
+		this.flipSpeed = 2f + this.swimSpeed;
+		this.fleeSpeed = 4f + this.swimSpeed;
+		this.swimLookSpeed = Random.Range(this.minRotateSpeed, this.maxRotateSpeed);
+		this.flipLookSpeed = this.swimLookSpeed * 5f;
+		this.fleeLookSpeed = 12f;
+		this.currentSwimLookSpeed = this.swimLookSpeed;
+		this.waveTimer += Random.Range(-5f, 5f);
+		this.waveSpeed = Random.Range(this.waveSpeedMin, this.waveSpeedMax);
+		this.waveHeight = Random.Range(this.waveHeightMin, this.waveHeightMax);
+		this.animSwim = this.anim["Swim_Relative"];
+		this.animSwim.speed = Random.Range(0.75f, 1.25f);
+		this.animSwim.normalizedTime = Random.value;
+		return true;
+	}
+
+	// Token: 0x06000460 RID: 1120 RVA: 0x000315DC File Offset: 0x0002F7DC
+	public void Initiate(Rigidbody target, Character character)
+	{
+		this.character = character;
+		this.target = target;
+		this.currentSpeed = this.swimSpeed * (this.fishManager.velocityModifer * this.characterSpeedInfluence);
+		this.SetSwimState();
+	}
+
+	// Token: 0x06000461 RID: 1121 RVA: 0x00031614 File Offset: 0x0002F814
+	public Vector3 GetCachedPos()
+	{
+		return this.fishTransform.position;
+	}
+
+	// Token: 0x06000462 RID: 1122 RVA: 0x00031624 File Offset: 0x0002F824
+	public void SetIndependentState(Rigidbody characterTarget, Character character)
+	{
+		this.character = character;
+		this.characterTarget = characterTarget;
+		this.currentSpeed = this.swimSpeed * (this.fishManager.velocityModifer * this.characterSpeedInfluence);
+		this.state = FishFriend.State.Indenpendent;
+	}
+
+	// Token: 0x06000463 RID: 1123 RVA: 0x00031668 File Offset: 0x0002F868
+	private void IndenpendentState()
+	{
+		this.Move(this.swimSpeed, this.swimAcceleration);
+		this.Rotate(this.idlePos, this.currentSwimLookSpeed, true);
+		if (this.fishManager.characterSwimming)
+		{
+			float num = Vector2.Distance(this.fishTransform.position, this.character.pos3);
+			if (num < this.wakeDistanceIndependent || (this.awakeBySignal && ScriptGlobals.boy.state is BoySwimState))
+			{
+				this.Initiate(this.characterTarget, this.character);
+			}
+		}
+	}
+
+	// Token: 0x06000464 RID: 1124 RVA: 0x00031710 File Offset: 0x0002F910
+	private void SetSwimState()
+	{
+		this.currentDelay = Random.Range(this.minFlipDelay, this.maxFlipDelay);
+		this.state = FishFriend.State.Swim;
+	}
+
+	// Token: 0x06000465 RID: 1125 RVA: 0x00031730 File Offset: 0x0002F930
+	private void SwimState()
+	{
+		Vector3 position = this.fishTransform.position;
+		Vector3 position2 = this.target.position;
+		if (this.targetBlocked)
+		{
+			float num = this.currentTarget.x - position.x;
+			float num2 = this.currentTarget.y - position.y;
+			if (num < 0f)
+			{
+				num = -num;
+			}
+			if (num2 < 0f)
+			{
+				num2 = -num2;
+			}
+			float num3 = num + num2;
+			if (num3 < 0.5f)
+			{
+				this.currentTarget.x = position2.x + this.targetOffset.x;
+				this.currentTarget.y = position2.y + this.targetOffset.y;
+				this.currentTarget.z = position2.z + this.targetOffset.z;
+			}
+		}
+		else
+		{
+			this.currentTarget.x = position2.x + this.targetOffset.x;
+			this.currentTarget.y = position2.y + this.targetOffset.y;
+			this.currentTarget.z = position2.z + this.targetOffset.z;
+		}
+		float num4 = this.swimSpeed * (this.fishManager.velocityModifer * this.characterSpeedInfluence);
+		float num5 = 1f;
+		if (this.distanceAcceleration != 0f)
+		{
+			float num6 = position2.x - position.x;
+			float num7 = position2.y - position.y;
+			if (num6 < 0f)
+			{
+				num6 = -num6;
+			}
+			if (num7 < 0f)
+			{
+				num7 = -num7;
+			}
+			float num8 = num6 + num7;
+			num5 += num8 / 9f * this.distanceAcceleration;
+			if (num5 < 1f)
+			{
+				num5 = 1f;
+			}
+		}
+		this.ApplyMovement(num4 * num5, this.swimAcceleration, this.currentTarget, this.currentSwimLookSpeed);
+		this.currentDelay -= Time.deltaTime;
+		if (this.currentDelay < 0f)
+		{
+			this.SetFlipState();
+		}
+		if (this.fishManager.characterSwimming && !this.fishManager.floatingDown)
+		{
+			Vector3 pos = this.character.pos3;
+			pos.x -= position.x;
+			pos.y -= position.y;
+			pos.z -= position.z;
+			if (pos.x < 0f)
+			{
+				pos.x = -pos.x;
+			}
+			if (pos.y < 0f)
+			{
+				pos.y = -pos.y;
+			}
+			if (pos.z < 0f)
+			{
+				pos.z = -pos.z;
+			}
+			float num9 = this.character.velocity3.magnitude / 2.8f;
+			float num10 = this.scareDistBase + num9 * this.scareDistFactor;
+			if (pos.x < num10 && pos.y < num10 && pos.z < num10)
+			{
+				this.SetFleeState(0.15f);
+			}
+		}
+	}
+
+	// Token: 0x06000466 RID: 1126 RVA: 0x00031A88 File Offset: 0x0002FC88
+	private void SetFlipState()
+	{
+		this.currentDelay = 0.25f;
+		Vector3 insideUnitSphere = Random.insideUnitSphere;
+		Vector2 vector = this.fishManager.CollisionCheckAdjust(this.fishTransform.position, this.fishTransform.position + insideUnitSphere.normalized * 20f, true);
+		this.tempLookAt.x = vector.x;
+		this.tempLookAt.y = vector.y;
+		this.tempLookAt.z = insideUnitSphere.z;
+		this.state = FishFriend.State.Flip;
+	}
+
+	// Token: 0x06000467 RID: 1127 RVA: 0x00031B28 File Offset: 0x0002FD28
+	private void FlipState()
+	{
+		this.ApplyMovement(this.flipSpeed, this.flipAcceleration, this.tempLookAt, this.flipLookSpeed);
+		this.currentDelay -= Time.deltaTime;
+		if (this.currentDelay < 0f)
+		{
+			this.SetSwimState();
+		}
+	}
+
+	// Token: 0x06000468 RID: 1128 RVA: 0x00031B7C File Offset: 0x0002FD7C
+	private void SetFleeState(float amount = 0.15f)
+	{
+		Vector3 vector = Random.insideUnitSphere * 0.3f;
+		Vector3 vector2 = this.character.pos3 + vector + this.targetOffset * 3f;
+		Vector3 vector3 = (this.fishTransform.position - vector2).normalized * 4f;
+		this.tempLookAt = this.fishTransform.position + vector3;
+		Vector2 vector4 = this.fishManager.CollisionCheckAdjust(this.fishTransform.position, this.tempLookAt, true);
+		this.tempLookAt.x = vector4.x;
+		this.tempLookAt.y = vector4.y;
+		this.currentDelay = amount;
+		this.currentSwimLookSpeed = this.swimLookSpeed;
+		this.state = FishFriend.State.Flee;
+	}
+
+	// Token: 0x06000469 RID: 1129 RVA: 0x00031C64 File Offset: 0x0002FE64
+	private void FleeState()
+	{
+		this.ApplyMovement(this.fleeSpeed, this.fleeAcceleration, this.tempLookAt, this.fleeLookSpeed);
+		this.currentDelay -= Time.deltaTime;
+		if (this.currentDelay < 0f)
+		{
+			this.SetSwimState();
+		}
+	}
+
+	// Token: 0x0600046A RID: 1130 RVA: 0x00031CB8 File Offset: 0x0002FEB8
+	public void UmbrellaUpdate()
+	{
+		if (this.state != FishFriend.State.None)
+		{
+			this.fishTransform.Refresh(false);
+			switch (this.state)
+			{
+			case FishFriend.State.Indenpendent:
+				this.IndenpendentState();
+				break;
+			case FishFriend.State.Swim:
+				this.SwimState();
+				break;
+			case FishFriend.State.Flip:
+				this.FlipState();
+				break;
+			case FishFriend.State.Flee:
+				this.FleeState();
+				break;
+			}
+			this.fishTransform.Commit(ref this.parentWorldToLocalMatrix, ref this.parentWorldToLocalRotation);
+		}
+	}
+
+	// Token: 0x0600046B RID: 1131 RVA: 0x00031D44 File Offset: 0x0002FF44
+	public void SpawnAroundPosition(Vector3 spawnPos, bool setIdlePos)
+	{
+		Vector3 vector = Random.onUnitSphere * (0.45f + Random.value);
+		vector.y /= 1.45f;
+		vector += spawnPos;
+		Vector3 zero = Vector3Fast.zero;
+		Vector3 vector2 = spawnPos - vector;
+		zero.x = -vector2.z;
+		zero.z = vector2.x;
+		this.lastRotation = Quaternion.LookRotation(zero);
+		base.transform.SetPositionRotation(vector, this.lastRotation);
+		this.fishTransform.Refresh(true);
+		this.currentSpeed = this.swimSpeed * (this.fishManager.velocityModifer * this.characterSpeedInfluence);
+		if (setIdlePos)
+		{
+			this.idlePos = vector;
+		}
+	}
+
+	// Token: 0x0600046C RID: 1132 RVA: 0x00031E04 File Offset: 0x00030004
+	private void ApplyMovement(float speedTarget, float speedAcceleration, Vector3 rot, float angularAcceleration)
+	{
+		if (this.currentlyColliding)
+		{
+			Vector3 vector = rot;
+			vector.x -= this.fishTransform.position.x;
+			vector.y -= this.fishTransform.position.y;
+			vector.z -= this.fishTransform.position.z;
+			vector.Normalize();
+			if (Vector3.Dot(vector, this.fishTransform.forward) < 0.8f)
+			{
+				this.Move(0f, speedAcceleration * 10f);
+			}
+			else
+			{
+				this.Move(speedTarget, speedAcceleration);
+			}
+		}
+		else
+		{
+			this.Move(speedTarget, speedAcceleration);
+		}
+		this.Rotate(rot, angularAcceleration, true);
+	}
+
+	// Token: 0x0600046D RID: 1133 RVA: 0x00031ED0 File Offset: 0x000300D0
+	private void Move(float speed, float acc)
+	{
+		float deltaTime = Time.deltaTime;
+		this.currentSpeed += (speed - this.currentSpeed) * deltaTime * acc;
+		Vector3 position = this.fishTransform.position;
+		float num = this.currentSpeed * deltaTime * this.streamStrength;
+		position.x += this.fishTransform.forward.x * num;
+		position.y += this.fishTransform.forward.y * num;
+		position.z += this.fishTransform.forward.z * num;
+		this.waveTimer += deltaTime * this.waveSpeed;
+		float num2 = Mathf.Sin(this.waveTimer) * this.waveHeight;
+		float num3 = num2 - this.lastWaveOffset;
+		position.x += this.fishTransform.up.x * num3;
+		position.y += this.fishTransform.up.y * num3;
+		position.z += this.fishTransform.up.z * num3;
+		this.fishTransform.position = position;
+		this.fishTransform.dirty = true;
+		this.lastWaveOffset = num2;
+	}
+
+	// Token: 0x0600046E RID: 1134 RVA: 0x0003202C File Offset: 0x0003022C
+	private void Rotate(Vector3 rotateTowards, float speed, bool worldSpace = true)
+	{
+		Vector3 vector;
+		vector.x = rotateTowards.x - this.fishTransform.position.x;
+		vector.y = rotateTowards.y - this.fishTransform.position.y;
+		vector.z = rotateTowards.z - this.fishTransform.position.z;
+		if (vector.x != 0f || vector.y != 0f || vector.z != 0f)
+		{
+			Vector3 vector2 = (!worldSpace) ? this.fishTransform.up : Vector3Fast.up;
+			this.desiredRotation = Quaternion.LookRotation(vector, vector2);
+			this.lastRotation = Quaternion.Slerp(this.lastRotation, this.desiredRotation, speed * Time.deltaTime).Normalized();
+			this.fishTransform.rotation = this.lastRotation;
+			this.fishTransform.dirty = true;
+		}
+	}
+
+	// Token: 0x0600046F RID: 1135 RVA: 0x00032134 File Offset: 0x00030334
+	public float GetCurrentSpeed()
+	{
+		if (this.target == null)
+		{
+			return -1f;
+		}
+		return this.currentSpeed;
+	}
+
+	// Token: 0x06000470 RID: 1136 RVA: 0x00032154 File Offset: 0x00030354
+	public void SetStream(float value)
+	{
+		this.streamStrength = value;
+	}
+
+	// Token: 0x06000471 RID: 1137 RVA: 0x00032160 File Offset: 0x00030360
+	public void Scare(float amount = 0.15f)
+	{
+		if (this.state != FishFriend.State.Flee && this.target)
+		{
+			this.SetFleeState(amount);
+		}
+	}
+
+	// Token: 0x06000472 RID: 1138 RVA: 0x00032188 File Offset: 0x00030388
+	public void SetCharacter(Character character)
+	{
+		this.character = character;
+	}
+
+	// Token: 0x06000473 RID: 1139 RVA: 0x00032194 File Offset: 0x00030394
+	private void OnFollowBoy()
+	{
+		this.awakeBySignal = true;
+	}
+
+	// Token: 0x06000474 RID: 1140 RVA: 0x000321A0 File Offset: 0x000303A0
+	public void UpdateCollision()
+	{
+		if (this.target != null)
+		{
+			Vector3 position = this.fishTransform.position;
+			Vector3 forward = this.fishTransform.forward;
+			this.currentlyColliding = this.fishManager.CollisionCheck(position, position + forward, true);
+			this.targetBlocked = this.fishManager.CollisionCheck(position, this.target.position + this.targetOffset, true);
+		}
+	}
+
+	// Token: 0x06000475 RID: 1141 RVA: 0x00032230 File Offset: 0x00030430
+	private void OnDrawGizmos()
+	{
+		if (this.debug && EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			Color color = Color.green;
+			if (this.state == FishFriend.State.Flee)
+			{
+				color = Color.red;
+			}
+			if (this.state == FishFriend.State.Flip)
+			{
+				color = Color.yellow;
+			}
+			color.a = 0.5f;
+			Gizmos.color = color;
+			Gizmos.DrawSphere(base.transform.position, 0.1f);
+		}
+	}
+
+	// Token: 0x06000476 RID: 1142 RVA: 0x000322A4 File Offset: 0x000304A4
+	private void OnDrawGizmosSelected()
+	{
+		if (this.debug && EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay) && this.wakeDistanceIndependent > 0f)
+		{
+			Gizmos.color = Color.cyan.Alpha(0.25f);
+			Gizmos.DrawSphere(base.transform.position, this.wakeDistanceIndependent);
+		}
+	}
+
+	// Token: 0x04000783 RID: 1923
+	public Animation anim;
+
+	// Token: 0x04000784 RID: 1924
+	public float waveHeightMin = 0.06f;
+
+	// Token: 0x04000785 RID: 1925
+	public float waveHeightMax = 0.16f;
+
+	// Token: 0x04000786 RID: 1926
+	public float waveSpeed = 2f;
+
+	// Token: 0x04000787 RID: 1927
+	public float minRotateSpeed = 0.5f;
+
+	// Token: 0x04000788 RID: 1928
+	public float maxRotateSpeed = 1.3f;
+
+	// Token: 0x04000789 RID: 1929
+	public float minSwimSpeed = 1.3f;
+
+	// Token: 0x0400078A RID: 1930
+	public float maxSwimSpeed = 2.1f;
+
+	// Token: 0x0400078B RID: 1931
+	public float characterSpeedInfluence = 0.75f;
+
+	// Token: 0x0400078C RID: 1932
+	public float scareDistBase;
+
+	// Token: 0x0400078D RID: 1933
+	public float scareDistFactor = 2f;
+
+	// Token: 0x0400078E RID: 1934
+	public float distanceAcceleration;
+
+	// Token: 0x0400078F RID: 1935
+	public float wakeDistanceIndependent = 8f;
+
+	// Token: 0x04000790 RID: 1936
+	public ColorBlendProbe colorBlendProbe;
+
+	// Token: 0x04000791 RID: 1937
+	public bool debug;
+
+	// Token: 0x04000792 RID: 1938
+	private SignalIn followBoy;
+
+	// Token: 0x04000793 RID: 1939
+	private FishFriend.State state;
+
+	// Token: 0x04000794 RID: 1940
+	private float swimLookSpeed;
+
+	// Token: 0x04000795 RID: 1941
+	private float flipLookSpeed;
+
+	// Token: 0x04000796 RID: 1942
+	private float fleeLookSpeed;
+
+	// Token: 0x04000797 RID: 1943
+	private float currentSwimLookSpeed;
+
+	// Token: 0x04000798 RID: 1944
+	private float swimAcceleration = 0.75f;
+
+	// Token: 0x04000799 RID: 1945
+	private float flipAcceleration = 3f;
+
+	// Token: 0x0400079A RID: 1946
+	private float fleeAcceleration = 6f;
+
+	// Token: 0x0400079B RID: 1947
+	private float swimSpeed;
+
+	// Token: 0x0400079C RID: 1948
+	private float flipSpeed;
+
+	// Token: 0x0400079D RID: 1949
+	private float fleeSpeed;
+
+	// Token: 0x0400079E RID: 1950
+	private float waveHeight;
+
+	// Token: 0x0400079F RID: 1951
+	private float currentSpeed;
+
+	// Token: 0x040007A0 RID: 1952
+	private float maxFlipDelay = 20f;
+
+	// Token: 0x040007A1 RID: 1953
+	private float minFlipDelay = 8f;
+
+	// Token: 0x040007A2 RID: 1954
+	private float currentDelay;
+
+	// Token: 0x040007A3 RID: 1955
+	private float waveSpeedMin = 0.5f;
+
+	// Token: 0x040007A4 RID: 1956
+	private float waveSpeedMax = 3f;
+
+	// Token: 0x040007A5 RID: 1957
+	private float lastWaveOffset;
+
+	// Token: 0x040007A6 RID: 1958
+	private float waveTimer;
+
+	// Token: 0x040007A7 RID: 1959
+	private float offsetDelay = 3f;
+
+	// Token: 0x040007A8 RID: 1960
+	private Rigidbody target;
+
+	// Token: 0x040007A9 RID: 1961
+	private Rigidbody characterTarget;
+
+	// Token: 0x040007AA RID: 1962
+	private Vector3 tempLookAt;
+
+	// Token: 0x040007AB RID: 1963
+	private AnimationState animSwim;
+
+	// Token: 0x040007AC RID: 1964
+	private Vector3 currentTarget;
+
+	// Token: 0x040007AD RID: 1965
+	private Quaternion lastRotation = QuaternionFast.identity;
+
+	// Token: 0x040007AE RID: 1966
+	private Quaternion desiredRotation;
+
+	// Token: 0x040007AF RID: 1967
+	private Character character;
+
+	// Token: 0x040007B0 RID: 1968
+	private float streamStrength = 1f;
+
+	// Token: 0x040007B1 RID: 1969
+	private bool awakeBySignal;
+
+	// Token: 0x040007B2 RID: 1970
+	private bool currentlyColliding;
+
+	// Token: 0x040007B3 RID: 1971
+	private bool targetBlocked;
+
+	// Token: 0x040007B4 RID: 1972
+	[SerializeField]
+	[HideInInspector]
+	private FishManager fishManager;
+
+	// Token: 0x040007B5 RID: 1973
+	[HideInInspector]
+	[SerializeField]
+	private Vector3 idlePos;
+
+	// Token: 0x040007B6 RID: 1974
+	[HideInInspector]
+	[SerializeField]
+	private float offsetTimer;
+
+	// Token: 0x040007B7 RID: 1975
+	[HideInInspector]
+	[SerializeField]
+	private Vector3 targetOffset;
+
+	// Token: 0x040007B8 RID: 1976
+	[SerializeField]
+	[HideInInspector]
+	private FishFriend.FishTransform fishTransform;
+
+	// Token: 0x040007B9 RID: 1977
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x040007BA RID: 1978
+	[SerializeField]
+	private Matrix4x4 parentWorldToLocalMatrix;
+
+	// Token: 0x040007BB RID: 1979
+	[SerializeField]
+	private Quaternion parentWorldToLocalRotation;
+
+	// Token: 0x02000085 RID: 133
+	private enum State
+	{
+		// Token: 0x040007BD RID: 1981
+		None,
+		// Token: 0x040007BE RID: 1982
+		Indenpendent,
+		// Token: 0x040007BF RID: 1983
+		Swim,
+		// Token: 0x040007C0 RID: 1984
+		Flip,
+		// Token: 0x040007C1 RID: 1985
+		Flee
+	}
+
+	// Token: 0x02000086 RID: 134
+	[Serializable]
+	private struct FishTransform
+	{
+		// Token: 0x06000477 RID: 1143 RVA: 0x00032304 File Offset: 0x00030504
+		public FishTransform(Transform source)
+		{
+			this.source = source;
+			source.GetPositionRotation(ref this.position, ref this.rotation);
+			this.forward = this.rotation * Vector3Fast.forward;
+			this.up = this.rotation * Vector3Fast.up;
+			this.dirty = false;
+		}
+
+		// Token: 0x06000478 RID: 1144 RVA: 0x00032360 File Offset: 0x00030560
+		public void Refresh(bool positionRefresh = false)
+		{
+			if (positionRefresh)
+			{
+				this.source.GetPositionRotation(ref this.position, ref this.rotation);
+			}
+			this.forward = this.rotation * Vector3Fast.forward;
+			this.up = this.rotation * Vector3Fast.up;
+			this.dirty = false;
+		}
+
+		// Token: 0x06000479 RID: 1145 RVA: 0x000323C0 File Offset: 0x000305C0
+		public void Commit(ref Matrix4x4 parentMatrix, ref Quaternion parentQuaternion)
+		{
+			if (this.dirty)
+			{
+				this.dirty = false;
+				this.source.SetLocalPositionRotation(parentMatrix.MultiplyPoint3x4(this.position), parentQuaternion * this.rotation);
+			}
+		}
+
+		// Token: 0x040007C2 RID: 1986
+		public Transform source;
+
+		// Token: 0x040007C3 RID: 1987
+		public Vector3 position;
+
+		// Token: 0x040007C4 RID: 1988
+		public Vector3 forward;
+
+		// Token: 0x040007C5 RID: 1989
+		public Vector3 up;
+
+		// Token: 0x040007C6 RID: 1990
+		public Quaternion rotation;
+
+		// Token: 0x040007C7 RID: 1991
+		public bool dirty;
+	}
+}

@@ -1,0 +1,241 @@
+using System;
+using AudioCommands;
+using UnityEngine;
+
+// Token: 0x020004C2 RID: 1218
+public class ForcePushGetWagonVoiceLogic : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001FD3 RID: 8147 RVA: 0x0010E9D0 File Offset: 0x0010CBD0
+	public bool PreAwake(int callcount)
+	{
+		this.spawnSaveStart = SignalIn.Create("spawnSaveStart", base.gameObject, new Action(this.DoSpawnStart));
+		this.spawnSaveEnd = SignalIn.Create("spawnSaveEnd", base.gameObject, new Action(this.DoSpawnEnd));
+		this.enterHill = SignalOut.Create("enterHill", base.gameObject);
+		this.enterHatch1 = SignalOut.Create("enterHatch1", base.gameObject);
+		this.enterHatch2 = SignalOut.Create("enterHatch2", base.gameObject);
+		this.enterHatch3 = SignalOut.Create("enterHatch3", base.gameObject);
+		this.enterFinal = SignalOut.Create("enterFinal", base.gameObject);
+		this.enterCover = SignalOut.Create("enterCover", base.gameObject);
+		this.exitCover = SignalOut.Create("exitCover", base.gameObject);
+		this.closeCall = SignalOut.Create("closeCall", base.gameObject);
+		this.spawnAtEnd = SignalOut.Create("spawnAtEnd", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001FD4 RID: 8148 RVA: 0x0010EAE8 File Offset: 0x0010CCE8
+	private bool boyIsInCover()
+	{
+		return this.coverHill.isInsideThisTrigger() || this.InsideActiveCover(this.coverHatch1) || this.InsideActiveCover(this.coverHatch2) || this.InsideActiveCover(this.coverHatch3) || this.BoySafeToTheRight();
+	}
+
+	// Token: 0x06001FD5 RID: 8149 RVA: 0x0010EB48 File Offset: 0x0010CD48
+	private bool InsideActiveCover(ForcePushCover cover)
+	{
+		return cover.isInsideThisTrigger() && cover.IsEnabled();
+	}
+
+	// Token: 0x06001FD6 RID: 8150 RVA: 0x0010EB60 File Offset: 0x0010CD60
+	private bool BoySafeToTheRight()
+	{
+		return ScriptGlobals.boy.pos3.x > this.coverFinalStart.position.x;
+	}
+
+	// Token: 0x06001FD7 RID: 8151 RVA: 0x0010EB9C File Offset: 0x0010CD9C
+	private bool BoySafeToTheLeft()
+	{
+		return ScriptGlobals.boy.pos3.x < this.mineEntrancePos.position.x;
+	}
+
+	// Token: 0x06001FD8 RID: 8152 RVA: 0x0010EBD8 File Offset: 0x0010CDD8
+	private void CheckProgressionTriggers()
+	{
+		if (!this.hillVisited && this.coverHill.isInsideThisTrigger())
+		{
+			this.hillVisited = true;
+			this.enterHill.Signal();
+			this.musicLength = PersistentBehaviour<GlobalAudio>.instance.music.GetLoopLength_s();
+		}
+		else if (!this.hatch1Visited && this.InsideActiveCover(this.coverHatch1))
+		{
+			this.hatch1Visited = true;
+			this.enterHatch1.Signal();
+		}
+		else if (!this.hatch2Visited && this.InsideActiveCover(this.coverHatch2))
+		{
+			this.hatch2Visited = true;
+			this.enterHatch2.Signal();
+		}
+		else if (!this.hatch3Visited && this.InsideActiveCover(this.coverHatch3))
+		{
+			this.hatch3Visited = true;
+			this.enterHatch3.Signal();
+		}
+		else if (!this.finalVisited && this.BoySafeToTheRight())
+		{
+			this.finalVisited = true;
+			this.enterFinal.Signal();
+		}
+	}
+
+	// Token: 0x06001FD9 RID: 8153 RVA: 0x0010ECF0 File Offset: 0x0010CEF0
+	private void Update()
+	{
+		if (!this.isActive)
+		{
+			return;
+		}
+		bool flag = this.boyIsInCover();
+		if (!flag)
+		{
+			this.musicPos = PersistentBehaviour<GlobalAudio>.instance.music.GetMusicPosition_s();
+			if (this.musicPos >= this.musicLength - 1f && !this.closeCallWarningSent)
+			{
+				this.closeCall.Signal();
+				this.closeCallWarningSent = true;
+			}
+			else if (this.musicPos <= this.musicLength - 1f && this.closeCallWarningSent)
+			{
+				this.closeCallWarningSent = false;
+			}
+		}
+		this.CheckProgressionTriggers();
+		if (!flag && this.boyInCoverLastFrame)
+		{
+			if (this.BoySafeToTheLeft() && !this.insideMinesAgain && LevelGlobals.mindHatOnHead && !LevelGlobals.mindHatOnHead.IsAttached())
+			{
+				ThemeUtils.SetVoiceConfig(ScriptGlobals.boy.gameObject, this.voiceEnterMines);
+				this.insideMinesAgain = true;
+			}
+			else
+			{
+				this.exitCover.Signal();
+			}
+		}
+		else if (flag && !this.boyInCoverLastFrame)
+		{
+			if (this.insideMinesAgain && LevelGlobals.mindHatOnHead && !LevelGlobals.mindHatOnHead.IsAttached())
+			{
+				ThemeUtils.SetVoiceConfig(ScriptGlobals.boy.gameObject, this.voiceExitMines);
+				this.insideMinesAgain = false;
+			}
+			this.enterCover.Signal();
+		}
+		this.boyInCoverLastFrame = flag;
+	}
+
+	// Token: 0x06001FDA RID: 8154 RVA: 0x0010EE74 File Offset: 0x0010D074
+	private void DoSpawnStart()
+	{
+		this.hillVisited = true;
+		this.enterHill.Signal();
+		this.musicLength = PersistentBehaviour<GlobalAudio>.instance.music.GetLoopLength_s();
+	}
+
+	// Token: 0x06001FDB RID: 8155 RVA: 0x0010EEA0 File Offset: 0x0010D0A0
+	private void DoSpawnEnd()
+	{
+		this.hillVisited = false;
+		this.hatch1Visited = false;
+		this.hatch2Visited = false;
+		this.hatch3Visited = false;
+		this.finalVisited = false;
+		if (this.BoySafeToTheRight())
+		{
+			this.spawnAtEnd.Signal();
+		}
+		else
+		{
+			this.isActive = false;
+		}
+	}
+
+	// Token: 0x04003AE5 RID: 15077
+	public ForcePushCover coverHill;
+
+	// Token: 0x04003AE6 RID: 15078
+	public ForcePushCover coverHatch1;
+
+	// Token: 0x04003AE7 RID: 15079
+	public ForcePushCover coverHatch2;
+
+	// Token: 0x04003AE8 RID: 15080
+	public ForcePushCover coverHatch3;
+
+	// Token: 0x04003AE9 RID: 15081
+	public Transform coverFinalStart;
+
+	// Token: 0x04003AEA RID: 15082
+	public Transform mineEntrancePos;
+
+	// Token: 0x04003AEB RID: 15083
+	public BoyVoiceConfig voiceEnterMines;
+
+	// Token: 0x04003AEC RID: 15084
+	public BoyVoiceConfig voiceExitMines;
+
+	// Token: 0x04003AED RID: 15085
+	private SignalIn spawnSaveStart;
+
+	// Token: 0x04003AEE RID: 15086
+	private SignalIn spawnSaveEnd;
+
+	// Token: 0x04003AEF RID: 15087
+	private SignalOut enterHill;
+
+	// Token: 0x04003AF0 RID: 15088
+	private SignalOut enterHatch1;
+
+	// Token: 0x04003AF1 RID: 15089
+	private SignalOut enterHatch2;
+
+	// Token: 0x04003AF2 RID: 15090
+	private SignalOut enterHatch3;
+
+	// Token: 0x04003AF3 RID: 15091
+	private SignalOut enterFinal;
+
+	// Token: 0x04003AF4 RID: 15092
+	private SignalOut enterCover;
+
+	// Token: 0x04003AF5 RID: 15093
+	private SignalOut exitCover;
+
+	// Token: 0x04003AF6 RID: 15094
+	private SignalOut closeCall;
+
+	// Token: 0x04003AF7 RID: 15095
+	private SignalOut spawnAtEnd;
+
+	// Token: 0x04003AF8 RID: 15096
+	private bool hillVisited;
+
+	// Token: 0x04003AF9 RID: 15097
+	private bool hatch1Visited;
+
+	// Token: 0x04003AFA RID: 15098
+	private bool hatch2Visited;
+
+	// Token: 0x04003AFB RID: 15099
+	private bool hatch3Visited;
+
+	// Token: 0x04003AFC RID: 15100
+	private bool finalVisited;
+
+	// Token: 0x04003AFD RID: 15101
+	private bool boyInCoverLastFrame;
+
+	// Token: 0x04003AFE RID: 15102
+	private float musicPos;
+
+	// Token: 0x04003AFF RID: 15103
+	private float musicLength = 6f;
+
+	// Token: 0x04003B00 RID: 15104
+	private bool isActive = true;
+
+	// Token: 0x04003B01 RID: 15105
+	private bool closeCallWarningSent;
+
+	// Token: 0x04003B02 RID: 15106
+	private bool insideMinesAgain;
+}

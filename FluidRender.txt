@@ -1,0 +1,76 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000565 RID: 1381
+public class FluidRender : MonoBehaviour
+{
+	// Token: 0x060023DC RID: 9180 RVA: 0x00129A78 File Offset: 0x00127C78
+	private void Start()
+	{
+		this.fluidSim = new FluidSimulation(this.dimension - 2, 0f, 0f, this.native);
+		this.visualization = new Texture2D(this.dimension, this.dimension, 3, false);
+		this.visualization.filterMode = 0;
+		base.GetComponent<Renderer>().material.SetTexture("_MainTex", this.visualization);
+	}
+
+	// Token: 0x060023DD RID: 9181 RVA: 0x00129AE8 File Offset: 0x00127CE8
+	private void Vizualize()
+	{
+		Color[] pixels = this.visualization.GetPixels();
+		for (int i = 0; i < this.dimension * this.dimension; i++)
+		{
+			pixels[i].r = this.fluidSim.densities[i];
+			pixels[i].g = this.fluidSim.velocities[i];
+			pixels[i].b = this.fluidSim.pressures[i];
+		}
+		this.visualization.SetPixels(pixels);
+		this.visualization.Apply(false);
+	}
+
+	// Token: 0x060023DE RID: 9182 RVA: 0x00129B84 File Offset: 0x00127D84
+	private void UpdateUserInput()
+	{
+		if (Input.GetKey(32) || Input.GetKey(330))
+		{
+			for (int i = 20; i < 24; i++)
+			{
+				for (int j = 20; j < 24; j++)
+				{
+					this.fluidSim.SetPressure(i - 4, j - 4, this.pressureAdd);
+					this.fluidSim.SetVelocity(i, j, this.velocityAdd);
+					this.fluidSim.SetDensity(i, j, this.densityAdd);
+				}
+			}
+		}
+	}
+
+	// Token: 0x060023DF RID: 9183 RVA: 0x00129C14 File Offset: 0x00127E14
+	private void Update()
+	{
+		this.fluidSim.ClearPrev();
+		this.UpdateUserInput();
+		this.fluidSim.Simulate(Time.deltaTime);
+		this.Vizualize();
+	}
+
+	// Token: 0x04004244 RID: 16964
+	public int dimension = 128;
+
+	// Token: 0x04004245 RID: 16965
+	public bool native = true;
+
+	// Token: 0x04004246 RID: 16966
+	private FluidSimulation fluidSim;
+
+	// Token: 0x04004247 RID: 16967
+	private Texture2D visualization;
+
+	// Token: 0x04004248 RID: 16968
+	public float velocityAdd = 20f;
+
+	// Token: 0x04004249 RID: 16969
+	public float pressureAdd = 10f;
+
+	// Token: 0x0400424A RID: 16970
+	public float densityAdd = 10f;
+}

@@ -1,0 +1,76 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000D2 RID: 210
+public class FakeWaterGirlHair : MonoBehaviour
+{
+	// Token: 0x0600068E RID: 1678 RVA: 0x0004AAB8 File Offset: 0x00048CB8
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.hairPrefab == null)
+		{
+			return;
+		}
+		GameObject gameObject = Object.Instantiate<GameObject>(this.hairPrefab);
+		gameObject.transform.parent = this.headBone;
+		gameObject.transform.localPosition = Vector3.zero;
+		gameObject.transform.localEulerAngles = new Vector3(0f, 0f, 0f);
+		LineRenderer[] componentsInChildren = gameObject.transform.GetComponentsInChildren<LineRenderer>();
+		foreach (LineRenderer lineRenderer in componentsInChildren)
+		{
+			lineRenderer.sharedMaterial = this.hairMaterial;
+		}
+		Hair[] componentsInChildren2 = gameObject.transform.GetComponentsInChildren<Hair>();
+		int num = 0;
+		int j = 0;
+		int num2 = componentsInChildren2.Length;
+		while (j < num2)
+		{
+			Hair hair = componentsInChildren2[j];
+			hair.hairLength *= this.hairLengthScale;
+			hair.hairWidthBottom *= this.hairBottomWidthScale;
+			hair.hairWidthTop *= this.hairTopWidthScale;
+			MaterialInstance materialInstance = hair.HairRenderer.gameObject.AddComponent<MaterialInstance>();
+			MaterialInstance.FloatProperty orAddFloatProperty = materialInstance.GetOrAddFloatProperty("_hairID");
+			materialInstance.SetFloatProperty(orAddFloatProperty, (float)num);
+			num = (num + 1) % 4;
+			hair.UpdateHairSetting(false);
+			j++;
+		}
+	}
+
+	// Token: 0x0600068F RID: 1679 RVA: 0x0004AC1C File Offset: 0x00048E1C
+	private void Awake()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x04000B44 RID: 2884
+	public Transform headBone;
+
+	// Token: 0x04000B45 RID: 2885
+	public GameObject hairPrefab;
+
+	// Token: 0x04000B46 RID: 2886
+	public Material hairMaterial;
+
+	// Token: 0x04000B47 RID: 2887
+	public float hairLengthScale = 2.2f;
+
+	// Token: 0x04000B48 RID: 2888
+	public float hairBottomWidthScale = 1.3f;
+
+	// Token: 0x04000B49 RID: 2889
+	public float hairTopWidthScale = 2f;
+
+	// Token: 0x04000B4A RID: 2890
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

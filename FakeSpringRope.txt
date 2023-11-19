@@ -1,0 +1,363 @@
+using System;
+using System.Collections.Generic;
+using Playdead.Native;
+using UnityEngine;
+
+// Token: 0x0200025A RID: 602
+public class FakeSpringRope : MonoBehaviour
+{
+	// Token: 0x06001296 RID: 4758 RVA: 0x000AE9EC File Offset: 0x000ACBEC
+	[LateProcessBuild(-1)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.bottomPoint == null)
+		{
+			return;
+		}
+		Vector3 position = base.transform.position;
+		Vector3 position2 = this.bottomPoint.transform.position;
+		SplineLineRenderer component = base.GetComponent<SplineLineRenderer>();
+		component.linePoints.Add(base.gameObject);
+		this.ropeObjects.Add(base.transform);
+		Transform transform = Object.Instantiate<GameObject>(this.spiralPrefab).transform;
+		transform.parent = base.transform;
+		transform.transform.localPosition = Vector3Fast.zero;
+		transform.transform.localEulerAngles = Vector3Fast.zero;
+		for (int i = 0; i < this.spiralDivisions; i++)
+		{
+			if (this.spiralPrefab != null)
+			{
+				transform = Object.Instantiate<GameObject>(this.spiralPrefab).transform;
+				component.linePoints.Add(transform.gameObject);
+				transform.parent = base.transform.parent;
+				float num = (float)(i + 1) / (float)(this.spiralDivisions + 1);
+				transform.position = position * (1f - num) + position2 * num;
+				this.ropeObjects.Add(transform);
+			}
+		}
+		component.linePoints.Add(this.bottomPoint);
+		this.ropeObjects.Add(this.bottomPoint.transform);
+		this._transform = base.transform;
+	}
+
+	// Token: 0x06001297 RID: 4759 RVA: 0x000AEB74 File Offset: 0x000ACD74
+	private void Start()
+	{
+		this.OnPreProcess();
+		int count = this.ropeObjects.Count;
+		for (int i = 0; i < count; i++)
+		{
+			Transform transform = this.ropeObjects[i];
+			this.fastRopeObjects.Add(transform);
+			this.velocity.Add(Vector3Fast.zero);
+			this.avgPosList.Add(Vector3Fast.zero);
+			this.curPosList.Add(transform.position);
+		}
+		this.initialGravityFactor = this.gravityFactor;
+		int j = 0;
+		int count2 = this.verticalPillars.Count;
+		while (j < count2)
+		{
+			this.verticalPillarScale.Add(this.verticalPillars[j].localScale.x);
+			j++;
+		}
+		int k = 0;
+		int count3 = this.horizontalPillars.Count;
+		while (k < count3)
+		{
+			this.horizontalPillarScale.Add(this.horizontalPillars[k].localScale.x);
+			k++;
+		}
+		this.locScaleVector = new Vector3(this.spiralRadius * 2f, 1f, this.spiralRadius * 2f);
+	}
+
+	// Token: 0x06001298 RID: 4760 RVA: 0x000AECB4 File Offset: 0x000ACEB4
+	public void PullBottomTowardRoot(float power)
+	{
+		this.pullPower = power;
+		if (!this.isPulling)
+		{
+			this.bottomRig = this.bottomPoint.GetComponent<Rigidbody>();
+			if (this.bottomRig != null)
+			{
+				this.isPulling = true;
+				this.bottomRig.isKinematic = false;
+				if (this.bottomReparent != null)
+				{
+					this.bottomPoint.transform.parent = this.bottomReparent;
+				}
+				if (this.autoPullToRopeLength || this.maxRopeLength > 0f)
+				{
+					this.ropeLengthAtPull = (this._transform.position - this.bottomPoint.transform.position).magnitude;
+					if (this.ropeLengthAtPull < this.maxRopeLength)
+					{
+						this.lowerIndex = FastMath.Max((int)((float)this.fastRopeObjects.size * (1f - this.ropeLengthAtPull / this.maxRopeLength)), 1);
+						if (this.lowerIndex > 1)
+						{
+							for (int i = this.lowerIndex - 1; i < this.lowerIndex; i++)
+							{
+								this.fastRopeObjects.raw[i].gameObject.SetActive(false);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x06001299 RID: 4761 RVA: 0x000AEDF8 File Offset: 0x000ACFF8
+	public void SetBottomVelocity(Vector3 velocity)
+	{
+		if (this.bottomRig != null)
+		{
+			this.bottomRig.AddForce(velocity, 2);
+		}
+	}
+
+	// Token: 0x0600129A RID: 4762 RVA: 0x000AEE18 File Offset: 0x000AD018
+	private void FixedUpdate()
+	{
+		if (this.isPulling && (this.pullPower != 0f || this.autoPullToRopeLength))
+		{
+			int size = this.curPosList.size;
+			Vector3 vector = (!this.overridePull) ? this.curPosList.raw[0] : this.overridePullPos;
+			Vector3 vector2 = vector - this.curPosList.raw[size - 1];
+			vector2.Normalize();
+			if (this.autoPullToRopeLength)
+			{
+				float magnitude = (this.curPosList.raw[0] - this.curPosList.raw[size - 1]).magnitude;
+				if (magnitude > this.ropeLengthAtPull * 0.9f)
+				{
+					float num = magnitude - this.ropeLengthAtPull * 0.9f;
+					this.bottomRig.AddForce(vector2 * num * 7f * Time.deltaTime, 2);
+				}
+				float num2 = Mathf.Clamp(this.initialGravityFactor - (magnitude - this.ropeLengthAtPull) * 0.5f, 0.1f, this.initialGravityFactor * 1.4f);
+				this.gravityFactor += (num2 - this.gravityFactor) * 5f * Time.deltaTime;
+			}
+			else
+			{
+				Vector3 vector3 = this.bottomRig.velocity;
+				float num3 = Vector3.Dot(vector3, vector2);
+				float num4 = 2f * this.pullPower;
+				float num5 = num4 - num3;
+				this.bottomRig.AddForce(num5 * vector2 * 8f * Time.deltaTime, 2);
+			}
+		}
+	}
+
+	// Token: 0x0600129B RID: 4763 RVA: 0x000AEFE4 File Offset: 0x000AD1E4
+	public float GetInternalRopeVelocity()
+	{
+		float num = 0f;
+		int i = 0;
+		int num2 = this.velocity.size - 1;
+		while (i < num2)
+		{
+			num += (this.velocity.raw[i] - this.velocity.raw[i + 1]).magnitude;
+			i++;
+		}
+		return num;
+	}
+
+	// Token: 0x0600129C RID: 4764 RVA: 0x000AF058 File Offset: 0x000AD258
+	public void StartShoot()
+	{
+		this.shootTimer = 0.5f;
+	}
+
+	// Token: 0x0600129D RID: 4765 RVA: 0x000AF068 File Offset: 0x000AD268
+	private void Update()
+	{
+		float deltaTime = Time.deltaTime;
+		if (deltaTime <= 0f)
+		{
+			return;
+		}
+		this.overridePull = false;
+		int size = this.curPosList.size;
+		if (size > 2)
+		{
+			this.verticalPillarPos.size = 0;
+			int i = 0;
+			int count = this.verticalPillars.Count;
+			while (i < count)
+			{
+				this.verticalPillarPos.Add(this.verticalPillars[i].position);
+				i++;
+			}
+			this.horizontalPillarPos.size = 0;
+			int j = 0;
+			int count2 = this.horizontalPillars.Count;
+			while (j < count2)
+			{
+				this.horizontalPillarPos.Add(this.horizontalPillars[j].position);
+				j++;
+			}
+			this.curPosList.raw[0] = this.fastRopeObjects.raw[0].position;
+			this.curPosList.raw[size - 1] = this.fastRopeObjects.raw[size - 1].position;
+			for (int k = 1; k < this.lowerIndex; k++)
+			{
+				this.curPosList.raw[k] = this.curPosList.raw[0];
+			}
+			float groundy = 0f;
+			bool flag = this.ground != null;
+			if (flag)
+			{
+				groundy = this.ground.position.y;
+			}
+			for (float num = deltaTime; num > 0f; num -= 0.035f)
+			{
+				float dt = Mathf.Min(num, 0.035f);
+				GameCodeImpl.UpdateFakeSpringRope(this.curPosList.raw, this.curPosList.size, this.velocity.raw, this.gravityFactor, this.springStrength, this.springDamping, this.iterations, dt, this.horizontalPillarPos.raw, this.horizontalPillarPos.size, this.horizontalPillarScale.raw, this.verticalPillarPos.raw, this.verticalPillarPos.size, this.verticalPillarScale.raw, flag, groundy, ref this.overridePullPos, ref this.overridePull, FastMath.Max(this.shootTimer * 3f, 0f), this.lowerIndex);
+			}
+			this.shootTimer -= deltaTime;
+			for (int l = 0; l < size - 1; l++)
+			{
+				Vector3 vector = this.curPosList.raw[l + 1];
+				vector.x -= this.curPosList.raw[l].x;
+				vector.y -= this.curPosList.raw[l].y;
+				vector.z -= this.curPosList.raw[l].z;
+				float magnitude = vector.magnitude;
+				float num2 = 1f / magnitude;
+				vector.x *= num2;
+				if (FastMath.Abs(vector.x) < 0.98f && (vector.x != 0f || vector.y != 0f || vector.z != 0f))
+				{
+					vector.y *= num2;
+					vector.z *= num2;
+					this.forwVector.y = vector.z;
+					this.forwVector.z = -vector.y;
+					this.fastRopeObjects.raw[l].rotation = Quaternion.LookRotation(this.forwVector, vector);
+					this.locScaleVector.y = magnitude;
+					this.fastRopeObjects.raw[l].localScale = this.locScaleVector;
+				}
+				if (l > 0)
+				{
+					this.fastRopeObjects.raw[l].position = this.curPosList.raw[l];
+				}
+			}
+		}
+	}
+
+	// Token: 0x0400223B RID: 8763
+	public GameObject spiralPrefab;
+
+	// Token: 0x0400223C RID: 8764
+	public GameObject bottomPoint;
+
+	// Token: 0x0400223D RID: 8765
+	public Transform bottomReparent;
+
+	// Token: 0x0400223E RID: 8766
+	public int spiralDivisions;
+
+	// Token: 0x0400223F RID: 8767
+	public List<Transform> ropeObjects = new List<Transform>();
+
+	// Token: 0x04002240 RID: 8768
+	public FastList<Transform> fastRopeObjects = new FastList<Transform>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04002241 RID: 8769
+	public FastList<Vector3> velocity = new FastList<Vector3>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04002242 RID: 8770
+	public float springStrength = 25f;
+
+	// Token: 0x04002243 RID: 8771
+	public float springDamping = 1f;
+
+	// Token: 0x04002244 RID: 8772
+	public int iterations = 10;
+
+	// Token: 0x04002245 RID: 8773
+	public float gravityFactor = 1f;
+
+	// Token: 0x04002246 RID: 8774
+	public float spiralRadius = 0.5f;
+
+	// Token: 0x04002247 RID: 8775
+	public float pauseBeforeReelIn = 1f;
+
+	// Token: 0x04002248 RID: 8776
+	public float maxRopeLength = -1f;
+
+	// Token: 0x04002249 RID: 8777
+	public bool autoPullToRopeLength;
+
+	// Token: 0x0400224A RID: 8778
+	private float ropeLengthAtPull;
+
+	// Token: 0x0400224B RID: 8779
+	private float initialGravityFactor = 1f;
+
+	// Token: 0x0400224C RID: 8780
+	public List<Transform> verticalPillars;
+
+	// Token: 0x0400224D RID: 8781
+	public List<Transform> horizontalPillars;
+
+	// Token: 0x0400224E RID: 8782
+	private FastList<Vector3> verticalPillarPos = new FastList<Vector3>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x0400224F RID: 8783
+	private FastList<float> verticalPillarScale = new FastList<float>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04002250 RID: 8784
+	private FastList<Vector3> horizontalPillarPos = new FastList<Vector3>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04002251 RID: 8785
+	private FastList<float> horizontalPillarScale = new FastList<float>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04002252 RID: 8786
+	public Transform ground;
+
+	// Token: 0x04002253 RID: 8787
+	private FastList<Vector3> curPosList = new FastList<Vector3>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04002254 RID: 8788
+	private int lowerIndex = 1;
+
+	// Token: 0x04002255 RID: 8789
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04002256 RID: 8790
+	[HideInInspector]
+	[SerializeField]
+	private Transform _transform;
+
+	// Token: 0x04002257 RID: 8791
+	private Quaternion offSet;
+
+	// Token: 0x04002258 RID: 8792
+	private FastList<Vector3> avgPosList = new FastList<Vector3>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04002259 RID: 8793
+	private Vector3 locScaleVector;
+
+	// Token: 0x0400225A RID: 8794
+	private Vector3 forwVector = default(Vector3);
+
+	// Token: 0x0400225B RID: 8795
+	private float pullPower;
+
+	// Token: 0x0400225C RID: 8796
+	private bool isPulling;
+
+	// Token: 0x0400225D RID: 8797
+	private Rigidbody bottomRig;
+
+	// Token: 0x0400225E RID: 8798
+	private Vector3 overridePullPos = Vector3Fast.zero;
+
+	// Token: 0x0400225F RID: 8799
+	private bool overridePull;
+
+	// Token: 0x04002260 RID: 8800
+	private float shootTimer;
+}

@@ -1,0 +1,1023 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200052D RID: 1325
+public class FloatUpDudeLogic : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002287 RID: 8839 RVA: 0x001202A8 File Offset: 0x0011E4A8
+	public bool PreAwake(int callcount)
+	{
+		this.floatUp = SignalIn.Create("floatUp", base.gameObject, new Action(this.StartFloat));
+		return true;
+	}
+
+	// Token: 0x06002288 RID: 8840 RVA: 0x001202D0 File Offset: 0x0011E4D0
+	private void Start()
+	{
+		if (this.specificSubmarine == null)
+		{
+			this.specificSubmarine = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine).transform.GetComponent<Submarine>();
+		}
+		if (this.specificSubmarine != null)
+		{
+			this.floatStarted = true;
+		}
+	}
+
+	// Token: 0x06002289 RID: 8841 RVA: 0x00120324 File Offset: 0x0011E524
+	private void StartFloat()
+	{
+		if (this.timer <= 0f)
+		{
+			this.floatStarted = true;
+		}
+	}
+
+	// Token: 0x0600228A RID: 8842 RVA: 0x00120340 File Offset: 0x0011E540
+	private bool DoFloatCode(Boy boy)
+	{
+		if (boy)
+		{
+			BoySwimState boySwimState = boy.state as BoySwimState;
+			if (boySwimState != null)
+			{
+				if (!boySwimState.atSurface)
+				{
+					Vector3 velocity = boy.velocity3;
+					if (velocity.y < 2f && boy.input.looseDir.GetSqrLength() == 0f)
+					{
+						boy.AddVelocity(new vector2f(0f, (2f - velocity.y) * Time.deltaTime * 1f), null, 1f);
+					}
+				}
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x0600228B RID: 8843 RVA: 0x001203DC File Offset: 0x0011E5DC
+	private void UpdateMindControlled(Boy boy)
+	{
+		if (boy.specialBoyMode != Boy.SpecialBoyMode.InsideSub)
+		{
+			if (this.currentAnim == this.idleStandAnim || this.currentAnim == this.transitToIdleStandAnim)
+			{
+				this.transitFromIdleStandAnim.transform.rotation = this.idleStandAnim.transform.rotation;
+				this.SetNewAnim(boy, this.transitFromIdleStandAnim);
+			}
+			if (this.currentAnim == this.transitFromIdleStandAnim && (this.transitFromIdleStandAnim.frame > this.transitFromIdleStandAnim.numFrames - 2f || (this.transitFromIdleStandAnim.frame > 16f && boy.input.looseDir.x != 0f)))
+			{
+				this.currentAnim = null;
+				BoyUtils.ClearState(boy, 0.3f);
+			}
+		}
+		if (this.overrideState != FloatUpDudeLogic.OverrideCustomState.None && this.overrideState != FloatUpDudeLogic.OverrideCustomState.BalancingOnSub)
+		{
+			if (boy.state is BoyCustomAnimState)
+			{
+				BoyUtils.ClearState(boy, -1f);
+			}
+			this.overrideState = FloatUpDudeLogic.OverrideCustomState.None;
+		}
+		else
+		{
+			this.DoFloatCode(boy);
+		}
+	}
+
+	// Token: 0x0600228C RID: 8844 RVA: 0x00120510 File Offset: 0x0011E710
+	private float DistFromTop()
+	{
+		return this.surfacePoint.position.y - 0.3f - base.transform.position.y;
+	}
+
+	// Token: 0x0600228D RID: 8845 RVA: 0x0012054C File Offset: 0x0011E74C
+	private bool DoSimplePushAway(ref Vector3 wantedPos, Vector3 boyPos, float radius, float pushAwayFactor)
+	{
+		if (this.specificSubmarine.velocity3.y < 0f || this.specificSubmarine.booster.IsCharging)
+		{
+			return false;
+		}
+		Vector3 vector = wantedPos + this.floatyBoyDistOffset * Vector3.down - boyPos;
+		vector.z = 0f;
+		float magnitude = vector.magnitude;
+		float num = 0f;
+		if (magnitude < radius)
+		{
+			float num2 = (radius - magnitude) / radius;
+			num2 = num2 * 0.5f + (1f - (1f - num2) * (1f - num2)) * 0.5f;
+			num = -pushAwayFactor * MathUtils.SmoothFraction(num2);
+		}
+		if (num < wantedPos.z)
+		{
+			wantedPos.z = wantedPos.z * (1f - this.pushAwayBlendIn) + num * this.pushAwayBlendIn;
+			if (num < -0.2f)
+			{
+				return true;
+			}
+		}
+		else
+		{
+			wantedPos.z += (num - wantedPos.z) * 0.6f * Time.deltaTime;
+		}
+		return false;
+	}
+
+	// Token: 0x0600228E RID: 8846 RVA: 0x00120668 File Offset: 0x0011E868
+	private bool SubPushingFromBelow(Boy boy, ref bool almost)
+	{
+		if (boy.pos.y < this.surfacePoint.transform.position.y - this.surfaceDistancePushable && this.specificSubmarine.velocity3.y < 1.5f)
+		{
+			return false;
+		}
+		if (this.specificSubmarine.velocity3.y > 0f && !this.specificSubmarine.IsAtSurface())
+		{
+			Vector3 vector = boy.pos3 - Vector3.up * this.floatyBoyDistOffset;
+			Vector3 vector2 = vector - this.specificSubmarine.pos3;
+			vector2.z = 0f;
+			float magnitude = vector2.magnitude;
+			Vector3 vector3 = vector2 / magnitude;
+			float num = Vector3.Dot(vector3, this.specificSubmarine.velocity3.normalized);
+			float num2 = 0.8f;
+			if (this.specificSubmarine.velocity3.y > 3.5f)
+			{
+				num2 = 1.2f;
+			}
+			if (vector2.y > 0.6f && (num > 0.7f || (Mathf.Abs(vector2.x) < num2 && num > 0.1f)))
+			{
+				if (magnitude < 1.4f)
+				{
+					if (vector3.x > 0.25f || vector3.x < -0.25f)
+					{
+						vector3.x = Mathf.Clamp(vector3.x, -0.25f, 0.25f);
+						vector3.Normalize();
+					}
+					this.subLocalOffset = this.specificSubmarine.transform.InverseTransformDirection(vector3 * 1.2f);
+					return true;
+				}
+				almost = true;
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x0600228F RID: 8847 RVA: 0x00120840 File Offset: 0x0011EA40
+	private void SetAnimAngle(AnimClipNode animNode)
+	{
+		Vector3 vector = this.specificSubmarine.transform.TransformDirection(this.subLocalOffset);
+		vector.z = 0f;
+		vector.Normalize();
+		float num = Vector3.Angle(vector, Vector3.right);
+		float num2 = 90f - num;
+		if (animNode.transform.parent.transform.right.x < 0f)
+		{
+			num2 = -num2;
+		}
+		animNode.transform.localEulerAngles = new Vector3(num2, 90f, 0f);
+	}
+
+	// Token: 0x06002290 RID: 8848 RVA: 0x001208D0 File Offset: 0x0011EAD0
+	private void DoAimTriggerEnabling(Boy boy)
+	{
+		Vector3 position = this.aimTrigger.aimPoint.transform.position;
+		Vector3 position2 = this.specificSubmarine.transform.position;
+		Vector3 vector = boy.pos3 + Vector3.down * this.floatyBoyDistOffset;
+		Vector3 vector2 = position - position2;
+		Vector3 vector3 = vector - (position2 + Vector3.up * 1.2f);
+		if (vector2.y < 0.5f || vector3.y <= 0f)
+		{
+			this.aimTrigger.DoDisable();
+			return;
+		}
+		float num = vector2.x / vector2.y;
+		float num2 = num * vector3.y - vector3.x;
+		Vector3 vector4 = position2 + Vector3.up * 1.2f;
+		Debug.DrawLine(vector4, vector4 + vector2, Color.green);
+		Debug.DrawLine(vector4, vector4 + vector3, Color.blue);
+		if (Mathf.Abs(num2) < 1f)
+		{
+			this.aimTrigger.DoEnable();
+		}
+		else
+		{
+			this.aimTrigger.DoDisable();
+		}
+	}
+
+	// Token: 0x06002291 RID: 8849 RVA: 0x00120A04 File Offset: 0x0011EC04
+	private void DoFloatingUpdate(Boy boy)
+	{
+		this.inFloatTime += Time.deltaTime;
+		this.DoAimTriggerEnabling(boy);
+		if (!(boy.state is BoyCustomAnimState))
+		{
+			this.overrideState = FloatUpDudeLogic.OverrideCustomState.None;
+		}
+		this.velocity.x = this.velocity.x * (1f - 1f * Time.deltaTime);
+		this.velocity.y = Mathf.Min(this.velocity.y + Time.deltaTime, 1.2f);
+		float num = this.DistFromTop();
+		if (this.justLandedTimer > 0f && this.velocity.y < 0f)
+		{
+			this.velocity.y = Mathf.Min(this.velocity.y + Time.deltaTime * this.justLandedTimer * 30f, 1.2f);
+		}
+		else
+		{
+			if (num <= 0.3f && this.velocity.y > -0.4f)
+			{
+				this.velocity.y = this.velocity.y - (0.3f - num) * 20f * Mathf.Min(this.inFloatTime * 1f, 1f) * Time.deltaTime;
+			}
+			if (num < 0.7f)
+			{
+				this.velocity.y = this.velocity.y * (1f - Time.deltaTime * 2f);
+			}
+			else if (this.velocity.y < -0.2f)
+			{
+				this.velocity.y = this.velocity.y * (1f - Time.deltaTime * 3f);
+			}
+		}
+		if (this.currentAnim == null)
+		{
+			this.currentAnim = this.swirlSmallAnim;
+			this.currentAnim.transform.position = boy.transform.position;
+			BoyUtils.StartCustomAnim(boy, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		Vector3 position = this.currentAnim.transform.position + this.velocity * Time.deltaTime;
+		if (position.x < this.leftBorderPoint.position.x)
+		{
+			if (this.velocity.x < 0f)
+			{
+				this.velocity.x = 0f;
+			}
+			this.velocity.x = Mathf.Min(1f, this.velocity.x + Time.deltaTime * 2f);
+		}
+		if (position.x > this.rightBorderPoint.position.x)
+		{
+			if (this.velocity.x > 0f)
+			{
+				this.velocity.x = 0f;
+			}
+			this.velocity.x = Mathf.Max(-1f, this.velocity.x - Time.deltaTime * 2f);
+		}
+		if (ScriptGlobals.boy.specialBoyMode == Boy.SpecialBoyMode.InsideSub)
+		{
+			bool flag = false;
+			if (this.SubPushingFromBelow(boy, ref flag))
+			{
+				if (this.specificSubmarine.velocity3.y > 4f || (this.specificSubmarine.velocity3.y > 0.01f && this.specificSubmarine.booster.IsBoosting))
+				{
+					this.currentAnim = this.ShotIntoTheAirAnim;
+					this.currentAnim.transform.position = this.specificSubmarine.transform.TransformPoint(this.subLocalOffset) + this.specificSubmarine.velocity3 * 2f * Time.deltaTime;
+					BoyUtils.StartCustomAnim(boy, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+					this.flyUpSpeed = this.specificSubmarine.velocity3 + 0.2f * Vector3.up;
+					this.overrideState = FloatUpDudeLogic.OverrideCustomState.FlyingUp;
+				}
+				else
+				{
+					if (this.specificSubmarine.velocity3.y > 1.5f)
+					{
+						this.currentAnim = this.getUpFromTopAnim;
+					}
+					else
+					{
+						this.currentAnim = this.getUpFromTopLightAnim;
+					}
+					this.currentAnim.transform.position = this.specificSubmarine.transform.TransformPoint(this.subLocalOffset) + this.specificSubmarine.velocity3 * 2f * Time.deltaTime;
+					BoyUtils.StartCustomAnim(boy, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+					this.readyForBalance = false;
+					this.noBalanceDir = 0f;
+					this.overrideState = FloatUpDudeLogic.OverrideCustomState.BalancingOnSub;
+				}
+				return;
+			}
+			if (!flag && this.DoSimplePushAway(ref position, ScriptGlobals.boy.pos3, 3.4f, 1.5f))
+			{
+				float num2 = Mathf.Max(1f - Mathf.Abs(position.z), 0f);
+				float magnitude = this.specificSubmarine.velocity3.magnitude;
+				if (magnitude > 1.5f)
+				{
+					this.velocity += (magnitude - 1.5f) * this.specificSubmarine.velocity3 / magnitude * Time.deltaTime * num2 * 2f;
+				}
+				if (this.currentAnim != this.swirlViolentAnim || this.swirlViolentAnim.frame > 60f)
+				{
+					if (magnitude > 1.5f)
+					{
+						this.SetNewAnim(boy, this.swirlViolentAnim);
+					}
+					else if (magnitude > 0.5f && this.currentAnim != this.swirlSmallAnim)
+					{
+						this.SetNewAnim(boy, this.swirlSmallAnim);
+					}
+				}
+			}
+			this.currentAnim.transform.position = position;
+		}
+		else
+		{
+			if (this.DoSimplePushAway(ref position, ScriptGlobals.boy.pos3, 1.8f, 0.4f) && this.currentAnim != this.swirlSmallAnim && ScriptGlobals.boy.velocity.magnitude > 1f)
+			{
+				this.SetNewAnim(boy, this.swirlSmallAnim);
+			}
+			this.DoSimplePushAway(ref position, this.specificSubmarine.transform.position, 3.5f, 1.5f);
+			this.currentAnim.transform.position = position;
+		}
+		if ((this.currentAnim == this.swirlViolentAnim || this.currentAnim == this.swirlSmallAnim) && this.currentAnim.frame > this.currentAnim.numFrames - 5f)
+		{
+			this.SetNewAnim(boy, this.floatAnim);
+		}
+	}
+
+	// Token: 0x06002292 RID: 8850 RVA: 0x001210F8 File Offset: 0x0011F2F8
+	private void RotateAnimationParent(Boy boy)
+	{
+		if (boy.facing >= 0f)
+		{
+			this.floatAnim.transform.parent.transform.rotation = Quaternion.identity;
+		}
+		else
+		{
+			this.floatAnim.transform.parent.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+		}
+	}
+
+	// Token: 0x06002293 RID: 8851 RVA: 0x00121168 File Offset: 0x0011F368
+	private void UpdateNoCustomState(Boy boy)
+	{
+		if (boy.specialBoyMode == Boy.SpecialBoyMode.None)
+		{
+			if (boy.status.groundPlateau == null && boy.state is BoyCustomAnimState && boy.velocity.y < -2f)
+			{
+				BoyUtils.ClearState(boy, -1f);
+			}
+		}
+		else
+		{
+			boy.gameObject.GetComponent<MindHatReceiver>().DontGoToSleep();
+		}
+		BoySwimState boySwimState = boy.state as BoySwimState;
+		if (boySwimState != null && !boySwimState.isLanding)
+		{
+			boy.gameObject.GetComponent<MindHatReceiver>().DontGoToSleep();
+			this.velocity = boy.velocity3;
+			this.velocity.z = 0f;
+			this.inFloatTime = 0f;
+			this.overrideState = FloatUpDudeLogic.OverrideCustomState.IdleFloating;
+			this.RotateAnimationParent(boy);
+			this.currentAnim = this.swirlViolentAnim;
+			this.currentAnim.transform.position = boy.transform.position;
+			this.pushAwayBlendIn = 0f;
+			BoyUtils.StartCustomAnim(boy, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			return;
+		}
+		bool flag = false;
+		BoyRunState boyRunState = boy.state as BoyRunState;
+		bool flag2 = this.currentAnim == this.idleStandAnim;
+		bool flag3 = this.currentAnim == this.pushedByBoyFloor || this.currentAnim == this.pushedByBoyFloorFW;
+		if (boyRunState != null || flag2 || this.currentAnim == this.transitToIdleStandAnim || (flag3 && this.currentAnim.frame > 50f))
+		{
+			if (!flag2 && !flag3 && boy.status.groundBody != null && boy.status.groundBody.gameObject == this.specificSubmarine.gameObject)
+			{
+				Actor actor = boy.visualBoy.actor;
+				Actor.Bone bone = actor.bones[actor.specificBones.head];
+				float num = bone.transform.position.y - boy.pos3.y;
+				if (num > -0.1f)
+				{
+					flag = true;
+				}
+				else
+				{
+					this.rescueFromGoToSleepTimer = 0f;
+				}
+			}
+			else if (Mathf.Abs(ScriptGlobals.boy.pos.x - boy.pos.x) < 0.9f && Mathf.Abs(ScriptGlobals.boy.pos3.z - boy.pos3.z) < 0.2f)
+			{
+				float num2 = Mathf.Sign(ScriptGlobals.boy.velocity.x);
+				AnimClipNode anim = this.pushedByBoyFloor;
+				if (num2 * boy.facing >= 0f)
+				{
+					anim = this.pushedByBoyFloorFW;
+				}
+				if (Random.Range(0f, 1f) < 0.5f)
+				{
+					RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, Random.Range(0.2f, 0.3f), 0.15f, 0, 0f);
+				}
+				else
+				{
+					RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftSpike, Random.Range(0.2f, 0.3f), 0.15f, 0, 0f);
+				}
+				this.currentAnim = anim;
+				BoyUtils.StartCustomAnim(boy, anim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			}
+			else if (this.currentAnim != this.idleStandAnim && this.currentAnim != this.transitToIdleStandAnim && Mathf.Abs(boy.velocity.x) < 0.05f)
+			{
+				this.currentAnim = this.transitToIdleStandAnim;
+				float num3 = boy.properties.height * 0.5f;
+				if (this.veryFirstUpdate)
+				{
+					num3 -= 0.05f;
+				}
+				this.veryFirstUpdate = false;
+				this.currentAnim.transform.position = boy.transform.position - Vector3.up * num3;
+				if (boy.facing >= 0f)
+				{
+					this.idleStandAnim.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+					this.transitToIdleStandAnim.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+				}
+				else
+				{
+					this.idleStandAnim.transform.rotation = Quaternion.Euler(0f, -90f, 0f);
+					this.transitToIdleStandAnim.transform.rotation = Quaternion.Euler(0f, -90f, 0f);
+				}
+				BoyUtils.StartCustomAnim(boy, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			}
+		}
+		if (!flag)
+		{
+			if (this.currentAnim == this.transitToIdleStandAnim && this.currentAnim.frame > this.transitToIdleStandAnim.numFrames - 2f)
+			{
+				this.readyForBalance = true;
+				this.SetNewAnim(boy, this.idleStandAnim);
+				return;
+			}
+			if (boy.specialBoyMode == Boy.SpecialBoyMode.None)
+			{
+				BoyCustomAnimState boyCustomAnimState = boy.state as BoyCustomAnimState;
+				if (boyCustomAnimState != null && Mathf.Abs(boy.pos.x - this.specificSubmarine.transform.position.x) < 1.5f && Mathf.Abs(boy.pos.y - this.specificSubmarine.transform.position.y) < 2.5f)
+				{
+					flag = true;
+				}
+			}
+		}
+		if (flag && this.currentAnim != this.transitToIdleStandAnim)
+		{
+			if (this.rescueFromGoToSleepTimer > 0.075f)
+			{
+				this.RotateAnimationParent(boy);
+				if (boy.facing >= 0f)
+				{
+					this.idleStandAnim.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+					this.transitToIdleStandAnim.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+				}
+				else
+				{
+					this.idleStandAnim.transform.rotation = Quaternion.Euler(0f, -90f, 0f);
+					this.transitToIdleStandAnim.transform.rotation = Quaternion.Euler(0f, -90f, 0f);
+				}
+				this.currentAnim = this.transitToIdleStandAnim;
+				Vector3 vector = boy.pos3 - Vector3.up * boy.properties.height * 0.5f;
+				this.subLocalOffset = this.specificSubmarine.transform.InverseTransformPoint(vector);
+				this.currentAnim.transform.position = vector;
+				BoyUtils.StartCustomAnim(boy, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				this.readyForBalance = true;
+				this.noBalanceDir = 0f;
+				boy.specialBoyMode = Boy.SpecialBoyMode.None;
+				this.overrideState = FloatUpDudeLogic.OverrideCustomState.BalancingOnSub;
+			}
+		}
+		else
+		{
+			this.rescueFromGoToSleepTimer = 0f;
+			if (flag)
+			{
+				Vector3 vector2 = boy.pos3 - Vector3.up * boy.properties.height * 0.5f;
+				this.subLocalOffset = this.specificSubmarine.transform.InverseTransformPoint(vector2);
+				this.currentAnim.transform.position = vector2;
+				this.readyForBalance = true;
+				this.noBalanceDir = 0f;
+				boy.specialBoyMode = Boy.SpecialBoyMode.None;
+				this.overrideState = FloatUpDudeLogic.OverrideCustomState.BalancingOnSub;
+			}
+		}
+	}
+
+	// Token: 0x06002294 RID: 8852 RVA: 0x00121938 File Offset: 0x0011FB38
+	private void SetNewAnim(Boy boy, AnimClipNode animToSet)
+	{
+		animToSet.transform.position = this.currentAnim.transform.position;
+		this.currentAnim = animToSet;
+		BoyUtils.StartCustomAnim(boy, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+	}
+
+	// Token: 0x06002295 RID: 8853 RVA: 0x0012197C File Offset: 0x0011FB7C
+	private void UpdateBalancingOnSub(Boy boy)
+	{
+		this.aimTrigger.DoEnable();
+		float x = this.specificSubmarine.velocity3.x;
+		float num = (x - this.velLastFrame.x) / boy.dt;
+		if (this.currentAnim == this.forceDownAnim)
+		{
+			if (this.currentAnim.frame > this.currentAnim.numFrames - 2f)
+			{
+				this.readyForBalance = true;
+				this.SetNewAnim(boy, this.idleStandAnim);
+			}
+		}
+		else if (this.specificSubmarine.velocity3.y > 4f && (this.currentAnim != this.getUpFromTopAnim || this.currentAnim.frame > 30f))
+		{
+			this.readyForBalance = false;
+			if (Mathf.Abs(this.subLocalOffset.x) > 0.3f || Mathf.Abs(this.subLocalOffset.z) > 0.2f)
+			{
+				this.subLocalOffset.x = Mathf.Clamp(this.subLocalOffset.x, -0.3f, 0.3f);
+				this.subLocalOffset.z = Mathf.Clamp(this.subLocalOffset.z, -0.2f, 0.2f);
+				Vector3 position = this.specificSubmarine.transform.TransformPoint(this.subLocalOffset);
+				this.forceDownAnim.transform.position = position;
+				this.currentAnim = this.forceDownAnim;
+				BoyUtils.StartCustomAnim(boy, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			}
+			else
+			{
+				this.SetNewAnim(boy, this.forceDownAnim);
+			}
+		}
+		if (this.currentAnim == this.getUpFromTopAnim || this.currentAnim == this.animAccelerateBackward || this.currentAnim == this.animAccelerateForward || this.currentAnim == this.getUpFromTopLightAnim || this.currentAnim == this.transitToIdleStandAnim)
+		{
+			if (this.currentAnim.frame > this.currentAnim.numFrames - 2f)
+			{
+				this.readyForBalance = true;
+				this.SetNewAnim(boy, this.idleStandAnim);
+				this.currentAnim.transform.position = this.specificSubmarine.transform.TransformPoint(this.subLocalOffset) + this.specificSubmarine.velocity3 * 2f * Time.deltaTime;
+				return;
+			}
+			if (this.currentAnim.frame > 20f && Mathf.Abs(num) < 1f)
+			{
+				this.noBalanceDir = 0f;
+			}
+		}
+		else
+		{
+			this.noBalanceDir *= 1f - Time.deltaTime;
+			if (this.noBalanceDir < 0.1f)
+			{
+				this.noBalanceDir = 0f;
+			}
+		}
+		if (this.currentAnim.transform.position.y < this.surfacePoint.position.y - this.surfaceDistancePushable && this.specificSubmarine.velocity3.y < 1f)
+		{
+			this.inFloatTime = 0f;
+			this.overrideState = FloatUpDudeLogic.OverrideCustomState.IdleFloating;
+			this.currentAnim = this.swirlViolentAnim;
+			this.currentAnim.transform.position = boy.transform.position + Vector3.up * 0.4f;
+			this.velocity = this.specificSubmarine.velocity3 * 0.7f;
+			this.velocity.z = 0f;
+			BoyUtils.StartCustomAnim(boy, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.pushAwayBlendIn = 0f;
+			return;
+		}
+		bool flag = false;
+		if (this.readyForBalance && boy.dt > 0f && Mathf.Abs(num) > 1f && num * this.noBalanceDir <= 0f)
+		{
+			this.balanceTime += boy.dt;
+			flag = true;
+			if (this.balanceTime > 0.15f)
+			{
+				this.noBalanceDir = Mathf.Sign(num);
+				AnimClipNode animClipNode = this.animAccelerateForward;
+				if (num * boy.facing > 0f)
+				{
+					animClipNode = this.animAccelerateBackward;
+				}
+				if (animClipNode != null)
+				{
+					this.SetNewAnim(boy, animClipNode);
+					this.currentAnim.transform.position = this.specificSubmarine.transform.TransformPoint(this.subLocalOffset) + this.specificSubmarine.velocity3 * 2f * Time.deltaTime;
+					return;
+				}
+			}
+		}
+		if (!flag)
+		{
+			this.balanceTime = 0f;
+		}
+		bool flag2 = false;
+		Vector3 vector = boy.pos3 - ScriptGlobals.boy.pos3;
+		if ((this.currentAnim == this.idleStandAnim || this.currentAnim == this.transitToIdleStandAnim) && Mathf.Abs(vector.x) < 0.6f && Mathf.Abs(vector.y) < 0.6f)
+		{
+			flag2 = true;
+		}
+		if (Mathf.Abs(vector.z) < 0.25f && ((this.specificSubmarine.GetHatchOpened() && Mathf.Abs(this.specificSubmarine.transform.InverseTransformPoint(boy.pos3).z) < 0.55f) || flag2))
+		{
+			this.hatchOpenTime += Time.deltaTime;
+			if (this.hatchOpenTime > 0.15f || flag2)
+			{
+				if (boy.facing >= 0f)
+				{
+					this.SetNewAnim(boy, this.pushedAwayStep);
+				}
+				else
+				{
+					this.SetNewAnim(boy, this.pushedAwayStepMirrored);
+				}
+				this.overrideState = FloatUpDudeLogic.OverrideCustomState.PushedOnSub;
+				this.currentAnim.transform.position = this.specificSubmarine.transform.TransformPoint(this.subLocalOffset) + this.specificSubmarine.velocity3 * 2f * Time.deltaTime;
+				return;
+			}
+		}
+		else
+		{
+			this.hatchOpenTime = 0f;
+		}
+		if (Mathf.Abs(num) > 10f && Mathf.Abs(this.specificSubmarine.velocity3.x) > 4f)
+		{
+			float num2 = -Mathf.Sign(this.specificSubmarine.velocity3.x);
+			if (num2 * boy.facing > 0f)
+			{
+				this.SetNewAnim(boy, this.animFallOffForward);
+			}
+			else
+			{
+				this.SetNewAnim(boy, this.animFallOffBackward);
+			}
+			float num3 = 1.5f;
+			if (this.subLocalOffset.z * num2 < 0f)
+			{
+				num3 = 1.5f + Mathf.Abs(this.subLocalOffset.z) * 6f;
+			}
+			this.fallOffDir = new Vector3(num2 * num3, this.specificSubmarine.velocity3.y, 0f);
+			this.overrideState = FloatUpDudeLogic.OverrideCustomState.FallingOff;
+			this.currentAnim.transform.position = this.specificSubmarine.transform.TransformPoint(this.subLocalOffset) + this.specificSubmarine.velocity3 * 2f * Time.deltaTime;
+			return;
+		}
+		this.currentAnim.transform.position = this.specificSubmarine.transform.TransformPoint(this.subLocalOffset) + this.specificSubmarine.velocity3 * 2f * Time.deltaTime;
+	}
+
+	// Token: 0x06002296 RID: 8854 RVA: 0x00122194 File Offset: 0x00120394
+	private void UpdateFallingOff(Boy boy)
+	{
+		Vector3 position = this.currentAnim.transform.position;
+		position.x += (this.specificSubmarine.velocity3.x * 0.8f + this.fallOffDir.x) * Time.deltaTime;
+		position.z += this.fallOffDir.z * Time.deltaTime;
+		if (position.z < -1.8f)
+		{
+			position.z = -1.8f;
+			this.fallOffDir.z = 0f;
+		}
+		this.fallOffDir.y = this.fallOffDir.y - 10f * Time.deltaTime;
+		position.y += this.fallOffDir.y * Time.deltaTime;
+		this.currentAnim.transform.position = position;
+		if (position.y < this.surfacePoint.position.y - 0.7f)
+		{
+			this.inFloatTime = 0f;
+			this.overrideState = FloatUpDudeLogic.OverrideCustomState.IdleFloating;
+			this.pushAwayBlendIn = 0f;
+			this.velocity = new Vector3(this.fallOffDir.x * 0.7f + this.specificSubmarine.velocity3.x * 0.8f, this.fallOffDir.y * 0.6f, 0f);
+			this.justLandedTimer = 0.6f;
+			this.SetNewAnim(boy, this.swirlViolentAnim);
+		}
+	}
+
+	// Token: 0x06002297 RID: 8855 RVA: 0x0012232C File Offset: 0x0012052C
+	private void UpdatePushedOnSub(Boy boy)
+	{
+		Vector3 position = this.specificSubmarine.transform.TransformPoint(this.subLocalOffset);
+		if (this.currentAnim.frame > 5f)
+		{
+			float f = (Mathf.Min(this.currentAnim.frame, 15f) - 5f) / 10f;
+			position.y -= 0.2f * MathUtils.SmoothFraction(f);
+		}
+		this.currentAnim.transform.position = position;
+		if (this.currentAnim.frame >= this.currentAnim.numFrames - 1f)
+		{
+			this.idleStandAnim.transform.position = boy.pos3 - boy.properties.height * Vector3.up * 0.5f;
+			this.subLocalOffset = this.specificSubmarine.transform.InverseTransformPoint(this.idleStandAnim.transform.position);
+			this.currentAnim = this.idleStandAnim;
+			BoyUtils.StartCustomAnim(boy, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.overrideState = FloatUpDudeLogic.OverrideCustomState.BalancingOnSub;
+			this.readyForBalance = true;
+		}
+	}
+
+	// Token: 0x06002298 RID: 8856 RVA: 0x00122464 File Offset: 0x00120664
+	private void UpdateFlyingUpState(Boy boy)
+	{
+		if (this.specificSubmarine.velocity3.y > 0f && this.flyUpSpeed.y > 0f)
+		{
+			this.flyUpSpeed.y = this.specificSubmarine.velocity3.y + 0.6f;
+		}
+		else
+		{
+			this.flyUpSpeed.y = this.flyUpSpeed.y - 10f * Time.deltaTime;
+		}
+		Vector3 position = this.currentAnim.transform.position + this.flyUpSpeed * Time.deltaTime;
+		bool flag = false;
+		if (this.flyUpSpeed.y >= 0f)
+		{
+			this.topPos = position;
+		}
+		else
+		{
+			Vector3 position2 = this.surfacePoint.position;
+			float num = MathUtils.SmoothFraction(Mathf.Min((this.topPos.y - position.y) / (this.topPos.y - position2.y), 1f));
+			position.z = this.topPos.z * (1f - num) - 1.8f * num;
+			if (position.y < position2.y)
+			{
+				flag = true;
+			}
+		}
+		if (position.x < this.leftBorderPoint.position.x - 1f)
+		{
+			position.x = this.leftBorderPoint.position.x - 1f;
+			if (this.flyUpSpeed.x < 0f)
+			{
+				this.flyUpSpeed.x = Mathf.Clamp(-this.flyUpSpeed.x * 0.6f, 0.5f, 1f);
+			}
+			AnimClipNode animClipNode = (boy.facing >= 0f) ? this.klaskBackOnWallAnim : this.klaskOnWallAnim;
+			if (this.currentAnim != animClipNode)
+			{
+				this.currentAnim.transform.position = position;
+				this.SetNewAnim(boy, animClipNode);
+				return;
+			}
+		}
+		if (position.x > this.rightBorderPoint.position.x + 1f)
+		{
+			position.x = this.rightBorderPoint.position.x + 1f;
+			if (this.flyUpSpeed.x > 0f)
+			{
+				this.flyUpSpeed.x = Mathf.Clamp(-this.flyUpSpeed.x * 0.6f, -1f, -0.5f);
+			}
+			AnimClipNode animClipNode2 = (boy.facing <= 0f) ? this.klaskBackOnWallAnim : this.klaskOnWallAnim;
+			if (this.currentAnim != animClipNode2)
+			{
+				this.currentAnim.transform.position = position;
+				this.SetNewAnim(boy, animClipNode2);
+				return;
+			}
+		}
+		this.currentAnim.transform.position = position;
+		if (flag)
+		{
+			this.overrideState = FloatUpDudeLogic.OverrideCustomState.IdleFloating;
+			this.inFloatTime = 0f;
+			this.currentAnim = this.swirlViolentAnim;
+			this.currentAnim.transform.position = boy.transform.position + Vector3.up * 0.5f;
+			this.velocity = this.flyUpSpeed * 0.55f;
+			this.velocity.z = 0f;
+			BoyUtils.StartCustomAnim(boy, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.pushAwayBlendIn = 0f;
+		}
+	}
+
+	// Token: 0x06002299 RID: 8857 RVA: 0x00122808 File Offset: 0x00120A08
+	private void UpdateNOTMindControlled(Boy boy)
+	{
+		if (boy.state is BoyLadderState)
+		{
+			boy.SpawnExternalState(new BoyJumpState(boy, BoyJumpState.State.JumpDown, (boy.state as BoyLadderState).ladder.GetComponent<Collider>()), Boy.AffectMode.Default);
+		}
+		else if (boy.specialBoyMode == Boy.SpecialBoyMode.ClimbingSub)
+		{
+			boy.SpawnExternalState(new BoyJumpState(boy, BoyJumpState.State.JumpDown, null), Boy.AffectMode.Default);
+		}
+		if (boy.specialBoyMode != Boy.SpecialBoyMode.None)
+		{
+			this.currentAnim = null;
+		}
+		if (this.currentAnim == this.transitFromIdleStandAnim)
+		{
+			this.SetNewAnim(boy, this.transitToIdleStandAnim);
+		}
+		if (this.overrideState == FloatUpDudeLogic.OverrideCustomState.BalancingOnSub)
+		{
+			if (!(boy.state is BoyCustomAnimState))
+			{
+				this.overrideState = FloatUpDudeLogic.OverrideCustomState.None;
+			}
+			else if (boy.specialBoyMode != Boy.SpecialBoyMode.None)
+			{
+				this.overrideState = FloatUpDudeLogic.OverrideCustomState.None;
+			}
+		}
+		switch (this.overrideState)
+		{
+		case FloatUpDudeLogic.OverrideCustomState.None:
+			this.aimTrigger.DoDisable();
+			this.UpdateNoCustomState(boy);
+			break;
+		case FloatUpDudeLogic.OverrideCustomState.IdleFloating:
+			this.DoFloatingUpdate(boy);
+			break;
+		case FloatUpDudeLogic.OverrideCustomState.FallingOff:
+			this.UpdateFallingOff(boy);
+			break;
+		case FloatUpDudeLogic.OverrideCustomState.BalancingOnSub:
+			this.UpdateBalancingOnSub(boy);
+			break;
+		case FloatUpDudeLogic.OverrideCustomState.PushedOnSub:
+			this.UpdatePushedOnSub(boy);
+			break;
+		case FloatUpDudeLogic.OverrideCustomState.FlyingUp:
+			this.UpdateFlyingUpState(boy);
+			break;
+		}
+	}
+
+	// Token: 0x0600229A RID: 8858 RVA: 0x00122954 File Offset: 0x00120B54
+	private void FixedUpdate()
+	{
+		Boy boy = this.dudeSpawner.GetBoy();
+		if (boy == null)
+		{
+			return;
+		}
+		if (!this.dudeSpawner.IsBoyReady())
+		{
+			return;
+		}
+		float deltaTime = Time.deltaTime;
+		this.justLandedTimer = FastMath.Max(0f, this.justLandedTimer - deltaTime);
+		this.pushAwayBlendIn = FastMath.Min(this.pushAwayBlendIn + deltaTime * 2f, 1f);
+		if (this.mindHat && this.mindHat.GetBoyInHat() == boy)
+		{
+			this.overrideState = FloatUpDudeLogic.OverrideCustomState.None;
+			return;
+		}
+		if (boy.isMindControlled)
+		{
+			this.rescueFromGoToSleepTimer = 0f;
+			if (boy.specialBoyMode != Boy.SpecialBoyMode.None)
+			{
+				this.overrideState = FloatUpDudeLogic.OverrideCustomState.None;
+			}
+			this.aimTrigger.DoDisable();
+			this.UpdateMindControlled(boy);
+		}
+		else
+		{
+			this.rescueFromGoToSleepTimer += Time.deltaTime;
+			if (this.floatStarted)
+			{
+				this.UpdateNOTMindControlled(boy);
+			}
+		}
+		if (this.specificSubmarine.CanPositionBeQueried())
+		{
+			this.velLastFrame.x = this.specificSubmarine.velocity3.x;
+		}
+	}
+
+	// Token: 0x0400406C RID: 16492
+	public Submarine specificSubmarine;
+
+	// Token: 0x0400406D RID: 16493
+	public MindHatDudeSpawner dudeSpawner;
+
+	// Token: 0x0400406E RID: 16494
+	public Transform surfacePoint;
+
+	// Token: 0x0400406F RID: 16495
+	public Transform leftBorderPoint;
+
+	// Token: 0x04004070 RID: 16496
+	public Transform rightBorderPoint;
+
+	// Token: 0x04004071 RID: 16497
+	public AnimClipNode floatAnim;
+
+	// Token: 0x04004072 RID: 16498
+	public AnimClipNode swirlViolentAnim;
+
+	// Token: 0x04004073 RID: 16499
+	public AnimClipNode swirlSmallAnim;
+
+	// Token: 0x04004074 RID: 16500
+	public AnimClipNode getUpFromTopAnim;
+
+	// Token: 0x04004075 RID: 16501
+	public AnimClipNode getUpFromTopLightAnim;
+
+	// Token: 0x04004076 RID: 16502
+	public AnimClipNode idleStandAnim;
+
+	// Token: 0x04004077 RID: 16503
+	public AnimClipNode transitToIdleStandAnim;
+
+	// Token: 0x04004078 RID: 16504
+	public AnimClipNode transitFromIdleStandAnim;
+
+	// Token: 0x04004079 RID: 16505
+	public AnimClipNode forceDownAnim;
+
+	// Token: 0x0400407A RID: 16506
+	public AnimClipNode ShotIntoTheAirAnim;
+
+	// Token: 0x0400407B RID: 16507
+	public AnimClipNode klaskOnWallAnim;
+
+	// Token: 0x0400407C RID: 16508
+	public AnimClipNode klaskBackOnWallAnim;
+
+	// Token: 0x0400407D RID: 16509
+	public AnimClipNode animFallOffForward;
+
+	// Token: 0x0400407E RID: 16510
+	public AnimClipNode animFallOffBackward;
+
+	// Token: 0x0400407F RID: 16511
+	public AnimClipNode pushedAwayStep;
+
+	// Token: 0x04004080 RID: 16512
+	public AnimClipNode pushedAwayStepMirrored;
+
+	// Token: 0x04004081 RID: 16513
+	public AnimClipNode pushedByBoy;
+
+	// Token: 0x04004082 RID: 16514
+	public AnimClipNode pushedByBoyFloor;
+
+	// Token: 0x04004083 RID: 16515
+	public AnimClipNode pushedByBoyFloorFW;
+
+	// Token: 0x04004084 RID: 16516
+	public AnimClipNode animAccelerateForward;
+
+	// Token: 0x04004085 RID: 16517
+	public AnimClipNode animAccelerateBackward;
+
+	// Token: 0x04004086 RID: 16518
+	public SubmarineChargeAimTrigger aimTrigger;
+
+	// Token: 0x04004087 RID: 16519
+	private Vector3 subLocalOffset = Vector3.zero;
+
+	// Token: 0x04004088 RID: 16520
+	public MindHat mindHat;
+
+	// Token: 0x04004089 RID: 16521
+	private SignalIn floatUp;
+
+	// Token: 0x0400408A RID: 16522
+	private Vector3 velocity;
+
+	// Token: 0x0400408B RID: 16523
+	private AnimClipNode currentAnim;
+
+	// Token: 0x0400408C RID: 16524
+	public float surfaceDistancePushable = 1.7f;
+
+	// Token: 0x0400408D RID: 16525
+	public float floatyBoyDistOffset = 0.3f;
+
+	// Token: 0x0400408E RID: 16526
+	private FloatUpDudeLogic.OverrideCustomState overrideState;
+
+	// Token: 0x0400408F RID: 16527
+	private bool veryFirstUpdate = true;
+
+	// Token: 0x04004090 RID: 16528
+	private bool floatStarted;
+
+	// Token: 0x04004091 RID: 16529
+	private float timer;
+
+	// Token: 0x04004092 RID: 16530
+	private float pushAwayBlendIn = 1f;
+
+	// Token: 0x04004093 RID: 16531
+	private float inFloatTime;
+
+	// Token: 0x04004094 RID: 16532
+	private vector2f velLastFrame;
+
+	// Token: 0x04004095 RID: 16533
+	private bool readyForBalance;
+
+	// Token: 0x04004096 RID: 16534
+	private float noBalanceDir;
+
+	// Token: 0x04004097 RID: 16535
+	private float hatchOpenTime;
+
+	// Token: 0x04004098 RID: 16536
+	private float balanceTime;
+
+	// Token: 0x04004099 RID: 16537
+	private Vector3 fallOffDir = Vector3.zero;
+
+	// Token: 0x0400409A RID: 16538
+	private float justLandedTimer;
+
+	// Token: 0x0400409B RID: 16539
+	private Vector3 flyUpSpeed = Vector3.zero;
+
+	// Token: 0x0400409C RID: 16540
+	private Vector3 topPos = Vector3.zero;
+
+	// Token: 0x0400409D RID: 16541
+	private float rescueFromGoToSleepTimer;
+
+	// Token: 0x0200052E RID: 1326
+	private enum OverrideCustomState
+	{
+		// Token: 0x0400409F RID: 16543
+		None,
+		// Token: 0x040040A0 RID: 16544
+		IdleFloating,
+		// Token: 0x040040A1 RID: 16545
+		FallingOff,
+		// Token: 0x040040A2 RID: 16546
+		BalancingOnSub,
+		// Token: 0x040040A3 RID: 16547
+		PushedOnSub,
+		// Token: 0x040040A4 RID: 16548
+		FlyingUp
+	}
+}

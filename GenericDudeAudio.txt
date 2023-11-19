@@ -1,0 +1,271 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000126 RID: 294
+public class GenericDudeAudio : MonoBehaviour, IFastEventListener, IUnityAnimEventPreprocessed, IUnityAnimEventHandler, IUnityAnimEventComponent
+{
+	// Token: 0x060008E3 RID: 2275 RVA: 0x0005CEC0 File Offset: 0x0005B0C0
+	[EarlyProcessBuild(0)]
+	public void PreprocessingRegister()
+	{
+		if (!this.isRegistered && !this.preprocessed)
+		{
+			AnimEventPreprocessManager.Register(this);
+			this.isRegistered = true;
+		}
+	}
+
+	// Token: 0x060008E4 RID: 2276 RVA: 0x0005CEE8 File Offset: 0x0005B0E8
+	public void Preprocess()
+	{
+		if (this.preprocessed)
+		{
+			return;
+		}
+		string text = this.dudeType.ToString();
+		this.idMap = new AnimEventAkIDMap(text, base.gameObject);
+		this.walkFootStepEvent = new AudioEventSimple(text + "_walk");
+		this.jogFootStepEvent = new AudioEventSimple(text + "_jog");
+		this.akGameObj = base.GetComponent<AkGameObj>();
+		this.akGameObj.ToggleAutoUpdateTransform(false);
+		this.preprocessed = true;
+	}
+
+	// Token: 0x060008E5 RID: 2277 RVA: 0x0005CF70 File Offset: 0x0005B170
+	private void Awake()
+	{
+		this.PreprocessingRegister();
+	}
+
+	// Token: 0x060008E6 RID: 2278 RVA: 0x0005CF78 File Offset: 0x0005B178
+	private void Start()
+	{
+		this.manager = AlbinoGroupManager.mInstance;
+		this.manager.AddGenericDudeAudio(this);
+		this.ac = base.transform.parent.GetComponent<AnimcontrolledCharacter>();
+		GameManager.scenesLoaded.Register(this, ref this.scenesLoadedHandle);
+	}
+
+	// Token: 0x060008E7 RID: 2279 RVA: 0x0005CFC4 File Offset: 0x0005B1C4
+	private void OnDestroy()
+	{
+		GameManager.scenesLoaded.Unregister(ref this.scenesLoadedHandle);
+	}
+
+	// Token: 0x060008E8 RID: 2280 RVA: 0x0005CFD8 File Offset: 0x0005B1D8
+	public void OnFastEvent(FastEvent sender)
+	{
+		if (sender == GameManager.scenesLoaded)
+		{
+			this.idle = false;
+			this.effectMaterialOveride = EffectMaterial.Material.None;
+		}
+	}
+
+	// Token: 0x060008E9 RID: 2281 RVA: 0x0005CFF4 File Offset: 0x0005B1F4
+	public void OverideEffectMaterial(EffectMaterial.Material newMat)
+	{
+		if (newMat == EffectMaterial.Material.None)
+		{
+			SoundEngine.Switches.material.Set((int)this.lastEventGroundCollider.GetComponent<EffectMaterial>().material, this.akGameObj);
+		}
+		else
+		{
+			SoundEngine.Switches.material.Set((int)newMat, this.akGameObj);
+		}
+		this.effectMaterialOveride = newMat;
+	}
+
+	// Token: 0x060008EA RID: 2282 RVA: 0x0005D044 File Offset: 0x0005B244
+	public void HandleAnimEvent(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent)
+	{
+		if (base.enabled && animEvent.isAudioEvent)
+		{
+			if (animEvent.type == UnityAnimEvent.AudioType.Flags)
+			{
+				if ((animEvent.flags & UnityAnimEvent.Flags.AlbinoIdle) != UnityAnimEvent.Flags.None)
+				{
+					this.idle = true;
+					return;
+				}
+			}
+			else
+			{
+				Vector3 position = this.akGameObj.transformCached.position;
+				Vector3 vector = (!(ScriptGlobals.mainCharacter is Huddle)) ? ScriptGlobals.boy.pos3 : ScriptGlobals.huddle.pos3;
+				float num = vector.x - position.x;
+				float num2 = vector.y - position.y;
+				float num3 = vector.z - position.z;
+				float num4 = num * num + num2 * num2 + num3 * num3;
+				if (num4 > 400f)
+				{
+					return;
+				}
+				Collider lastGroundCollider = this.ac.GetLastGroundCollider();
+				if (lastGroundCollider != this.lastEventGroundCollider)
+				{
+					EffectMaterial.Material value = EffectMaterial.Material.Concrete;
+					if (lastGroundCollider != null)
+					{
+						EffectMaterial component = lastGroundCollider.GetComponent<EffectMaterial>();
+						if (component != null)
+						{
+							value = component.material;
+						}
+					}
+					if (this.effectMaterialOveride == EffectMaterial.Material.None)
+					{
+						SoundEngine.Switches.material.Set((int)value, this.akGameObj);
+					}
+					this.lastEventGroundCollider = lastGroundCollider;
+				}
+				if (animEvent.type == UnityAnimEvent.AudioType.Footstep)
+				{
+					float magnitude = this.ac.GetLastMoveSpeed().magnitude;
+					AkGameObjUmbrella.UpdateTransform(this.akGameObj, true);
+					if (magnitude <= 2.5f)
+					{
+						this.walkFootStepEvent.Post(base.gameObject);
+					}
+					else
+					{
+						this.jogFootStepEvent.Post(base.gameObject);
+					}
+				}
+				else
+				{
+					string eventName;
+					uint eventID = this.idMap.GetEventID(animEvent, out eventName);
+					AkGameObjUmbrella.UpdateTransform(this.akGameObj, true);
+					SoundEngine.PostEventByIDFast(eventID, eventName, this.akGameObj);
+				}
+			}
+		}
+	}
+
+	// Token: 0x060008EB RID: 2283 RVA: 0x0005D21C File Offset: 0x0005B41C
+	public void HandleAnimEventEditor(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent)
+	{
+		if (base.enabled && animEvent.isAudioEvent)
+		{
+			string eventName;
+			if (animEvent.type == UnityAnimEvent.AudioType.Footstep)
+			{
+				eventName = this.dudeType.ToString() + "_walk";
+			}
+			else
+			{
+				eventName = AudioEventNames.GetEventName(animEvent, this.dudeType.ToString(), null);
+			}
+			EditorAudio.PostEvent(eventName);
+		}
+	}
+
+	// Token: 0x060008EC RID: 2284 RVA: 0x0005D28C File Offset: 0x0005B48C
+	public void HandleContinuousAnimEvent(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent, bool isActive)
+	{
+	}
+
+	// Token: 0x060008ED RID: 2285 RVA: 0x0005D290 File Offset: 0x0005B490
+	public void HandleAnimationChange(IUnityAnimEventTrigger trigger, Object oldAnim, Object newAnim)
+	{
+		this.idle = false;
+	}
+
+	// Token: 0x060008EE RID: 2286 RVA: 0x0005D29C File Offset: 0x0005B49C
+	public void PreprocessUnityAnimEvents(int animID, List<UnityAnimEvent> events)
+	{
+		this.idMap.PreprocessUnityAnimEvents(animID, events);
+	}
+
+	// Token: 0x060008EF RID: 2287 RVA: 0x0005D2AC File Offset: 0x0005B4AC
+	public AnimEventAkIDMap GetAnimEventAkIDMap()
+	{
+		return this.idMap;
+	}
+
+	// Token: 0x060008F0 RID: 2288 RVA: 0x0005D2B4 File Offset: 0x0005B4B4
+	virtual bool get_enabled()
+	{
+		return base.enabled;
+	}
+
+	// Token: 0x060008F1 RID: 2289 RVA: 0x0005D2BC File Offset: 0x0005B4BC
+	virtual GameObject get_gameObject()
+	{
+		return base.gameObject;
+	}
+
+	// Token: 0x060008F2 RID: 2290 RVA: 0x0005D2C4 File Offset: 0x0005B4C4
+	virtual GameObject get_gameObject()
+	{
+		return base.gameObject;
+	}
+
+	// Token: 0x04000EF8 RID: 3832
+	private const float footstepTimeout = 0.05f;
+
+	// Token: 0x04000EF9 RID: 3833
+	private const float walkToJogThreshold = 2.5f;
+
+	// Token: 0x04000EFA RID: 3834
+	private const float maxRangeSqrd = 400f;
+
+	// Token: 0x04000EFB RID: 3835
+	public GenericDudeAudio.GenericDudeType dudeType;
+
+	// Token: 0x04000EFC RID: 3836
+	[SerializeField]
+	private bool preprocessed;
+
+	// Token: 0x04000EFD RID: 3837
+	[SerializeField]
+	private bool preprocessFinalized;
+
+	// Token: 0x04000EFE RID: 3838
+	[SerializeField]
+	private AnimEventAkIDMap idMap;
+
+	// Token: 0x04000EFF RID: 3839
+	[SerializeField]
+	private AkGameObj akGameObj;
+
+	// Token: 0x04000F00 RID: 3840
+	[SerializeField]
+	private AudioEventSimple walkFootStepEvent;
+
+	// Token: 0x04000F01 RID: 3841
+	[SerializeField]
+	private AudioEventSimple jogFootStepEvent;
+
+	// Token: 0x04000F02 RID: 3842
+	private bool isRegistered;
+
+	// Token: 0x04000F03 RID: 3843
+	public bool idle;
+
+	// Token: 0x04000F04 RID: 3844
+	private int scenesLoadedHandle = -1;
+
+	// Token: 0x04000F05 RID: 3845
+	private AnimcontrolledCharacter ac;
+
+	// Token: 0x04000F06 RID: 3846
+	private AlbinoGroupManager manager;
+
+	// Token: 0x04000F07 RID: 3847
+	private EffectMaterial.Material effectMaterialOveride;
+
+	// Token: 0x04000F08 RID: 3848
+	private Collider lastEventGroundCollider;
+
+	// Token: 0x02000127 RID: 295
+	public enum GenericDudeType
+	{
+		// Token: 0x04000F0A RID: 3850
+		mines_albino,
+		// Token: 0x04000F0B RID: 3851
+		prehuddle_albino
+	}
+}

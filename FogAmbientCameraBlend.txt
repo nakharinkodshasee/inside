@@ -1,0 +1,47 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200032D RID: 813
+[ExecuteInEditMode]
+public class FogAmbientCameraBlend : MonoBehaviour
+{
+	// Token: 0x060016C6 RID: 5830 RVA: 0x000C7B90 File Offset: 0x000C5D90
+	private void OnPreRender()
+	{
+		bool fogenable = true;
+		FogAmbientBlendValues currentBlendVal = FogAmbientBlender.currentBlendVal;
+		FogAmbientBlendValues.ApplyToRenderSettings(currentBlendVal, fogenable);
+		FogAmbientBlendValues.ApplyToCameraSettings(base.GetComponent<Camera>(), currentBlendVal);
+		D11PDPostCombined component = base.gameObject.GetComponent<D11PDPostCombined>();
+		if (component != null && component.enabled)
+		{
+			FogAmbientBlendValues.ApplyToCombined(component, currentBlendVal);
+		}
+		PDReflectionCuller component2 = base.gameObject.GetComponent<PDReflectionCuller>();
+		if (component2 != null && component2.enabled)
+		{
+			FogAmbientBlendValues.ApplyToReflectionCuller(component2, currentBlendVal);
+		}
+	}
+
+	// Token: 0x0400287E RID: 10366
+	public FogAmbientBlender data = new FogAmbientBlender();
+
+	// Token: 0x0400287F RID: 10367
+	private static int prevFrameUpdated = -1;
+
+	// Token: 0x04002880 RID: 10368
+	[NonSerialized]
+	public FogAmbientCameraBlend.FogForceEnable OverrideFogEnabled = FogAmbientCameraBlend.FogForceEnable.UseDefault;
+
+	// Token: 0x0200032E RID: 814
+	public enum FogForceEnable
+	{
+		// Token: 0x04002882 RID: 10370
+		UseDefault = -1,
+		// Token: 0x04002883 RID: 10371
+		ForceDisabled,
+		// Token: 0x04002884 RID: 10372
+		ForceEnabled
+	}
+}

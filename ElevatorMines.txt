@@ -1,0 +1,753 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200013A RID: 314
+public class ElevatorMines : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000990 RID: 2448 RVA: 0x00061350 File Offset: 0x0005F550
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.elevatorRigidbody.gameObject, this);
+		this.audioDoorsOpen = new AudioEventSimpleLocal("env_mines_cargoLift_elevator_doors_open", akGameObj);
+		this.audioDoorsClose = new AudioEventSimpleLocal("env_mines_cargoLift_elevator_doors_close", akGameObj);
+		this.audioDoorsOpened = new AudioEventSimpleLocal("env_mines_cargoLift_elevator_doors_opened", akGameObj);
+		this.audioDoorsClosed = new AudioEventSimpleLocal("env_mines_cargoLift_elevator_doors_closed", akGameObj);
+		this.audioStopTop = new AudioEventSimpleLocal("env_mines_cargoLift_elevator_move_stopTop", akGameObj);
+		this.audioStopMiddle = new AudioEventSimpleLocal("env_mines_cargoLift_elevator_move_stopMiddle", akGameObj);
+		this.audioStopBottom = new AudioEventSimpleLocal("env_mines_cargoLift_elevator_move_stopBottom", akGameObj);
+		this.audioMoveUpStart = new AudioEventSimpleLocal("env_mines_cargoLift_elevator_moveUp_start", akGameObj);
+		this.audioChangeToUp = new AudioEventSimpleLocal("env_mines_cargoLift_elevator_changeToUp", akGameObj);
+		this.audioMoveDownStart = new AudioEventSimpleLocal("env_mines_cargoLift_elevator_moveDown_start", akGameObj);
+		this.audioChangeToDown = new AudioEventSimpleLocal("env_mines_cargoLift_elevator_changeToDown", akGameObj);
+		AkGameObj akGameObj2 = AudioUtils.EnsureAkGameObj(this.engineSoundObject, this);
+		this.audioMoveUpStartEngine = new AudioEventSimpleLocal("env_mines_cargoLift_elevatorEngine_moveUp_start", akGameObj2);
+		this.audioMoveUpStopEngine = new AudioEventSimpleLocal("env_mines_cargoLift_elevatorEngine_moveUp_stop", akGameObj2);
+		this.audioChangeToUpEngine = new AudioEventSimpleLocal("env_mines_cargoLift_elevatorEngine_changeToUp", akGameObj2);
+		this.audioMoveDownStartEngine = new AudioEventSimpleLocal("env_mines_cargoLift_elevatorEngine_moveDown_start", akGameObj2);
+		this.audioMoveDownStopEngine = new AudioEventSimpleLocal("env_mines_cargoLift_elevatorEngine_moveDown_stop", akGameObj2);
+		this.audioChangeToDownEngine = new AudioEventSimpleLocal("env_mines_cargoLift_elevatorEngine_changeToDown", akGameObj2);
+	}
+
+	// Token: 0x06000991 RID: 2449 RVA: 0x000614B0 File Offset: 0x0005F6B0
+	public bool PreAwake(int callcount)
+	{
+		this.loadTop = SignalIn.Create("loadTop", base.gameObject, delegate
+		{
+			this.OnLoadFloor(0);
+		});
+		this.loadCenter = SignalIn.Create("loadCenter", base.gameObject, delegate
+		{
+			this.OnLoadFloor(1);
+		});
+		this.loadBottom = SignalIn.Create("loadBottom", base.gameObject, delegate
+		{
+			this.OnLoadFloor(2);
+		});
+		this.activateElevator = SignalIn.Create("activateElevator", base.gameObject, new Action(this.OnActivateElevator));
+		this.deactivateElevator = SignalIn.Create("deactivateElevator", base.gameObject, new Action(this.OnDeactivateElevator));
+		this.topFloor = SignalIn.Create("topFloor", base.gameObject, delegate
+		{
+			this.OnMoveToFloor(0);
+		});
+		this.centerFloor = SignalIn.Create("centerFloor", base.gameObject, delegate
+		{
+			this.OnMoveToFloor(1);
+		});
+		this.bottomFloor = SignalIn.Create("bottomFloor", base.gameObject, delegate
+		{
+			this.OnMoveToFloor(2);
+		});
+		this.electricityOn = SignalOut.Create("electricityOn", base.gameObject);
+		this.electricityOff = SignalOut.Create("electricityOff", base.gameObject);
+		this.floorReached = SignalOut.Create("floorReached", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000992 RID: 2450 RVA: 0x00061610 File Offset: 0x0005F810
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.SetLights(-1);
+		this.animDoorCloseState = this.animDoorLeft[this.animDoorClose.name];
+		this.animDoorOpenState = this.animDoorLeft[this.animDoorOpen.name];
+		this.currentFloorIndex = (this.targetFloorIndex = 1);
+		this.targetPos = this.floors[this.currentFloorIndex].transform.position.y;
+		this.SetIdleFirstTimeState();
+	}
+
+	// Token: 0x06000993 RID: 2451 RVA: 0x000616A0 File Offset: 0x0005F8A0
+	private void OnEnable()
+	{
+		this.animDoorLeft.Play(this.animDoorOpenComplete.name);
+		this.animDoorRight.Play(this.animDoorOpenComplete.name);
+	}
+
+	// Token: 0x06000994 RID: 2452 RVA: 0x000616DC File Offset: 0x0005F8DC
+	private void SetIdleFirstTimeState()
+	{
+		this.velocity = 0f;
+		this.state = ElevatorMines.State.Idle;
+	}
+
+	// Token: 0x06000995 RID: 2453 RVA: 0x000616F0 File Offset: 0x0005F8F0
+	private void SetIdleState()
+	{
+		this.velocity = 0f;
+		this.audioDoorsOpen.PostFast();
+		this.OpenDoors();
+		this.state = ElevatorMines.State.Idle;
+	}
+
+	// Token: 0x06000996 RID: 2454 RVA: 0x00061724 File Offset: 0x0005F924
+	private void IdleState()
+	{
+		this.MoveDoors(true);
+		if (this.targetFloorIndex != this.currentFloorIndex)
+		{
+			this.SetPrepareState();
+		}
+	}
+
+	// Token: 0x06000997 RID: 2455 RVA: 0x00061748 File Offset: 0x0005F948
+	private void SetPrepareState()
+	{
+		this.audioDoorsClose.PostFast();
+		this.CloseDoors();
+		this.state = ElevatorMines.State.Prepare;
+	}
+
+	// Token: 0x06000998 RID: 2456 RVA: 0x00061764 File Offset: 0x0005F964
+	private void PrepareState()
+	{
+		if (!this.MoveDoors(false))
+		{
+			this.SetMoveState();
+		}
+	}
+
+	// Token: 0x06000999 RID: 2457 RVA: 0x00061788 File Offset: 0x0005F988
+	private void SetMoveState()
+	{
+		this.currentFloorIndex = this.targetFloorIndex;
+		this.atTarget = false;
+		this.state = ElevatorMines.State.Move;
+	}
+
+	// Token: 0x0600099A RID: 2458 RVA: 0x000617A4 File Offset: 0x0005F9A4
+	public float GetTargetPosY()
+	{
+		return this.targetPos;
+	}
+
+	// Token: 0x0600099B RID: 2459 RVA: 0x000617AC File Offset: 0x0005F9AC
+	public float GetCurrentPosY()
+	{
+		return this.elevatorRigidbody.transform.position.y;
+	}
+
+	// Token: 0x0600099C RID: 2460 RVA: 0x000617D4 File Offset: 0x0005F9D4
+	public bool GetDoorsMoving()
+	{
+		return this.doorsMoving;
+	}
+
+	// Token: 0x0600099D RID: 2461 RVA: 0x000617DC File Offset: 0x0005F9DC
+	private void MoveState()
+	{
+		Vector3 position = this.elevatorRigidbody.transform.position;
+		Vector3 vector = position;
+		float num = this.targetPos - vector.y;
+		float num2 = (Mathf.Sign(this.velocity) != Mathf.Sign(num)) ? this.deceleration : this.acceleration;
+		this.velocity += Mathf.Sign(num) * Time.deltaTime * num2;
+		float num3 = this.maxSpeed;
+		if (Mathf.Abs(num) <= this.breakDist)
+		{
+			float num4 = 1f - Mathf.Abs(num) / this.breakDist;
+			num3 -= this.breakAmount * num4;
+		}
+		this.velocity = Mathf.Clamp(this.velocity, -num3, num3);
+		vector.y += this.velocity * Time.deltaTime;
+		if (position.y < this.targetPos && vector.y > this.targetPos)
+		{
+			if (vector.y > this.floors[1].position.y + 3f)
+			{
+				this.audioStopTop.PostFast();
+			}
+			else if (vector.y > this.floors[2].position.y + 3f && vector.y < this.floors[0].position.y - 3f)
+			{
+				this.audioStopMiddle.PostFast();
+			}
+			this.audioMoveUpStopEngine.PostFast();
+			vector.y = this.targetPos;
+		}
+		else if (position.y > this.targetPos && vector.y < this.targetPos)
+		{
+			if (vector.y > this.floors[2].position.y + 3f && vector.y < this.floors[0].position.y - 3f)
+			{
+				this.audioStopMiddle.PostFast();
+			}
+			else if (vector.y < this.floors[1].position.y - 3f)
+			{
+				this.audioStopBottom.PostFast();
+			}
+			this.audioMoveDownStopEngine.PostFast();
+			vector.y = this.targetPos;
+		}
+		this.elevatorRigidbody.MovePosition(vector);
+		this.ToggleMiddleBlockers();
+		if (vector.y == this.targetPos)
+		{
+			this.SetLights(this.currentFloorIndex);
+			this.floorReached.Signal();
+			this.atTarget = true;
+			this.SetIdleState();
+		}
+		else if (this.targetFloorIndex != this.currentFloorIndex)
+		{
+			this.SetMoveState();
+		}
+	}
+
+	// Token: 0x0600099E RID: 2462 RVA: 0x00061AC8 File Offset: 0x0005FCC8
+	private void SetShakeState()
+	{
+		this.shakeStartPos = this.elevatorRigidbody.transform.position;
+		this.shakeTimer = 0f;
+		this.velocity = 0f;
+		this.state = ElevatorMines.State.Shake;
+	}
+
+	// Token: 0x0600099F RID: 2463 RVA: 0x00061B00 File Offset: 0x0005FD00
+	private void ShakeState()
+	{
+		if (this.shakeTimer <= this.shakeDuration)
+		{
+			this.shakeTimer += Time.deltaTime;
+			float num = this.animShake.Evaluate(this.shakeTimer / this.shakeDuration) * this.shakeScale;
+			Vector3 vector = this.shakeStartPos;
+			vector.y += num;
+			this.elevatorRigidbody.MovePosition(vector);
+		}
+		else
+		{
+			this.SetMoveState();
+		}
+	}
+
+	// Token: 0x060009A0 RID: 2464 RVA: 0x00061B80 File Offset: 0x0005FD80
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case ElevatorMines.State.Idle:
+			this.IdleState();
+			break;
+		case ElevatorMines.State.Prepare:
+			this.PrepareState();
+			break;
+		case ElevatorMines.State.Move:
+			this.MoveState();
+			break;
+		case ElevatorMines.State.Shake:
+			this.ShakeState();
+			break;
+		}
+	}
+
+	// Token: 0x060009A1 RID: 2465 RVA: 0x00061BE0 File Offset: 0x0005FDE0
+	private void DoorToggleBlockers(bool opening)
+	{
+		if (this.currentFloorIndex == 2)
+		{
+			if (opening)
+			{
+				this.blockerDownOne.OnDisableTrigger();
+				this.blockerDownTwo.OnDisableTrigger();
+				this.waitDownRight.OnDisableTrigger();
+				this.waitDownLeft.OnDisableTrigger();
+			}
+			else
+			{
+				this.blockerDownOne.OnEnableTrigger();
+				this.blockerDownTwo.OnEnableTrigger();
+				this.waitDownRight.OnEnableTrigger();
+				this.waitDownLeft.OnEnableTrigger();
+			}
+		}
+		else if (this.currentFloorIndex == 1)
+		{
+			if (opening)
+			{
+				this.blockerMiddleOne.OnDisableTrigger();
+				this.blockerMiddleTwo.OnDisableTrigger();
+				this.waitMidLeft.OnDisableTrigger();
+				this.waitMidRight.OnDisableTrigger();
+			}
+			else
+			{
+				this.blockerMiddleOne.OnEnableTrigger();
+				this.blockerMiddleTwo.OnEnableTrigger();
+				this.waitMidLeft.OnEnableTrigger();
+				this.waitMidRight.OnEnableTrigger();
+			}
+		}
+		else if (this.currentFloorIndex == 0)
+		{
+			if (opening)
+			{
+				this.blockerUpOne.OnDisableTrigger();
+				this.blockerUpTwo.OnDisableTrigger();
+				this.waitUpLeft.OnDisableTrigger();
+				this.waitUpRight.OnDisableTrigger();
+			}
+			else
+			{
+				this.blockerUpOne.OnEnableTrigger();
+				this.blockerUpTwo.OnEnableTrigger();
+				this.waitUpLeft.OnEnableTrigger();
+				this.waitUpRight.OnEnableTrigger();
+			}
+		}
+	}
+
+	// Token: 0x060009A2 RID: 2466 RVA: 0x00061D44 File Offset: 0x0005FF44
+	private void ToggleMiddleBlockers()
+	{
+		if (this.elevatorRigidbody.position.y > this.floors[1].position.y - 5f)
+		{
+			this.blockerMiddleOne.OnEnableTrigger();
+			this.blockerMiddleTwo.OnEnableTrigger();
+		}
+		else
+		{
+			this.blockerMiddleOne.OnDisableTrigger();
+			this.blockerMiddleTwo.OnDisableTrigger();
+		}
+		if (this.elevatorRigidbody.position.y > this.floors[0].position.y - 5f)
+		{
+			this.blockerUpOne.OnEnableTrigger();
+			this.blockerUpTwo.OnEnableTrigger();
+		}
+		else
+		{
+			this.blockerUpOne.OnDisableTrigger();
+			this.blockerUpTwo.OnDisableTrigger();
+		}
+	}
+
+	// Token: 0x060009A3 RID: 2467 RVA: 0x00061E1C File Offset: 0x0006001C
+	private void OpenDoors()
+	{
+		this.animDoorLeft.CrossFade(this.animDoorOpen.name);
+		this.animDoorRight.CrossFade(this.animDoorOpenB.name);
+		this.doorToggleBlockers = true;
+		this.doorsMoving = true;
+	}
+
+	// Token: 0x060009A4 RID: 2468 RVA: 0x00061E64 File Offset: 0x00060064
+	private void LoadDoorsOpen()
+	{
+		this.animDoorLeft.Play(this.animDoorOpen.name);
+		this.animDoorLeft[this.animDoorOpen.name].normalizedTime = 1f;
+		this.animDoorRight.Play(this.animDoorOpenB.name);
+		this.animDoorRight[this.animDoorOpenB.name].normalizedTime = 1f;
+		this.doorToggleBlockers = true;
+		this.doorsMoving = true;
+	}
+
+	// Token: 0x060009A5 RID: 2469 RVA: 0x00061EF0 File Offset: 0x000600F0
+	private void CloseDoors()
+	{
+		this.animDoorLeft.CrossFade(this.animDoorClose.name);
+		this.animDoorRight.CrossFade(this.animDoorCloseB.name);
+		this.doorToggleBlockers = true;
+		this.doorsMoving = true;
+	}
+
+	// Token: 0x060009A6 RID: 2470 RVA: 0x00061F38 File Offset: 0x00060138
+	private bool MoveDoors(bool opening)
+	{
+		if (!this.doorsMoving)
+		{
+			return false;
+		}
+		if (((opening && this.animDoorOpenState.normalizedTime >= 0.1f) || (!opening && this.animDoorCloseState.normalizedTime >= 0.12f)) && this.doorToggleBlockers)
+		{
+			this.DoorToggleBlockers(opening);
+			this.doorToggleBlockers = false;
+		}
+		if ((opening && this.animDoorOpenState.normalizedTime >= 0.4f) || (!opening && this.animDoorCloseState.normalizedTime >= 0.4f))
+		{
+			if (opening)
+			{
+				this.audioDoorsOpened.PostFast();
+			}
+			else
+			{
+				this.audioDoorsClosed.PostFast();
+			}
+			this.doorsMoving = false;
+			return false;
+		}
+		return true;
+	}
+
+	// Token: 0x060009A7 RID: 2471 RVA: 0x00062004 File Offset: 0x00060204
+	public bool IsMoving()
+	{
+		return this.state == ElevatorMines.State.Move;
+	}
+
+	// Token: 0x060009A8 RID: 2472 RVA: 0x00062010 File Offset: 0x00060210
+	private void OnMoveToFloor(int f)
+	{
+		this.targetFloorIndex = f;
+		this.targetPos = this.floors[f].transform.position.y;
+		if (this.targetPos > this.elevatorRigidbody.transform.position.y)
+		{
+			if (this.atTarget)
+			{
+				this.audioMoveUpStart.PostFast();
+				this.audioMoveUpStartEngine.PostFast();
+			}
+			else
+			{
+				this.audioChangeToUp.PostFast();
+				this.audioChangeToUpEngine.PostFast();
+			}
+		}
+		else if (this.atTarget)
+		{
+			this.audioMoveDownStart.PostFast();
+			this.audioMoveDownStartEngine.PostFast();
+		}
+		else
+		{
+			this.audioChangeToDown.PostFast();
+			this.audioChangeToDownEngine.PostFast();
+		}
+	}
+
+	// Token: 0x060009A9 RID: 2473 RVA: 0x000620EC File Offset: 0x000602EC
+	private void OnLoadFloor(int f)
+	{
+		this.OnActivateElevator();
+		Vector3 position = this.elevatorRigidbody.transform.position;
+		position.y = this.floors[f].transform.position.y;
+		this.elevatorRigidbody.transform.position = position;
+		this.currentFloorIndex = f;
+		this.targetFloorIndex = f;
+		this.targetPos = position.y;
+		this.SetLights(f);
+		this.DoorToggleBlockers(true);
+	}
+
+	// Token: 0x060009AA RID: 2474 RVA: 0x00062170 File Offset: 0x00060370
+	private void OnActivateElevator()
+	{
+		this.SetLights(1);
+		this.electricityOn.Signal();
+	}
+
+	// Token: 0x060009AB RID: 2475 RVA: 0x00062184 File Offset: 0x00060384
+	private void OnDeactivateElevator()
+	{
+		this.SetLights(-1);
+		this.LoadDoorsOpen();
+		this.velocity = 0f;
+		this.doorsMoving = false;
+		this.state = ElevatorMines.State.Idle;
+		this.electricityOff.Signal();
+	}
+
+	// Token: 0x060009AC RID: 2476 RVA: 0x000621B8 File Offset: 0x000603B8
+	private void SetLights(int active)
+	{
+		int i = 0;
+		int num = this.displayLights.Length;
+		while (i < num)
+		{
+			this.displayLights[i].material = ((i != active) ? this.displayOff : this.displayOn);
+			i++;
+		}
+	}
+
+	// Token: 0x04001049 RID: 4169
+	public Rigidbody elevatorRigidbody;
+
+	// Token: 0x0400104A RID: 4170
+	public float maxSpeed = 4.25f;
+
+	// Token: 0x0400104B RID: 4171
+	public float acceleration = 2.5f;
+
+	// Token: 0x0400104C RID: 4172
+	public float deceleration = 4f;
+
+	// Token: 0x0400104D RID: 4173
+	public float breakAmount = 3.75f;
+
+	// Token: 0x0400104E RID: 4174
+	public float breakDist = 3f;
+
+	// Token: 0x0400104F RID: 4175
+	public Animation animDoorLeft;
+
+	// Token: 0x04001050 RID: 4176
+	public Animation animDoorRight;
+
+	// Token: 0x04001051 RID: 4177
+	public AnimationClip animDoorOpen;
+
+	// Token: 0x04001052 RID: 4178
+	public AnimationClip animDoorClose;
+
+	// Token: 0x04001053 RID: 4179
+	public AnimationClip animDoorOpenB;
+
+	// Token: 0x04001054 RID: 4180
+	public AnimationClip animDoorCloseB;
+
+	// Token: 0x04001055 RID: 4181
+	public AnimationClip animDoorOpenComplete;
+
+	// Token: 0x04001056 RID: 4182
+	public AlbinoBlocker blockerUpOne;
+
+	// Token: 0x04001057 RID: 4183
+	public AlbinoBlocker blockerUpTwo;
+
+	// Token: 0x04001058 RID: 4184
+	public AlbinoBlocker blockerMiddleOne;
+
+	// Token: 0x04001059 RID: 4185
+	public AlbinoBlocker blockerMiddleTwo;
+
+	// Token: 0x0400105A RID: 4186
+	public AlbinoBlocker blockerDownOne;
+
+	// Token: 0x0400105B RID: 4187
+	public AlbinoBlocker blockerDownTwo;
+
+	// Token: 0x0400105C RID: 4188
+	public AlbinoWaitTrigger waitUpRight;
+
+	// Token: 0x0400105D RID: 4189
+	public AlbinoWaitTrigger waitUpLeft;
+
+	// Token: 0x0400105E RID: 4190
+	public AlbinoWaitTrigger waitMidRight;
+
+	// Token: 0x0400105F RID: 4191
+	public AlbinoWaitTrigger waitMidLeft;
+
+	// Token: 0x04001060 RID: 4192
+	public AlbinoWaitTrigger waitDownRight;
+
+	// Token: 0x04001061 RID: 4193
+	public AlbinoWaitTrigger waitDownLeft;
+
+	// Token: 0x04001062 RID: 4194
+	public Transform[] floors;
+
+	// Token: 0x04001063 RID: 4195
+	public Renderer[] displayLights;
+
+	// Token: 0x04001064 RID: 4196
+	public Material displayOff;
+
+	// Token: 0x04001065 RID: 4197
+	public Material displayOn;
+
+	// Token: 0x04001066 RID: 4198
+	public AnimationCurve animShake;
+
+	// Token: 0x04001067 RID: 4199
+	public float shakeScale = 0.18f;
+
+	// Token: 0x04001068 RID: 4200
+	public float shakeDuration = 0.75f;
+
+	// Token: 0x04001069 RID: 4201
+	public GameObject engineSoundObject;
+
+	// Token: 0x0400106A RID: 4202
+	public SignalIn activateElevator;
+
+	// Token: 0x0400106B RID: 4203
+	public SignalIn deactivateElevator;
+
+	// Token: 0x0400106C RID: 4204
+	public SignalIn topFloor;
+
+	// Token: 0x0400106D RID: 4205
+	public SignalIn centerFloor;
+
+	// Token: 0x0400106E RID: 4206
+	public SignalIn bottomFloor;
+
+	// Token: 0x0400106F RID: 4207
+	public SignalIn loadTop;
+
+	// Token: 0x04001070 RID: 4208
+	public SignalIn loadCenter;
+
+	// Token: 0x04001071 RID: 4209
+	public SignalIn loadBottom;
+
+	// Token: 0x04001072 RID: 4210
+	public SignalOut electricityOn;
+
+	// Token: 0x04001073 RID: 4211
+	public SignalOut electricityOff;
+
+	// Token: 0x04001074 RID: 4212
+	public SignalOut floorReached;
+
+	// Token: 0x04001075 RID: 4213
+	private ElevatorMines.State state;
+
+	// Token: 0x04001076 RID: 4214
+	private float targetPos;
+
+	// Token: 0x04001077 RID: 4215
+	private AnimationState animDoorOpenState;
+
+	// Token: 0x04001078 RID: 4216
+	private AnimationState animDoorCloseState;
+
+	// Token: 0x04001079 RID: 4217
+	private int targetFloorIndex;
+
+	// Token: 0x0400107A RID: 4218
+	private int currentFloorIndex;
+
+	// Token: 0x0400107B RID: 4219
+	private float velocity;
+
+	// Token: 0x0400107C RID: 4220
+	private Vector3 shakeStartPos;
+
+	// Token: 0x0400107D RID: 4221
+	private float shakeTimer;
+
+	// Token: 0x0400107E RID: 4222
+	private bool doorsMoving;
+
+	// Token: 0x0400107F RID: 4223
+	private bool doorToggleBlockers;
+
+	// Token: 0x04001080 RID: 4224
+	private bool atTarget = true;
+
+	// Token: 0x04001081 RID: 4225
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioMoveUpStartEngine;
+
+	// Token: 0x04001082 RID: 4226
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioMoveUpStopEngine;
+
+	// Token: 0x04001083 RID: 4227
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioChangeToUpEngine;
+
+	// Token: 0x04001084 RID: 4228
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioMoveDownStartEngine;
+
+	// Token: 0x04001085 RID: 4229
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioMoveDownStopEngine;
+
+	// Token: 0x04001086 RID: 4230
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioChangeToDownEngine;
+
+	// Token: 0x04001087 RID: 4231
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioDoorsOpen;
+
+	// Token: 0x04001088 RID: 4232
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioDoorsClose;
+
+	// Token: 0x04001089 RID: 4233
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioDoorsOpened;
+
+	// Token: 0x0400108A RID: 4234
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioDoorsClosed;
+
+	// Token: 0x0400108B RID: 4235
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioMoveUpStart;
+
+	// Token: 0x0400108C RID: 4236
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioChangeToUp;
+
+	// Token: 0x0400108D RID: 4237
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioMoveDownStart;
+
+	// Token: 0x0400108E RID: 4238
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioChangeToDown;
+
+	// Token: 0x0400108F RID: 4239
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStopTop;
+
+	// Token: 0x04001090 RID: 4240
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStopMiddle;
+
+	// Token: 0x04001091 RID: 4241
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStopBottom;
+
+	// Token: 0x04001092 RID: 4242
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x0200013B RID: 315
+	private enum State
+	{
+		// Token: 0x04001094 RID: 4244
+		None,
+		// Token: 0x04001095 RID: 4245
+		Idle,
+		// Token: 0x04001096 RID: 4246
+		Prepare,
+		// Token: 0x04001097 RID: 4247
+		Move,
+		// Token: 0x04001098 RID: 4248
+		Shake
+	}
+}

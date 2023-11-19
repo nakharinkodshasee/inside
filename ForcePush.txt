@@ -1,0 +1,197 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001A2 RID: 418
+public class ForcePush : MonoBehaviour
+{
+	// Token: 0x06000C2F RID: 3119 RVA: 0x00077570 File Offset: 0x00075770
+	private void Start()
+	{
+		this.blowBackAnimNode = base.GetComponent<AnimClipNode>();
+	}
+
+	// Token: 0x06000C30 RID: 3120 RVA: 0x00077580 File Offset: 0x00075780
+	private void Update()
+	{
+	}
+
+	// Token: 0x06000C31 RID: 3121 RVA: 0x00077584 File Offset: 0x00075784
+	public void EnterCover()
+	{
+		this.coverCount++;
+	}
+
+	// Token: 0x06000C32 RID: 3122 RVA: 0x00077594 File Offset: 0x00075794
+	public void ExitCover()
+	{
+		this.coverCount--;
+	}
+
+	// Token: 0x06000C33 RID: 3123 RVA: 0x000775A4 File Offset: 0x000757A4
+	private void DoBlow()
+	{
+		Boy boy = ScriptGlobals.boy;
+		VisualBoy visualBoy = boy.visualBoy;
+		VisualBoyCustomAnim visualBoyCustomAnim = visualBoy.state as VisualBoyCustomAnim;
+		if (visualBoyCustomAnim != null && visualBoyCustomAnim.anim == this.holdOnToIdleNode)
+		{
+			this.holdOnToNode.transform.position = ScriptGlobals.boy.transform.position + Vector3.down * ScriptGlobals.boy.properties.height * 0.5f;
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.holdOnToNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		else if (this.coverCount == 0 && !ScriptGlobals.boy.isDead)
+		{
+			this.blowBackAnimNode.transform.position = ScriptGlobals.boy.transform.position + Vector3.down * ScriptGlobals.boy.properties.height * 0.5f;
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.blowBackAnimNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.speedFromGravity = -ScriptGlobals.boy.velocity.y - this.punchUpSpeed;
+			this.timeSincePush = 0f;
+		}
+	}
+
+	// Token: 0x06000C34 RID: 3124 RVA: 0x000776F4 File Offset: 0x000758F4
+	private void UpdatePushActiveState()
+	{
+		Boy boy = ScriptGlobals.boy;
+		VisualBoy visualBoy = boy.visualBoy;
+		VisualBoyCustomAnim visualBoyCustomAnim = visualBoy.state as VisualBoyCustomAnim;
+		if (visualBoyCustomAnim != null && visualBoyCustomAnim.anim == this.blowBackAnimNode)
+		{
+			this.pushIsActive = true;
+		}
+		else
+		{
+			this.pushIsActive = false;
+		}
+		if (visualBoyCustomAnim != null && visualBoyCustomAnim.anim == this.impactLeftNode)
+		{
+			this.recoverIsActive = true;
+		}
+		else
+		{
+			this.recoverIsActive = false;
+		}
+	}
+
+	// Token: 0x06000C35 RID: 3125 RVA: 0x00077784 File Offset: 0x00075984
+	private void UpdatePushLogic()
+	{
+		if (this.pushIsActive || this.recoverIsActive)
+		{
+			if (ScriptGlobals.boy.status.groundCollider == null)
+			{
+				this.speedFromGravity += Time.deltaTime * this.gravityStrength;
+			}
+			else if (this.timeSincePush > 0.1f)
+			{
+				this.speedFromGravity = 0f;
+			}
+		}
+		else
+		{
+			this.speedFromGravity = 0f;
+		}
+	}
+
+	// Token: 0x06000C36 RID: 3126 RVA: 0x0007780C File Offset: 0x00075A0C
+	private void UpdateGravity()
+	{
+		this.blowBackAnimNode.transform.position = this.blowBackAnimNode.transform.position + Vector3.down * this.speedFromGravity * Time.deltaTime;
+		this.impactLeftNode.transform.position = this.impactLeftNode.transform.position + Vector3.down * this.speedFromGravity * Time.deltaTime;
+	}
+
+	// Token: 0x06000C37 RID: 3127 RVA: 0x00077898 File Offset: 0x00075A98
+	private void TestForLeftCollision()
+	{
+		if (!this.recoverIsActive && this.pushIsActive && (BoyUtils.GetNumSideCollisions(ScriptGlobals.boy, -1f) > 0 || BoyUtils.GetNumSideCollisions(ScriptGlobals.boy, 1f) > 0))
+		{
+			this.impactLeftNode.transform.position = ScriptGlobals.boy.transform.position + Vector3.down * ScriptGlobals.boy.properties.height * 0.5f - new Vector3(ScriptGlobals.boy.velocity.x, ScriptGlobals.boy.velocity.y, 0f) * Time.deltaTime;
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.impactLeftNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+	}
+
+	// Token: 0x06000C38 RID: 3128 RVA: 0x00077984 File Offset: 0x00075B84
+	private void TestForGroundHit()
+	{
+		bool flag = ScriptGlobals.boy.status.groundCollider != null;
+		if (flag && !this.previousOnGroundStatus)
+		{
+			this.impactLeftNode.transform.position = this.impactLeftNode.transform.position - new Vector3(BoyUtils.GetRelativeLandVelocity(ScriptGlobals.boy).x, BoyUtils.GetRelativeLandVelocity(ScriptGlobals.boy).y, 0f) * Time.fixedDeltaTime;
+			this.blowBackAnimNode.transform.position = this.blowBackAnimNode.transform.position - new Vector3(BoyUtils.GetRelativeLandVelocity(ScriptGlobals.boy).x, BoyUtils.GetRelativeLandVelocity(ScriptGlobals.boy).y, 0f) * Time.fixedDeltaTime;
+		}
+		this.previousOnGroundStatus = flag;
+	}
+
+	// Token: 0x06000C39 RID: 3129 RVA: 0x00077A7C File Offset: 0x00075C7C
+	private void TestForHoldOnto()
+	{
+		Boy boy = ScriptGlobals.boy;
+		VisualBoy visualBoy = boy.visualBoy;
+		VisualBoyCustomAnim visualBoyCustomAnim = visualBoy.state as VisualBoyCustomAnim;
+		BoyGrabState boyGrabState = ScriptGlobals.boy.state as BoyGrabState;
+		if (boyGrabState)
+		{
+			this.holdOnToIdleNode.transform.position = new Vector3(boyGrabState.body.transform.position.x - 0.33f, ScriptGlobals.boy.transform.position.y, 0f) + Vector3.down * ScriptGlobals.boy.properties.height * 0.5f;
+		}
+		if (boyGrabState != null && boyGrabState.body.GetComponent<ForcePushGrabHold>())
+		{
+			if (visualBoyCustomAnim == null)
+			{
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.holdOnToIdleNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			}
+		}
+		else if (visualBoyCustomAnim != null && visualBoyCustomAnim.anim == this.holdOnToIdleNode && !GameInput.rawAction)
+		{
+			BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+		}
+	}
+
+	// Token: 0x06000C3A RID: 3130 RVA: 0x00077BB8 File Offset: 0x00075DB8
+	private void FixedUpdate()
+	{
+		this.timeSincePush += Time.deltaTime;
+		this.UpdatePushActiveState();
+		this.UpdatePushLogic();
+		this.UpdateGravity();
+		this.TestForLeftCollision();
+		this.TestForGroundHit();
+		this.TestForHoldOnto();
+	}
+
+	// Token: 0x0400155C RID: 5468
+	public AnimClipNode impactLeftNode;
+
+	// Token: 0x0400155D RID: 5469
+	public AnimClipNode holdOnToNode;
+
+	// Token: 0x0400155E RID: 5470
+	public AnimClipNode holdOnToIdleNode;
+
+	// Token: 0x0400155F RID: 5471
+	public float gravityStrength = 9f;
+
+	// Token: 0x04001560 RID: 5472
+	public float punchUpSpeed = 1f;
+
+	// Token: 0x04001561 RID: 5473
+	private SimpleEvent<ForcePush> pushBoy = new SimpleEvent<ForcePush>("pushBoy");
+
+	// Token: 0x04001562 RID: 5474
+	private float timeSincePush;
+
+	// Token: 0x04001563 RID: 5475
+	private AnimClipNode blowBackAnimNode;
+
+	// Token: 0x04001564 RID: 5476
+	private bool pushIsActive;
+
+	// Token: 0x04001565 RID: 5477
+	private bool recoverIsActive;
+
+	// Token: 0x04001566 RID: 5478
+	private int coverCount;
+
+	// Token: 0x04001567 RID: 5479
+	private float speedFromGravity;
+
+	// Token: 0x04001568 RID: 5480
+	private bool previousOnGroundStatus;
+}

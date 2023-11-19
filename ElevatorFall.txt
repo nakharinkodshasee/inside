@@ -1,0 +1,612 @@
+using System;
+using AudioCommands;
+using UnityEngine;
+
+// Token: 0x02000138 RID: 312
+public class ElevatorFall : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06000970 RID: 2416 RVA: 0x00060658 File Offset: 0x0005E858
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioRideUncover = new AudioEventSimple("music_mines_forcePushMovingCover_elevatorRideUncover");
+		this.audioFirstCrash = new AudioEventSimple(this.soundPrefix + "FirstCrash");
+		this.audioSecondCrash = new AudioEventSimple(this.soundPrefix + "SecondCrash");
+		this.audioHitWater = new AudioEventSimple(this.soundPrefix + "HitWater");
+	}
+
+	// Token: 0x06000971 RID: 2417 RVA: 0x000606DC File Offset: 0x0005E8DC
+	public bool PreAwake(int callcount)
+	{
+		this.loadIntoSequence = SignalIn.Create("loadIntoSequence", base.gameObject, new Action(this.LoadIntoSequence));
+		this.loadAtBottom = SignalIn.Create("loadAtBottom", base.gameObject, new Action(this.LoadAtBottom));
+		this.begin = SignalIn.Create("begin", base.gameObject, new Action(this.Begin));
+		this.blow = SignalIn.Create("blow", base.gameObject, new Action(this.Blow));
+		this.doorOpened = SignalIn.Create("doorOpened", base.gameObject, new Action(this.DoorOpened));
+		this.readyDoor = SignalOut.Create("readyDoor", base.gameObject);
+		this.hitGround = SignalOut.Create("hitGround", base.gameObject);
+		this.prepareVoice = SignalOut.Create("prepareVoice", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000972 RID: 2418 RVA: 0x000607D8 File Offset: 0x0005E9D8
+	private void Start()
+	{
+		this.OnPreProcess();
+		UnityAnimEventSignaller unityAnimEventSignaller = this.animEvents;
+		unityAnimEventSignaller.animEventTriggered = (Action<UnityAnimEvent>)Delegate.Combine(unityAnimEventSignaller.animEventTriggered, new Action<UnityAnimEvent>(this.AnimEventReceived));
+		this.triggerInsideElevator.enterTrigger.Register(this, ref this.insideTriggerEnterHandle);
+		this.triggerInsideElevator.exitTrigger.Register(this, ref this.insideTriggerExitHandle);
+		this.animCloseState = this.anim["PartA_CloseUp"];
+		this.animDecentState = this.anim["PartB_Decent"];
+		this.animDecentState.speed = 0f;
+		this.animPhysicsDecentState = this.animPhysics["PartB_Decent"];
+		this.animPhysicsDecentState.speed = 0f;
+		this.animCrashState = this.anim["PartC_Crash"];
+		this.animCrashState.speed = 0f;
+		this.animPhysicsCrashState = this.animPhysics["PartC_Crash"];
+		this.animPhysicsCrashState.speed = 0f;
+		this.animCrash2State = this.anim["PartD_Crash2"];
+		this.animPhysicsCrash2State = this.animPhysics["PartD_Crash2"];
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x06000973 RID: 2419 RVA: 0x00060928 File Offset: 0x0005EB28
+	private void SetClosingState()
+	{
+		this.anim.Play(this.animCloseState.name);
+		this.animPhysics.Play(this.animCloseState.name);
+		this.doorColliders.SetActive(true);
+		this.state = ElevatorFall.State.Closing;
+	}
+
+	// Token: 0x06000974 RID: 2420 RVA: 0x00060978 File Offset: 0x0005EB78
+	private void ClosingState()
+	{
+		if (this.animCloseState.normalizedTime >= 1f && this.musicTimer != 0f)
+		{
+			this.SetDecentState();
+		}
+	}
+
+	// Token: 0x06000975 RID: 2421 RVA: 0x000609A8 File Offset: 0x0005EBA8
+	private void SetDecentState()
+	{
+		this.anim.Play(this.animDecentState.name);
+		this.animPhysics.Play(this.animPhysicsDecentState.name);
+		this.moveTimer = (this.movePhysicsTimer = (this.moveTimerStart = this.musicTimer));
+		this.voiceConfig.intensityConfig.AtoBDuration = this.moveTimer - 2f;
+		ThemeUtils.SetVoiceConfig(ScriptGlobals.boy.gameObject, this.voiceConfig);
+		this.state = ElevatorFall.State.Decent;
+	}
+
+	// Token: 0x06000976 RID: 2422 RVA: 0x00060A3C File Offset: 0x0005EC3C
+	private void DecentState()
+	{
+		if (!this.prepareVoiceSent && this.musicTimer < 8f)
+		{
+			this.audioRideUncover.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.prepareVoiceSent = true;
+		}
+		if (!this.audioFirstCrashSent && this.musicTimer < 2f)
+		{
+			this.audioFirstCrash.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioFirstCrashSent = true;
+		}
+		this.PlayAnim(this.animDecentState, Time.deltaTime);
+		if (this.musicTimer <= 0f)
+		{
+			this.prepareVoice.Signal();
+			this.SetCrashState();
+		}
+	}
+
+	// Token: 0x06000977 RID: 2423 RVA: 0x00060AE0 File Offset: 0x0005ECE0
+	private void SetCrashState()
+	{
+		this.anim.CrossFade(this.animCrashState.name);
+		this.animPhysics.CrossFade(this.animPhysicsCrashState.name);
+		this.moveTimer = (this.movePhysicsTimer = (this.moveTimerStart = (this.musicTimer = this.audioInterval)));
+		BoyUtils.StartCustomAnim(this.boy, this.animBoyShake, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		ThemeUtils.SetBoyTheme(this.boy.visualBoy, "JetCrateBalance", VisualBoy.ThemePriority.High);
+		this.state = ElevatorFall.State.Crash;
+	}
+
+	// Token: 0x06000978 RID: 2424 RVA: 0x00060B78 File Offset: 0x0005ED78
+	private void CrashState()
+	{
+		if (!this.audioSecondCrashSent && this.musicTimer < 2f)
+		{
+			this.audioSecondCrash.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioSecondCrashSent = true;
+		}
+		this.PlayAnim(this.animCrashState, Time.deltaTime);
+		if (this.musicTimer <= 0f)
+		{
+			this.SetCrashState2();
+		}
+	}
+
+	// Token: 0x06000979 RID: 2425 RVA: 0x00060BE0 File Offset: 0x0005EDE0
+	private void SetCrashState2()
+	{
+		this.anim.CrossFade(this.animCrash2State.name);
+		this.animPhysics.CrossFade(this.animCrash2State.name);
+		BoyUtils.StartCustomAnim(this.boy, this.animBoyShake2, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.state = ElevatorFall.State.Crash2;
+	}
+
+	// Token: 0x0600097A RID: 2426 RVA: 0x00060C3C File Offset: 0x0005EE3C
+	private void CrashState2()
+	{
+	}
+
+	// Token: 0x0600097B RID: 2427 RVA: 0x00060C40 File Offset: 0x0005EE40
+	private void SetCrashState3()
+	{
+		this.anim.CrossFade(this.animCrash2State.name);
+		this.animPhysics.CrossFade(this.animCrash2State.name);
+		this.animCrash2State.normalizedTime = 1f;
+		this.animPhysicsCrash2State.normalizedTime = 1f;
+		this.state = ElevatorFall.State.Crash3;
+	}
+
+	// Token: 0x0600097C RID: 2428 RVA: 0x00060CA0 File Offset: 0x0005EEA0
+	private void CrashState3()
+	{
+	}
+
+	// Token: 0x0600097D RID: 2429 RVA: 0x00060CA4 File Offset: 0x0005EEA4
+	private void SetUnderwaterState()
+	{
+		this.animCrash2State.speed = 1f;
+		ThemeUtils.SetBoyTheme(this.boy.visualBoy, string.Empty, VisualBoy.ThemePriority.High);
+		this.audioHitWater.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.readyDoor.Signal();
+		this.elevatorDoor.strengthModifier = 0.6f;
+		int i = 0;
+		int num = this.wreckageBubbles.Length;
+		while (i < num)
+		{
+			this.wreckageBubbles[i].Play();
+			i++;
+		}
+		this.state = ElevatorFall.State.Underwater;
+	}
+
+	// Token: 0x0600097E RID: 2430 RVA: 0x00060D34 File Offset: 0x0005EF34
+	private void UnderwaterState()
+	{
+		Vector3 position = this.elevatorPhysicsTarget.transform.position;
+		float num = (this.boy.pos3.y - this.bottomPos.position.y) / 15f;
+		num = 1f - Mathf.Clamp(num, 0f, 1f);
+		float strengthModifier = 0.6f + 1.7f * num;
+		this.elevatorDoor.strengthModifier = strengthModifier;
+		if (this.insideElevator)
+		{
+			BoyCustomAnimState boyCustomAnimState = this.boy.state as BoyCustomAnimState;
+			if (boyCustomAnimState != null && !boyCustomAnimState.anim.absolute)
+			{
+				BoyUtils.ClearState(this.boy, -1f);
+			}
+			if (this.previousElevatorPos != Vector3.zero)
+			{
+				float y = this.boy.input.stick.y;
+				Vector3 vector = position - this.previousElevatorPos;
+				vector.z = 0f;
+				float x = vector.y * ((y >= -0.3f) ? this.streamStrength : this.swimDownStreamSterngth);
+				this.waterStream.strength.x = x;
+			}
+			this.previousElevatorPos = position;
+		}
+		else
+		{
+			this.waterStream.strength.x = 0f;
+		}
+	}
+
+	// Token: 0x0600097F RID: 2431 RVA: 0x00060E9C File Offset: 0x0005F09C
+	private void DoorOpened()
+	{
+		float num = (this.boy.pos3.y - this.bottomPos.position.y) / 15f;
+		num = 1f - Mathf.Clamp(num, 0f, 1f);
+		float extraAir = 2.7f * num;
+		this.boy.GiveBoyExtraAir(extraAir);
+	}
+
+	// Token: 0x06000980 RID: 2432 RVA: 0x00060F04 File Offset: 0x0005F104
+	private void SetGroundState()
+	{
+		this.waterStream.strength.x = 0f;
+		this.state = ElevatorFall.State.None;
+		this.hitGround.Signal();
+	}
+
+	// Token: 0x06000981 RID: 2433 RVA: 0x00060F30 File Offset: 0x0005F130
+	private void Update()
+	{
+		this.UpdateMusicTime();
+		if (this.musicTimer > 0f)
+		{
+			this.musicTimer -= this.musicDeltaTime;
+		}
+		if (this.state != ElevatorFall.State.None)
+		{
+			switch (this.state)
+			{
+			case ElevatorFall.State.Closing:
+				this.ClosingState();
+				break;
+			case ElevatorFall.State.Decent:
+				this.DecentState();
+				break;
+			case ElevatorFall.State.Crash:
+				this.CrashState();
+				break;
+			case ElevatorFall.State.Crash2:
+				this.CrashState2();
+				break;
+			case ElevatorFall.State.Crash3:
+				this.CrashState3();
+				break;
+			case ElevatorFall.State.Underwater:
+				this.UnderwaterState();
+				break;
+			}
+		}
+	}
+
+	// Token: 0x06000982 RID: 2434 RVA: 0x00060FE0 File Offset: 0x0005F1E0
+	private void FixedUpdate()
+	{
+		if (this.state == ElevatorFall.State.Decent)
+		{
+			this.PlayPhysicsAnim(this.animPhysicsDecentState, Time.fixedDeltaTime);
+		}
+		else if (this.state == ElevatorFall.State.Crash)
+		{
+			this.PlayPhysicsAnim(this.animPhysicsCrashState, Time.fixedDeltaTime);
+		}
+	}
+
+	// Token: 0x06000983 RID: 2435 RVA: 0x0006102C File Offset: 0x0005F22C
+	private void PlayAnim(AnimationState anim, float dt)
+	{
+		this.moveTimer -= dt;
+		this.moveTimer = Mathf.Lerp(this.moveTimer, this.musicTimer, this.adjustSpeed * dt);
+		anim.normalizedTime = (this.moveTimerStart - this.moveTimer) / this.moveTimerStart;
+	}
+
+	// Token: 0x06000984 RID: 2436 RVA: 0x00061080 File Offset: 0x0005F280
+	private void PlayPhysicsAnim(AnimationState anim, float dt)
+	{
+		this.movePhysicsTimer -= dt;
+		this.movePhysicsTimer = Mathf.Lerp(this.movePhysicsTimer, this.musicTimer, this.adjustSpeed * dt);
+		anim.normalizedTime = (this.moveTimerStart - this.movePhysicsTimer) / this.moveTimerStart;
+	}
+
+	// Token: 0x06000985 RID: 2437 RVA: 0x000610D4 File Offset: 0x0005F2D4
+	private void LoadIntoSequence()
+	{
+		this.SetCrashState2();
+	}
+
+	// Token: 0x06000986 RID: 2438 RVA: 0x000610DC File Offset: 0x0005F2DC
+	private void LoadAtBottom()
+	{
+		this.SetCrashState3();
+	}
+
+	// Token: 0x06000987 RID: 2439 RVA: 0x000610E4 File Offset: 0x0005F2E4
+	private void AnimEventReceived(UnityAnimEvent e)
+	{
+		if (this.state == ElevatorFall.State.Crash3)
+		{
+			return;
+		}
+		string defaultEventNameStem = e.GetDefaultEventNameStem();
+		if (defaultEventNameStem == "GravityShift")
+		{
+			BoyUtils.StartCustomAnim(this.boy, this.animBoyGravityShift, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		else if (defaultEventNameStem == "HitWater")
+		{
+			this.SetUnderwaterState();
+		}
+		else if (defaultEventNameStem == "HitBottom")
+		{
+			this.SetGroundState();
+		}
+	}
+
+	// Token: 0x06000988 RID: 2440 RVA: 0x00061164 File Offset: 0x0005F364
+	private void Begin()
+	{
+		this.SetClosingState();
+	}
+
+	// Token: 0x06000989 RID: 2441 RVA: 0x0006116C File Offset: 0x0005F36C
+	private void UpdateMusicTime()
+	{
+		float num = PersistentBehaviour<GlobalAudio>.instance.music.GetMusicPosition_s();
+		if (num > this.musicCycleTime)
+		{
+			num -= this.musicCycleTime;
+		}
+		this.musicDeltaTime = num - this.previousMusicTime;
+		if (num < this.previousMusicTime)
+		{
+			this.musicDeltaTime += this.musicCycleTime;
+		}
+		this.previousMusicTime = num;
+	}
+
+	// Token: 0x0600098A RID: 2442 RVA: 0x000611D4 File Offset: 0x0005F3D4
+	private void Blow()
+	{
+		if (this.state == ElevatorFall.State.Closing && this.musicTimer == 0f)
+		{
+			if (this.animCloseState.normalizedTime < 0.5f)
+			{
+				this.totalDecentTime = this.audioInterval * 3f;
+			}
+			else
+			{
+				this.totalDecentTime = this.audioInterval * 2f;
+			}
+			this.musicTimer = this.totalDecentTime;
+		}
+	}
+
+	// Token: 0x0600098B RID: 2443 RVA: 0x00061248 File Offset: 0x0005F448
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.triggerInsideElevator.enterTrigger)
+		{
+			this.TriggerEnter(collider);
+		}
+		else if (sender == this.triggerInsideElevator.exitTrigger)
+		{
+			this.TriggerExit(collider);
+		}
+	}
+
+	// Token: 0x0600098C RID: 2444 RVA: 0x00061284 File Offset: 0x0005F484
+	private void TriggerEnter(Collider c)
+	{
+		if (c.GetComponent<BoyProbe>())
+		{
+			this.insideElevator = true;
+		}
+	}
+
+	// Token: 0x0600098D RID: 2445 RVA: 0x000612A0 File Offset: 0x0005F4A0
+	private void TriggerExit(Collider c)
+	{
+		if (c.GetComponent<BoyProbe>())
+		{
+			this.insideElevator = false;
+		}
+	}
+
+	// Token: 0x0600098E RID: 2446 RVA: 0x000612BC File Offset: 0x0005F4BC
+	private void OnDestroy()
+	{
+		UnityAnimEventSignaller unityAnimEventSignaller = this.animEvents;
+		unityAnimEventSignaller.animEventTriggered = (Action<UnityAnimEvent>)Delegate.Remove(unityAnimEventSignaller.animEventTriggered, new Action<UnityAnimEvent>(this.AnimEventReceived));
+	}
+
+	// Token: 0x04001005 RID: 4101
+	public Animation anim;
+
+	// Token: 0x04001006 RID: 4102
+	public Animation animPhysics;
+
+	// Token: 0x04001007 RID: 4103
+	public GameObject doorColliders;
+
+	// Token: 0x04001008 RID: 4104
+	public GameObject elevatorPhysicsTarget;
+
+	// Token: 0x04001009 RID: 4105
+	public AnimClipNode animBoyShake;
+
+	// Token: 0x0400100A RID: 4106
+	public AnimClipNode animBoyShake2;
+
+	// Token: 0x0400100B RID: 4107
+	public AnimClipNode animBoyGravityShift;
+
+	// Token: 0x0400100C RID: 4108
+	public UnityAnimEventSignaller animEvents;
+
+	// Token: 0x0400100D RID: 4109
+	public WaterStream waterStream;
+
+	// Token: 0x0400100E RID: 4110
+	public float streamStrength = 72f;
+
+	// Token: 0x0400100F RID: 4111
+	public float swimDownStreamSterngth = 50f;
+
+	// Token: 0x04001010 RID: 4112
+	public OpenElevatorDoors door;
+
+	// Token: 0x04001011 RID: 4113
+	public CollisionEvents triggerInsideElevator;
+
+	// Token: 0x04001012 RID: 4114
+	public OpenElevatorDoors elevatorDoor;
+
+	// Token: 0x04001013 RID: 4115
+	public Transform bottomPos;
+
+	// Token: 0x04001014 RID: 4116
+	public float musicCycleTime = 6f;
+
+	// Token: 0x04001015 RID: 4117
+	public float adjustSpeed = 0.35f;
+
+	// Token: 0x04001016 RID: 4118
+	public BoyVoiceConfig voiceConfig;
+
+	// Token: 0x04001017 RID: 4119
+	public bool debug;
+
+	// Token: 0x04001018 RID: 4120
+	public ParticleSystem[] wreckageBubbles = new ParticleSystem[0];
+
+	// Token: 0x04001019 RID: 4121
+	private SignalIn blow;
+
+	// Token: 0x0400101A RID: 4122
+	private SignalIn begin;
+
+	// Token: 0x0400101B RID: 4123
+	private SignalIn loadIntoSequence;
+
+	// Token: 0x0400101C RID: 4124
+	private SignalIn loadAtBottom;
+
+	// Token: 0x0400101D RID: 4125
+	private SignalIn doorOpened;
+
+	// Token: 0x0400101E RID: 4126
+	private SignalOut readyDoor;
+
+	// Token: 0x0400101F RID: 4127
+	private SignalOut hitGround;
+
+	// Token: 0x04001020 RID: 4128
+	private SignalOut prepareVoice;
+
+	// Token: 0x04001021 RID: 4129
+	private ElevatorFall.State state;
+
+	// Token: 0x04001022 RID: 4130
+	private AnimationState animCloseState;
+
+	// Token: 0x04001023 RID: 4131
+	private AnimationState animDecentState;
+
+	// Token: 0x04001024 RID: 4132
+	private AnimationState animCrashState;
+
+	// Token: 0x04001025 RID: 4133
+	private AnimationState animCrash2State;
+
+	// Token: 0x04001026 RID: 4134
+	private float musicTimer;
+
+	// Token: 0x04001027 RID: 4135
+	private float moveTimer;
+
+	// Token: 0x04001028 RID: 4136
+	private float movePhysicsTimer;
+
+	// Token: 0x04001029 RID: 4137
+	private float moveTimerStart;
+
+	// Token: 0x0400102A RID: 4138
+	private float audioInterval = 6f;
+
+	// Token: 0x0400102B RID: 4139
+	private float totalDecentTime;
+
+	// Token: 0x0400102C RID: 4140
+	private float previousMusicTime;
+
+	// Token: 0x0400102D RID: 4141
+	private Vector3 previousElevatorPos = Vector3.zero;
+
+	// Token: 0x0400102E RID: 4142
+	private string soundPrefix = "music_Lab_ElevatorRide_";
+
+	// Token: 0x0400102F RID: 4143
+	private bool audioFirstCrashSent;
+
+	// Token: 0x04001030 RID: 4144
+	private bool audioSecondCrashSent;
+
+	// Token: 0x04001031 RID: 4145
+	private bool prepareVoiceSent;
+
+	// Token: 0x04001032 RID: 4146
+	private bool insideElevator;
+
+	// Token: 0x04001033 RID: 4147
+	private float animHitWaterTime = 5.92f;
+
+	// Token: 0x04001034 RID: 4148
+	private float musicDeltaTime;
+
+	// Token: 0x04001035 RID: 4149
+	private float vel;
+
+	// Token: 0x04001036 RID: 4150
+	private AnimationState animPhysicsDecentState;
+
+	// Token: 0x04001037 RID: 4151
+	private AnimationState animPhysicsCrashState;
+
+	// Token: 0x04001038 RID: 4152
+	private AnimationState animPhysicsCrash2State;
+
+	// Token: 0x04001039 RID: 4153
+	private Boy boy;
+
+	// Token: 0x0400103A RID: 4154
+	private int insideTriggerEnterHandle = -1;
+
+	// Token: 0x0400103B RID: 4155
+	private int insideTriggerExitHandle = -1;
+
+	// Token: 0x0400103C RID: 4156
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioRideUncover;
+
+	// Token: 0x0400103D RID: 4157
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioFirstCrash;
+
+	// Token: 0x0400103E RID: 4158
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioSecondCrash;
+
+	// Token: 0x0400103F RID: 4159
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioHitWater;
+
+	// Token: 0x04001040 RID: 4160
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x02000139 RID: 313
+	private enum State
+	{
+		// Token: 0x04001042 RID: 4162
+		None,
+		// Token: 0x04001043 RID: 4163
+		Closing,
+		// Token: 0x04001044 RID: 4164
+		Decent,
+		// Token: 0x04001045 RID: 4165
+		Crash,
+		// Token: 0x04001046 RID: 4166
+		Crash2,
+		// Token: 0x04001047 RID: 4167
+		Crash3,
+		// Token: 0x04001048 RID: 4168
+		Underwater
+	}
+}

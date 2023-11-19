@@ -1,0 +1,438 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000137 RID: 311
+public class Elevator : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000960 RID: 2400 RVA: 0x0005FD18 File Offset: 0x0005DF18
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioStartUp = new AudioEventSimpleLocal(this.audioPrefix + "_startUp", akGameObj);
+		this.audioReachedUp = new AudioEventSimpleLocal(this.audioPrefix + "_reachedUp", akGameObj);
+		this.audioStartDown = new AudioEventSimpleLocal(this.audioPrefix + "_startDown", akGameObj);
+		this.audioReachedDown = new AudioEventSimpleLocal(this.audioPrefix + "_reachedDown", akGameObj);
+		this.audioChangeToUp = new AudioEventSimpleLocal(this.audioPrefix + "_changeToUp", akGameObj);
+		this.audioChangeToDown = new AudioEventSimpleLocal(this.audioPrefix + "_changeToDown", akGameObj);
+	}
+
+	// Token: 0x06000961 RID: 2401 RVA: 0x0005FDF0 File Offset: 0x0005DFF0
+	public bool PreAwake(int callcount)
+	{
+		this.doMove = SignalIn.Create("doMove", base.gameObject, new Action(this.GettingInput));
+		this.targetReached = SignalOut.Create("targetReached", base.gameObject);
+		this.startMoving = SignalOut.Create("startMoving", base.gameObject);
+		this.startDown = SignalOut.Create("startDown", base.gameObject);
+		this.reachDown = SignalOut.Create("reachDown", base.gameObject);
+		this.startUp = SignalOut.Create("startUp", base.gameObject);
+		this.reachUp = SignalOut.Create("reachUp", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000962 RID: 2402 RVA: 0x0005FEA4 File Offset: 0x0005E0A4
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.speedToApply = this.speed;
+		this.isMoving = false;
+		if (!this.startingBetweenTargets)
+		{
+			this.InitialiseStartPos();
+		}
+		if (this.doStartUp)
+		{
+			this.isDown = false;
+		}
+	}
+
+	// Token: 0x06000963 RID: 2403 RVA: 0x0005FEF0 File Offset: 0x0005E0F0
+	private int FindClosestTarget()
+	{
+		int result = 0;
+		float num = float.MaxValue;
+		for (int i = 0; i < this.targets.Length; i++)
+		{
+			float magnitude = (this.elevatorObject.transform.position - this.targets[i].position).magnitude;
+			if (magnitude < num)
+			{
+				num = magnitude;
+				result = i;
+			}
+		}
+		return result;
+	}
+
+	// Token: 0x06000964 RID: 2404 RVA: 0x0005FF58 File Offset: 0x0005E158
+	private int GetIdOnTarget(Transform targetToFind)
+	{
+		int result = -1;
+		for (int i = 0; i < this.targets.Length; i++)
+		{
+			if (targetToFind == this.targets[i])
+			{
+				result = i;
+			}
+		}
+		return result;
+	}
+
+	// Token: 0x06000965 RID: 2405 RVA: 0x0005FF98 File Offset: 0x0005E198
+	private void GettingInput()
+	{
+		if (this.direction == 0 && this.isDown)
+		{
+			this.startUp.Signal();
+			this.audioStartUp.PostFast();
+			this.HandleUpSignal();
+		}
+		else if (this.direction == 0 && !this.isDown)
+		{
+			this.startDown.Signal();
+			this.audioStartDown.PostFast();
+			this.HandleDownSignal();
+		}
+		else if (this.direction != 0)
+		{
+			this.DoChangeDir();
+		}
+	}
+
+	// Token: 0x06000966 RID: 2406 RVA: 0x00060028 File Offset: 0x0005E228
+	private void InitialiseStartPos()
+	{
+		this.routeIndex = this.FindClosestTarget();
+		this.currentTarget = this.targets[this.routeIndex];
+	}
+
+	// Token: 0x06000967 RID: 2407 RVA: 0x0006004C File Offset: 0x0005E24C
+	private void UpdateMovement()
+	{
+		float num = 1f;
+		if (this.changingDir)
+		{
+			this.breakTimer += Time.deltaTime;
+			float num2 = Mathf.InverseLerp(this.timeToBreak, 0f, this.breakTimer);
+			num = this.breakCurve.Evaluate(num2);
+			if ((double)num <= 0.01)
+			{
+				if (this.dirToChangeTo == -1)
+				{
+					this.ChangeToGoDown();
+				}
+				else
+				{
+					this.ChangeToGoUp();
+				}
+			}
+			if (this.breakTimer >= this.timeToBreak)
+			{
+				this.changingDir = false;
+			}
+		}
+		float magnitude = (this.previousTarget.position - this.elevatorObject.transform.position).magnitude;
+		float num3 = Mathf.InverseLerp(0f, this.accelTargetDist, magnitude);
+		float num4 = this.accelTarget.Evaluate(num3);
+		float magnitude2 = (this.currentTarget.position - this.elevatorObject.transform.position).magnitude;
+		float num5 = Mathf.InverseLerp(this.deaccelTargetDist, 0f, magnitude2);
+		float num6 = this.deaccelTarget.Evaluate(num5);
+		float num7;
+		if (magnitude2 < this.deaccelTargetDist)
+		{
+			num7 = num6;
+		}
+		else if (magnitude < this.accelTargetDist)
+		{
+			num7 = num4;
+		}
+		else
+		{
+			num7 = 1f;
+		}
+		this.speedToApply = this.speed * num7;
+		Vector3 vector = (this.currentTarget.position - this.elevatorObject.transform.position).normalized;
+		vector *= this.speedToApply;
+		this.elevatorObject.MovePosition(this.elevatorObject.transform.position + vector * Time.deltaTime * num);
+		if (!this.changingDir && (double)(this.elevatorObject.transform.position - this.currentTarget.position).magnitude <= 0.009)
+		{
+			this.targetReached.Signal();
+			this.isMoving = false;
+			this.direction = 0;
+			this.breakTimer = 0f;
+			this.changingDir = false;
+			if (this.currentTarget == this.targets[0])
+			{
+				this.audioReachedUp.PostFast();
+				this.reachUp.Signal();
+				this.isDown = false;
+			}
+			else if (this.currentTarget == this.targets[this.targets.Length - 1])
+			{
+				this.reachDown.Signal();
+				this.audioReachedDown.PostFast();
+				this.isDown = true;
+			}
+		}
+	}
+
+	// Token: 0x06000968 RID: 2408 RVA: 0x00060334 File Offset: 0x0005E534
+	private void DoChangeDir()
+	{
+		if (!this.isMoving)
+		{
+			return;
+		}
+		if (this.changingDir)
+		{
+			this.breakTimer = this.timeToBreak - this.breakTimer;
+		}
+		else
+		{
+			this.breakTimer = 0f;
+		}
+		this.dirToChangeTo = -this.direction;
+		if (this.dirToChangeTo < 0)
+		{
+			this.audioChangeToDown.PostFast();
+		}
+		else if (this.dirToChangeTo > 0)
+		{
+			this.audioChangeToUp.PostFast();
+		}
+		this.changingDir = true;
+	}
+
+	// Token: 0x06000969 RID: 2409 RVA: 0x000603C4 File Offset: 0x0005E5C4
+	private void HandleUpSignal()
+	{
+		if (this.GetIdOnTarget(this.currentTarget) == 0)
+		{
+			return;
+		}
+		if (!this.targetsInitialized && this.startingBetweenTargets)
+		{
+			this.currentTarget = this.targetUp;
+			this.previousTarget = this.targetDown;
+			this.InitializeTargets();
+		}
+		if (this.isMoving)
+		{
+			this.DoChangeDir();
+		}
+		else
+		{
+			this.ChangeToGoUp();
+			this.startMoving.Signal();
+		}
+	}
+
+	// Token: 0x0600096A RID: 2410 RVA: 0x00060440 File Offset: 0x0005E640
+	private void ChangeToGoUp()
+	{
+		if (this.routeIndex > 0)
+		{
+			this.previousTarget = this.currentTarget;
+			this.currentTarget = this.targets[this.routeIndex - 1];
+			this.routeIndex--;
+			this.direction = 1;
+			this.isMoving = true;
+		}
+	}
+
+	// Token: 0x0600096B RID: 2411 RVA: 0x00060498 File Offset: 0x0005E698
+	private void HandleDownSignal()
+	{
+		if (this.GetIdOnTarget(this.currentTarget) == this.targets.Length - 1)
+		{
+			return;
+		}
+		if (!this.targetsInitialized && this.startingBetweenTargets)
+		{
+			this.currentTarget = this.targetDown;
+			this.previousTarget = this.targetUp;
+			this.InitializeTargets();
+		}
+		if (this.isMoving)
+		{
+			this.DoChangeDir();
+		}
+		else
+		{
+			this.ChangeToGoDown();
+			this.startMoving.Signal();
+		}
+	}
+
+	// Token: 0x0600096C RID: 2412 RVA: 0x0006051C File Offset: 0x0005E71C
+	private void InitializeTargets()
+	{
+		this.routeIndex = this.GetIdOnTarget(this.previousTarget);
+		this.targetsInitialized = true;
+		this.breakTimer = this.timeToBreak / 2f;
+		this.changingDir = true;
+	}
+
+	// Token: 0x0600096D RID: 2413 RVA: 0x0006055C File Offset: 0x0005E75C
+	private void ChangeToGoDown()
+	{
+		if (this.routeIndex < this.targets.Length - 1)
+		{
+			this.previousTarget = this.currentTarget;
+			this.currentTarget = this.targets[this.routeIndex + 1];
+			this.routeIndex++;
+			this.direction = -1;
+			this.isMoving = true;
+		}
+	}
+
+	// Token: 0x0600096E RID: 2414 RVA: 0x000605BC File Offset: 0x0005E7BC
+	private void FixedUpdate()
+	{
+		if (this.isMoving)
+		{
+			this.UpdateMovement();
+		}
+	}
+
+	// Token: 0x04000FDC RID: 4060
+	public Rigidbody elevatorObject;
+
+	// Token: 0x04000FDD RID: 4061
+	public float speed;
+
+	// Token: 0x04000FDE RID: 4062
+	public Transform[] targets;
+
+	// Token: 0x04000FDF RID: 4063
+	public AnimationCurve accelTarget;
+
+	// Token: 0x04000FE0 RID: 4064
+	public AnimationCurve deaccelTarget;
+
+	// Token: 0x04000FE1 RID: 4065
+	public AnimationCurve breakCurve;
+
+	// Token: 0x04000FE2 RID: 4066
+	public float accelTargetDist = 1f;
+
+	// Token: 0x04000FE3 RID: 4067
+	public float deaccelTargetDist = 1f;
+
+	// Token: 0x04000FE4 RID: 4068
+	public bool startingBetweenTargets;
+
+	// Token: 0x04000FE5 RID: 4069
+	public Transform targetUp;
+
+	// Token: 0x04000FE6 RID: 4070
+	public Transform targetDown;
+
+	// Token: 0x04000FE7 RID: 4071
+	public bool doStartUp;
+
+	// Token: 0x04000FE8 RID: 4072
+	private SignalIn doMove;
+
+	// Token: 0x04000FE9 RID: 4073
+	private SignalOut targetReached;
+
+	// Token: 0x04000FEA RID: 4074
+	private SignalOut startMoving;
+
+	// Token: 0x04000FEB RID: 4075
+	private SignalOut startDown;
+
+	// Token: 0x04000FEC RID: 4076
+	private SignalOut reachDown;
+
+	// Token: 0x04000FED RID: 4077
+	private SignalOut startUp;
+
+	// Token: 0x04000FEE RID: 4078
+	private SignalOut reachUp;
+
+	// Token: 0x04000FEF RID: 4079
+	private int routeCount;
+
+	// Token: 0x04000FF0 RID: 4080
+	private int routeIndex;
+
+	// Token: 0x04000FF1 RID: 4081
+	private int direction;
+
+	// Token: 0x04000FF2 RID: 4082
+	private int dirToChangeTo;
+
+	// Token: 0x04000FF3 RID: 4083
+	private float speedToApply;
+
+	// Token: 0x04000FF4 RID: 4084
+	private Transform currentTarget;
+
+	// Token: 0x04000FF5 RID: 4085
+	private Transform previousTarget;
+
+	// Token: 0x04000FF6 RID: 4086
+	private bool changingDir;
+
+	// Token: 0x04000FF7 RID: 4087
+	private bool hasBeenBreaking;
+
+	// Token: 0x04000FF8 RID: 4088
+	private bool isMoving;
+
+	// Token: 0x04000FF9 RID: 4089
+	public float timeToBreak = 2f;
+
+	// Token: 0x04000FFA RID: 4090
+	public string audioPrefix = string.Empty;
+
+	// Token: 0x04000FFB RID: 4091
+	private float breakTimer;
+
+	// Token: 0x04000FFC RID: 4092
+	private bool targetsInitialized;
+
+	// Token: 0x04000FFD RID: 4093
+	private bool isDown = true;
+
+	// Token: 0x04000FFE RID: 4094
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04000FFF RID: 4095
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStartUp;
+
+	// Token: 0x04001000 RID: 4096
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioReachedUp;
+
+	// Token: 0x04001001 RID: 4097
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStartDown;
+
+	// Token: 0x04001002 RID: 4098
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioReachedDown;
+
+	// Token: 0x04001003 RID: 4099
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioChangeToUp;
+
+	// Token: 0x04001004 RID: 4100
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioChangeToDown;
+}

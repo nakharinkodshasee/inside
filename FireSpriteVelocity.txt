@@ -1,0 +1,81 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000327 RID: 807
+[ExecuteInEditMode]
+public class FireSpriteVelocity : MonoBehaviour
+{
+	// Token: 0x060016AC RID: 5804 RVA: 0x000C6F24 File Offset: 0x000C5124
+	private void OnEnable()
+	{
+		this.x = new AttackReleaseFilter(this.attack, this.release);
+		this.y = new AttackReleaseFilter(this.attack, this.release);
+		this.z = new AttackReleaseFilter(this.attack, this.release);
+		this.velProps = new MaterialInstance.VectorProperty[this.sprites.Length];
+		this.boundProps = new MaterialInstance.VectorProperty[this.sprites.Length];
+		for (int i = 0; i < this.sprites.Length; i++)
+		{
+			this.velProps[i] = this.sprites[i].GetOrAddVectorProperty("_Velocity");
+			this.boundProps[i] = this.sprites[i].GetOrAddVectorProperty("_Bounds");
+		}
+	}
+
+	// Token: 0x060016AD RID: 5805 RVA: 0x000C6FEC File Offset: 0x000C51EC
+	private void Update()
+	{
+		Vector4 value = this.crate.position;
+		value.z = this.crate.transform.eulerAngles.z * 0.017453292f;
+		value.w = this.crate.transform.localScale.x * 0.5f;
+		for (int i = 0; i < this.sprites.Length; i++)
+		{
+			this.sprites[i].SetVectorProperty(this.boundProps[i], value);
+		}
+		Vector3 vector;
+		if (Application.isPlaying)
+		{
+			vector.x = Mathf.Clamp(this.x.Filter(this.crate.velocity.x), -8f, 8f);
+			vector.y = Mathf.Clamp(this.y.Filter(this.crate.velocity.y), -8f, 8f);
+			vector.z = Mathf.Clamp(this.z.Filter(this.crate.angularVelocity.z), -4f, 4f);
+		}
+		else
+		{
+			vector = this.testVelocity;
+		}
+		for (int j = 0; j < this.sprites.Length; j++)
+		{
+			this.sprites[j].SetVectorProperty(this.velProps[j], vector);
+		}
+	}
+
+	// Token: 0x04002852 RID: 10322
+	public Rigidbody crate;
+
+	// Token: 0x04002853 RID: 10323
+	public MaterialInstance[] sprites;
+
+	// Token: 0x04002854 RID: 10324
+	[Range(0f, 10f)]
+	public int attack;
+
+	// Token: 0x04002855 RID: 10325
+	[Range(0f, 10f)]
+	public int release;
+
+	// Token: 0x04002856 RID: 10326
+	public Vector3 testVelocity;
+
+	// Token: 0x04002857 RID: 10327
+	private AttackReleaseFilter x;
+
+	// Token: 0x04002858 RID: 10328
+	private AttackReleaseFilter y;
+
+	// Token: 0x04002859 RID: 10329
+	private AttackReleaseFilter z;
+
+	// Token: 0x0400285A RID: 10330
+	private MaterialInstance.VectorProperty[] velProps;
+
+	// Token: 0x0400285B RID: 10331
+	private MaterialInstance.VectorProperty[] boundProps;
+}

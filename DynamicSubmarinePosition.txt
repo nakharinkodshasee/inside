@@ -1,0 +1,57 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200052C RID: 1324
+public class DynamicSubmarinePosition : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002282 RID: 8834 RVA: 0x00120128 File Offset: 0x0011E328
+	public bool PreAwake(int callcount)
+	{
+		this.checkLevelGlobalsPos = SignalIn.Create("checkLevelGlobalsPos", base.gameObject, new Action(this.DoCheckLevelGlobalsPosData));
+		this.setLevelGlobalsPos = SignalIn.Create("setLevelGlobalsPos", base.gameObject, new Action(this.DoSetLevelGlobalsPosData));
+		this.subInPlace = SignalOut.Create("subInPlace", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06002283 RID: 8835 RVA: 0x00120190 File Offset: 0x0011E390
+	private void Start()
+	{
+		this.sub = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine).gameObject;
+	}
+
+	// Token: 0x06002284 RID: 8836 RVA: 0x001201A8 File Offset: 0x0011E3A8
+	private void DoSetLevelGlobalsPosData()
+	{
+		float magnitude = (this.sub.transform.position - ScriptGlobals.boy.pos3).magnitude;
+		if (magnitude < 300f)
+		{
+			LevelGlobals.subPositionSubmergedChamber = this.sub.transform.position;
+		}
+	}
+
+	// Token: 0x06002285 RID: 8837 RVA: 0x00120204 File Offset: 0x0011E404
+	private void DoCheckLevelGlobalsPosData()
+	{
+		Vector3 subPositionSubmergedChamber = LevelGlobals.subPositionSubmergedChamber;
+		if (subPositionSubmergedChamber.x != 0f)
+		{
+			this.dynamicPos.position = subPositionSubmergedChamber;
+		}
+		this.subInPlace.Signal();
+	}
+
+	// Token: 0x04004067 RID: 16487
+	public Transform dynamicPos;
+
+	// Token: 0x04004068 RID: 16488
+	private SignalIn checkLevelGlobalsPos;
+
+	// Token: 0x04004069 RID: 16489
+	private SignalIn setLevelGlobalsPos;
+
+	// Token: 0x0400406A RID: 16490
+	private SignalOut subInPlace;
+
+	// Token: 0x0400406B RID: 16491
+	private GameObject sub;
+}

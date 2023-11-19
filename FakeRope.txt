@@ -1,0 +1,208 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000256 RID: 598
+public class FakeRope : MonoBehaviour
+{
+	// Token: 0x0600127B RID: 4731 RVA: 0x000AD238 File Offset: 0x000AB438
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this._transform = base.transform;
+	}
+
+	// Token: 0x0600127C RID: 4732 RVA: 0x000AD25C File Offset: 0x000AB45C
+	public void SetIterationCounter(int newIterations, float timeBeforeDegrade)
+	{
+		this.currentDegradeTime = timeBeforeDegrade;
+		this.degradeTime = timeBeforeDegrade;
+		this.iterations = newIterations;
+	}
+
+	// Token: 0x0600127D RID: 4733 RVA: 0x000AD280 File Offset: 0x000AB480
+	private void Start()
+	{
+		this.OnPreProcess();
+		int count = this.ropeObjects.Count;
+		for (int i = 0; i < count; i++)
+		{
+			Transform transform = this.ropeObjects[i];
+			this.curPosList.Add(transform.position);
+			this.fastRopeObjects.Add(transform);
+		}
+		if (count > 1)
+		{
+			this.segmentLength = this.totalLength / (float)(this.ropeObjects.Count - 1);
+		}
+		else
+		{
+			this.segmentLength = 1f;
+		}
+		if (this.simulateWater)
+		{
+			this.offSet = Quaternion.Euler(new Vector3(0f, 0f, this.angleOffset * 57.29578f));
+		}
+	}
+
+	// Token: 0x0600127E RID: 4734 RVA: 0x000AD340 File Offset: 0x000AB540
+	private void Update()
+	{
+		float deltaTime = Time.deltaTime;
+		if (deltaTime <= 0f)
+		{
+			return;
+		}
+		if (this.noUpdateTime > 0f)
+		{
+			this.noUpdateTime -= deltaTime;
+			return;
+		}
+		int size = this.curPosList.size;
+		if (size > 2)
+		{
+			if (this.currentDegradeTime > 0f && this.iterations > 1)
+			{
+				this.currentDegradeTime -= deltaTime;
+				if (this.currentDegradeTime < 0f)
+				{
+					this.iterations--;
+					this.currentDegradeTime = this.degradeTime;
+				}
+			}
+			this.curPosList.raw[0] = this.fastRopeObjects.raw[0].position;
+			this.curPosList.raw[size - 1] = this.fastRopeObjects.raw[size - 1].position;
+			float num = 2f * deltaTime;
+			if (this.simulateWater)
+			{
+				this.waterAngle += this.angleFactor * deltaTime;
+				this.startAngle.x = Mathf.Sin(this.waterAngle);
+				this.startAngle.y = Mathf.Cos(this.waterAngle);
+				this.waterDirections.size = 1;
+				for (int i = 1; i < size - 3; i++)
+				{
+					this.waterDirections.Add(this.startAngle);
+					QuaternionFast.Rotate(ref this.offSet, ref this.startAngle, out this.startAngle);
+				}
+				this.waterDirections.Add(this.startAngle);
+			}
+			for (int j = 0; j < this.iterations; j++)
+			{
+				Vector3 vector = this.curPosList.raw[0];
+				Vector3 vector2 = this.curPosList.raw[1];
+				for (int k = 1; k < size - 1; k++)
+				{
+					Vector3 vector3 = vector;
+					vector = vector2;
+					vector2 = this.curPosList.raw[k + 1];
+					Vector3 vector4 = vector;
+					if (this.simulateWater)
+					{
+						Vector3 vector5 = this.waterDirections.raw[k];
+						float num2 = deltaTime * this.waterPower;
+						vector4.x += vector5.x * num2;
+						vector4.y += vector5.y * num2;
+						vector4.z += vector5.z * num2;
+					}
+					Vector3 vector6 = vector4;
+					Vector3 vector7;
+					vector7.x = vector2.x - vector4.x;
+					vector7.y = vector2.y - vector4.y;
+					vector7.z = vector2.z - vector4.z;
+					float num3 = this.segmentLength / vector7.magnitude;
+					vector4.x = vector2.x - vector7.x * num3;
+					vector4.y = vector2.y - vector7.y * num3;
+					vector4.z = vector2.z - vector7.z * num3;
+					vector7.x = vector3.x - vector6.x;
+					vector7.y = vector3.y - vector6.y;
+					vector7.z = vector3.z - vector6.z;
+					num3 = this.segmentLength / vector7.magnitude;
+					vector6.x = vector3.x - vector7.x * num3;
+					vector6.y = vector3.y - vector7.y * num3;
+					vector6.z = vector3.z - vector7.z * num3;
+					vector.x = (vector4.x + vector6.x) * 0.5f;
+					vector.y = (vector4.y + vector6.y) * 0.5f;
+					vector.z = (vector4.z + vector6.z) * 0.5f;
+					if (this.zRestrict)
+					{
+						vector.z = vector.z * (1f - num) + (vector2.z + vector3.z) * 0.5f * num;
+					}
+					this.curPosList.raw[k] = vector;
+				}
+			}
+			for (int l = 1; l < size - 1; l++)
+			{
+				this.fastRopeObjects.raw[l].SetLocalPositionNoNotify(this._transform.InverseTransformPoint(this.curPosList.raw[l]));
+			}
+		}
+	}
+
+	// Token: 0x040021EA RID: 8682
+	public List<Transform> ropeObjects = new List<Transform>();
+
+	// Token: 0x040021EB RID: 8683
+	public FastList<Transform> fastRopeObjects = new FastList<Transform>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040021EC RID: 8684
+	public float totalLength = 12f;
+
+	// Token: 0x040021ED RID: 8685
+	public bool zRestrict;
+
+	// Token: 0x040021EE RID: 8686
+	private int iterations = 1;
+
+	// Token: 0x040021EF RID: 8687
+	public bool simulateWater;
+
+	// Token: 0x040021F0 RID: 8688
+	public float angleOffset = 0.5f;
+
+	// Token: 0x040021F1 RID: 8689
+	public float angleFactor = 1f;
+
+	// Token: 0x040021F2 RID: 8690
+	public float waterPower = 0.08f;
+
+	// Token: 0x040021F3 RID: 8691
+	private FastList<Vector3> curPosList = new FastList<Vector3>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040021F4 RID: 8692
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x040021F5 RID: 8693
+	[HideInInspector]
+	[SerializeField]
+	private Transform _transform;
+
+	// Token: 0x040021F6 RID: 8694
+	private float degradeTime = -1f;
+
+	// Token: 0x040021F7 RID: 8695
+	private float currentDegradeTime = -1f;
+
+	// Token: 0x040021F8 RID: 8696
+	private float segmentLength = 1f;
+
+	// Token: 0x040021F9 RID: 8697
+	private float noUpdateTime = 0.15f;
+
+	// Token: 0x040021FA RID: 8698
+	private Quaternion offSet;
+
+	// Token: 0x040021FB RID: 8699
+	private FastList<Vector3> waterDirections = new FastList<Vector3>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040021FC RID: 8700
+	private float waterAngle;
+
+	// Token: 0x040021FD RID: 8701
+	private Vector3 startAngle = Vector3Fast.zero;
+}

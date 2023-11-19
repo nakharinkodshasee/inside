@@ -1,0 +1,68 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003D9 RID: 985
+public class FlameBaseRotater : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001A64 RID: 6756 RVA: 0x000E6A3C File Offset: 0x000E4C3C
+	public bool PreAwake(int callcount)
+	{
+		this.setUpVector = SignalIn.Create("setUpVector", base.gameObject, new Action(this.OnSetUpVector));
+		this.setDiagonalVector = SignalIn.Create("setDiagonalVector", base.gameObject, new Action(this.OnSetDiagonalVector));
+		return true;
+	}
+
+	// Token: 0x06001A65 RID: 6757 RVA: 0x000E6A90 File Offset: 0x000E4C90
+	private void Start()
+	{
+		Quaternion rotation = Quaternion.LookRotation(Vector3.forward, this.wantedUp);
+		base.transform.rotation = rotation;
+		this.upVectorToUse = this.WantedDiagonal;
+	}
+
+	// Token: 0x06001A66 RID: 6758 RVA: 0x000E6AC8 File Offset: 0x000E4CC8
+	private void OnEnable()
+	{
+		Quaternion rotation = Quaternion.LookRotation(Vector3.forward, this.wantedUp);
+		base.transform.rotation = rotation;
+	}
+
+	// Token: 0x06001A67 RID: 6759 RVA: 0x000E6AF4 File Offset: 0x000E4CF4
+	private void OnSetUpVector()
+	{
+		this.upVectorToUse = this.wantedUp;
+	}
+
+	// Token: 0x06001A68 RID: 6760 RVA: 0x000E6B04 File Offset: 0x000E4D04
+	private void OnSetDiagonalVector()
+	{
+		this.upVectorToUse = this.WantedDiagonal;
+	}
+
+	// Token: 0x06001A69 RID: 6761 RVA: 0x000E6B14 File Offset: 0x000E4D14
+	private void Update()
+	{
+		Quaternion quaternion = Quaternion.LookRotation(Vector3.forward, this.upVectorToUse);
+		Quaternion quaternion2 = base.transform.rotation;
+		quaternion2 = Quaternion.Slerp(quaternion2, quaternion, Time.deltaTime * this.fireMoveScale);
+		base.transform.rotation = quaternion2;
+	}
+
+	// Token: 0x04002F95 RID: 12181
+	public Vector3 wantedUp = Vector3.up;
+
+	// Token: 0x04002F96 RID: 12182
+	public Vector3 WantedDiagonal = new Vector3(-1f, 1f, 0f);
+
+	// Token: 0x04002F97 RID: 12183
+	public float fireMoveScale = 0.6f;
+
+	// Token: 0x04002F98 RID: 12184
+	private Vector3 upVectorToUse;
+
+	// Token: 0x04002F99 RID: 12185
+	private SignalIn setUpVector;
+
+	// Token: 0x04002F9A RID: 12186
+	private SignalIn setDiagonalVector;
+}

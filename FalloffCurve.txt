@@ -1,0 +1,82 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000559 RID: 1369
+[ExecuteInEditMode]
+public class FalloffCurve : MonoBehaviour
+{
+	// Token: 0x060023A2 RID: 9122 RVA: 0x00128CE8 File Offset: 0x00126EE8
+	public void UpdateCurveTex()
+	{
+		for (int i = 0; i < 2; i++)
+		{
+			for (int j = 0; j < 256; j++)
+			{
+				float num = (float)j / 255f;
+				float num2 = this.myanimcurve.Evaluate(num);
+				this.curveTex.SetPixel(j, i, new Color(num2, num2, num2));
+			}
+		}
+		this.curveTex.Apply(true);
+	}
+
+	// Token: 0x060023A3 RID: 9123 RVA: 0x00128D54 File Offset: 0x00126F54
+	protected void InitCurveTex()
+	{
+		if (this.curveTex == null)
+		{
+			this.curveTex = new Texture2D(256, 2, 3, false, true);
+			this.curveTex.wrapMode = 1;
+		}
+		this.UpdateCurveTex();
+		base.GetComponent<Renderer>().sharedMaterial.SetTexture(this.ShaderTexProperty, this.curveTex);
+	}
+
+	// Token: 0x060023A4 RID: 9124 RVA: 0x00128DB4 File Offset: 0x00126FB4
+	public void Reset()
+	{
+		if (this.myanimcurve == null)
+		{
+			this.myanimcurve = new AnimationCurve();
+		}
+		else
+		{
+			while (this.myanimcurve.length > 0)
+			{
+				this.myanimcurve.RemoveKey(0);
+			}
+		}
+		this.myanimcurve.AddKey(new Keyframe(0f, 1f, 0f, 0f));
+		this.myanimcurve.AddKey(new Keyframe(0.5f, 1f, 0f, 0f));
+		this.myanimcurve.AddKey(new Keyframe(0.85f, 0f, 0f, 0f));
+		this.myanimcurve.AddKey(new Keyframe(1f, 0f, 0f, 0f));
+		this.ShaderTexProperty = "_FalloffTex";
+		this.InitCurveTex();
+	}
+
+	// Token: 0x060023A5 RID: 9125 RVA: 0x00128EA4 File Offset: 0x001270A4
+	public void Start()
+	{
+		this.InitCurveTex();
+	}
+
+	// Token: 0x060023A6 RID: 9126 RVA: 0x00128EAC File Offset: 0x001270AC
+	public void Update()
+	{
+	}
+
+	// Token: 0x04004215 RID: 16917
+	protected const int tex_width = 256;
+
+	// Token: 0x04004216 RID: 16918
+	protected const int tex_height = 2;
+
+	// Token: 0x04004217 RID: 16919
+	public AnimationCurve myanimcurve;
+
+	// Token: 0x04004218 RID: 16920
+	public Texture2D curveTex;
+
+	// Token: 0x04004219 RID: 16921
+	public string ShaderTexProperty = string.Empty;
+}

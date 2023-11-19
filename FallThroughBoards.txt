@@ -1,0 +1,120 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000404 RID: 1028
+public class FallThroughBoards : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001B19 RID: 6937 RVA: 0x000ED1F8 File Offset: 0x000EB3F8
+	public bool PreAwake(int callcount)
+	{
+		this.startFallThrough = SignalIn.Create("startFallThrough", base.gameObject, new Action(this.FallThrough));
+		this.startNextBoardFallThrough = SignalIn.Create("startNextBoardFallThrough", base.gameObject, new Action(this.NextBoardFallOff));
+		return true;
+	}
+
+	// Token: 0x06001B1A RID: 6938 RVA: 0x000ED24C File Offset: 0x000EB44C
+	public void FallThrough()
+	{
+		Boy boy = ScriptGlobals.boy;
+		Vector3 position = this.sleepWalkerCollection.transform.position;
+		position.x += boy.pos.x - this.leftStandardFallPos.transform.position.x;
+		this.sleepWalkerCollection.transform.position = position;
+		this.sleepWalkerCollection.HasBeenMoved();
+		float num = float.MaxValue;
+		int num2 = 0;
+		int i = 0;
+		int num3 = this.boards.Length;
+		while (i < num3)
+		{
+			Rigidbody rigidbody = this.boards[i];
+			float num4 = Mathf.Abs(ScriptGlobals.boy.pos.x - rigidbody.position.x);
+			if (num4 < num)
+			{
+				this.closestBoard = rigidbody;
+				num = num4;
+				num2 = i;
+			}
+			i++;
+		}
+		if (num2 < this.boards.Length - 1)
+		{
+			this.nextBoard = this.boards[num2 + 1];
+		}
+		Vector3 position2 = this.landAnimation.transform.position;
+		position2.x = this.closestBoard.transform.position.x;
+		this.landAnimation.transform.position = position2;
+		Vector3 position3 = this.animNode.transform.position;
+		position3.x = this.closestBoard.transform.position.x - 0.1f;
+		this.animNode.transform.position = position3;
+		BoyUtils.StartCustomAnim(boy, this.animNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		Vector3 position4 = this.fxParticles.transform.position;
+		position4.x = this.closestBoard.transform.position.x;
+		this.fxParticles.transform.position = position4;
+		this.fxParticlesNext.transform.position = position4;
+		this.closestBoard.isKinematic = false;
+		this.closestBoard.AddForceAtPosition(Vector3.down * 50f, this.closestBoard.position + Vector3.back * 0.5f);
+		this.fxParticles.Play(true);
+	}
+
+	// Token: 0x06001B1B RID: 6939 RVA: 0x000ED4A4 File Offset: 0x000EB6A4
+	public void NextBoardFallOff()
+	{
+		if (this.nextBoard)
+		{
+			this.nextBoard.isKinematic = false;
+			this.nextBoard.AddForceAtPosition(Vector3.down * 50f, this.nextBoard.position - Vector3.back * 0.5f);
+		}
+		this.fxParticlesNext.Play(true);
+		this.fallTimer = 0.5f;
+	}
+
+	// Token: 0x06001B1C RID: 6940 RVA: 0x000ED520 File Offset: 0x000EB720
+	private void FixedUpdate()
+	{
+		if (this.fallTimer > 0f)
+		{
+			this.fallTimer -= Time.deltaTime;
+			if (this.fallTimer <= 0f)
+			{
+				this.closestBoard.gameObject.SetActive(false);
+				this.nextBoard.gameObject.SetActive(false);
+			}
+		}
+	}
+
+	// Token: 0x04003116 RID: 12566
+	public GameObject landAnimation;
+
+	// Token: 0x04003117 RID: 12567
+	public GameObject leftStandardFallPos;
+
+	// Token: 0x04003118 RID: 12568
+	public SleepWalkerCollection sleepWalkerCollection;
+
+	// Token: 0x04003119 RID: 12569
+	public ParticleSystem fxParticles;
+
+	// Token: 0x0400311A RID: 12570
+	public ParticleSystem fxParticlesNext;
+
+	// Token: 0x0400311B RID: 12571
+	public AnimClipNode animNode;
+
+	// Token: 0x0400311C RID: 12572
+	public Rigidbody[] boards;
+
+	// Token: 0x0400311D RID: 12573
+	private Rigidbody nextBoard;
+
+	// Token: 0x0400311E RID: 12574
+	private Rigidbody closestBoard;
+
+	// Token: 0x0400311F RID: 12575
+	private float fallTimer;
+
+	// Token: 0x04003120 RID: 12576
+	private SignalIn startFallThrough;
+
+	// Token: 0x04003121 RID: 12577
+	private SignalIn startNextBoardFallThrough;
+}

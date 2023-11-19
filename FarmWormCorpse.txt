@@ -1,0 +1,157 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000081 RID: 129
+public class FarmWormCorpse : MonoBehaviour
+{
+	// Token: 0x0600044B RID: 1099 RVA: 0x00030B3C File Offset: 0x0002ED3C
+	private void Start()
+	{
+		this.attractWormStartPos = this.attractWorm.transform.position;
+	}
+
+	// Token: 0x0600044C RID: 1100 RVA: 0x00030B54 File Offset: 0x0002ED54
+	private void Update()
+	{
+	}
+
+	// Token: 0x0600044D RID: 1101 RVA: 0x00030B58 File Offset: 0x0002ED58
+	private void CrawlOut()
+	{
+		foreach (GameObject gameObject in this.worms)
+		{
+			gameObject.GetComponent<Animation>().Blend("WiggleAss", 1f, 0.25f);
+			gameObject.GetComponent<Animation>().Blend("AssInside", 0f, 0.25f);
+		}
+		if (!this.attractionActive)
+		{
+			this.attractWorm.GetComponent<Animation>().Blend("WiggleAss", 1f, 0.25f);
+			this.attractWorm.GetComponent<Animation>().Blend("AssInside", 0f, 0.25f);
+		}
+		this.hideInside = false;
+	}
+
+	// Token: 0x0600044E RID: 1102 RVA: 0x00030C3C File Offset: 0x0002EE3C
+	private void CrawlIn()
+	{
+		foreach (GameObject gameObject in this.worms)
+		{
+			gameObject.GetComponent<Animation>().Blend("AssInside", 1f, 0.25f);
+			gameObject.GetComponent<Animation>().Blend("WiggleAss", 0f, 0.25f);
+		}
+		if (!this.wormedCrawledIn && !this.attractionActive)
+		{
+			this.attractWorm.GetComponent<Animation>().Blend("AssInside", 1f, 0.25f);
+			this.attractWorm.GetComponent<Animation>().Blend("WiggleAss", 0f, 0.25f);
+		}
+		this.hideInside = true;
+	}
+
+	// Token: 0x0600044F RID: 1103 RVA: 0x00030D2C File Offset: 0x0002EF2C
+	public void AttractAssEnable()
+	{
+		this.attractWorm.GetComponent<Animation>().Play("ComeOutCorpse");
+		this.attractionActive = true;
+		this.attractionTimer = 0f;
+	}
+
+	// Token: 0x06000450 RID: 1104 RVA: 0x00030D64 File Offset: 0x0002EF64
+	public void AttractAssDisable()
+	{
+		this.attractionActive = false;
+		if (!this.wormedCrawledIn)
+		{
+			if (this.hideInside)
+			{
+				this.attractWorm.GetComponent<Animation>().Play("AssInside");
+			}
+			else
+			{
+				this.attractWorm.GetComponent<Animation>().Play("WiggleAss");
+			}
+		}
+	}
+
+	// Token: 0x06000451 RID: 1105 RVA: 0x00030DC0 File Offset: 0x0002EFC0
+	private void FixedUpdate()
+	{
+		float num = Mathf.Abs(base.transform.position.x - ScriptGlobals.boy.transform.position.x);
+		if (!this.hideInside && num < 2f)
+		{
+			this.CrawlIn();
+		}
+		else if (this.hideInside && num > 2.5f)
+		{
+			this.CrawlOut();
+		}
+		if (!this.wormedCrawledIn)
+		{
+			if (this.attractionActive)
+			{
+				this.attractionTimer = Mathf.Min(6.5f, this.attractionTimer + Time.deltaTime);
+				if (this.attractionTimer >= 6.5f)
+				{
+					this.wormedCrawledIn = true;
+					this.attractWorm.transform.position = this.assPivot.transform.position;
+					this.attractWorm.transform.rotation = this.assPivot.transform.rotation;
+					this.attractWorm.GetComponent<Animation>().Play("InjectIntoPig");
+					return;
+				}
+			}
+			else
+			{
+				this.attractionTimer = Mathf.Max(0f, this.attractionTimer - 4f * Time.deltaTime);
+			}
+			float num2 = Mathf.InverseLerp(0f, 2f, this.attractionTimer);
+			Vector3 position = Vector3.Lerp(this.attractWormStartPos, this.attractWormTargetPos.transform.position, num2);
+			this.attractWorm.transform.position = position;
+		}
+		else
+		{
+			this.attractWorm.transform.position = this.assPivot.transform.position;
+			this.attractWorm.transform.rotation = this.assPivot.transform.rotation;
+			if (this.wormedCrawledIn)
+			{
+				this.crawledInTimer += Time.deltaTime;
+				if (this.crawledInTimer > 2f && this.attractWorm.GetComponentInChildren<SkinnedMeshRenderer>().enabled)
+				{
+					this.attractWorm.GetComponentInChildren<SkinnedMeshRenderer>().enabled = false;
+				}
+			}
+		}
+	}
+
+	// Token: 0x0400076F RID: 1903
+	public List<GameObject> worms;
+
+	// Token: 0x04000770 RID: 1904
+	public FarmPigFight pigFight;
+
+	// Token: 0x04000771 RID: 1905
+	public GameObject attractWorm;
+
+	// Token: 0x04000772 RID: 1906
+	public GameObject attractWormTargetPos;
+
+	// Token: 0x04000773 RID: 1907
+	public GameObject assPivot;
+
+	// Token: 0x04000774 RID: 1908
+	private bool hideInside;
+
+	// Token: 0x04000775 RID: 1909
+	private bool attractionActive;
+
+	// Token: 0x04000776 RID: 1910
+	private float attractionTimer;
+
+	// Token: 0x04000777 RID: 1911
+	private Vector3 attractWormStartPos;
+
+	// Token: 0x04000778 RID: 1912
+	private bool wormedCrawledIn;
+
+	// Token: 0x04000779 RID: 1913
+	private float crawledInTimer;
+}

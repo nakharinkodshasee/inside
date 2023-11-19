@@ -1,0 +1,70 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000082 RID: 130
+public class EndFishWaypointMover : MonoBehaviour
+{
+	// Token: 0x06000453 RID: 1107 RVA: 0x00030FF4 File Offset: 0x0002F1F4
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000454 RID: 1108 RVA: 0x00030FF8 File Offset: 0x0002F1F8
+	private void Update()
+	{
+	}
+
+	// Token: 0x06000455 RID: 1109 RVA: 0x00030FFC File Offset: 0x0002F1FC
+	private void FixedUpdate()
+	{
+		Vector3 vector = ScriptGlobals.huddle.transform.position;
+		float num = Mathf.InverseLerp(this.leftWayPoint.position.y, this.topLeftWayPoint.position.y, vector.y);
+		float num2 = Mathf.Lerp(this.leftWayPoint.position.x, this.topLeftWayPoint.position.x, num);
+		vector.x = Mathf.Max(vector.x, num2);
+		Vector3 vector2 = this.targetWayPoint.position - vector;
+		float x = vector2.x;
+		if (x > 55f)
+		{
+			return;
+		}
+		vector2.Normalize();
+		vector += vector2 * this.dist;
+		if (ScriptGlobals.huddle.transform.position.x < this.leftWayPoint.position.x)
+		{
+			vector.y = Mathf.Min(vector.y, this.leftWayPoint.position.y);
+		}
+		base.transform.position = vector;
+		float sqrMagnitude = (base.transform.position - this.targetWayPoint.position).sqrMagnitude;
+		if (!this.setToFinalPos && sqrMagnitude < 36f)
+		{
+			this.setToFinalPos = true;
+		}
+		else if (this.setToFinalPos && sqrMagnitude > 64f)
+		{
+			this.setToFinalPos = false;
+		}
+		if (ScriptGlobals.huddle.pos.y > this.targetWayPoint.position.y)
+		{
+			this.setToFinalPos = true;
+		}
+		if (this.setToFinalPos)
+		{
+			base.transform.position = this.targetWayPoint.position;
+		}
+	}
+
+	// Token: 0x0400077A RID: 1914
+	public Transform leftWayPoint;
+
+	// Token: 0x0400077B RID: 1915
+	public Transform topLeftWayPoint;
+
+	// Token: 0x0400077C RID: 1916
+	public Transform targetWayPoint;
+
+	// Token: 0x0400077D RID: 1917
+	public float dist = 5f;
+
+	// Token: 0x0400077E RID: 1918
+	private bool setToFinalPos;
+}

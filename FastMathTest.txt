@@ -1,0 +1,30 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000584 RID: 1412
+[ExecuteInEditMode]
+public class FastMathTest : MonoBehaviour
+{
+	// Token: 0x0600244D RID: 9293 RVA: 0x0012BB08 File Offset: 0x00129D08
+	private void Update()
+	{
+		if ((!Application.isEditor && GameManager.controller != null && GameManager.controller.A) || Input.GetKeyDown(32))
+		{
+			this.benchmark = true;
+		}
+		if (this.benchmark)
+		{
+			this.benchmark = false;
+			this.Benchmark();
+		}
+	}
+
+	// Token: 0x0600244E RID: 9294 RVA: 0x0012BB68 File Offset: 0x00129D68
+	private void Benchmark()
+	{
+		FastMathBenchmark.Run(100000);
+	}
+
+	// Token: 0x0400429A RID: 17050
+	public bool benchmark;
+}

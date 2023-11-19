@@ -1,0 +1,76 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004C1 RID: 1217
+public class ForcePushDudes : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001FCF RID: 8143 RVA: 0x0010E878 File Offset: 0x0010CA78
+	public bool PreAwake(int callcount)
+	{
+		this.activate = SignalIn.Create("activate", base.gameObject, new Action(this.OnActivate));
+		return true;
+	}
+
+	// Token: 0x06001FD0 RID: 8144 RVA: 0x0010E8A0 File Offset: 0x0010CAA0
+	private void FixedUpdate()
+	{
+		if (!this.isActive)
+		{
+			return;
+		}
+		int i = 0;
+		int num = this.destroyDudes.Length;
+		while (i < num)
+		{
+			ForcePushObject forcePushObject = this.destroyDudes[i];
+			int currentDestroyIndex = forcePushObject.currentDestroyIndex;
+			if (currentDestroyIndex > 0 && currentDestroyIndex != 1 && currentDestroyIndex < forcePushObject.destroys.Length - 1)
+			{
+				float num2 = Mathf.Abs(ScriptGlobals.boy.pos.x - forcePushObject.transform.position.x);
+				if (num2 < this.destroyMinDist)
+				{
+					forcePushObject.currentDestroyIndex = 1;
+				}
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06001FD1 RID: 8145 RVA: 0x0010E948 File Offset: 0x0010CB48
+	private void OnActivate()
+	{
+		int i = 0;
+		int num = this.dudes.Length;
+		while (i < num)
+		{
+			this.dudes[i].useBlowAlternative = false;
+			i++;
+		}
+		int j = 0;
+		int num2 = this.destroyDudes.Length;
+		while (j < num2)
+		{
+			this.destroyDudes[j].destroyDist = this.destroyDist;
+			j++;
+		}
+		this.isActive = true;
+	}
+
+	// Token: 0x04003ADF RID: 15071
+	public ForcePushObject[] destroyDudes;
+
+	// Token: 0x04003AE0 RID: 15072
+	public float destroyDist = 7f;
+
+	// Token: 0x04003AE1 RID: 15073
+	public float destroyMinDist = 3f;
+
+	// Token: 0x04003AE2 RID: 15074
+	public ForcePushObject[] dudes;
+
+	// Token: 0x04003AE3 RID: 15075
+	private SignalIn activate;
+
+	// Token: 0x04003AE4 RID: 15076
+	private bool isActive;
+}

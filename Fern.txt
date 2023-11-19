@@ -1,0 +1,482 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020003D7 RID: 983
+public class Fern : MonoBehaviour, IFastEventListener, IFastEventExListener<Collider>
+{
+	// Token: 0x06001A51 RID: 6737 RVA: 0x000E5CD4 File Offset: 0x000E3ED4
+	[ContextMenu("PreProcessTest")]
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioFoley = new AudioEventSimple("env_vegetation_fern_foley");
+		this.leafTransform = this.visualsLeaf.transform;
+		this.anim = this.visualsLeaf.GetComponent<Animation>();
+		this.animBody = this.visualsBody.GetComponent<Animation>();
+		this.leafPosStart = this.leafTransform.position - this.leafTransform.forward * (this.leafTransform.position.z / this.leafTransform.forward.z);
+		this.zAdjust = Mathf.Sign(this.visualsLeaf.transform.position.z);
+		this.leafEndStartRot = this.visualsLeafEnd.transform.localRotation.eulerAngles;
+	}
+
+	// Token: 0x06001A52 RID: 6738 RVA: 0x000E5DC8 File Offset: 0x000E3FC8
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.trigger.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.trigger.exitTrigger.Register(this, ref this.triggerExitHandle);
+		this.animBend = this.anim["BendLR"];
+		this.animBend.normalizedTime = 0.5f;
+		this.animBend.speed = 0f;
+		this.animTouch = this.anim["TouchNoise"];
+		this.animTouch.blendMode = 1;
+		this.animTouch.layer = 2;
+		this.anim.Play("TouchNoise");
+		this.animIdle = this.animBody["Idle"];
+		this.animIdle.layer = 0;
+		if (this.jetcrate)
+		{
+			this.jetcrate.jetCrateForceActive.Register(this, ref this.jetCrateForceActiveHandle);
+		}
+		this.character = ScriptGlobals.boy;
+		this.leafPos = this.leafPosStart;
+		this.SetIdleState();
+	}
+
+	// Token: 0x06001A53 RID: 6739 RVA: 0x000E5EE4 File Offset: 0x000E40E4
+	private void SetIdleState()
+	{
+		this.state = Fern.State.Idle;
+	}
+
+	// Token: 0x06001A54 RID: 6740 RVA: 0x000E5EF0 File Offset: 0x000E40F0
+	private void IdleState()
+	{
+	}
+
+	// Token: 0x06001A55 RID: 6741 RVA: 0x000E5EF4 File Offset: 0x000E40F4
+	private void SetNearState()
+	{
+		this.currentDir = Mathf.Sign(this.leafPosStart.x - this.character.pos3.x);
+		this.state = Fern.State.Near;
+	}
+
+	// Token: 0x06001A56 RID: 6742 RVA: 0x000E5F34 File Offset: 0x000E4134
+	private void SetFlopState()
+	{
+		this.state = Fern.State.Flop;
+	}
+
+	// Token: 0x06001A57 RID: 6743 RVA: 0x000E5F40 File Offset: 0x000E4140
+	private void FlopState()
+	{
+		if (Mathf.Abs(this.animBend.normalizedTime - 0.5f) < 0.2f)
+		{
+			this.SetNearState();
+		}
+	}
+
+	// Token: 0x06001A58 RID: 6744 RVA: 0x000E5F74 File Offset: 0x000E4174
+	private void NearState()
+	{
+		this.charX = this.character.pos3.x + this.width * this.currentDir;
+		float num = Mathf.Abs(this.character.pos3.y - this.leafTransform.position.y);
+		if (num > 1.1f)
+		{
+			if ((this.character.pos3.x - this.leafX.x) * this.currentDir > 0.5f * this.currentDir)
+			{
+				this.currentDir *= -1f;
+			}
+		}
+		else if (this.charX * this.currentDir > this.leafX.x * this.currentDir)
+		{
+			if (!this.anim.IsPlaying(this.animBend.clip.name))
+			{
+				this.anim.CrossFade(this.animBend.clip.name);
+			}
+			float num2 = (this.leafX.x - this.charX) * this.moveFactor;
+			this.animBend.normalizedTime += num2 * this.zAdjust;
+			this.leafVel = (this.animBend.normalizedTime - this.previousBend) * this.moveFriction;
+			if (ScriptGlobals.boy.isCharacterActive && ScriptGlobals.boy.input.jump && ScriptGlobals.boy.status.groundCollider != null && (this.recentJumpAnim == null || this.recentJumpAnim.time > 0.5f))
+			{
+				this.JumpFlop(0f, 0.25f);
+				this.Shake(-this.leafTransform.forward);
+			}
+			if (this.character.velocity3.y < -0.2f && Mathf.Abs(this.character.pos3.y - this.leafTransform.position.y) < 1.2f && (this.recentJumpAnim == null || this.recentJumpAnim.time > 1.5f))
+			{
+				this.JumpFlop(0.66f, 0.25f);
+				this.Shake(this.leafTransform.forward);
+			}
+			float num3 = Mathf.Abs(this.character.pos3.x - this.leafPosStart.x);
+			if (num3 > 0.5f && this.character.pos3.x * this.currentDir > this.leafTip.position.x * this.currentDir)
+			{
+				this.HardFlop();
+			}
+		}
+	}
+
+	// Token: 0x06001A59 RID: 6745 RVA: 0x000E627C File Offset: 0x000E447C
+	private void FixedUpdate()
+	{
+		if (!this.visualBodysRenderer.isVisible)
+		{
+			return;
+		}
+		this.Wave();
+		if (this.state != Fern.State.None)
+		{
+			switch (this.state)
+			{
+			case Fern.State.Idle:
+				this.IdleState();
+				break;
+			case Fern.State.Near:
+				this.NearState();
+				break;
+			case Fern.State.Flop:
+				this.FlopState();
+				break;
+			}
+		}
+		if (this.debug && this.test != null && this.test.Count > 0)
+		{
+			foreach (Vector3 vector in this.test)
+			{
+				Debug.DrawLine(base.transform.position, base.transform.position + vector, new Color(1f, 0.4f, 0f));
+			}
+		}
+	}
+
+	// Token: 0x06001A5A RID: 6746 RVA: 0x000E639C File Offset: 0x000E459C
+	private void HardFlop()
+	{
+		this.SetFlopState();
+		this.Shake(this.leafTransform.right * -this.currentDir * this.zAdjust);
+	}
+
+	// Token: 0x06001A5B RID: 6747 RVA: 0x000E63D8 File Offset: 0x000E45D8
+	private void JumpFlop(float offset, float fadeLength)
+	{
+		if (!this.animJump)
+		{
+			this.animJump = this.anim["JumpAddA"];
+			this.animJump.blendMode = 1;
+			this.animJump.layer = 3;
+		}
+		this.recentJumpAnim = this.anim.CrossFadeQueued("JumpAddA", fadeLength, 2);
+		this.recentJumpAnim.time = offset;
+		this.recentJumpAnim.blendMode = 1;
+		this.recentJumpAnim.layer = 3;
+	}
+
+	// Token: 0x06001A5C RID: 6748 RVA: 0x000E6460 File Offset: 0x000E4660
+	public void OnFastEvent(FastEvent sender)
+	{
+		if (this.jetcrate && sender == this.jetcrate.jetCrateForceActive)
+		{
+			AnimationClip animationClip = this.jetCrateShakes[Random.Range(0, this.jetCrateShakes.Length)];
+			AnimationState animationState = this.animBody[animationClip.name];
+			animationState.blendMode = 1;
+			animationState.layer = 3;
+			AnimationState animationState2 = this.animBody.CrossFadeQueued(animationState.name, 0.15f, 2);
+			animationState2.speed = Random.Range(0.85f, 1.15f);
+		}
+	}
+
+	// Token: 0x06001A5D RID: 6749 RVA: 0x000E64F4 File Offset: 0x000E46F4
+	private void Wave()
+	{
+		Vector3 position = this.leafTransform.position;
+		Vector3 vector = this.leafTip.transform.position - position;
+		vector.y = 0f;
+		vector.Normalize();
+		this.leafX = position - vector * position.z / vector.z;
+		this.previousBend = this.animBend.normalizedTime;
+		this.leafVel += (this.bendTowards - this.animBend.normalizedTime) * this.leafAcceleration * Time.deltaTime;
+		this.leafVel += this.leafVel * -this.leafFriction * Time.deltaTime;
+		this.leafVel = Mathf.Clamp(this.leafVel, -this.maxLeafVel, this.maxLeafVel);
+		this.animBend.normalizedTime += this.leafVel;
+		this.animBend.normalizedTime = Mathf.Clamp(this.animBend.normalizedTime, 0f, 1f);
+		float num = (this.animBend.normalizedTime - 0.5f) * 2f;
+		this.tipLeafVel += (num - this.tipBend) * this.tipLeafAcceleration * Time.deltaTime;
+		this.tipLeafVel += this.tipLeafVel * -this.tipLeafFriction * Time.deltaTime;
+		this.tipLeafVel = Mathf.Clamp(this.tipLeafVel, -this.maxLeafVel, this.maxLeafVel);
+		this.tipBend += this.tipLeafVel;
+		float num2 = this.tipBend * this.leafEndRot;
+		this.visualsLeafEnd.transform.localRotation = Quaternion.Euler(this.leafEndStartRot.x, this.leafEndStartRot.y + num2, this.leafEndStartRot.z);
+	}
+
+	// Token: 0x06001A5E RID: 6750 RVA: 0x000E66E8 File Offset: 0x000E48E8
+	public void Shake(Vector3 dir)
+	{
+		if (this.debug)
+		{
+			this.test = new List<Vector3>();
+		}
+		float num = Vector3.Dot(dir, this.visualsBody.transform.forward);
+		float num2 = Vector3.Dot(dir, this.visualsBody.transform.right);
+		if (num > 0.707f)
+		{
+			this.currentShake = "Shake0Light";
+			if (this.debug)
+			{
+				this.test.Add(this.visualsBody.transform.forward * 3f);
+			}
+		}
+		else if (num < -0.707f)
+		{
+			this.currentShake = "Shake180Light";
+			if (this.debug)
+			{
+				this.test.Add(-this.visualsBody.transform.forward * 3f);
+			}
+		}
+		else if (num2 > 0.707f)
+		{
+			this.currentShake = "Shake270Light";
+			if (this.debug)
+			{
+				this.test.Add(-this.visualsBody.transform.right * 3f);
+			}
+		}
+		else
+		{
+			this.currentShake = "Shake90Light";
+			if (this.debug)
+			{
+				this.test.Add(-this.visualsBody.transform.right * 3f);
+			}
+		}
+		this.audioFoley.PostFast(AudioKeyObject.AkGameObjs.boy);
+		this.animBody.CrossFadeQueued(this.currentShake, 0.3f, 2);
+	}
+
+	// Token: 0x06001A5F RID: 6751 RVA: 0x000E688C File Offset: 0x000E4A8C
+	private void OnDrawGizmos()
+	{
+		if (this.debug)
+		{
+			Gizmos.color = Color.grey;
+			Gizmos.DrawSphere(this.leafPosStart, 0.1f);
+			Gizmos.color = Color.green;
+			Gizmos.DrawSphere(this.leafPos + new Vector3(0f, 0.3f, 0f), 0.1f);
+			Gizmos.color = Color.red;
+			Gizmos.DrawSphere(this.leafTip.position, 0.1f);
+			Gizmos.color = Color.black;
+			Gizmos.DrawSphere(this.leafX, 0.1f);
+			Gizmos.color = Color.cyan;
+			Vector3 position = this.visualsLeaf.transform.position;
+			position.x = this.charX;
+			position.z = 0f;
+			Gizmos.DrawSphere(position, 0.1f);
+		}
+	}
+
+	// Token: 0x06001A60 RID: 6752 RVA: 0x000E696C File Offset: 0x000E4B6C
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.trigger.enterTrigger)
+		{
+			this.TriggerEnter(collider);
+		}
+		else if (sender == this.trigger.exitTrigger)
+		{
+			this.TriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06001A61 RID: 6753 RVA: 0x000E69A8 File Offset: 0x000E4BA8
+	private void TriggerEnter(Collider c)
+	{
+		BoyProbe component = c.GetComponent<BoyProbe>();
+		if (component)
+		{
+			this.SetNearState();
+		}
+	}
+
+	// Token: 0x06001A62 RID: 6754 RVA: 0x000E69D0 File Offset: 0x000E4BD0
+	private void TriggerExit(Collider c)
+	{
+		BoyProbe component = c.GetComponent<BoyProbe>();
+		if (component)
+		{
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x04002F61 RID: 12129
+	public CollisionEvents trigger;
+
+	// Token: 0x04002F62 RID: 12130
+	public Transform leafTip;
+
+	// Token: 0x04002F63 RID: 12131
+	public GameObject visualsLeaf;
+
+	// Token: 0x04002F64 RID: 12132
+	public Transform visualsLeafEnd;
+
+	// Token: 0x04002F65 RID: 12133
+	public GameObject visualsBody;
+
+	// Token: 0x04002F66 RID: 12134
+	public Renderer visualBodysRenderer;
+
+	// Token: 0x04002F67 RID: 12135
+	private string currentShake;
+
+	// Token: 0x04002F68 RID: 12136
+	private Fern.State state;
+
+	// Token: 0x04002F69 RID: 12137
+	private Vector3 leafPos;
+
+	// Token: 0x04002F6A RID: 12138
+	private Character character;
+
+	// Token: 0x04002F6B RID: 12139
+	private float width = 0.45f;
+
+	// Token: 0x04002F6C RID: 12140
+	private float currentDir;
+
+	// Token: 0x04002F6D RID: 12141
+	private AnimationState recentJumpAnim;
+
+	// Token: 0x04002F6E RID: 12142
+	private float previousBend = 0.5f;
+
+	// Token: 0x04002F6F RID: 12143
+	private float leafVel;
+
+	// Token: 0x04002F70 RID: 12144
+	public float leafFriction = 1.1f;
+
+	// Token: 0x04002F71 RID: 12145
+	public float leafAcceleration = 0.2f;
+
+	// Token: 0x04002F72 RID: 12146
+	public float maxLeafVel = 0.02f;
+
+	// Token: 0x04002F73 RID: 12147
+	private float bendTowards = 0.5f;
+
+	// Token: 0x04002F74 RID: 12148
+	private float tipBend;
+
+	// Token: 0x04002F75 RID: 12149
+	private float tipLeafVel;
+
+	// Token: 0x04002F76 RID: 12150
+	public float tipLeafFriction = 1.1f;
+
+	// Token: 0x04002F77 RID: 12151
+	public float tipLeafAcceleration = 0.2f;
+
+	// Token: 0x04002F78 RID: 12152
+	public float leafEndRot = 40f;
+
+	// Token: 0x04002F79 RID: 12153
+	private float charX;
+
+	// Token: 0x04002F7A RID: 12154
+	public float moveFactor = 0.015f;
+
+	// Token: 0x04002F7B RID: 12155
+	public float moveFriction = 0.8f;
+
+	// Token: 0x04002F7C RID: 12156
+	private Vector3 leafX;
+
+	// Token: 0x04002F7D RID: 12157
+	public JetCrate jetcrate;
+
+	// Token: 0x04002F7E RID: 12158
+	public AnimationClip[] jetCrateShakes;
+
+	// Token: 0x04002F7F RID: 12159
+	public bool debug;
+
+	// Token: 0x04002F80 RID: 12160
+	private List<Vector3> test;
+
+	// Token: 0x04002F81 RID: 12161
+	private AnimationState animTouch;
+
+	// Token: 0x04002F82 RID: 12162
+	private AnimationState animBend;
+
+	// Token: 0x04002F83 RID: 12163
+	private AnimationState animJump;
+
+	// Token: 0x04002F84 RID: 12164
+	private AnimationState animIdle;
+
+	// Token: 0x04002F85 RID: 12165
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04002F86 RID: 12166
+	private int triggerExitHandle = -1;
+
+	// Token: 0x04002F87 RID: 12167
+	private int jetCrateForceActiveHandle = -1;
+
+	// Token: 0x04002F88 RID: 12168
+	[HideInInspector]
+	[SerializeField]
+	private float zAdjust = 1f;
+
+	// Token: 0x04002F89 RID: 12169
+	[HideInInspector]
+	[SerializeField]
+	private Vector3 leafEndStartRot;
+
+	// Token: 0x04002F8A RID: 12170
+	[SerializeField]
+	[HideInInspector]
+	private Vector3 leafPosStart;
+
+	// Token: 0x04002F8B RID: 12171
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioFoley;
+
+	// Token: 0x04002F8C RID: 12172
+	[HideInInspector]
+	[SerializeField]
+	private Animation animBody;
+
+	// Token: 0x04002F8D RID: 12173
+	[HideInInspector]
+	[SerializeField]
+	private Animation anim;
+
+	// Token: 0x04002F8E RID: 12174
+	[SerializeField]
+	[HideInInspector]
+	private Transform leafTransform;
+
+	// Token: 0x04002F8F RID: 12175
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x020003D8 RID: 984
+	private enum State
+	{
+		// Token: 0x04002F91 RID: 12177
+		None,
+		// Token: 0x04002F92 RID: 12178
+		Idle,
+		// Token: 0x04002F93 RID: 12179
+		Near,
+		// Token: 0x04002F94 RID: 12180
+		Flop
+	}
+}

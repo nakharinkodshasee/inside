@@ -1,0 +1,81 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000486 RID: 1158
+public class FenceForceForwardLogic : DefaultBoyInput, IPreAwake
+{
+	// Token: 0x1700008D RID: 141
+	// (get) Token: 0x06001E5C RID: 7772 RVA: 0x001045B4 File Offset: 0x001027B4
+	public override vector2f stick
+	{
+		get
+		{
+			if (!this.logicIsActive)
+			{
+				return base.stick;
+			}
+			if (ScriptGlobals.boy.transform.position.x < this.forceLeftPoint.position.x)
+			{
+				return new vector2f(-1f, 0f);
+			}
+			if ((double)base.stick.x < 0.6 && !this.forceRight)
+			{
+				return new vector2f(-1f, 0f);
+			}
+			return new vector2f(1f, 0f);
+		}
+	}
+
+	// Token: 0x06001E5D RID: 7773 RVA: 0x0010465C File Offset: 0x0010285C
+	public bool PreAwake(int callcount)
+	{
+		this.boyInsideTrigger = SignalIn.Create("boyInsideTrigger", base.gameObject, new Action(this.OnBoyInsideTrigger));
+		this.boyOutsideTrigger = SignalIn.Create("boyOutsideTrigger", base.gameObject, new Action(this.OnBoyOutsideTrigger));
+		return true;
+	}
+
+	// Token: 0x06001E5E RID: 7774 RVA: 0x001046B0 File Offset: 0x001028B0
+	private void OnBoyInsideTrigger()
+	{
+		this.logicIsActive = true;
+		ScriptGlobals.boy.input = this;
+	}
+
+	// Token: 0x06001E5F RID: 7775 RVA: 0x001046C4 File Offset: 0x001028C4
+	private void OnBoyOutsideTrigger()
+	{
+		this.logicIsActive = false;
+		ScriptGlobals.boy.input = this;
+	}
+
+	// Token: 0x06001E60 RID: 7776 RVA: 0x001046D8 File Offset: 0x001028D8
+	private void Update()
+	{
+		if (this.logicIsActive)
+		{
+			if (!this.forceRight && base.stick.x >= 0.6f)
+			{
+				this.forceRight = true;
+			}
+		}
+		else
+		{
+			this.forceRight = false;
+		}
+	}
+
+	// Token: 0x04003803 RID: 14339
+	public Transform forceLeftPoint;
+
+	// Token: 0x04003804 RID: 14340
+	private SignalIn boyInsideTrigger;
+
+	// Token: 0x04003805 RID: 14341
+	private SignalIn boyOutsideTrigger;
+
+	// Token: 0x04003806 RID: 14342
+	private bool logicIsActive;
+
+	// Token: 0x04003807 RID: 14343
+	private bool forceRight;
+}

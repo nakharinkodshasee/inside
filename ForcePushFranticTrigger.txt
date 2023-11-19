@@ -1,0 +1,118 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200011A RID: 282
+public class ForcePushFranticTrigger : MonoBehaviour
+{
+	// Token: 0x0600088F RID: 2191 RVA: 0x0005AF60 File Offset: 0x00059160
+	private void Start()
+	{
+		Transform childComponent = ScriptGlobals.boy.visualBoy.transform.GetChildComponent("Themes");
+		this.forcePushTheme = childComponent.GetChildComponent("ForcePush");
+		this.franticTheme = childComponent.GetChildComponent("Frantic");
+	}
+
+	// Token: 0x06000890 RID: 2192 RVA: 0x0005AFAC File Offset: 0x000591AC
+	private void Update()
+	{
+		if (!this.boyInsideTrigger)
+		{
+			return;
+		}
+		if (this.manager == null)
+		{
+			this.manager = LevelGlobals.forcePushManager;
+			return;
+		}
+		if (ForcePushManager.GetInCover())
+		{
+			if (this.currentTheme == this.franticTheme)
+			{
+				float x = ScriptGlobals.boy.velocity.x;
+				if (ScriptGlobals.boy.state is BoyCustomAnimState || (Mathf.Abs(x) < 0.25f && Mathf.Abs(ScriptGlobals.boy.input.stick.x) < 0.4f))
+				{
+					this.currentTheme = this.forcePushTheme;
+				}
+				else if (this.currentRunSpeed != this.coverRunSpeed)
+				{
+					this.currentRunSpeed += Mathf.Sign(this.coverRunSpeed - this.currentRunSpeed) * Time.deltaTime * this.runSpeedBlend;
+					this.currentRunSpeed = Mathf.Clamp(this.currentRunSpeed, this.coverRunSpeed, 4f);
+				}
+			}
+			else
+			{
+				this.currentRunSpeed = ForcePushFranticTrigger.defaultRunSpeed;
+			}
+		}
+		else
+		{
+			this.currentRunSpeed = 4f;
+			this.currentTheme = this.franticTheme;
+		}
+		this.AdjustRunSpeed();
+		if (ScriptGlobals.boy.visualBoy.theme != this.currentTheme)
+		{
+			ScriptGlobals.boy.visualBoy.SetTheme(this.currentTheme, VisualBoy.ThemePriority.High);
+		}
+	}
+
+	// Token: 0x06000891 RID: 2193 RVA: 0x0005B130 File Offset: 0x00059330
+	private void AdjustRunSpeed()
+	{
+		Boy boy = ScriptGlobals.boy;
+		BoyProperties properties = boy.properties;
+		float num = this.currentRunSpeed / properties.run.maxSpeedFlat;
+		properties.run.maxSpeedUp = properties.run.maxSpeedUp * num;
+		properties.run.maxSpeedFlat = this.currentRunSpeed;
+		properties.run.maxSpeedDown = properties.run.maxSpeedDown * num;
+		properties.jump.takeoffVelocityRun.x = properties.jump.takeoffVelocityRun.x * ((num - 1f) * 0.6f + 1f);
+		properties.jump.takeoffVelocityStand.x = properties.jump.takeoffVelocityStand.x * ((num - 1f) * 0.6f + 1f);
+	}
+
+	// Token: 0x06000892 RID: 2194 RVA: 0x0005B208 File Offset: 0x00059408
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.currentTheme = this.forcePushTheme;
+			this.boyInsideTrigger = true;
+		}
+	}
+
+	// Token: 0x06000893 RID: 2195 RVA: 0x0005B230 File Offset: 0x00059430
+	private void OnTriggerExit(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>())
+		{
+			ThemeUtils.TryResetBoyTheme(ScriptGlobals.boy, VisualBoy.ThemePriority.High);
+			this.boyInsideTrigger = false;
+		}
+	}
+
+	// Token: 0x04000E80 RID: 3712
+	public float coverRunSpeed = 3.1f;
+
+	// Token: 0x04000E81 RID: 3713
+	public float runSpeedBlend = 1f;
+
+	// Token: 0x04000E82 RID: 3714
+	private bool boyInsideTrigger;
+
+	// Token: 0x04000E83 RID: 3715
+	private ForcePushManager manager;
+
+	// Token: 0x04000E84 RID: 3716
+	private Transform forcePushTheme;
+
+	// Token: 0x04000E85 RID: 3717
+	private Transform franticTheme;
+
+	// Token: 0x04000E86 RID: 3718
+	private static float defaultRunSpeed = 2.72f;
+
+	// Token: 0x04000E87 RID: 3719
+	private float currentRunSpeed = ForcePushFranticTrigger.defaultRunSpeed;
+
+	// Token: 0x04000E88 RID: 3720
+	private Transform currentTheme;
+}

@@ -1,0 +1,102 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001A4 RID: 420
+public class ForcePushCover : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000C3D RID: 3133 RVA: 0x00077C1C File Offset: 0x00075E1C
+	public bool PreAwake(int callcount)
+	{
+		this.enableCover = SignalIn.Create("enableCover", base.gameObject, new Action(this.enable));
+		this.disableCover = SignalIn.Create("disableCover", base.gameObject, new Action(this.disable));
+		return true;
+	}
+
+	// Token: 0x06000C3E RID: 3134 RVA: 0x00077C70 File Offset: 0x00075E70
+	private void Start()
+	{
+		this.isEnabled = this.startEnabled;
+	}
+
+	// Token: 0x06000C3F RID: 3135 RVA: 0x00077C80 File Offset: 0x00075E80
+	private void OnEnable()
+	{
+		ForcePushManager.addCover(this);
+	}
+
+	// Token: 0x06000C40 RID: 3136 RVA: 0x00077C88 File Offset: 0x00075E88
+	private void OnDisable()
+	{
+		ForcePushManager.removeCover(this);
+		this.boyInsideTrigger = false;
+	}
+
+	// Token: 0x06000C41 RID: 3137 RVA: 0x00077C98 File Offset: 0x00075E98
+	private void OnDestroy()
+	{
+		ForcePushManager.removeCover(this);
+	}
+
+	// Token: 0x06000C42 RID: 3138 RVA: 0x00077CA0 File Offset: 0x00075EA0
+	public bool isInEnabledState()
+	{
+		return base.gameObject.activeInHierarchy && this.isEnabled && base.GetComponent<Collider>() && base.GetComponent<Collider>().enabled && base.enabled;
+	}
+
+	// Token: 0x06000C43 RID: 3139 RVA: 0x00077CF4 File Offset: 0x00075EF4
+	public bool isInsideThisTrigger()
+	{
+		return this.boyInsideTrigger;
+	}
+
+	// Token: 0x06000C44 RID: 3140 RVA: 0x00077CFC File Offset: 0x00075EFC
+	public bool IsEnabled()
+	{
+		return this.isEnabled;
+	}
+
+	// Token: 0x06000C45 RID: 3141 RVA: 0x00077D04 File Offset: 0x00075F04
+	public void enable()
+	{
+		this.isEnabled = true;
+	}
+
+	// Token: 0x06000C46 RID: 3142 RVA: 0x00077D10 File Offset: 0x00075F10
+	public void disable()
+	{
+		this.isEnabled = false;
+	}
+
+	// Token: 0x06000C47 RID: 3143 RVA: 0x00077D1C File Offset: 0x00075F1C
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.boyInsideTrigger = true;
+		}
+	}
+
+	// Token: 0x06000C48 RID: 3144 RVA: 0x00077D38 File Offset: 0x00075F38
+	private void OnTriggerExit(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.boyInsideTrigger = false;
+		}
+	}
+
+	// Token: 0x04001569 RID: 5481
+	public bool startEnabled = true;
+
+	// Token: 0x0400156A RID: 5482
+	private SignalIn enableCover;
+
+	// Token: 0x0400156B RID: 5483
+	private SignalIn disableCover;
+
+	// Token: 0x0400156C RID: 5484
+	private bool isEnabled = true;
+
+	// Token: 0x0400156D RID: 5485
+	private bool boyInsideTrigger;
+}

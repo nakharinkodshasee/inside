@@ -1,0 +1,36 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000487 RID: 1159
+public class FloatJetCrateIntoZ : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001E62 RID: 7778 RVA: 0x00104730 File Offset: 0x00102930
+	public bool PreAwake(int callcount)
+	{
+		this.companionJetCrate = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.labJetCrate).GetComponent<JetCrate>();
+		this.myPos = base.transform.position;
+		return true;
+	}
+
+	// Token: 0x06001E63 RID: 7779 RVA: 0x00104768 File Offset: 0x00102968
+	private void Update()
+	{
+		Vector3 position = this.companionJetCrate.GetRigidBody().position;
+		Vector3 vector = position - this.myPos;
+		Vector3 vector2 = ScriptGlobals.boy.pos3 - this.myPos;
+		if (vector.y > 0f && vector.y < 10f && FastMath.Abs(vector.x) < 2f && vector2.y > 0f && !this.companionJetCrate.GetRigidBody().isKinematic && this.companionJetCrate.GetRigidBody().velocity.y >= 0f)
+		{
+			this.companionJetCrate.SetFloatIntoZ();
+		}
+		else if (vector.y < 0.8f && vector.y > -5f && this.companionJetCrate.GetRigidBody().isKinematic && this.companionJetCrate.GetRigidBody().velocity.y < 0f)
+		{
+			this.companionJetCrate.LeaveFloatMode();
+		}
+	}
+
+	// Token: 0x04003808 RID: 14344
+	private JetCrate companionJetCrate;
+
+	// Token: 0x04003809 RID: 14345
+	private Vector3 myPos;
+}

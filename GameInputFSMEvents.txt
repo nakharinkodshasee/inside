@@ -1,0 +1,138 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000390 RID: 912
+public class GameInputFSMEvents : MonoBehaviour
+{
+	// Token: 0x0600189E RID: 6302 RVA: 0x000D5BB4 File Offset: 0x000D3DB4
+	private void UpdateStickValueEvents()
+	{
+		float num = GameInput.stick.x;
+		float num2 = GameInput.stick.y;
+		if (this.useAbsoluteValues)
+		{
+			num = Mathf.Abs(num);
+			num2 = Mathf.Abs(num2);
+		}
+		if (num >= this.specificXValue && !this.aboveX)
+		{
+			this.aboveX = true;
+			this.aboveSpecifiedX.OnEvent(this);
+		}
+		else if (num < this.specificXValue && this.aboveX)
+		{
+			this.aboveX = false;
+			this.belowSpecifiedX.OnEvent(this);
+		}
+		if (num2 >= this.specificYValue && !this.aboveY)
+		{
+			this.aboveY = true;
+			this.aboveSpecifiedY.OnEvent(this);
+		}
+		else if (num2 < this.specificYValue && this.aboveY)
+		{
+			this.aboveY = false;
+			this.belowSpecifiedY.OnEvent(this);
+		}
+	}
+
+	// Token: 0x0600189F RID: 6303 RVA: 0x000D5CA8 File Offset: 0x000D3EA8
+	private void checkForAnyInput()
+	{
+		if (GameInput.stick.x != 0f || GameInput.stick.y != 0f || GameInput.jump || GameInput.rawAction)
+		{
+			this.gettingInput = true;
+		}
+		else
+		{
+			this.gettingInput = false;
+		}
+	}
+
+	// Token: 0x060018A0 RID: 6304 RVA: 0x000D5D0C File Offset: 0x000D3F0C
+	private void FixedUpdate()
+	{
+		if (GameInput.jump)
+		{
+			this.jumpButtonPressed.OnEvent(this);
+		}
+		bool rawAction = GameInput.rawAction;
+		if (rawAction && !this.previousRawAction)
+		{
+			this.rawActionButtonPressed.OnEvent(this);
+		}
+		else if (!rawAction && this.previousRawAction)
+		{
+			this.rawActionButtonNotPressed.OnEvent(this);
+		}
+		if (this.stickValueEvents)
+		{
+			this.UpdateStickValueEvents();
+		}
+		this.checkForAnyInput();
+		if (this.gettingInput && !this.gotInputLastFrame)
+		{
+			this.inputRegistered.OnEvent(this);
+		}
+		else if (!this.gettingInput && this.gotInputLastFrame)
+		{
+			this.noInputRegistered.OnEvent(this);
+		}
+		this.previousRawAction = rawAction;
+		this.gotInputLastFrame = this.gettingInput;
+	}
+
+	// Token: 0x04002C4F RID: 11343
+	public bool stickValueEvents;
+
+	// Token: 0x04002C50 RID: 11344
+	public bool useAbsoluteValues;
+
+	// Token: 0x04002C51 RID: 11345
+	public float specificXValue;
+
+	// Token: 0x04002C52 RID: 11346
+	public float specificYValue;
+
+	// Token: 0x04002C53 RID: 11347
+	private bool aboveX;
+
+	// Token: 0x04002C54 RID: 11348
+	private bool aboveY;
+
+	// Token: 0x04002C55 RID: 11349
+	private bool gettingInput;
+
+	// Token: 0x04002C56 RID: 11350
+	private bool gotInputLastFrame;
+
+	// Token: 0x04002C57 RID: 11351
+	private bool previousRawAction;
+
+	// Token: 0x04002C58 RID: 11352
+	private SimpleEvent<GameInputFSMEvents> jumpButtonPressed = new SimpleEvent<GameInputFSMEvents>("jumpButtonPressed");
+
+	// Token: 0x04002C59 RID: 11353
+	private SimpleEvent<GameInputFSMEvents> rawActionButtonPressed = new SimpleEvent<GameInputFSMEvents>("rawActionButtonPressed");
+
+	// Token: 0x04002C5A RID: 11354
+	private SimpleEvent<GameInputFSMEvents> rawActionButtonNotPressed = new SimpleEvent<GameInputFSMEvents>("rawActionButtonNotPressed");
+
+	// Token: 0x04002C5B RID: 11355
+	private SimpleEvent<GameInputFSMEvents> aboveSpecifiedX = new SimpleEvent<GameInputFSMEvents>("aboveSpecifiedX");
+
+	// Token: 0x04002C5C RID: 11356
+	private SimpleEvent<GameInputFSMEvents> belowSpecifiedX = new SimpleEvent<GameInputFSMEvents>("belowSpecifiedX");
+
+	// Token: 0x04002C5D RID: 11357
+	private SimpleEvent<GameInputFSMEvents> aboveSpecifiedY = new SimpleEvent<GameInputFSMEvents>("aboveSpecifiedY");
+
+	// Token: 0x04002C5E RID: 11358
+	private SimpleEvent<GameInputFSMEvents> belowSpecifiedY = new SimpleEvent<GameInputFSMEvents>("belowSpecifiedY");
+
+	// Token: 0x04002C5F RID: 11359
+	private SimpleEvent<GameInputFSMEvents> inputRegistered = new SimpleEvent<GameInputFSMEvents>("inputRegistered");
+
+	// Token: 0x04002C60 RID: 11360
+	private SimpleEvent<GameInputFSMEvents> noInputRegistered = new SimpleEvent<GameInputFSMEvents>("noInputRegistered");
+}

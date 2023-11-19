@@ -1,0 +1,2251 @@
+using System;
+using System.Collections.Generic;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x0200007E RID: 126
+public class FarmPigFight : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x0600040B RID: 1035 RVA: 0x0002CA20 File Offset: 0x0002AC20
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.visualPig.gameObject, this);
+		this.audioGrabWorm = new AudioEventSimpleLocal(this.audioPrefix + "_wormGrab", akGameObj);
+		this.audioWormRelease = new AudioEventSimpleLocal(this.audioPrefix + "_wormRelease", akGameObj);
+		this.audioWormReleaseSpringy = new AudioEventSimpleLocal(this.audioPrefix + "_wormReleaseSpringy", akGameObj);
+		this.audioWormPull = new AudioEventSimpleLocal(this.audioPrefix + "_wormPull", akGameObj);
+		this.audioWormPullStop = new AudioEventSimpleLocal(this.audioPrefix + "_wormPullStop", akGameObj);
+		this.audioWormPullSuccess = new AudioEventSimpleLocal(this.audioPrefix + "_wormPullSuccess", akGameObj);
+		this.audioAttack = new AudioEventSimpleLocal(this.audioPrefix + "_attack", akGameObj);
+		this.audioHitWall = new AudioEventSimpleLocal(this.audioPrefix + "_hitwall", akGameObj);
+		this.audioMovedByBoy = new AudioEventSimpleLocal(this.audioPrefix + "_movedbyBoy", akGameObj);
+		this.audioSilent = new AudioEventSimpleLocal(this.audioPrefix + "_silent", akGameObj);
+		this.audioWormOut = new AudioEventSimpleLocal(this.audioPrefix + "_wormOut", akGameObj);
+		this.audioContent = new AudioEventSimpleLocal(this.audioPrefix + "_content", akGameObj);
+		this.audioTurn = new AudioEventSimpleLocal(this.audioPrefix + "_turn", akGameObj);
+		this.audioBoyKilled = new AudioEventSimpleLocal(this.audioPrefix + "_boyKilled", akGameObj);
+		this.audioAttackInBarn = new AudioEventSimpleLocal(this.audioPrefix + "_attackInBarn", akGameObj);
+		this.audioPig = new AudioEventSimpleLocal(this.audioPrefix, akGameObj);
+		this.audioSmashWallEnv = new AudioEventSimpleLocal("env_farm_pigfight_pigSmashWall", akGameObj);
+		this.audioSmashWallAmb = new AudioEventSimple("amb_sws_farm_pigfight_pigSmashWall");
+		this.rtpcAmbTrack01 = new RTPC("rtpc_amb_sws_track_01", false);
+	}
+
+	// Token: 0x0600040C RID: 1036 RVA: 0x0002CC3C File Offset: 0x0002AE3C
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		switch (callcount)
+		{
+		case 0:
+			this.woodWallSmashed = SignalIn.Create("woodWallSmashed", base.gameObject, new Action(this.OnWoodWallSmashed));
+			this.forceForward = SignalIn.Create("forceForward", base.gameObject, new Action(this.OnForceWard));
+			return false;
+		case 1:
+			this.firstAttackInBarn = SignalIn.Create("firstAttackInBarn", base.gameObject, new Action(this.SetFirstAttackInBarn));
+			this.initialWakeUp = SignalIn.Create("initialWakeUp", base.gameObject, new Action(this.SetWakeupState));
+			return false;
+		case 2:
+			this.setSleepState = SignalIn.Create("setSleepState", base.gameObject, new Action(this.SetSleepState));
+			this.setAngryWaitState = SignalIn.Create("setAngryWaitState", base.gameObject, new Action(this.SetAngryWaitState));
+			return false;
+		case 3:
+			this.setIdleState = SignalIn.Create("setIdleState", base.gameObject, new Action(this.SetIdleStateSignal));
+			this.setKnockedOut = SignalIn.Create("setKnockedOut", base.gameObject, new Action(this.LoadAtWall));
+			return false;
+		case 4:
+			this.disallowTurning = SignalIn.Create("disallowTurning", base.gameObject, new Action(this.DisallowTurning));
+			this.allowTurning = SignalIn.Create("allowTurning", base.gameObject, new Action(this.AllowTurning));
+			return false;
+		case 5:
+			this.disablePassingTouch = SignalIn.Create("disablePassingTouch", base.gameObject, new Action(this.DisableTouch));
+			this.hitWall = SignalIn.Create("hitWall", base.gameObject, new Action(this.HitWall));
+			return false;
+		case 6:
+			this.wormPulledOff = SignalOut.Create("wormPulledOff", base.gameObject);
+			this.attack = SignalOut.Create("attack", base.gameObject);
+			return false;
+		case 7:
+			this.proneAtWall = SignalOut.Create("proneAtWall", base.gameObject);
+			this.boyKilled = SignalOut.Create("boyKilled", base.gameObject);
+			return false;
+		case 8:
+			this.loadAttack = SignalOut.Create("loadAttack", base.gameObject);
+			this.loadPigfight = SignalIn.Create("loadPigfight", base.gameObject, new Action(this.OnLoadPigfight));
+			return false;
+		case 9:
+			this.hitTrigger.enterTrigger.Register(this, ref this.hitTriggerEnterHandle);
+			this.grabTrigger.enterTrigger.Register(this, ref this.grabTriggerEnterHandle);
+			this.grabTrigger.exitTrigger.Register(this, ref this.grabTriggerExitHandle);
+			this.collisionObject.layer = LayerMask.NameToLayer("Player");
+			this.wallCollisionObject.layer = LayerMask.NameToLayer("Player");
+			return false;
+		case 10:
+			this.animWormWiggleAssState = this.animWorm[this.animWormWiggleAss.name];
+			this.animWormWiggleAssState.layer = 0;
+			this.animWorm.Play(this.animWormWiggleAss.name);
+			this.animWormIdleInWalledAssState = this.animWorm[this.animWormIdleInWalledAss.name];
+			this.animWormIdleInWalledAssState.layer = 1;
+			return false;
+		case 11:
+			this.animWormHeldByBoyState = this.animWorm[this.animWormHeldByBoy.name];
+			this.animWormHeldByBoyState.layer = 1;
+			this.animWormBounceBackState = this.animWorm[this.animWormBounceBack.name];
+			this.animWormBounceBackState.layer = 1;
+			this.animWormPulledByBoyState = this.animWorm[this.animWormPulledByBoy.name];
+			this.animWormPulledByBoyState.layer = 2;
+			return false;
+		case 12:
+			this.animWormThrownState = this.animWorm[this.animWormThrown.name];
+			this.animWormThrownState.layer = 3;
+			this.boyPullNode = (this.boyWormPullBlend.children[1].anim as AnimClipNode);
+			this.pullDir.Normalize();
+			return false;
+		case 13:
+			this.pullPigWormDef = this.visualPig.GetBlendHelper().GetDefinition("WallWormPullSqueek", true);
+			this.holdPigWormDef = this.visualPig.GetBlendHelper().GetDefinition("WallWormPull", true);
+			this.environmentLayerMask = 1 << CollisionUtils.Layers.environment;
+			this.visualPigRigidbody = this.visualPig.GetComponent<Rigidbody>();
+			return false;
+		case 14:
+			SoundEngine.RegisterGameObject(base.gameObject);
+			return false;
+		case 15:
+			this.animWormTransform = this.animWorm.transform;
+			if (!GameManager.IsLoading())
+			{
+				this.noLateUpdateCounter = 3;
+			}
+			return false;
+		case 16:
+			this.FillPigBoneList();
+			return true;
+		default:
+			return true;
+		}
+	}
+
+	// Token: 0x0600040D RID: 1037 RVA: 0x0002D120 File Offset: 0x0002B320
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.animWorm.Play(this.animWormPulledByBoyState.name);
+		this.audioSilent.PostFast();
+	}
+
+	// Token: 0x0600040E RID: 1038 RVA: 0x0002D158 File Offset: 0x0002B358
+	private void SetIdleStateSignal()
+	{
+		this.makeDynamicNextFrame = true;
+		this.SetIdleState();
+	}
+
+	// Token: 0x0600040F RID: 1039 RVA: 0x0002D168 File Offset: 0x0002B368
+	private void SetIdleState()
+	{
+		this.collisionObject.layer = LayerMask.NameToLayer("Ungrouped");
+		this.timer = 1f;
+		this.audioContent.PostFast();
+		this.state = FarmPigFight.State.Idle;
+		this.allowBoneOffset = true;
+	}
+
+	// Token: 0x06000410 RID: 1040 RVA: 0x0002D1B0 File Offset: 0x0002B3B0
+	private void IdleState()
+	{
+		this.TestSetNoGrab();
+		BoyGrabState boyGrabState = ScriptGlobals.boy.state as BoyGrabState;
+		Rigidbody component = this.visualPig.GetComponent<Rigidbody>();
+		if (this.leftDragEdge != null && this.visualPig.transform.position.x < this.leftDragEdge.position.x)
+		{
+			Vector3 position = this.visualPig.transform.position;
+			position.x = this.leftDragEdge.position.x;
+			component.MovePosition(position);
+		}
+		if (this.rightDragEdge != null && this.visualPig.transform.position.x > this.rightDragEdge.position.x)
+		{
+			Vector3 position2 = this.visualPig.transform.position;
+			position2.x = this.rightDragEdge.position.x;
+			component.MovePosition(position2);
+		}
+		if (boyGrabState != null && boyGrabState.body == this.visualPig.GetComponent<Rigidbody>())
+		{
+			this.SetBoyPushState();
+		}
+	}
+
+	// Token: 0x06000411 RID: 1041 RVA: 0x0002D2F4 File Offset: 0x0002B4F4
+	private void SetSleepState()
+	{
+		AnimationBlendHelper blendHelper = this.visualPig.GetBlendHelper();
+		ABDefinition definition = blendHelper.GetDefinition("Sleeping", true);
+		blendHelper.SetBlendDefinition(definition);
+		this.state = FarmPigFight.State.Sleep;
+		this.allowBoneOffset = false;
+	}
+
+	// Token: 0x06000412 RID: 1042 RVA: 0x0002D330 File Offset: 0x0002B530
+	private void SleepState()
+	{
+	}
+
+	// Token: 0x06000413 RID: 1043 RVA: 0x0002D334 File Offset: 0x0002B534
+	private void SetWakeupState()
+	{
+		if (this.state == FarmPigFight.State.Sleep)
+		{
+			this.visualPig.ForceToAnimation("GetUpRun", null, -1f, 0f, false);
+			if (this.chaseFadeRTPC)
+			{
+				this.rtpcTimer = this.rtpcFadeDuration;
+			}
+			this.SetAttackState();
+		}
+	}
+
+	// Token: 0x06000414 RID: 1044 RVA: 0x0002D388 File Offset: 0x0002B588
+	public void SetAttackState()
+	{
+		this.visualPig.FollowWaypoint(this.attackWayPoint);
+		this.attack.Signal();
+		this.forceForwardTimer = 0f;
+		this.doFirstAttackInBarn = false;
+		this.attackRight = Mathf.Sign(ScriptGlobals.boy.pos.x - this.visualPig.transform.position.x);
+		this.SetAttackWaypointPos(true);
+		this.state = FarmPigFight.State.Attack;
+	}
+
+	// Token: 0x06000415 RID: 1045 RVA: 0x0002D408 File Offset: 0x0002B608
+	private void AttackState()
+	{
+		this.SetAttackWaypointPos(false);
+		this.forceForwardTimer -= Time.deltaTime;
+		if (this.forceForwardTimer > 0f)
+		{
+			return;
+		}
+		if (this.allowTurn && this.attackRight * (this.visualPig.transform.position.x - (ScriptGlobals.boy.transform.position.x + this.attackRight * 2.5f)) > 0f)
+		{
+			if (this.waitInside)
+			{
+				this.attackRight = -this.attackRight;
+				this.waitInside = false;
+				this.SetTurnAndStopState();
+			}
+			else
+			{
+				this.attackRight = -this.attackRight;
+				this.attack.Signal();
+			}
+		}
+	}
+
+	// Token: 0x06000416 RID: 1046 RVA: 0x0002D4DC File Offset: 0x0002B6DC
+	private void SetTurnAndStopState()
+	{
+		this.visualPig.GetBlendHelper().TransitToBlendDefinition(this.turnAndRunDef, 0.2f, 0f);
+		this.state = FarmPigFight.State.TurnAndStop;
+	}
+
+	// Token: 0x06000417 RID: 1047 RVA: 0x0002D508 File Offset: 0x0002B708
+	private void TurnAndStopState()
+	{
+		bool flag = true;
+		AnimationBlendHelper blendHelper = this.visualPig.GetBlendHelper();
+		ABDefinition topDefinition = blendHelper.GetTopDefinition();
+		if (topDefinition == this.turnAndRunDef)
+		{
+			ABHelperData latestAnimData = blendHelper.GetLatestAnimData();
+			if (latestAnimData.normalizedAnimPos < 0.93f)
+			{
+				flag = false;
+			}
+		}
+		if (flag)
+		{
+			this.SetIdleAngryState();
+		}
+	}
+
+	// Token: 0x06000418 RID: 1048 RVA: 0x0002D55C File Offset: 0x0002B75C
+	private void SetIdleAngryState()
+	{
+		this.audioContent.PostFast();
+		this.visualPig.FollowWaypoint(null);
+		this.pauseBeforeCharge = !this.doFirstAttackInBarn;
+		this.visualPig.ForceToAnimation("IdleA", null, -1f, 0f, false);
+		this.state = FarmPigFight.State.IdleAngry;
+	}
+
+	// Token: 0x06000419 RID: 1049 RVA: 0x0002D5B4 File Offset: 0x0002B7B4
+	private void IdleAngryState()
+	{
+		if (this.doFirstAttackInBarn)
+		{
+			this.doFirstAttackInBarn = false;
+			this.SetChargeState(this.pauseBeforeCharge);
+		}
+	}
+
+	// Token: 0x0600041A RID: 1050 RVA: 0x0002D5D4 File Offset: 0x0002B7D4
+	private void SetChargeState(bool pauseFirst = true)
+	{
+		this.state = FarmPigFight.State.Charge;
+		this.attack.Signal();
+		if (pauseFirst)
+		{
+			this.audioAttackInBarn.PostFast();
+			this.timer = this.chargeTime;
+		}
+		else
+		{
+			this.audioAttack.PostFast();
+			this.timer = 0f;
+		}
+		this.visualPig.ForceToAnimation("ReadyCharge", null, 0.4f, 0f, false);
+	}
+
+	// Token: 0x0600041B RID: 1051 RVA: 0x0002D64C File Offset: 0x0002B84C
+	private void ChargeState()
+	{
+		this.timer -= Time.deltaTime;
+		if (this.timer <= 0f || Mathf.Abs(ScriptGlobals.boy.pos.x - this.visualPig.transform.position.x) < 3.5f)
+		{
+			this.visualPig.ForceToAnimation("RunA_Long", null, -1f, 0f, false);
+			this.SetAttackState();
+		}
+	}
+
+	// Token: 0x0600041C RID: 1052 RVA: 0x0002D6D8 File Offset: 0x0002B8D8
+	private void ResumeWallHitState()
+	{
+		BoyUtils.ClearState(ScriptGlobals.boy, 0.27f);
+		this.timer = this.wallStunnedTime;
+		this.visualPig.ForceToAnimation("HitWall", this.hitWallAlignPoint, 0.4f, 0.99f, false);
+		this.wallCollisionObject.layer = LayerMask.NameToLayer("Ungrouped");
+		this.releaseTimer = this.releaseDelay;
+		if (this.grabTimer <= 0f)
+		{
+			this.audioWormRelease.PostFast();
+		}
+		if ((double)this.pullFraction > 0.05)
+		{
+			this.audioWormPullStop.PostFast();
+		}
+		if (this.pullFraction > 0.5f)
+		{
+			this.audioWormReleaseSpringy.PostFast();
+			this.animWorm.CrossFade(this.animWormBounceBackState.name, 0.15f);
+		}
+		else
+		{
+			this.animWorm.CrossFade(this.animWormIdleInWalledAss.name);
+		}
+		this.state = FarmPigFight.State.WallHit;
+		this.allowBoneOffset = true;
+	}
+
+	// Token: 0x0600041D RID: 1053 RVA: 0x0002D7E0 File Offset: 0x0002B9E0
+	private void SetWallHitState()
+	{
+		this.allowBoneOffset = true;
+		Vector3 vector = ScriptGlobals.boy.pos3 - this.visualPig.transform.position;
+		if (vector.x > 0f && vector.x < 3f && vector.y < 1.05f)
+		{
+			if (ScriptGlobals.boy.isDead)
+			{
+				if (this.alignAnimation != this.boyKilledBackwardAgainstWall && this.alignAnimation != this.boyKilledForwardAgainstWall)
+				{
+					ScriptGlobals.boy.SpawnExternalState(new BoyRagdollState(ScriptGlobals.boy), Boy.AffectMode.AffectDeadBoy);
+					this.AddBoyRagdolVelCount = 3;
+					this.collisionObject.gameObject.SetActive(false);
+					this.wallCollisionObject.gameObject.SetActive(false);
+				}
+				else
+				{
+					this.boyKILLWallChosen = true;
+				}
+			}
+			else if (!(ScriptGlobals.boy.state is BoyCustomAnimState))
+			{
+				if (ScriptGlobals.boy.facing > 0f && this.boyKilledBackwardAgainstWall != null)
+				{
+					this.boyHitWallChosen = true;
+					this.boyKILLWallChosen = true;
+					this.boyHitWallTimer = 0f;
+					this.alignAnimation = this.boyKilledBackwardAgainstWall;
+					this.PlayBoyAnimation(this.boyKilledBackwardAgainstWall, 1f);
+				}
+				else if (ScriptGlobals.boy.facing < 0f && this.boyKilledForwardAgainstWall != null)
+				{
+					this.boyHitWallChosen = true;
+					this.boyKILLWallChosen = true;
+					this.boyHitWallTimer = 0f;
+					this.alignAnimation = this.boyKilledForwardAgainstWall;
+					this.PlayBoyAnimation(this.boyKilledForwardAgainstWall, 1f);
+				}
+				else
+				{
+					this.audioBoyKilled.PostFast();
+					this.boyKilled.Signal();
+					ScriptGlobals.boy.Kill();
+				}
+			}
+		}
+		this.proneAtWall.Signal();
+		this.timer = this.wallStunnedTime;
+		this.wallCollisionObject.layer = LayerMask.NameToLayer("Ungrouped");
+		this.visualPig.ForceToAnimation("HitWall", this.hitWallAlignPoint, -1f, 0f, false);
+		this.audioHitWall.PostFast();
+		this.state = FarmPigFight.State.WallHitTransition;
+	}
+
+	// Token: 0x0600041E RID: 1054 RVA: 0x0002DA28 File Offset: 0x0002BC28
+	private void WallHitTransitionState()
+	{
+		bool flag = this.visualPig.blendHelper.GetLatestAnimData().normalizedAnimPos > 0.5f;
+		if (flag)
+		{
+			this.animWorm.CrossFade(this.animWormIdleInWalledAss.name);
+			this.wormBlendStartPos = this.animWorm.transform.position;
+			this.wormBlendStartRot = this.animWorm.transform.rotation;
+			this.wormState = FarmPigFight.WormState.Wall;
+			this.state = FarmPigFight.State.WallHit;
+		}
+	}
+
+	// Token: 0x0600041F RID: 1055 RVA: 0x0002DAA8 File Offset: 0x0002BCA8
+	private void WallHitState()
+	{
+		if (!this.animWorm.IsPlaying(this.animWormIdleInWalledAss.name) && this.animWormBounceBackState.normalizedTime >= 1f)
+		{
+			this.animWorm.CrossFade(this.animWormIdleInWalledAss.name);
+		}
+		if (this.releaseTimer > 0f)
+		{
+			this.releaseTimer -= Time.deltaTime;
+		}
+		if (this.boyInside && Device.GrabCheck(ScriptGlobals.boy, true) && this.releaseTimer <= 0f && this.pullFraction <= 0f)
+		{
+			this.SetGrabWormState();
+			return;
+		}
+		if (this.pullFraction > 0f)
+		{
+			this.pullFraction -= Time.deltaTime * 3f;
+			if (this.pullFraction < 0f)
+			{
+				this.pullFraction = 0f;
+			}
+		}
+	}
+
+	// Token: 0x06000420 RID: 1056 RVA: 0x0002DBA4 File Offset: 0x0002BDA4
+	private void SetGrabWormState()
+	{
+		this.boyWormPullBlend.currentBlendValue = MathUtils.SmoothFraction(this.pullFraction);
+		BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyWormPullBlend, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.visualPig.ForceToAnimation(this.holdPigWormDef, true, this.hitWallAlignPoint.transform.position, this.hitWallAlignPoint.transform.eulerAngles, -1f, 0f, false);
+		this.animWorm.CrossFade(this.animWormHeldByBoy.name, 0.2f);
+		this.grabTimer = this.grabDelay;
+		this.grabStunTimer = this.grabStunDelay;
+		this.previouslyPulling = false;
+		Device.SetVoicePassive();
+		this.wormPullTimer = 0f;
+		this.state = FarmPigFight.State.GrabWorm;
+	}
+
+	// Token: 0x06000421 RID: 1057 RVA: 0x0002DC70 File Offset: 0x0002BE70
+	private void GrabWormState()
+	{
+		if (this.grabStunTimer > 0f)
+		{
+			this.grabStunTimer -= Time.deltaTime;
+		}
+		if (!ScriptGlobals.boy.input.rawAction && this.grabStunTimer <= 0f)
+		{
+			Device.SetVoiceNone();
+			this.ResumeWallHitState();
+			return;
+		}
+		if (this.grabTimer > 0f)
+		{
+			this.grabTimer -= Time.deltaTime;
+			if (this.grabTimer <= 0f)
+			{
+				this.audioGrabWorm.PostFast();
+			}
+			return;
+		}
+		bool flag = this.CheckPull();
+		if (flag)
+		{
+			this.wormPullTimer += Time.deltaTime * 0.65f;
+			this.pullFraction = this.pullCurve.Evaluate(this.wormPullTimer);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftSpike, this.pullFraction * 0.15f, Time.deltaTime, 0, 0f);
+		}
+		else
+		{
+			this.pullFraction -= Time.deltaTime * 3f;
+			this.wormPullTimer = 0f;
+		}
+		if (this.previouslyPulling != flag)
+		{
+			if (flag)
+			{
+				this.visualPig.ForceToAnimation(this.pullPigWormDef, true, this.hitWallAlignPoint.transform.position, this.hitWallAlignPoint.transform.eulerAngles, 0.35f, 0f, false);
+				this.audioMovedByBoy.PostFast();
+				Device.SetVoiceActive();
+			}
+			else
+			{
+				this.visualPig.ForceToAnimation(this.holdPigWormDef, true, this.hitWallAlignPoint.transform.position, this.hitWallAlignPoint.transform.eulerAngles, 0.55f, 0f, false);
+				this.audioSilent.PostFast();
+				Device.SetVoicePassive();
+			}
+			if (this.previouslyPulling != flag && flag)
+			{
+				this.audioWormPull.PostFast();
+			}
+			this.previouslyPulling = flag;
+		}
+		this.wormPullTimer = Mathf.Clamp01(this.wormPullTimer);
+		this.pullFraction = Mathf.Clamp01(this.pullFraction);
+		this.boyWormPullBlend.currentBlendValue = this.pullFraction;
+		if (!flag && this.pullFraction <= 0.1f && this.pullFractionLastFrame > this.pullFraction)
+		{
+			this.audioWormPullStop.PostFast();
+		}
+		this.pullFractionLastFrame = this.pullFraction;
+		if (this.wormPullingFx != null && this.poopAmount > 0f && this.pullFraction > 0.5f)
+		{
+			this.wormPullingFx.Emit(1);
+			this.poopAmount -= Time.deltaTime;
+		}
+		if (this.wormPullTimer >= 1f)
+		{
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.8f, 0.1f, 0, 0f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.4f, 0.6f, 0, 0f);
+			this.SetWormPulledOutState();
+		}
+	}
+
+	// Token: 0x06000422 RID: 1058 RVA: 0x0002DF7C File Offset: 0x0002C17C
+	private void SetWormPulledOutState()
+	{
+		if (this.wormPulledFx != null)
+		{
+			this.wormPulledFx.Play();
+		}
+		if (this.wormPuddleFx != null)
+		{
+			this.wormPuddleFx.Play();
+		}
+		this.timer = 2f;
+		this.wormPulledOff.Signal();
+		if (this.chaseFadeRTPC)
+		{
+			this.rtpcAmbTrack01.SetFast(0f, AudioKeyObject.AkGameObjs.global, 0f);
+		}
+		this.audioWormPullSuccess.PostFast();
+		this.audioWormOut.PostFast();
+		this.wormState = FarmPigFight.WormState.Free;
+		BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyWormPullOut, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.visualPig.ForceToAnimation("WallBecomeNicePig", null, -1f, 0f, false);
+		this.animWorm.Stop();
+		this.animWorm.CrossFade(this.animWormThrownState.name, 0.15f);
+		Device.SetVoiceNone();
+		this.state = FarmPigFight.State.WormPulledOut;
+	}
+
+	// Token: 0x06000423 RID: 1059 RVA: 0x0002E084 File Offset: 0x0002C284
+	private void TestSetNoGrab()
+	{
+		if (this.noGrab != null)
+		{
+			float y = ScriptGlobals.boy.pos.y;
+			float y2 = this.pigPhysics.position.y;
+			float num = y - y2;
+			this.noGrab.SetIsEnabled(num > 1f);
+		}
+	}
+
+	// Token: 0x06000424 RID: 1060 RVA: 0x0002E0E4 File Offset: 0x0002C2E4
+	private void WormPulledOutState()
+	{
+		this.TestSetNoGrab();
+		this.timer -= Time.deltaTime;
+		BoyGrabState boyGrabState = ScriptGlobals.boy.state as BoyGrabState;
+		bool flag = boyGrabState != null && boyGrabState.body == this.visualPig.GetComponent<Rigidbody>() && GameInput.rawAction;
+		if (this.timer <= 0f || flag)
+		{
+			this.SetIdleState();
+			this.audioContent.PostFast();
+			this.makeDynamicNextFrame = true;
+		}
+	}
+
+	// Token: 0x06000425 RID: 1061 RVA: 0x0002E174 File Offset: 0x0002C374
+	private void RecoverState()
+	{
+		this.timer -= Time.deltaTime;
+		if (this.timer <= 0f)
+		{
+			Vector3 eulerAngles = base.transform.rotation.eulerAngles;
+			eulerAngles.y *= -1f;
+			base.transform.rotation = Quaternion.Euler(eulerAngles);
+			this.SetAttackState();
+		}
+	}
+
+	// Token: 0x06000426 RID: 1062 RVA: 0x0002E1E4 File Offset: 0x0002C3E4
+	private void SetSlaughterBoyState()
+	{
+		this.PlayBoyAnimation(this.boyFallOffPigAnimNode, 1f);
+		this.boyFallOffPigAnimNode.transform.position = new Vector3(this.visualPig.transform.position.x, this.boyFallOffPigAnimNode.transform.position.y, this.boyFallOffPigAnimNode.transform.position.z);
+		this.audioBoyKilled.PostFast();
+		this.boyKilled.Signal();
+		ScriptGlobals.boy.Kill();
+		BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyFallOffPigAnimNode, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+		this.state = FarmPigFight.State.SlaughterBoy;
+	}
+
+	// Token: 0x06000427 RID: 1063 RVA: 0x0002E2A0 File Offset: 0x0002C4A0
+	private void SlaughterBoyState()
+	{
+	}
+
+	// Token: 0x06000428 RID: 1064 RVA: 0x0002E2A4 File Offset: 0x0002C4A4
+	private void SetAngryWaitState()
+	{
+		this.spawnPos = ScriptGlobals.boy.pos3;
+		this.visualPig.ForceToAnimation("IdleA", null, -1f, 0f, false);
+		this.audioAttack.PostFast();
+		this.state = FarmPigFight.State.AngryWait;
+	}
+
+	// Token: 0x06000429 RID: 1065 RVA: 0x0002E2F4 File Offset: 0x0002C4F4
+	private void AngryWaitState()
+	{
+		float num = Mathf.Abs(this.spawnPos.x - ScriptGlobals.boy.pos3.x);
+		if (num > 0.7f)
+		{
+			this.loadAttack.Signal();
+			this.SetChargeState(true);
+		}
+	}
+
+	// Token: 0x0600042A RID: 1066 RVA: 0x0002E344 File Offset: 0x0002C544
+	private void SetWalkState()
+	{
+		this.visualPig.ForceToAnimation("NiceIdle", null, -1f, 0f, false);
+		this.lastMovement = 0f;
+		this.state = FarmPigFight.State.Walk;
+	}
+
+	// Token: 0x0600042B RID: 1067 RVA: 0x0002E384 File Offset: 0x0002C584
+	private void WalkState()
+	{
+		float num = this.ChooseIdlePosition().x - this.visualPig.transform.position.x;
+		float num2 = 0.7f * Time.deltaTime;
+		bool flag = false;
+		if (num2 > Mathf.Abs(num))
+		{
+			num2 = Mathf.Abs(num);
+			flag = true;
+		}
+		if (!flag)
+		{
+			if (Mathf.Sign(num) != Mathf.Sign(base.transform.forward.x))
+			{
+				Vector3 eulerAngles = base.transform.rotation.eulerAngles;
+				eulerAngles.y *= -1f;
+				base.transform.rotation = Quaternion.Euler(eulerAngles);
+			}
+			base.GetComponent<Rigidbody>().velocity = new Vector3(Mathf.Sign(num) * 0.7f, 0f, 0f);
+		}
+		BoyGrabState boyGrabState = ScriptGlobals.boy.state as BoyGrabState;
+		if (boyGrabState != null && boyGrabState.body == this.visualPig.GetComponent<Rigidbody>())
+		{
+			this.SetBoyPushState();
+		}
+		if (flag)
+		{
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x0600042C RID: 1068 RVA: 0x0002E4B0 File Offset: 0x0002C6B0
+	private void SetBoyPushState()
+	{
+		this.visualPig.ForceToAnimation("NiceIdle", null, -1f, 0f, false);
+		this.lastMovement = 0f;
+		this.pushTime = 0f;
+		this.state = FarmPigFight.State.BoyPush;
+	}
+
+	// Token: 0x0600042D RID: 1069 RVA: 0x0002E4F0 File Offset: 0x0002C6F0
+	private void BoyPushState()
+	{
+		VisualBoyGrab visualBoyGrab = ScriptGlobals.boy.visualBoy.state as VisualBoyGrab;
+		if (visualBoyGrab != null && this.pushTime == 0f)
+		{
+			this.pushTime += Time.deltaTime;
+			Boy boy = ScriptGlobals.boy;
+			float height = boy.properties.height;
+			float radius = boy.properties.radius;
+			float num = 1.5f * radius;
+			float num2 = 0.5f * radius;
+			vector2f b = vector2f.up * (0.5f * height - 2f * radius) - vector2f.right * ((boy.facing >= 0f) ? num2 : num);
+			vector2f b2 = vector2f.up * (0.5f * height - 2f * radius) + vector2f.right * ((boy.facing <= 0f) ? num2 : num);
+			Collider component = this.collisionObject.GetComponent<Collider>();
+			float z = component.bounds.min.z;
+			Vector3 vector = MathUtils.v3(boy.pos + b, z);
+			Vector3 vector2 = MathUtils.v3(boy.pos + b2, z);
+			Transform closestPigBone = this.GetClosestPigBone(vector.x, -1f);
+			Transform closestPigBone2 = this.GetClosestPigBone(vector2.x, 1f);
+			visualBoyGrab.SetTargetBones(closestPigBone, closestPigBone2, z, z);
+		}
+		Rigidbody component2 = this.visualPig.GetComponent<Rigidbody>();
+		float x = this.visualPig.GetLastMoveSpeed().x;
+		float x2 = component2.velocity.x;
+		float num3 = x - x2;
+		this.visualPig.GetComponent<Rigidbody>().AddForce(num3 * Vector3.right, 2);
+		float num4 = ScriptGlobals.boy.input.looseDir.x;
+		if (this.leftDragEdge != null && this.visualPig.transform.position.x < this.leftDragEdge.position.x)
+		{
+			num4 = Mathf.Max(num4, 0f);
+			Vector3 position = this.visualPig.transform.position;
+			position.x = this.leftDragEdge.position.x;
+			component2.MovePosition(position);
+		}
+		if (this.rightDragEdge != null && this.visualPig.transform.position.x > this.rightDragEdge.position.x)
+		{
+			num4 = Mathf.Min(num4, 0f);
+			Vector3 position2 = this.visualPig.transform.position;
+			position2.x = this.rightDragEdge.position.x;
+			component2.MovePosition(position2);
+		}
+		if (num4 != 0f)
+		{
+			if (this.lastMovement != num4)
+			{
+				if (num4 < 0f)
+				{
+					this.visualPig.ForceToAnimation("DraggedBW", null, -1f, 0f, false);
+				}
+				else if (num4 > 0f)
+				{
+					this.visualPig.ForceToAnimation("WalkForced", null, -1f, 0f, false);
+				}
+				this.lastMovement = num4;
+			}
+		}
+		else if (this.lastMovement != 0f)
+		{
+			this.visualPig.ForceToAnimation("NiceIdle", null, -1f, 0f, false);
+			this.lastMovement = 0f;
+		}
+		if (!(ScriptGlobals.boy.state is BoyGrabState))
+		{
+			this.visualPig.ForceToAnimation("NiceIdle", null, -1f, 0f, false);
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x0600042E RID: 1070 RVA: 0x0002E8F4 File Offset: 0x0002CAF4
+	private float FindPiggyBackY(Vector3 worldPos, bool onlyBack = false)
+	{
+		GameObject gameObject = null;
+		GameObject gameObject2 = null;
+		int num = 0;
+		if (onlyBack)
+		{
+			num = 2;
+		}
+		int i = num;
+		int count = this.pigBackBones.Count;
+		while (i < count)
+		{
+			GameObject gameObject3 = this.pigBackBones[i];
+			float x = gameObject3.transform.position.x;
+			if (x <= worldPos.x)
+			{
+				if (gameObject == null || x > gameObject.transform.position.x)
+				{
+					gameObject = gameObject3;
+				}
+			}
+			else if (gameObject2 == null || x < gameObject2.transform.position.x)
+			{
+				gameObject2 = gameObject3;
+			}
+			i++;
+		}
+		if (gameObject == null || gameObject2 == null)
+		{
+			if (gameObject != null)
+			{
+				return gameObject.transform.position.y;
+			}
+			if (gameObject2 != null)
+			{
+				return gameObject2.transform.position.y;
+			}
+			return float.MinValue;
+		}
+		else
+		{
+			Vector3 position = gameObject2.transform.position;
+			Vector3 position2 = gameObject.transform.position;
+			float num2 = position.x - position2.x;
+			if (num2 < 0.01f)
+			{
+				return position.y;
+			}
+			float num3 = (worldPos.x - position2.x) / num2;
+			return num3 * position.y + (1f - num3) * position2.y;
+		}
+	}
+
+	// Token: 0x0600042F RID: 1071 RVA: 0x0002EA8C File Offset: 0x0002CC8C
+	private void ClearBackBoneDrop()
+	{
+		int i = 0;
+		int count = this.bonesTailToHead.Count;
+		while (i < count)
+		{
+			this.bonesWantedOffset.raw[i] = 0f;
+			i++;
+		}
+	}
+
+	// Token: 0x06000430 RID: 1072 RVA: 0x0002EACC File Offset: 0x0002CCCC
+	private void SetBackBoneDrop(float factor)
+	{
+		if (this.allowBoneOffset)
+		{
+			int num = -1;
+			int num2 = -1;
+			float num3 = ScriptGlobals.boy.pos.x - 0.15f;
+			float num4 = float.MinValue;
+			float num5 = float.MaxValue;
+			this.doBoneOffset = true;
+			int i = 0;
+			int count = this.bonesTailToHead.Count;
+			while (i < count)
+			{
+				Transform transform = this.bonesTailToHead.raw[i];
+				float x = transform.position.x;
+				if (x < num3 && x > num4)
+				{
+					num4 = x;
+					num = i;
+				}
+				if (x > num3 && x < num5)
+				{
+					num5 = x;
+					num2 = i;
+				}
+				i++;
+			}
+			int j = 0;
+			int count2 = this.bonesTailToHead.Count;
+			while (j < count2)
+			{
+				this.bonesWantedOffset[j] = 0f;
+				j++;
+			}
+			float num6 = factor + 1f * this.landPower * factor;
+			if (num != -1 && num2 == -1)
+			{
+				this.bonesWantedOffset.raw[num] = num6;
+			}
+			else if (num == -1 && num2 != -1)
+			{
+				this.bonesWantedOffset.raw[num2] = num6;
+			}
+			else if (num != -1 && num2 != -1)
+			{
+				float num7 = (num3 - num4) / (num5 - num4);
+				this.bonesWantedOffset.raw[num] = (1f - num7) * num6;
+				this.bonesWantedOffset.raw[num2] = num7 * num6;
+			}
+		}
+	}
+
+	// Token: 0x06000431 RID: 1073 RVA: 0x0002EC58 File Offset: 0x0002CE58
+	private void Update()
+	{
+		if (Time.deltaTime == 0f)
+		{
+			return;
+		}
+		if (this.boyDodgeActive)
+		{
+			RaycastHit raycastHit = default(RaycastHit);
+			if (Physics.Raycast(ScriptGlobals.boy.pos3, Vector3.down, ref raycastHit, 4f, this.environmentLayerMask))
+			{
+				float y = this.helperGameObject.transform.InverseTransformPoint(raycastHit.point).y;
+				this.initialDodgeY = this.helperGameObject.transform.position.y + y;
+			}
+			float num = this.initialDodgeY;
+			Vector3 position = this.currentDodgeAnim.transform.position;
+			if (this.currentDodgeAnim.frame < 8f && !ScriptGlobals.boy.isDead)
+			{
+				float num2 = this.FindPiggyBackY(ScriptGlobals.boy.pos3, false);
+				if (num2 > -3.4028235E+38f)
+				{
+					this.dodgeOverPigTimer += Time.deltaTime;
+					num = num2 - 0.9f;
+				}
+				else
+				{
+					this.dodgeOverPigTimer = 0f;
+				}
+			}
+			else
+			{
+				this.dodgeOverPigTimer = 0f;
+			}
+			float num3 = Mathf.Max(0f, 1f - this.dodgeOverPigTimer * 7f);
+			if (this.dodgeOverPigTimer == 0f)
+			{
+				num3 = 0f;
+			}
+			position.y += (num - position.y) * Mathf.Min(Time.deltaTime * (10f - num3 * 7f), 1f);
+			this.currentDodgeAnim.transform.position = position;
+			ScriptGlobals.boy.pos3.y = this.currentDodgeAnim.transform.position.y;
+		}
+		bool flag = false;
+		bool flag2 = false;
+		bool flag3 = ScriptGlobals.boy.state is BoyRunState;
+		bool flag4 = ScriptGlobals.boy.state is BoyReachPlateauState;
+		if (flag3 || flag4)
+		{
+			Collider collider;
+			if (flag3)
+			{
+				collider = ScriptGlobals.boy.status.groundCollider;
+			}
+			else
+			{
+				collider = (ScriptGlobals.boy.state as BoyReachPlateauState).plateau.collider;
+			}
+			GameObject gameObject = (!(collider != null)) ? null : collider.gameObject;
+			if (gameObject == this.collisionObject || gameObject == this.wallCollisionObject)
+			{
+				if (gameObject == this.wallCollisionObject)
+				{
+					flag2 = true;
+				}
+				flag = true;
+				float num4 = 0.06f;
+				if (!this.boyWasOnGround)
+				{
+					this.landPower = 1f;
+				}
+				this.SetBackBoneDrop(-num4);
+			}
+			this.boyWasOnGround = true;
+		}
+		else
+		{
+			if (this.landPower <= 0.1f)
+			{
+				this.ClearBackBoneDrop();
+			}
+			BoyReachPlateauState boyReachPlateauState = ScriptGlobals.boy.state as BoyReachPlateauState;
+			if (boyReachPlateauState != null)
+			{
+				if (boyReachPlateauState.plateau.collider.gameObject == this.collisionObject)
+				{
+					flag = true;
+				}
+			}
+			else if (this.standOnPigTime > 0f)
+			{
+				BoyJumpState boyJumpState = ScriptGlobals.boy.state as BoyJumpState;
+				if (boyJumpState != null && Mathf.Abs(ScriptGlobals.boy.pos.x - this.collisionObject.transform.position.x) < 1f && Mathf.Abs(ScriptGlobals.boy.velocity.x) < 1f)
+				{
+					flag = true;
+				}
+			}
+			if (this.boyWasOnGround)
+			{
+				this.landPower = 1f;
+				this.SetBackBoneDrop(-0.05f);
+			}
+			this.boyWasOnGround = false;
+		}
+		if (flag)
+		{
+			this.standOnPigTime += Time.deltaTime;
+			float num5 = this.FindPiggyBackY(ScriptGlobals.boy.pos3, flag2);
+			if (num5 == -3.4028235E+38f)
+			{
+				flag = false;
+			}
+			else
+			{
+				float num6 = (!flag2) ? 0.03f : 0f;
+				float num7 = ScriptGlobals.boy.pos.y - ScriptGlobals.boy.properties.height * 0.5f;
+				if (!(ScriptGlobals.boy.state is BoyRunState))
+				{
+					if (this.state == FarmPigFight.State.WallHit)
+					{
+						num7 = this.collisionObject.transform.position.y + 0.26f;
+						this.standOnPigTime = Time.deltaTime;
+					}
+					else
+					{
+						num7 = this.collisionObject.transform.position.y + 0.46f;
+					}
+				}
+				float num8 = num5 + num6 - num7;
+				this.standOnPigOffset += (num8 - this.standOnPigOffset) * Mathf.Min(Time.deltaTime * 40f * this.standOnPigTime, 1f);
+			}
+		}
+		if (!flag)
+		{
+			this.standOnPigTime = 0f;
+			float num9 = 0.8f;
+			if (ScriptGlobals.boy.velocity.y < 0f)
+			{
+				num9 = 0.8f;
+			}
+			float num10 = Mathf.Abs(this.standOnPigOffset);
+			num10 = Mathf.Max(num10 - Time.deltaTime * num9, 0f);
+			this.standOnPigOffset = Mathf.Sign(this.standOnPigOffset) * num10;
+			ScriptGlobals.boy.visualBoy.actor.visualYOffset = this.standOnPigOffset;
+		}
+		else if (Mathf.Abs(this.standOnPigOffset) > 0.001f)
+		{
+			ScriptGlobals.boy.visualBoy.actor.visualYOffset = this.standOnPigOffset;
+		}
+	}
+
+	// Token: 0x06000432 RID: 1074 RVA: 0x0002F234 File Offset: 0x0002D434
+	private void FixedUpdate()
+	{
+		if (this.boyHitWallChosen)
+		{
+			this.boyHitWallTimer += Time.deltaTime;
+			if (this.boyHitWallTimer > 1f)
+			{
+				this.boyHitWallChosen = false;
+			}
+			Vector3 position = this.alignAnimation.transform.position;
+			if (this.boyKILLWallChosen)
+			{
+				Vector3 vector = this.hitWallAlignPoint.transform.position + this.boyHitWallAlignOffset + Vector3.left * 0.27f;
+				this.alignAnimation.transform.position += (vector - position) * (Time.deltaTime * 9f);
+			}
+			else
+			{
+				Vector3 vector2 = this.visualPig.transform.position + this.boyHitWallAlignOffset;
+				this.alignAnimation.transform.position += (vector2 - position) * (Time.deltaTime * 7f);
+			}
+		}
+		if (this.AddBoyRagdolVelCount > 0)
+		{
+			this.AddBoyRagdolVelCount--;
+			float x = ScriptGlobals.boy.velocity.x;
+			if (x < 5f)
+			{
+				ScriptGlobals.boy.visualBoy.ragdoll.AddVelocity(Vector3.right * (5f - x));
+			}
+		}
+		if (this.firstAnimcharUpdate)
+		{
+			if (!this.visualPig.IsInitialized())
+			{
+				return;
+			}
+			this.visualPig.animChar.GetComponent<Animation>().cullingType = 0;
+			this.turnAndRunDef = this.visualPig.GetBlendHelper().GetDefinition("RunTurn", true);
+			this.firstAnimcharUpdate = false;
+		}
+		if (this.state == FarmPigFight.State.None)
+		{
+			return;
+		}
+		this.pigPhysics.MovePosition(this.visualPigRigidbody.position);
+		this.pigPhysics.MoveRotation(this.visualPigRigidbody.rotation);
+		switch (this.state)
+		{
+		case FarmPigFight.State.WallHit:
+			this.WallHitState();
+			break;
+		case FarmPigFight.State.WallHitTransition:
+			this.WallHitTransitionState();
+			break;
+		case FarmPigFight.State.Attack:
+			this.AttackState();
+			break;
+		case FarmPigFight.State.Idle:
+			this.IdleState();
+			break;
+		case FarmPigFight.State.Sleep:
+			this.SleepState();
+			break;
+		case FarmPigFight.State.TurnAndStop:
+			this.TurnAndStopState();
+			break;
+		case FarmPigFight.State.IdleAngry:
+			this.IdleAngryState();
+			break;
+		case FarmPigFight.State.Charge:
+			this.ChargeState();
+			break;
+		case FarmPigFight.State.GrabWorm:
+			this.GrabWormState();
+			break;
+		case FarmPigFight.State.SlaughterBoy:
+			this.SlaughterBoyState();
+			break;
+		case FarmPigFight.State.AngryWait:
+			this.AngryWaitState();
+			break;
+		case FarmPigFight.State.Walk:
+			this.WalkState();
+			break;
+		case FarmPigFight.State.BoyPush:
+			this.BoyPushState();
+			break;
+		case FarmPigFight.State.WormPulledOut:
+			this.WormPulledOutState();
+			break;
+		}
+		if (this.rtpcTimer > 0f)
+		{
+			this.rtpcTimer -= Time.deltaTime * 1.25f;
+			float value = Mathf.Clamp01(this.rtpcTimer / this.rtpcFadeDuration) * 100f;
+			this.rtpcAmbTrack01.SetFast(value, AudioKeyObject.AkGameObjs.global, 0f);
+		}
+		if (this.boyDodgeActive && (!(ScriptGlobals.boy.state is BoyCustomAnimState) || Mathf.Abs(this.visualPig.transform.position.x - ScriptGlobals.boy.transform.position.x) > 3f))
+		{
+			this.boyDodgeActive = false;
+		}
+		if (this.makeDynamicNextFrame)
+		{
+			this.t -= Time.deltaTime;
+			if (this.t < 0f)
+			{
+				this.visualPig.GetComponent<Rigidbody>().isKinematic = false;
+				this.makeDynamicNextFrame = false;
+				this.wallCollisionObject.SetActive(false);
+				this.collisionObject.SetActive(true);
+				this.collisionObject.layer = LayerMask.NameToLayer("Ungrouped");
+				this.visualPig.disableMovement = true;
+			}
+		}
+	}
+
+	// Token: 0x06000433 RID: 1075 RVA: 0x0002F65C File Offset: 0x0002D85C
+	private void LateUpdate()
+	{
+		if (this.noLateUpdateCounter > 0)
+		{
+			this.noLateUpdateCounter--;
+			return;
+		}
+		this.landPower = Mathf.Max(this.landPower - Time.deltaTime * 9.5f, 0f);
+		if (this.doBoneOffset)
+		{
+			float num = Mathf.Min(Time.deltaTime * 9.5f, 1f);
+			bool flag = true;
+			int i = 0;
+			int size = this.bonesWantedOffset.size;
+			while (i < size)
+			{
+				this.bonesCurrentOffset.raw[i] = this.bonesCurrentOffset.raw[i] * (1f - num) + this.bonesWantedOffset.raw[i] * num;
+				if (this.bonesCurrentOffset.raw[i] < -0.001f)
+				{
+					flag = false;
+				}
+				i++;
+			}
+			if (flag)
+			{
+				this.doBoneOffset = false;
+			}
+		}
+		if (this.doBoneOffset)
+		{
+			int j = 0;
+			int count = this.bonesTailToHead.Count;
+			while (j < count)
+			{
+				Transform transform = this.bonesTailToHead.raw[j];
+				Vector3 position = transform.position;
+				float num2 = this.bonesCurrentOffset.raw[j];
+				for (int k = 0; k < transform.childCount; k++)
+				{
+					Transform child = transform.GetChild(k);
+					if (child != this.bellyBone && !this.pigBackBones.Contains(child.gameObject) && child != this.bonesTailToHead.raw[this.bonesTailToHead.size - 1])
+					{
+						if (child != this.leftHipBone && child != this.rightHipBone && child != this.clavicleLBone && child != this.clavicleRBone)
+						{
+							Vector3 position2 = child.position;
+							position2.y -= num2;
+							child.position = position2;
+						}
+						else
+						{
+							Transform child2 = child.GetChild(0);
+							Vector3 position3 = child2.position;
+							position3.y -= num2;
+							child2.position = position3;
+						}
+					}
+				}
+				position.y += num2;
+				transform.position = position;
+				j++;
+			}
+		}
+		this.animWormPulledByBoyState.weight = this.pullFraction;
+		this.animWormPulledByBoyState.normalizedTime = this.boyPullNode.frame / this.boyPullNode.numFrames;
+		if (this.wormState == FarmPigFight.WormState.Pig)
+		{
+			this.animWormTransform.SetPositionRotation(this.assPos.position, this.assPos.rotation);
+		}
+		else if (this.wormState == FarmPigFight.WormState.Wall)
+		{
+			this.wormBlendTimer += Time.deltaTime;
+			this.wormBlendTimer = Mathf.Clamp01(this.wormBlendTimer);
+			this.animWormTransform.SetPositionRotation(Vector3.MoveTowards(this.wormBlendStartPos, this.hitWallAnimPose.position, this.wormBlendTimer), Quaternion.Slerp(this.wormBlendStartRot, this.hitWallAnimPose.rotation, this.wormBlendTimer));
+		}
+		else if (this.wormState == FarmPigFight.WormState.Free && !this.animWorm.isPlaying)
+		{
+			int num3 = Random.Range(0, 3);
+			if (num3 == 0)
+			{
+				this.animWorm.Play(this.animWormGroundIdleA.name);
+			}
+			else if (num3 == 1)
+			{
+				this.animWorm.Play(this.animWormGroundIdleB.name);
+			}
+			else
+			{
+				this.animWorm.Play(this.animWormGroundIdleC.name);
+			}
+		}
+	}
+
+	// Token: 0x06000434 RID: 1076 RVA: 0x0002FA20 File Offset: 0x0002DC20
+	private void SetFirstAttackInBarn()
+	{
+		this.doFirstAttackInBarn = true;
+	}
+
+	// Token: 0x06000435 RID: 1077 RVA: 0x0002FA2C File Offset: 0x0002DC2C
+	private void OnForceWard()
+	{
+		this.forceForwardTimer = 2f;
+	}
+
+	// Token: 0x06000436 RID: 1078 RVA: 0x0002FA3C File Offset: 0x0002DC3C
+	private void OnWoodWallSmashed()
+	{
+		this.audioSmashWallAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.audioSmashWallEnv.PostFast();
+		this.audioTurn.PostFast();
+		this.forceForwardTimer = 2f;
+		this.waitInside = true;
+	}
+
+	// Token: 0x06000437 RID: 1079 RVA: 0x0002FA84 File Offset: 0x0002DC84
+	private Vector3 ChooseIdlePosition()
+	{
+		float maxValue = float.MaxValue;
+		GameObject gameObject = null;
+		if (gameObject && maxValue <= this.idleMaxDistance)
+		{
+			return gameObject.transform.position;
+		}
+		return this.visualPig.transform.position;
+	}
+
+	// Token: 0x06000438 RID: 1080 RVA: 0x0002FACC File Offset: 0x0002DCCC
+	private void FillPigBoneList()
+	{
+		GameObject animChar = this.visualPig.animChar;
+		Transform transform = animChar.transform.Find("bones/Logic/Root");
+		this.bonesTailToHead.Add(transform.Find("TailA"));
+		this.bonesWantedOffset.Add(0f);
+		this.bonesCurrentOffset.Add(0f);
+		this.bonesTailToHead.Add(transform);
+		this.bonesWantedOffset.Add(0f);
+		this.bonesCurrentOffset.Add(0f);
+		this.leftHipBone = transform.Find("HipL");
+		this.rightHipBone = transform.Find("HipR");
+		Transform transform2 = transform.Find("SpineB");
+		this.bonesTailToHead.Add(transform2);
+		this.bonesWantedOffset.Add(0f);
+		this.bonesCurrentOffset.Add(0f);
+		this.bellyBone = transform2.Find("Belly");
+		transform2 = transform2.Find("SpineC");
+		this.clavicleLBone = transform2.Find("ClavicleL");
+		this.clavicleRBone = transform2.Find("ClavicleR");
+		this.bonesTailToHead.Add(transform2);
+		this.bonesWantedOffset.Add(0f);
+		this.bonesCurrentOffset.Add(0f);
+		transform2 = transform2.Find("Neck");
+		this.bonesTailToHead.Add(transform2);
+		this.bonesWantedOffset.Add(0f);
+		this.bonesCurrentOffset.Add(0f);
+		this.bonesTailToHead.Add(transform2.Find("Head"));
+		this.bonesWantedOffset.Add(0f);
+		this.bonesCurrentOffset.Add(0f);
+	}
+
+	// Token: 0x06000439 RID: 1081 RVA: 0x0002FC8C File Offset: 0x0002DE8C
+	private void GetClosestBone(Transform parent, float posx, float facing, ref float closest, ref Transform currentClosest)
+	{
+		int i = 1;
+		int count = this.bonesTailToHead.Count;
+		while (i < count)
+		{
+			Transform transform = this.bonesTailToHead.raw[i];
+			float num = facing * (transform.position.x - posx);
+			if (num < 0f)
+			{
+				num *= -1.5f;
+			}
+			if (num < closest)
+			{
+				closest = num;
+				currentClosest = transform;
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x0600043A RID: 1082 RVA: 0x0002FD00 File Offset: 0x0002DF00
+	private Transform GetClosestPigBone(float posx, float facing)
+	{
+		float maxValue = float.MaxValue;
+		Transform result = null;
+		this.GetClosestBone(this.root.transform, posx, facing, ref maxValue, ref result);
+		return result;
+	}
+
+	// Token: 0x0600043B RID: 1083 RVA: 0x0002FD30 File Offset: 0x0002DF30
+	public void SetAttackWaypointPos(bool always = false)
+	{
+		if (this.attackWayPoint != null)
+		{
+			AnimationBlendHelper blendHelper = this.visualPig.GetBlendHelper();
+			ABDefinition definition = blendHelper.GetDefinition("RunTurn", true);
+			if (always || blendHelper.CanTransitTo(definition))
+			{
+				Vector3 vector = this.visualPig.transform.position;
+				vector.z = ScriptGlobals.boy.pos3.z;
+				vector += Vector3.right * (this.attackRight * 3f);
+				this.attackWayPoint.transform.position = vector;
+			}
+		}
+	}
+
+	// Token: 0x0600043C RID: 1084 RVA: 0x0002FDD4 File Offset: 0x0002DFD4
+	private void PlayBoyAnimation(AnimClipNode animNode, float sign)
+	{
+		RaycastHit raycastHit = default(RaycastHit);
+		this.currentDodgeAnim = animNode;
+		this.initialDodgeY = animNode.transform.position.y;
+		if (Physics.Raycast(ScriptGlobals.boy.pos3, Vector3.down, ref raycastHit, 4f, this.environmentLayerMask))
+		{
+			Vector3 point = raycastHit.point;
+			point.z = 0f;
+			Vector3 normal = raycastHit.normal;
+			float num = 1f - Mathf.Abs(Vector3.Dot(normal, Vector3.up));
+			animNode.transform.position = point;
+			animNode.transform.up = normal;
+			animNode.transform.Rotate(0f, (ScriptGlobals.boy.facing != 1f) ? (-90f * sign) : 90f, 0f);
+			if (EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+			{
+				Debug.DrawLine(point, point + animNode.transform.up * 2f, Color.green, 3f);
+			}
+		}
+		else
+		{
+			Vector3 up = this.visualPig.transform.up;
+			up.z = 0f;
+			float num2 = Vector3.Angle(Vector3.right, up) - 90f;
+			if (ScriptGlobals.boy.facing > 0f)
+			{
+				animNode.transform.rotation = Quaternion.Euler(-sign * num2, 90f * sign, 0f);
+			}
+			else
+			{
+				animNode.transform.rotation = Quaternion.Euler(sign * num2, -90f * sign, 0f);
+			}
+			Vector3 vector = ScriptGlobals.boy.transform.position;
+			Vector3 vector2 = this.visualPig.transform.InverseTransformPoint(vector);
+			vector2.y = 0f;
+			vector = this.visualPig.transform.TransformPoint(vector2);
+			animNode.transform.position = vector;
+		}
+		EffectMaterial.Material material = EffectMaterial.Material.Mud;
+		if (this.visualPig.transform.position.x > this.mudEffectStopPos.position.x)
+		{
+			material = EffectMaterial.Material.Concrete;
+		}
+		if (!ScriptGlobals.boy.isDead)
+		{
+			EffectMaterial.Material material2 = material;
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, animNode, null, 0f, Boy.AffectMode.Default, material2);
+		}
+		else
+		{
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, animNode, null, 0f, Boy.AffectMode.AffectDeadBoy, material);
+		}
+		this.helperGameObject.transform.position = this.currentDodgeAnim.transform.position;
+		this.helperGameObject.transform.rotation = this.currentDodgeAnim.transform.rotation;
+	}
+
+	// Token: 0x0600043D RID: 1085 RVA: 0x0003008C File Offset: 0x0002E28C
+	private AnimClipNode SelectBoyDodgeAnimation()
+	{
+		this.boyHitWallChosen = false;
+		this.boyKILLWallChosen = false;
+		if (Mathf.Abs(ScriptGlobals.boy.velocity.x) < 0.25f)
+		{
+			if (Mathf.Sign(this.visualPig.transform.forward.x) != ScriptGlobals.boy.facing)
+			{
+				if (this.visualPig.transform.forward.x > 0.5f)
+				{
+					float num = this.hitWallAlignPoint.transform.position.x - this.visualPig.transform.position.x;
+					if (num < 3.5f)
+					{
+						this.boyHitWallChosen = true;
+						this.boyHitWallTimer = 0f;
+						this.alignAnimation = this.boyDodgeForwardCloseToWall;
+						RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.5f, 0.05f, 0, 0.15f);
+						RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.05f, 0, 0.3f);
+						RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.05f, 0, 0.4f);
+						RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.9f, 0.05f, 0, 0.74f);
+						RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.5f, 0.15f, 0, 0.84f);
+						return this.boyDodgeForwardCloseToWall;
+					}
+				}
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.5f, 0.05f, 0, 0.15f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.05f, 0, 0.3f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.05f, 0, 0.4f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.05f, 0, 0.74f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.4f, 0.05f, 0, 0.84f);
+				return this.boyDodgeAnimNodeUpwardsForward;
+			}
+			float num2 = this.hitWallAlignPoint.transform.position.x - this.visualPig.transform.position.x;
+			if (num2 < 4f)
+			{
+				this.boyHitWallChosen = true;
+				this.boyHitWallTimer = 0f;
+				this.alignAnimation = this.boyDodgeBackwardCloseToWall;
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.5f, 0.05f, 0, 0.15f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.05f, 0, 0.3f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.05f, 0, 0.4f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.9f, 0.05f, 0, 0.74f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.5f, 0.15f, 0, 0.84f);
+				return this.boyDodgeBackwardCloseToWall;
+			}
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.5f, 0.05f, 0, 0.15f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.05f, 0, 0.3f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.05f, 0, 0.4f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.9f, 0.05f, 0, 0.74f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.5f, 0.15f, 0, 0.84f);
+			return this.boyDodgeAnimNodeUpwardsBackwards;
+		}
+		else
+		{
+			if (Mathf.Sign(this.visualPig.transform.forward.x) != ScriptGlobals.boy.facing)
+			{
+				return this.boyDodgeAnimNodeForward;
+			}
+			float num3 = this.hitWallAlignPoint.transform.position.x - this.visualPig.transform.position.x;
+			if (num3 < 3f)
+			{
+				this.boyHitWallChosen = true;
+				this.boyHitWallTimer = 0f;
+				this.alignAnimation = this.boyDodgeBackwardCloseToWall;
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.5f, 0.05f, 0, 0.15f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.05f, 0, 0.3f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.05f, 0, 0.4f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.9f, 0.05f, 0, 0.74f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.5f, 0.15f, 0, 0.84f);
+				return this.boyDodgeBackwardCloseToWall;
+			}
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.5f, 0.1f, 0, 0.15f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.9f, 0.1f, 0, 0.5f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.6f, 0.25f, 0, 0.6f);
+			return this.boyDodgeAnimNodeBackwards;
+		}
+	}
+
+	// Token: 0x0600043E RID: 1086 RVA: 0x00030588 File Offset: 0x0002E788
+	private void DisallowTurning()
+	{
+		this.allowTurn = false;
+	}
+
+	// Token: 0x0600043F RID: 1087 RVA: 0x00030594 File Offset: 0x0002E794
+	private void AllowTurning()
+	{
+		this.allowTurn = true;
+	}
+
+	// Token: 0x06000440 RID: 1088 RVA: 0x000305A0 File Offset: 0x0002E7A0
+	public void HitWall()
+	{
+		if (this.state == FarmPigFight.State.Attack)
+		{
+			this.SetWallHitState();
+		}
+	}
+
+	// Token: 0x06000441 RID: 1089 RVA: 0x000305B4 File Offset: 0x0002E7B4
+	private void DisableTouch()
+	{
+		this.collisionObject.GetComponent<BoyDepthObstruction>().noPassingTouch = true;
+	}
+
+	// Token: 0x06000442 RID: 1090 RVA: 0x000305C8 File Offset: 0x0002E7C8
+	private void OnLoadPigfight()
+	{
+		this.chaseFadeRTPC = false;
+	}
+
+	// Token: 0x06000443 RID: 1091 RVA: 0x000305D4 File Offset: 0x0002E7D4
+	private bool CheckPull()
+	{
+		vector2f stick = GameInput.stick;
+		if (stick.magnitude < 0.4f)
+		{
+			return false;
+		}
+		Vector2 vector;
+		vector.x = stick.x;
+		vector.y = stick.y;
+		float num = Vector3.Dot(this.pullDir, vector);
+		return num >= 0.4f && (this.previouslyPulling || this.pullFraction <= 0f);
+	}
+
+	// Token: 0x06000444 RID: 1092 RVA: 0x00030658 File Offset: 0x0002E858
+	private void GrabTriggerEnter(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.boyInside = true;
+		}
+	}
+
+	// Token: 0x06000445 RID: 1093 RVA: 0x00030674 File Offset: 0x0002E874
+	private void GrabTriggerExit(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.boyInside = false;
+		}
+	}
+
+	// Token: 0x06000446 RID: 1094 RVA: 0x00030690 File Offset: 0x0002E890
+	private void LoadAtWall()
+	{
+		this.audioPig.PostFast();
+		this.timer = this.wallStunnedTime;
+		this.wallCollisionObject.layer = LayerMask.NameToLayer("Ungrouped");
+		this.visualPig.ForceToAnimation("HitWall", this.hitWallAlignPoint, -1f, 1f, false);
+		this.state = FarmPigFight.State.WallHit;
+	}
+
+	// Token: 0x06000447 RID: 1095 RVA: 0x000306F4 File Offset: 0x0002E8F4
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.hitTrigger.enterTrigger)
+		{
+			this.HitTriggerEnter(collider);
+		}
+		else if (sender == this.grabTrigger.enterTrigger)
+		{
+			this.GrabTriggerEnter(collider);
+		}
+		else if (sender == this.grabTrigger.exitTrigger)
+		{
+			this.GrabTriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06000448 RID: 1096 RVA: 0x00030758 File Offset: 0x0002E958
+	private void HitTriggerEnter(Collider collider)
+	{
+		if (this.boyDodgeActive)
+		{
+			return;
+		}
+		if (this.state == FarmPigFight.State.Attack && collider.attachedRigidbody && collider.attachedRigidbody.GetComponent<Boy>() && !ScriptGlobals.boy.isDead)
+		{
+			Boy boy = ScriptGlobals.boy;
+			VisualBoy visualBoy = boy.visualBoy;
+			VisualBoyCustomAnim visualBoyCustomAnim = visualBoy.state as VisualBoyCustomAnim;
+			if (ScriptGlobals.boy.transform.position.x >= this.mudKillsFromHere.position.x && ScriptGlobals.boy.transform.position.y > this.visualPig.transform.position.y + 0.85f && ScriptGlobals.boy.status.groundCollider == null && !(ScriptGlobals.boy.state is BoyCustomAnimState))
+			{
+				AnimClipNode animNode = this.SelectBoyDodgeAnimation();
+				this.PlayBoyAnimation(animNode, 1f);
+				SingletonBehaviour<CameraScript>.instance.OverrideCustomAnimAdjustment(0.2f, 1f);
+				this.boyDodgeActive = true;
+			}
+			else
+			{
+				this.audioBoyKilled.PostFast();
+				this.boyKilled.Signal();
+				ScriptGlobals.boy.Kill();
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftSpike, 1f, 0.1f, 0, 0f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightFadeOut, 0.6f, 0.18f, 0, 0.1f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.3f, 0.07f, 0, 0.25f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightFadeOut, 0.3f, 0.15f, 0, 0.45f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightFadeOut, 0.05f, 0.15f, 1, 0.82f);
+				this.boyDodgeActive = true;
+				if (this.allowTurn)
+				{
+					this.visualPig.ForceToAnimation("KillBoy", null, 0.4f, 0f, false);
+				}
+				float num = this.hitWallAlignPoint.transform.position.x - this.visualPig.transform.position.x;
+				if (Mathf.Sign(this.visualPig.transform.forward.x) == ScriptGlobals.boy.facing)
+				{
+					if (num < 1.6f && this.boyKilledBackwardAgainstWall != null)
+					{
+						this.boyHitWallChosen = true;
+						this.boyKILLWallChosen = true;
+						this.boyHitWallTimer = 0f;
+						this.alignAnimation = this.boyKilledBackwardAgainstWall;
+						this.PlayBoyAnimation(this.boyKilledBackwardAgainstWall, 1f);
+					}
+					else
+					{
+						this.PlayBoyAnimation(this.boyRunOverBack, 1f);
+					}
+				}
+				else if (num < 1.6f && this.boyKilledForwardAgainstWall != null)
+				{
+					this.boyHitWallChosen = true;
+					this.boyKILLWallChosen = true;
+					this.boyHitWallTimer = 0f;
+					this.alignAnimation = this.boyKilledForwardAgainstWall;
+					this.PlayBoyAnimation(this.boyKilledForwardAgainstWall, 1f);
+				}
+				else
+				{
+					this.PlayBoyAnimation(this.boyRunOver, 1f);
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000449 RID: 1097 RVA: 0x00030AB4 File Offset: 0x0002ECB4
+	private void OnDrawGizmos()
+	{
+		if (EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			Vector3 position = this.hitWallAnimPose.transform.position;
+			Gizmos.color = Color.red;
+			Gizmos.DrawLine(position, position + Vector3.up);
+			Gizmos.color = Color.green;
+			Vector3 position2 = this.hitWallAlignPoint.transform.position;
+			Vector3 vector = this.pullDir.normalized;
+			Gizmos.DrawLine(position2, position2 + vector);
+		}
+	}
+
+	// Token: 0x040006B5 RID: 1717
+	public float chargeTime = 2f;
+
+	// Token: 0x040006B6 RID: 1718
+	public float wallStunnedTime = 2f;
+
+	// Token: 0x040006B7 RID: 1719
+	public float getUpTime = 2f;
+
+	// Token: 0x040006B8 RID: 1720
+	public float animHeightOffset = 3f;
+
+	// Token: 0x040006B9 RID: 1721
+	public CollisionEvents hitTrigger;
+
+	// Token: 0x040006BA RID: 1722
+	public CollisionEvents grabTrigger;
+
+	// Token: 0x040006BB RID: 1723
+	public GameObject collisionObject;
+
+	// Token: 0x040006BC RID: 1724
+	public GameObject wallCollisionObject;
+
+	// Token: 0x040006BD RID: 1725
+	public GameObject root;
+
+	// Token: 0x040006BE RID: 1726
+	public AnimcontrolledCharacter visualPig;
+
+	// Token: 0x040006BF RID: 1727
+	public Rigidbody pigPhysics;
+
+	// Token: 0x040006C0 RID: 1728
+	public GameObject attackWayPoint;
+
+	// Token: 0x040006C1 RID: 1729
+	public AnimClipNode boyDodgeAnimNodeForward;
+
+	// Token: 0x040006C2 RID: 1730
+	public AnimClipNode boyDodgeAnimNodeUpwardsForward;
+
+	// Token: 0x040006C3 RID: 1731
+	public AnimClipNode boyDodgeAnimNodeUpwardsBackwards;
+
+	// Token: 0x040006C4 RID: 1732
+	public AnimClipNode boyDodgeAnimNodeBackwards;
+
+	// Token: 0x040006C5 RID: 1733
+	public AnimClipNode boyDodgeForwardCloseToWall;
+
+	// Token: 0x040006C6 RID: 1734
+	public AnimClipNode boyDodgeBackwardCloseToWall;
+
+	// Token: 0x040006C7 RID: 1735
+	public AnimClipNode boyKilledForwardAgainstWall;
+
+	// Token: 0x040006C8 RID: 1736
+	public AnimClipNode boyKilledBackwardAgainstWall;
+
+	// Token: 0x040006C9 RID: 1737
+	public AnimClipNode boyFallOffPigAnimNode;
+
+	// Token: 0x040006CA RID: 1738
+	public AnimClipNode boyRunOver;
+
+	// Token: 0x040006CB RID: 1739
+	public AnimClipNode boyRunOverBack;
+
+	// Token: 0x040006CC RID: 1740
+	public AnimClipNode boyPushedBack;
+
+	// Token: 0x040006CD RID: 1741
+	public AnimBlendNode boyWormPullBlend;
+
+	// Token: 0x040006CE RID: 1742
+	public AnimClipNode boyWormPullOut;
+
+	// Token: 0x040006CF RID: 1743
+	public Animation animWorm;
+
+	// Token: 0x040006D0 RID: 1744
+	private Transform animWormTransform;
+
+	// Token: 0x040006D1 RID: 1745
+	public AnimationClip animWormWiggleAss;
+
+	// Token: 0x040006D2 RID: 1746
+	public AnimationClip animWormIdleInWalledAss;
+
+	// Token: 0x040006D3 RID: 1747
+	public AnimationClip animWormHeldByBoy;
+
+	// Token: 0x040006D4 RID: 1748
+	public AnimationClip animWormPulledByBoy;
+
+	// Token: 0x040006D5 RID: 1749
+	public AnimationClip animWormBounceBack;
+
+	// Token: 0x040006D6 RID: 1750
+	public AnimationClip animWormThrown;
+
+	// Token: 0x040006D7 RID: 1751
+	public AnimationClip animWormGroundIdleA;
+
+	// Token: 0x040006D8 RID: 1752
+	public AnimationClip animWormGroundIdleB;
+
+	// Token: 0x040006D9 RID: 1753
+	public AnimationClip animWormGroundIdleC;
+
+	// Token: 0x040006DA RID: 1754
+	public ParticleSystem wormPullingFx;
+
+	// Token: 0x040006DB RID: 1755
+	public ParticleSystem wormPulledFx;
+
+	// Token: 0x040006DC RID: 1756
+	public ParticleSystem wormPuddleFx;
+
+	// Token: 0x040006DD RID: 1757
+	public Vector3 boyHitWallAlignOffset;
+
+	// Token: 0x040006DE RID: 1758
+	public float idleMaxDistance = 5f;
+
+	// Token: 0x040006DF RID: 1759
+	public GameObject hitWallAlignPoint;
+
+	// Token: 0x040006E0 RID: 1760
+	public Transform hitWallAnimPose;
+
+	// Token: 0x040006E1 RID: 1761
+	public Transform mudKillsFromHere;
+
+	// Token: 0x040006E2 RID: 1762
+	public Transform assPos;
+
+	// Token: 0x040006E3 RID: 1763
+	public Transform leftDragEdge;
+
+	// Token: 0x040006E4 RID: 1764
+	public Transform rightDragEdge;
+
+	// Token: 0x040006E5 RID: 1765
+	public Vector2 pullDir;
+
+	// Token: 0x040006E6 RID: 1766
+	public AnimationCurve pullCurve;
+
+	// Token: 0x040006E7 RID: 1767
+	public List<GameObject> pigBackBones;
+
+	// Token: 0x040006E8 RID: 1768
+	public string audioPrefix = "pig";
+
+	// Token: 0x040006E9 RID: 1769
+	public GameObject helperGameObject;
+
+	// Token: 0x040006EA RID: 1770
+	public float wormBlendTimer;
+
+	// Token: 0x040006EB RID: 1771
+	public NoGrab noGrab;
+
+	// Token: 0x040006EC RID: 1772
+	public Transform mudEffectStopPos;
+
+	// Token: 0x040006ED RID: 1773
+	private FarmPigFight.State state;
+
+	// Token: 0x040006EE RID: 1774
+	private SignalIn woodWallSmashed;
+
+	// Token: 0x040006EF RID: 1775
+	private SignalIn forceForward;
+
+	// Token: 0x040006F0 RID: 1776
+	private SignalIn firstAttackInBarn;
+
+	// Token: 0x040006F1 RID: 1777
+	private SignalIn initialWakeUp;
+
+	// Token: 0x040006F2 RID: 1778
+	private SignalIn setSleepState;
+
+	// Token: 0x040006F3 RID: 1779
+	private SignalIn setAngryWaitState;
+
+	// Token: 0x040006F4 RID: 1780
+	private SignalIn setIdleState;
+
+	// Token: 0x040006F5 RID: 1781
+	private SignalIn setKnockedOut;
+
+	// Token: 0x040006F6 RID: 1782
+	private SignalIn disallowTurning;
+
+	// Token: 0x040006F7 RID: 1783
+	private SignalIn allowTurning;
+
+	// Token: 0x040006F8 RID: 1784
+	private SignalIn disablePassingTouch;
+
+	// Token: 0x040006F9 RID: 1785
+	private SignalIn hitWall;
+
+	// Token: 0x040006FA RID: 1786
+	private SignalIn loadPigfight;
+
+	// Token: 0x040006FB RID: 1787
+	private SignalOut wormPulledOff;
+
+	// Token: 0x040006FC RID: 1788
+	private SignalOut attack;
+
+	// Token: 0x040006FD RID: 1789
+	private SignalOut proneAtWall;
+
+	// Token: 0x040006FE RID: 1790
+	private SignalOut boyKilled;
+
+	// Token: 0x040006FF RID: 1791
+	private SignalOut loadAttack;
+
+	// Token: 0x04000700 RID: 1792
+	private float timer;
+
+	// Token: 0x04000701 RID: 1793
+	private float boyHitWallTimer;
+
+	// Token: 0x04000702 RID: 1794
+	private float attackRight = 1f;
+
+	// Token: 0x04000703 RID: 1795
+	private float forceForwardTimer;
+
+	// Token: 0x04000704 RID: 1796
+	private float lastMovement;
+
+	// Token: 0x04000705 RID: 1797
+	private float pushTime;
+
+	// Token: 0x04000706 RID: 1798
+	private float pullFraction;
+
+	// Token: 0x04000707 RID: 1799
+	private float pullFractionLastFrame;
+
+	// Token: 0x04000708 RID: 1800
+	private float poopAmount = 1.75f;
+
+	// Token: 0x04000709 RID: 1801
+	private float t = 0.3f;
+
+	// Token: 0x0400070A RID: 1802
+	private float timeSinceLoad;
+
+	// Token: 0x0400070B RID: 1803
+	private float rtpcTimer;
+
+	// Token: 0x0400070C RID: 1804
+	private float rtpcFadeDuration = 4f;
+
+	// Token: 0x0400070D RID: 1805
+	private FarmPigFight.WormState wormState;
+
+	// Token: 0x0400070E RID: 1806
+	private bool boyHitWallChosen;
+
+	// Token: 0x0400070F RID: 1807
+	private bool boyKILLWallChosen;
+
+	// Token: 0x04000710 RID: 1808
+	private bool allowTurn = true;
+
+	// Token: 0x04000711 RID: 1809
+	private bool boyDodgeActive;
+
+	// Token: 0x04000712 RID: 1810
+	private bool waitInside;
+
+	// Token: 0x04000713 RID: 1811
+	private bool doFirstAttackInBarn;
+
+	// Token: 0x04000714 RID: 1812
+	private bool pauseBeforeCharge = true;
+
+	// Token: 0x04000715 RID: 1813
+	private bool chaseFadeRTPC = true;
+
+	// Token: 0x04000716 RID: 1814
+	private bool makeDynamicNextFrame;
+
+	// Token: 0x04000717 RID: 1815
+	private bool firstAnimcharUpdate = true;
+
+	// Token: 0x04000718 RID: 1816
+	private bool previouslyPulling;
+
+	// Token: 0x04000719 RID: 1817
+	private bool boyInside;
+
+	// Token: 0x0400071A RID: 1818
+	private ABDefinition turnAndRunDef;
+
+	// Token: 0x0400071B RID: 1819
+	private LayerMask environmentLayerMask;
+
+	// Token: 0x0400071C RID: 1820
+	private Vector3 spawnPos;
+
+	// Token: 0x0400071D RID: 1821
+	private Vector3 wormBlendStartPos;
+
+	// Token: 0x0400071E RID: 1822
+	private Quaternion wormBlendStartRot;
+
+	// Token: 0x0400071F RID: 1823
+	private AnimClipNode alignAnimation;
+
+	// Token: 0x04000720 RID: 1824
+	private AnimClipNode boyPullNode;
+
+	// Token: 0x04000721 RID: 1825
+	private int AddBoyRagdolVelCount;
+
+	// Token: 0x04000722 RID: 1826
+	private float wormPullTimer;
+
+	// Token: 0x04000723 RID: 1827
+	private AnimationState animWormWiggleAssState;
+
+	// Token: 0x04000724 RID: 1828
+	private AnimationState animWormIdleInWalledAssState;
+
+	// Token: 0x04000725 RID: 1829
+	private AnimationState animWormHeldByBoyState;
+
+	// Token: 0x04000726 RID: 1830
+	private AnimationState animWormPulledByBoyState;
+
+	// Token: 0x04000727 RID: 1831
+	private AnimationState animWormBounceBackState;
+
+	// Token: 0x04000728 RID: 1832
+	private AnimationState animWormThrownState;
+
+	// Token: 0x04000729 RID: 1833
+	private Rigidbody visualPigRigidbody;
+
+	// Token: 0x0400072A RID: 1834
+	private AnimClipNode currentDodgeAnim;
+
+	// Token: 0x0400072B RID: 1835
+	private float grabTimer;
+
+	// Token: 0x0400072C RID: 1836
+	private float grabDelay = 0.1f;
+
+	// Token: 0x0400072D RID: 1837
+	private float releaseTimer;
+
+	// Token: 0x0400072E RID: 1838
+	private float releaseDelay = 0.2f;
+
+	// Token: 0x0400072F RID: 1839
+	private float grabStunTimer;
+
+	// Token: 0x04000730 RID: 1840
+	private float grabStunDelay = 0.15f;
+
+	// Token: 0x04000731 RID: 1841
+	private float initialDodgeY;
+
+	// Token: 0x04000732 RID: 1842
+	private int hitTriggerEnterHandle = -1;
+
+	// Token: 0x04000733 RID: 1843
+	private int grabTriggerEnterHandle = -1;
+
+	// Token: 0x04000734 RID: 1844
+	private int grabTriggerExitHandle = -1;
+
+	// Token: 0x04000735 RID: 1845
+	private ABDefinition pullPigWormDef;
+
+	// Token: 0x04000736 RID: 1846
+	private ABDefinition holdPigWormDef;
+
+	// Token: 0x04000737 RID: 1847
+	private FastList<Transform> bonesTailToHead = new FastList<Transform>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04000738 RID: 1848
+	private FastList<float> bonesWantedOffset = new FastList<float>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04000739 RID: 1849
+	private FastList<float> bonesCurrentOffset = new FastList<float>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x0400073A RID: 1850
+	private Transform bellyBone;
+
+	// Token: 0x0400073B RID: 1851
+	private Transform leftHipBone;
+
+	// Token: 0x0400073C RID: 1852
+	private Transform rightHipBone;
+
+	// Token: 0x0400073D RID: 1853
+	private Transform clavicleLBone;
+
+	// Token: 0x0400073E RID: 1854
+	private Transform clavicleRBone;
+
+	// Token: 0x0400073F RID: 1855
+	private bool doBoneOffset;
+
+	// Token: 0x04000740 RID: 1856
+	private bool allowBoneOffset;
+
+	// Token: 0x04000741 RID: 1857
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04000742 RID: 1858
+	[SerializeField]
+	[HideInInspector]
+	private RTPC rtpcAmbTrack01;
+
+	// Token: 0x04000743 RID: 1859
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioGrabWorm;
+
+	// Token: 0x04000744 RID: 1860
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioWormRelease;
+
+	// Token: 0x04000745 RID: 1861
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioWormReleaseSpringy;
+
+	// Token: 0x04000746 RID: 1862
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioWormPull;
+
+	// Token: 0x04000747 RID: 1863
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioWormPullStop;
+
+	// Token: 0x04000748 RID: 1864
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioWormPullSuccess;
+
+	// Token: 0x04000749 RID: 1865
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioAttack;
+
+	// Token: 0x0400074A RID: 1866
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioHitWall;
+
+	// Token: 0x0400074B RID: 1867
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioMovedByBoy;
+
+	// Token: 0x0400074C RID: 1868
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioSilent;
+
+	// Token: 0x0400074D RID: 1869
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioWormOut;
+
+	// Token: 0x0400074E RID: 1870
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioContent;
+
+	// Token: 0x0400074F RID: 1871
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioPig;
+
+	// Token: 0x04000750 RID: 1872
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioSmashWallEnv;
+
+	// Token: 0x04000751 RID: 1873
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioTurn;
+
+	// Token: 0x04000752 RID: 1874
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioBoyKilled;
+
+	// Token: 0x04000753 RID: 1875
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioAttackInBarn;
+
+	// Token: 0x04000754 RID: 1876
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioSmashWallAmb;
+
+	// Token: 0x04000755 RID: 1877
+	private float standOnPigOffset;
+
+	// Token: 0x04000756 RID: 1878
+	private float standOnPigTime;
+
+	// Token: 0x04000757 RID: 1879
+	private float dodgeOverPigTimer;
+
+	// Token: 0x04000758 RID: 1880
+	private bool boyWasOnGround;
+
+	// Token: 0x04000759 RID: 1881
+	private int noLateUpdateCounter = 1;
+
+	// Token: 0x0400075A RID: 1882
+	private float landPower;
+
+	// Token: 0x0200007F RID: 127
+	private enum State
+	{
+		// Token: 0x0400075C RID: 1884
+		None,
+		// Token: 0x0400075D RID: 1885
+		WallHit,
+		// Token: 0x0400075E RID: 1886
+		WallHitTransition,
+		// Token: 0x0400075F RID: 1887
+		Attack,
+		// Token: 0x04000760 RID: 1888
+		Idle,
+		// Token: 0x04000761 RID: 1889
+		Sleep,
+		// Token: 0x04000762 RID: 1890
+		TurnAndStop,
+		// Token: 0x04000763 RID: 1891
+		IdleAngry,
+		// Token: 0x04000764 RID: 1892
+		Charge,
+		// Token: 0x04000765 RID: 1893
+		GrabWorm,
+		// Token: 0x04000766 RID: 1894
+		SlaughterBoy,
+		// Token: 0x04000767 RID: 1895
+		AngryWait,
+		// Token: 0x04000768 RID: 1896
+		Walk,
+		// Token: 0x04000769 RID: 1897
+		BoyPush,
+		// Token: 0x0400076A RID: 1898
+		WormPulledOut
+	}
+
+	// Token: 0x02000080 RID: 128
+	private enum WormState
+	{
+		// Token: 0x0400076C RID: 1900
+		Pig,
+		// Token: 0x0400076D RID: 1901
+		Wall,
+		// Token: 0x0400076E RID: 1902
+		Free
+	}
+}

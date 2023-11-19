@@ -1,0 +1,12 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003AA RID: 938
+public class ForkLiftController : MonoBehaviour
+{
+	// Token: 0x04002D0F RID: 11535
+	public DrivableWheeledVehicle vehicle;
+
+	// Token: 0x04002D10 RID: 11536
+	public PhysicsLift lift;
+}

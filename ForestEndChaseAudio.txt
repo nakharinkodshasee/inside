@@ -1,0 +1,664 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200044A RID: 1098
+public class ForestEndChaseAudio : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001CB2 RID: 7346 RVA: 0x000F9DB8 File Offset: 0x000F7FB8
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioDartHitBoyMusic = new AudioEventSimple("music_forest_chase_dart_hitBoy");
+		this.audioDartHitBoyAmb = new AudioEventSimple("amb_sws_forest_chase_dart_hitBoy");
+		this.audioDartMissMusic = new AudioEventSimple("music_forest_chase_dart_miss");
+		this.audioDartMissAmb = new AudioEventSimple("amb_sws_forest_chase_dart_miss");
+		this.audioChaseStartMusic = new AudioEventSimple("music_forest_chase_chaseStart");
+		this.audioChaseStartAmb = new AudioEventSimple("amb_sws_forest_chase_chaseStart");
+		this.audioSurviveLightMusic = new AudioEventSimple("music_forest_chase_surviveAtLight");
+		this.audioSurviveLightAmb = new AudioEventSimple("amb_sws_forest_chase_surviveAtLight");
+		this.audioSecondDudeMusic = new AudioEventSimple("music_forest_chase_secondDude");
+		this.audioSecondDudeAmb = new AudioEventSimple("amb_sws_forest_chase_secondDude");
+		this.audioTripMusic_1 = new AudioEventSimple("music_forest_chase_trip1");
+		this.audioTripAmb_1 = new AudioEventSimple("amb_sws_forest_chase_trip1");
+		this.audioTripPassedMusic_1 = new AudioEventSimple("music_forest_chase_trip1Passed");
+		this.audioTripPassedAmb_1 = new AudioEventSimple("amb_sws_forest_chase_trip1Passed");
+		this.audioTripMusic_2 = new AudioEventSimple("music_forest_chase_trip2");
+		this.audioTripAmb_2 = new AudioEventSimple("amb_sws_forest_chase_trip2");
+		this.audioTripPassedMusic_2 = new AudioEventSimple("music_forest_chase_trip2Passed");
+		this.audioTripPassedAmb_2 = new AudioEventSimple("amb_sws_forest_chase_trip2Passed");
+		this.audioTripMusic_3 = new AudioEventSimple("music_forest_chase_trip3");
+		this.audioTripAmb_3 = new AudioEventSimple("amb_sws_forest_chase_trip3");
+		this.audioTripPassedMusic_3 = new AudioEventSimple("music_forest_chase_trip3Passed");
+		this.audioTripPassedAmb_3 = new AudioEventSimple("amb_sws_forest_chase_trip3Passed");
+		this.audioEnterShootZoneMusic = new AudioEventSimple("music_forest_chase_enterShootZone");
+		this.audioEnterShootZoneAmb = new AudioEventSimple("amb_sws_forest_chase_enterShootZone");
+		this.audioExitShootZoneMusic = new AudioEventSimple("music_forest_chase_exitShootZone");
+		this.audioExitShootZoneAmb = new AudioEventSimple("amb_sws_forest_chase_exitShootZone");
+		this.audioJumpFromCliffMusic = new AudioEventSimple("music_forest_chase_jumpFromCliff");
+		this.audioJumpFromCliffAmb = new AudioEventSimple("amb_sws_forest_chase_jumpFromCliff");
+		this.akGameObjPassingCar = AudioUtils.EnsureAkGameObj(this.passingCar, null);
+		this.audioPassingCarStart = new AudioEventSimpleLocal("env_forest_chase_passingCar_start", this.akGameObjPassingCar);
+		this.audioPassingCarStop = new AudioEventSimpleLocal("env_forest_chase_passingCar_stop", this.akGameObjPassingCar);
+	}
+
+	// Token: 0x06001CB3 RID: 7347 RVA: 0x000F9FD8 File Offset: 0x000F81D8
+	public bool PreAwake(int callcount)
+	{
+		this.startChase = SignalIn.Create("startChase", base.gameObject, new Action(this.DoStartChase));
+		this.tripped1 = SignalIn.Create("tripped1", base.gameObject, new Action(this.DoTripped1));
+		this.survivedAtLight = SignalIn.Create("survivedAtLight", base.gameObject, new Action(this.DoSurviveAtLight));
+		this.newDudeAppear = SignalIn.Create("newDudeAppear", base.gameObject, new Action(this.DoNewDudeAppear));
+		this.tripped2 = SignalIn.Create("tripped2", base.gameObject, new Action(this.DoTripped2));
+		this.enterSlideKillZone = SignalIn.Create("enterSlideKillZone", base.gameObject, new Action(this.DoEnterSlideKillZone));
+		this.exitSlideKillZone = SignalIn.Create("exitSlideKillZone", base.gameObject, new Action(this.DoExitSlideKillZone));
+		this.tripped3 = SignalIn.Create("tripped3", base.gameObject, new Action(this.DoTripped3));
+		this.jumpFromCliff = SignalIn.Create("jumpFromCliff", base.gameObject, new Action(this.DoJumpFromCliff));
+		this.boyHit = SignalIn.Create("boyHit", base.gameObject, new Action(this.DoBoyHit));
+		this.groundHit = SignalIn.Create("groundHit", base.gameObject, new Action(this.DoGroundHit));
+		this.passingCarStart = SignalIn.Create("passingCarStart", base.gameObject, new Action(this.DoStartPassingCar));
+		this.enemyClose = SignalOut.Create("enemyClose", base.gameObject);
+		this.enemyNotClose = SignalOut.Create("enemyNotClose", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001CB4 RID: 7348 RVA: 0x000FA1AC File Offset: 0x000F83AC
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.trigger1RightEdge = this.CalculateRightEdge(this.tripTrigger_1);
+		this.trigger2RightEdge = this.CalculateRightEdge(this.tripTrigger_2);
+		this.trigger3RightEdge = this.CalculateRightEdge(this.tripTrigger_3);
+	}
+
+	// Token: 0x06001CB5 RID: 7349 RVA: 0x000FA1F8 File Offset: 0x000F83F8
+	private void OnDisable()
+	{
+		if (this.state != ForestEndChaseAudio.State.None && this.state != ForestEndChaseAudio.State.Finished)
+		{
+			this.audioPassingCarStop.PostFast();
+		}
+	}
+
+	// Token: 0x06001CB6 RID: 7350 RVA: 0x000FA22C File Offset: 0x000F842C
+	private float CalculateRightEdge(Collider coll)
+	{
+		return coll.transform.position.x + coll.bounds.extents.x + 0.6f;
+	}
+
+	// Token: 0x06001CB7 RID: 7351 RVA: 0x000FA26C File Offset: 0x000F846C
+	private void DoBoyHit()
+	{
+		this.audioDartHitBoyMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.audioDartHitBoyAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+	}
+
+	// Token: 0x06001CB8 RID: 7352 RVA: 0x000FA29C File Offset: 0x000F849C
+	private void DoGroundHit()
+	{
+		this.audioDartMissMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.audioDartMissAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+	}
+
+	// Token: 0x06001CB9 RID: 7353 RVA: 0x000FA2CC File Offset: 0x000F84CC
+	private void DoStartChase()
+	{
+		this.state = ForestEndChaseAudio.State.Trip1;
+		this.chasedByDude = true;
+		this.audioChaseStartMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.audioChaseStartAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+		SoundEngine.RTPCs.phyMove.SetFast(50f, this.akGameObjPassingCar, 0f);
+		this.audioPassingCarStart.PostFast();
+	}
+
+	// Token: 0x06001CBA RID: 7354 RVA: 0x000FA330 File Offset: 0x000F8530
+	private void DoStartPassingCar()
+	{
+		this.passingCar.GetComponent<AudioMove>().enabled = true;
+	}
+
+	// Token: 0x06001CBB RID: 7355 RVA: 0x000FA344 File Offset: 0x000F8544
+	private void DoTripped1()
+	{
+		if (this.state == ForestEndChaseAudio.State.Trip1)
+		{
+			this.trip1 = true;
+			this.audioTripMusic_1.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioTripAmb_1.PostFast(AudioKeyObject.AkGameObjs.global);
+		}
+	}
+
+	// Token: 0x06001CBC RID: 7356 RVA: 0x000FA37C File Offset: 0x000F857C
+	private void Trip1State()
+	{
+		if (ScriptGlobals.boy.pos3.x > this.trigger1RightEdge)
+		{
+			if (!this.trip1)
+			{
+				this.audioTripPassedMusic_1.PostFast(AudioKeyObject.AkGameObjs.global);
+				this.audioTripPassedAmb_1.PostFast(AudioKeyObject.AkGameObjs.global);
+			}
+			this.state = ForestEndChaseAudio.State.HideForLightTransition;
+		}
+	}
+
+	// Token: 0x06001CBD RID: 7357 RVA: 0x000FA3D8 File Offset: 0x000F85D8
+	private void DoSurviveAtLight()
+	{
+		if (!ScriptGlobals.boy.isDead)
+		{
+			this.audioSurviveLightMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioSurviveLightAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.state = ForestEndChaseAudio.State.Trip2Transition;
+		}
+	}
+
+	// Token: 0x06001CBE RID: 7358 RVA: 0x000FA41C File Offset: 0x000F861C
+	private void DoNewDudeAppear()
+	{
+		if (!this.newDudeAppeared)
+		{
+			this.audioSecondDudeMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioSecondDudeAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.newDudeAppeared = true;
+		}
+	}
+
+	// Token: 0x06001CBF RID: 7359 RVA: 0x000FA45C File Offset: 0x000F865C
+	private void HideForLightTransitionState()
+	{
+		this.state = ForestEndChaseAudio.State.HideForLight;
+	}
+
+	// Token: 0x06001CC0 RID: 7360 RVA: 0x000FA468 File Offset: 0x000F8668
+	private void HideForLightState()
+	{
+	}
+
+	// Token: 0x06001CC1 RID: 7361 RVA: 0x000FA46C File Offset: 0x000F866C
+	private void Trip2TransitionState()
+	{
+		this.state = ForestEndChaseAudio.State.Trip2;
+	}
+
+	// Token: 0x06001CC2 RID: 7362 RVA: 0x000FA478 File Offset: 0x000F8678
+	private void DoTripped2()
+	{
+		if (this.state == ForestEndChaseAudio.State.Trip2)
+		{
+			this.trip2 = true;
+			this.audioTripMusic_2.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioTripAmb_2.PostFast(AudioKeyObject.AkGameObjs.global);
+		}
+	}
+
+	// Token: 0x06001CC3 RID: 7363 RVA: 0x000FA4B0 File Offset: 0x000F86B0
+	private void Trip2State()
+	{
+		if (ScriptGlobals.boy.pos3.x > this.trigger2RightEdge)
+		{
+			if (!this.trip2)
+			{
+				this.audioTripPassedMusic_2.PostFast(AudioKeyObject.AkGameObjs.global);
+				this.audioTripPassedAmb_2.PostFast(AudioKeyObject.AkGameObjs.global);
+			}
+			this.state = ForestEndChaseAudio.State.SlideJump;
+		}
+	}
+
+	// Token: 0x06001CC4 RID: 7364 RVA: 0x000FA510 File Offset: 0x000F8710
+	private void DoEnterSlideKillZone()
+	{
+		this.chasedByDude = false;
+		this.fadeToZer0 = true;
+		this.dangerRTPCStatic = this.dangerRTPC;
+		this.audioEnterShootZoneMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.audioEnterShootZoneAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+	}
+
+	// Token: 0x06001CC5 RID: 7365 RVA: 0x000FA558 File Offset: 0x000F8758
+	private void DoExitSlideKillZone()
+	{
+		this.fadeToZer0 = false;
+		this.chasedByDog = true;
+		this.audioExitShootZoneMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.audioExitShootZoneAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.state = ForestEndChaseAudio.State.Trip3Transition;
+	}
+
+	// Token: 0x06001CC6 RID: 7366 RVA: 0x000FA590 File Offset: 0x000F8790
+	private void SlideJumpState()
+	{
+	}
+
+	// Token: 0x06001CC7 RID: 7367 RVA: 0x000FA594 File Offset: 0x000F8794
+	private void AtSlideJump()
+	{
+	}
+
+	// Token: 0x06001CC8 RID: 7368 RVA: 0x000FA598 File Offset: 0x000F8798
+	private void Trip3TransitionState()
+	{
+		this.state = ForestEndChaseAudio.State.Trip3;
+	}
+
+	// Token: 0x06001CC9 RID: 7369 RVA: 0x000FA5A4 File Offset: 0x000F87A4
+	private void DoTripped3()
+	{
+		if (this.state == ForestEndChaseAudio.State.Trip3)
+		{
+			this.trip3 = true;
+			this.audioTripMusic_3.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioTripAmb_3.PostFast(AudioKeyObject.AkGameObjs.global);
+		}
+	}
+
+	// Token: 0x06001CCA RID: 7370 RVA: 0x000FA5DC File Offset: 0x000F87DC
+	private void Trip3State()
+	{
+		if (ScriptGlobals.boy.pos3.x > this.trigger3RightEdge)
+		{
+			if (!this.trip3)
+			{
+				this.audioTripPassedMusic_3.PostFast(AudioKeyObject.AkGameObjs.global);
+				this.audioTripPassedAmb_3.PostFast(AudioKeyObject.AkGameObjs.global);
+			}
+			this.state = ForestEndChaseAudio.State.JumpOffCliff;
+		}
+	}
+
+	// Token: 0x06001CCB RID: 7371 RVA: 0x000FA638 File Offset: 0x000F8838
+	private void JumpOffCliffState()
+	{
+	}
+
+	// Token: 0x06001CCC RID: 7372 RVA: 0x000FA63C File Offset: 0x000F883C
+	private void DoJumpFromCliff()
+	{
+		this.chasedByDog = false;
+		this.audioJumpFromCliffMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.audioJumpFromCliffAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.audioPassingCarStop.PostFast();
+		this.state = ForestEndChaseAudio.State.Finished;
+	}
+
+	// Token: 0x06001CCD RID: 7373 RVA: 0x000FA67C File Offset: 0x000F887C
+	private void FadeRTPCToZero()
+	{
+		this.timeToZero -= Time.deltaTime;
+		float num = Mathf.InverseLerp(0f, 1.6f, this.timeToZero);
+		this.dangerRTPC = Mathf.Lerp(0.071f, this.dangerRTPCStatic, num);
+		SoundEngine.RTPCs.puzzleTransition.Set01ClampedFast(this.dangerRTPC, AudioKeyObject.AkGameObjs.global);
+	}
+
+	// Token: 0x06001CCE RID: 7374 RVA: 0x000FA6E0 File Offset: 0x000F88E0
+	private void UpdateDistanceRTPC(Transform t)
+	{
+		float magnitude = (ScriptGlobals.boy.pos3 - t.position).magnitude;
+		if (this.chasedByDude)
+		{
+			this.dangerRTPC = Mathf.InverseLerp(22f, 0f, magnitude);
+		}
+		else
+		{
+			this.dangerRTPC = Mathf.InverseLerp(36f, 0f, magnitude);
+		}
+		SoundEngine.RTPCs.puzzleTransition.Set01ClampedFast(this.dangerRTPC, AudioKeyObject.AkGameObjs.global);
+		if (magnitude < this.voiceSafeDist && this.voiceSafeLastFrame)
+		{
+			this.enemyClose.Signal();
+			this.voiceSafeLastFrame = false;
+		}
+		else if (magnitude > this.voiceSafeDist && !this.voiceSafeLastFrame)
+		{
+			this.enemyNotClose.Signal();
+			this.voiceSafeLastFrame = true;
+		}
+	}
+
+	// Token: 0x06001CCF RID: 7375 RVA: 0x000FA7B4 File Offset: 0x000F89B4
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case ForestEndChaseAudio.State.Trip1:
+			this.Trip1State();
+			break;
+		case ForestEndChaseAudio.State.HideForLightTransition:
+			this.HideForLightTransitionState();
+			break;
+		case ForestEndChaseAudio.State.HideForLight:
+			this.HideForLightState();
+			break;
+		case ForestEndChaseAudio.State.Trip2Transition:
+			this.Trip2TransitionState();
+			break;
+		case ForestEndChaseAudio.State.Trip2:
+			this.Trip2State();
+			break;
+		case ForestEndChaseAudio.State.Trip3Transition:
+			this.Trip3TransitionState();
+			break;
+		case ForestEndChaseAudio.State.Trip3:
+			this.Trip3State();
+			break;
+		case ForestEndChaseAudio.State.JumpOffCliff:
+			this.JumpOffCliffState();
+			break;
+		case ForestEndChaseAudio.State.SlideJump:
+			this.SlideJumpState();
+			break;
+		}
+		if (this.chasedByDude)
+		{
+			this.UpdateDistanceRTPC(this.dudeChaser);
+		}
+		else if (this.fadeToZer0)
+		{
+			this.FadeRTPCToZero();
+		}
+		else if (this.chasedByDog && this.dogChaser != null)
+		{
+			this.UpdateDistanceRTPC(this.dogChaser);
+		}
+	}
+
+	// Token: 0x04003499 RID: 13465
+	public Collider tripTrigger_1;
+
+	// Token: 0x0400349A RID: 13466
+	public Collider tripTrigger_2;
+
+	// Token: 0x0400349B RID: 13467
+	public Collider tripTrigger_3;
+
+	// Token: 0x0400349C RID: 13468
+	public Transform dudeChaser;
+
+	// Token: 0x0400349D RID: 13469
+	public Transform dogChaser;
+
+	// Token: 0x0400349E RID: 13470
+	public float voiceSafeDist = 4f;
+
+	// Token: 0x0400349F RID: 13471
+	public GameObject passingCar;
+
+	// Token: 0x040034A0 RID: 13472
+	private float trigger1RightEdge;
+
+	// Token: 0x040034A1 RID: 13473
+	private float trigger2RightEdge;
+
+	// Token: 0x040034A2 RID: 13474
+	private float trigger3RightEdge;
+
+	// Token: 0x040034A3 RID: 13475
+	private bool trip1;
+
+	// Token: 0x040034A4 RID: 13476
+	private bool trip2;
+
+	// Token: 0x040034A5 RID: 13477
+	private bool trip3;
+
+	// Token: 0x040034A6 RID: 13478
+	private bool chasedByDude;
+
+	// Token: 0x040034A7 RID: 13479
+	private bool chasedByDog;
+
+	// Token: 0x040034A8 RID: 13480
+	private bool newDudeAppeared;
+
+	// Token: 0x040034A9 RID: 13481
+	private bool voiceSafeLastFrame = true;
+
+	// Token: 0x040034AA RID: 13482
+	private float dangerRTPC;
+
+	// Token: 0x040034AB RID: 13483
+	private float timeToZero = 1.6f;
+
+	// Token: 0x040034AC RID: 13484
+	private bool fadeToZer0;
+
+	// Token: 0x040034AD RID: 13485
+	private float dangerRTPCStatic = 100f;
+
+	// Token: 0x040034AE RID: 13486
+	private ForestEndChaseAudio.State state;
+
+	// Token: 0x040034AF RID: 13487
+	private SignalIn startChase;
+
+	// Token: 0x040034B0 RID: 13488
+	private SignalIn tripped1;
+
+	// Token: 0x040034B1 RID: 13489
+	private SignalIn survivedAtLight;
+
+	// Token: 0x040034B2 RID: 13490
+	private SignalIn newDudeAppear;
+
+	// Token: 0x040034B3 RID: 13491
+	private SignalIn tripped2;
+
+	// Token: 0x040034B4 RID: 13492
+	private SignalIn enterSlideKillZone;
+
+	// Token: 0x040034B5 RID: 13493
+	private SignalIn exitSlideKillZone;
+
+	// Token: 0x040034B6 RID: 13494
+	private SignalIn tripped3;
+
+	// Token: 0x040034B7 RID: 13495
+	private SignalIn jumpFromCliff;
+
+	// Token: 0x040034B8 RID: 13496
+	private SignalIn boyHit;
+
+	// Token: 0x040034B9 RID: 13497
+	private SignalIn groundHit;
+
+	// Token: 0x040034BA RID: 13498
+	private SignalIn passingCarStart;
+
+	// Token: 0x040034BB RID: 13499
+	private SignalOut enemyClose;
+
+	// Token: 0x040034BC RID: 13500
+	private SignalOut enemyNotClose;
+
+	// Token: 0x040034BD RID: 13501
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObjPassingCar;
+
+	// Token: 0x040034BE RID: 13502
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioDartHitBoyMusic;
+
+	// Token: 0x040034BF RID: 13503
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioDartHitBoyAmb;
+
+	// Token: 0x040034C0 RID: 13504
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioDartMissMusic;
+
+	// Token: 0x040034C1 RID: 13505
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioDartMissAmb;
+
+	// Token: 0x040034C2 RID: 13506
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioChaseStartMusic;
+
+	// Token: 0x040034C3 RID: 13507
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioChaseStartAmb;
+
+	// Token: 0x040034C4 RID: 13508
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioSecondDudeMusic;
+
+	// Token: 0x040034C5 RID: 13509
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioSecondDudeAmb;
+
+	// Token: 0x040034C6 RID: 13510
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioSurviveLightMusic;
+
+	// Token: 0x040034C7 RID: 13511
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioSurviveLightAmb;
+
+	// Token: 0x040034C8 RID: 13512
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioEnterShootZoneMusic;
+
+	// Token: 0x040034C9 RID: 13513
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioEnterShootZoneAmb;
+
+	// Token: 0x040034CA RID: 13514
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioExitShootZoneMusic;
+
+	// Token: 0x040034CB RID: 13515
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioExitShootZoneAmb;
+
+	// Token: 0x040034CC RID: 13516
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioJumpFromCliffMusic;
+
+	// Token: 0x040034CD RID: 13517
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioJumpFromCliffAmb;
+
+	// Token: 0x040034CE RID: 13518
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioTripMusic_1;
+
+	// Token: 0x040034CF RID: 13519
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioTripAmb_1;
+
+	// Token: 0x040034D0 RID: 13520
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioTripPassedMusic_1;
+
+	// Token: 0x040034D1 RID: 13521
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioTripPassedAmb_1;
+
+	// Token: 0x040034D2 RID: 13522
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioTripMusic_2;
+
+	// Token: 0x040034D3 RID: 13523
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioTripAmb_2;
+
+	// Token: 0x040034D4 RID: 13524
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioTripPassedMusic_2;
+
+	// Token: 0x040034D5 RID: 13525
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioTripPassedAmb_2;
+
+	// Token: 0x040034D6 RID: 13526
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioTripMusic_3;
+
+	// Token: 0x040034D7 RID: 13527
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioTripAmb_3;
+
+	// Token: 0x040034D8 RID: 13528
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioTripPassedMusic_3;
+
+	// Token: 0x040034D9 RID: 13529
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioTripPassedAmb_3;
+
+	// Token: 0x040034DA RID: 13530
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioPassingCarStart;
+
+	// Token: 0x040034DB RID: 13531
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioPassingCarStop;
+
+	// Token: 0x040034DC RID: 13532
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x0200044B RID: 1099
+	private enum State
+	{
+		// Token: 0x040034DE RID: 13534
+		None,
+		// Token: 0x040034DF RID: 13535
+		Trip1,
+		// Token: 0x040034E0 RID: 13536
+		HideForLightTransition,
+		// Token: 0x040034E1 RID: 13537
+		HideForLight,
+		// Token: 0x040034E2 RID: 13538
+		Trip2Transition,
+		// Token: 0x040034E3 RID: 13539
+		Trip2,
+		// Token: 0x040034E4 RID: 13540
+		Trip3Transition,
+		// Token: 0x040034E5 RID: 13541
+		Trip3,
+		// Token: 0x040034E6 RID: 13542
+		JumpOffCliff,
+		// Token: 0x040034E7 RID: 13543
+		SlideJump,
+		// Token: 0x040034E8 RID: 13544
+		Finished
+	}
+}

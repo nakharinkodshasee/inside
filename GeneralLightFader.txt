@@ -1,0 +1,179 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000460 RID: 1120
+public class GeneralLightFader : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001D7A RID: 7546 RVA: 0x000FE490 File Offset: 0x000FC690
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.lightOriginalIntensities = new float[this.lights.Length];
+		for (int i = 0; i < this.lights.Length; i++)
+		{
+			this.lightOriginalIntensities[i] = this.lights[i].intensity;
+		}
+		this.particlesOriginalEmmision = new float[this.particles.Length];
+		for (int j = 0; j < this.particles.Length; j++)
+		{
+			this.particlesOriginalEmmision[j] = this.particles[j].emissionRate;
+		}
+	}
+
+	// Token: 0x06001D7B RID: 7547 RVA: 0x000FE534 File Offset: 0x000FC734
+	public bool PreAwake(int callcount)
+	{
+		this.fadeIn = SignalIn.Create("fadeIn", base.gameObject, new Action(this.OnFadeIn));
+		if (this.propertyType == GeneralLightFader.PropertyType.Color)
+		{
+			this.materialColorProperties = new MaterialInstance.ColorProperty[this.materialInstances.Length];
+			this.materialOriginalColors = new Color[this.materialInstances.Length];
+			int i = 0;
+			int num = this.materialInstances.Length;
+			while (i < num)
+			{
+				MaterialInstance materialInstance = this.materialInstances[i];
+				MaterialInstance.ColorProperty colorProperty = materialInstance.GetColorProperty(this.propertyName);
+				this.materialColorProperties[i] = colorProperty;
+				this.materialOriginalColors[i] = materialInstance.GetColorValue(colorProperty);
+				i++;
+			}
+		}
+		else if (this.propertyType == GeneralLightFader.PropertyType.Float)
+		{
+			this.materialFloatProperties = new MaterialInstance.FloatProperty[this.materialInstances.Length];
+			this.materialOriginalValues = new float[this.materialInstances.Length];
+			int j = 0;
+			int num2 = this.materialInstances.Length;
+			while (j < num2)
+			{
+				MaterialInstance materialInstance2 = this.materialInstances[j];
+				MaterialInstance.FloatProperty floatProperty = materialInstance2.GetFloatProperty(this.propertyName);
+				this.materialFloatProperties[j] = floatProperty;
+				this.materialOriginalValues[j] = materialInstance2.GetFloatValue(floatProperty);
+				j++;
+			}
+		}
+		return true;
+	}
+
+	// Token: 0x06001D7C RID: 7548 RVA: 0x000FE678 File Offset: 0x000FC878
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.UpdateLightIntensity(0f);
+	}
+
+	// Token: 0x06001D7D RID: 7549 RVA: 0x000FE68C File Offset: 0x000FC88C
+	private void Update()
+	{
+		if (this.fadeTimer > 0f)
+		{
+			this.fadeTimer -= Time.deltaTime;
+			float fraction = Mathf.Clamp01(1f - this.fadeTimer / this.fadeDuration);
+			this.UpdateLightIntensity(fraction);
+		}
+	}
+
+	// Token: 0x06001D7E RID: 7550 RVA: 0x000FE6DC File Offset: 0x000FC8DC
+	private void UpdateLightIntensity(float fraction)
+	{
+		float num = this.fadeInCurve.Evaluate(fraction);
+		for (int i = 0; i < this.lights.Length; i++)
+		{
+			this.lights[i].intensity = this.lightOriginalIntensities[i] * num;
+		}
+		for (int j = 0; j < this.materialInstances.Length; j++)
+		{
+			if (this.propertyType == GeneralLightFader.PropertyType.Color)
+			{
+				Color value = this.materialOriginalColors[j];
+				value.a *= num;
+				this.materialInstances[j].SetColorProperty(this.materialColorProperties[j], value);
+			}
+			else
+			{
+				float value2 = this.materialOriginalValues[j] * num;
+				this.materialInstances[j].SetFloatProperty(this.materialFloatProperties[j], value2);
+			}
+		}
+		for (int k = 0; k < this.particles.Length; k++)
+		{
+			this.particles[k].emissionRate = this.particlesOriginalEmmision[k] * num;
+		}
+	}
+
+	// Token: 0x06001D7F RID: 7551 RVA: 0x000FE7E0 File Offset: 0x000FC9E0
+	private void OnFadeIn()
+	{
+		this.fadeTimer = this.fadeDuration;
+	}
+
+	// Token: 0x04003630 RID: 13872
+	public Light[] lights;
+
+	// Token: 0x04003631 RID: 13873
+	public MaterialInstance[] materialInstances;
+
+	// Token: 0x04003632 RID: 13874
+	public string propertyName = "_Color";
+
+	// Token: 0x04003633 RID: 13875
+	public GeneralLightFader.PropertyType propertyType;
+
+	// Token: 0x04003634 RID: 13876
+	public ParticleSystem[] particles;
+
+	// Token: 0x04003635 RID: 13877
+	public float fadeDuration = 12f;
+
+	// Token: 0x04003636 RID: 13878
+	public AnimationCurve fadeInCurve;
+
+	// Token: 0x04003637 RID: 13879
+	private SignalIn fadeIn;
+
+	// Token: 0x04003638 RID: 13880
+	private float fadeTimer;
+
+	// Token: 0x04003639 RID: 13881
+	private MaterialInstance.ColorProperty[] materialColorProperties;
+
+	// Token: 0x0400363A RID: 13882
+	private Color[] materialOriginalColors;
+
+	// Token: 0x0400363B RID: 13883
+	private MaterialInstance.FloatProperty[] materialFloatProperties;
+
+	// Token: 0x0400363C RID: 13884
+	private float[] materialOriginalValues;
+
+	// Token: 0x0400363D RID: 13885
+	[HideInInspector]
+	[SerializeField]
+	private float[] lightOriginalIntensities;
+
+	// Token: 0x0400363E RID: 13886
+	[HideInInspector]
+	[SerializeField]
+	private float[] particlesOriginalEmmision;
+
+	// Token: 0x0400363F RID: 13887
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x02000461 RID: 1121
+	public enum PropertyType
+	{
+		// Token: 0x04003641 RID: 13889
+		Color,
+		// Token: 0x04003642 RID: 13890
+		Float
+	}
+}

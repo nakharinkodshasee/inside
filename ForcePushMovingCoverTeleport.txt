@@ -1,0 +1,40 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004C5 RID: 1221
+public class ForcePushMovingCoverTeleport : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001FEE RID: 8174 RVA: 0x0010F4F0 File Offset: 0x0010D6F0
+	public bool PreAwake(int callcount)
+	{
+		this.setPosition = SignalIn.Create("setPosition", base.gameObject, delegate
+		{
+			this.DoSetPosition();
+		});
+		return true;
+	}
+
+	// Token: 0x06001FEF RID: 8175 RVA: 0x0010F518 File Offset: 0x0010D718
+	private void DoSetPosition()
+	{
+		this.coverTop.transform.position = this.targetTop.position;
+		this.coverTop.transform.rotation = this.targetTop.rotation;
+		this.coverBottom.transform.position = this.targetBottom.position;
+		this.coverBottom.transform.rotation = this.targetBottom.rotation;
+	}
+
+	// Token: 0x04003B27 RID: 15143
+	public Rigidbody coverTop;
+
+	// Token: 0x04003B28 RID: 15144
+	public Rigidbody coverBottom;
+
+	// Token: 0x04003B29 RID: 15145
+	public Transform targetTop;
+
+	// Token: 0x04003B2A RID: 15146
+	public Transform targetBottom;
+
+	// Token: 0x04003B2B RID: 15147
+	private SignalIn setPosition;
+}

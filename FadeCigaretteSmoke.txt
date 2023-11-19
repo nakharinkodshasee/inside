@@ -1,0 +1,86 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000500 RID: 1280
+public class FadeCigaretteSmoke : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002183 RID: 8579 RVA: 0x0011909C File Offset: 0x0011729C
+	public bool PreAwake(int callcount)
+	{
+		this.startFade = SignalIn.Create("startFade", base.gameObject, new Action(this.DoStartFade));
+		this.loadFaded = SignalIn.Create("loadFaded", base.gameObject, new Action(this.DoLoadFaded));
+		return true;
+	}
+
+	// Token: 0x06002184 RID: 8580 RVA: 0x001190F0 File Offset: 0x001172F0
+	private void Start()
+	{
+		this.smokeProperty = this.smoke.GetOrAddFloatProperty("_FadeDist");
+		this.orgFadeDist = this.smoke.GetFloatValue(this.smokeProperty);
+	}
+
+	// Token: 0x06002185 RID: 8581 RVA: 0x00119120 File Offset: 0x00117320
+	private void DoLoadFaded()
+	{
+		this.hasFaded = true;
+		this.smoke.gameObject.SetActive(false);
+	}
+
+	// Token: 0x06002186 RID: 8582 RVA: 0x0011913C File Offset: 0x0011733C
+	private void DoStartFade()
+	{
+		if (!this.hasFaded)
+		{
+			this.isFading = true;
+			this.hasFaded = true;
+		}
+	}
+
+	// Token: 0x06002187 RID: 8583 RVA: 0x00119158 File Offset: 0x00117358
+	private void Update()
+	{
+		if (this.isFading)
+		{
+			this.timer += Time.deltaTime;
+			float num = Mathf.InverseLerp(0f, this.fadeTime, this.timer);
+			float num2 = this.fadeCurve.Evaluate(num);
+			float value = Mathf.Lerp(this.orgFadeDist, 0f, num2);
+			this.smoke.SetFloatProperty(this.smokeProperty, value);
+			if (this.timer >= this.fadeTime)
+			{
+				this.isFading = false;
+			}
+		}
+	}
+
+	// Token: 0x04003E46 RID: 15942
+	public float fadeTime = 35f;
+
+	// Token: 0x04003E47 RID: 15943
+	public AnimationCurve fadeCurve;
+
+	// Token: 0x04003E48 RID: 15944
+	public MaterialInstance smoke;
+
+	// Token: 0x04003E49 RID: 15945
+	private MaterialInstance.FloatProperty smokeProperty;
+
+	// Token: 0x04003E4A RID: 15946
+	private SignalIn startFade;
+
+	// Token: 0x04003E4B RID: 15947
+	private SignalIn loadFaded;
+
+	// Token: 0x04003E4C RID: 15948
+	private bool isFading;
+
+	// Token: 0x04003E4D RID: 15949
+	private float timer;
+
+	// Token: 0x04003E4E RID: 15950
+	private float orgFadeDist;
+
+	// Token: 0x04003E4F RID: 15951
+	private bool hasFaded;
+}
+

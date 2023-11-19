@@ -1,0 +1,455 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001A7 RID: 423
+public class ForcePushObject : UmbrellaBehaviour<ForcePushObject>, IFastEventListener, IPreAwake
+{
+	// Token: 0x06000C67 RID: 3175 RVA: 0x00078750 File Offset: 0x00076950
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioActivate = new AudioEventSimple(this.audioPrefix + "_activate");
+		this.audioDeactivate = new AudioEventSimple(this.audioPrefix + "_deactivate");
+		int num = this.destroys.Length;
+		this.audioDestroyArray = new AudioEventSimple[num];
+		for (int i = 0; i < num; i++)
+		{
+			this.audioDestroyArray[i] = new AudioEventSimple(this.audioPrefix + "_destroy" + i);
+		}
+	}
+
+	// Token: 0x06000C68 RID: 3176 RVA: 0x000787F0 File Offset: 0x000769F0
+	public bool PreAwake(int callcount)
+	{
+		this.blow = SignalOut.Create("blow", base.gameObject);
+		this.destroy = SignalOut.Create("destroy", base.gameObject);
+		this.complete = SignalOut.Create("complete", base.gameObject);
+		this.useAlternativeBlows = SignalIn.Create("useAlternativeBlows", base.gameObject, new Action(this.OnAlternativeBlows));
+		this.useDefaultBlows = SignalIn.Create("useDefaultBlows", base.gameObject, new Action(this.OnDefaultBlows));
+		this.loadComplete = SignalIn.Create("loadComplete", base.gameObject, new Action(this.OnLoadComplete));
+		this.activate = SignalIn.Create("activate", base.gameObject, new Action(this.OnActivate));
+		this.deactivate = SignalIn.Create("deactivate", base.gameObject, new Action(this.OnDeactivate));
+		return true;
+	}
+
+	// Token: 0x06000C69 RID: 3177 RVA: 0x000788EC File Offset: 0x00076AEC
+	private void Start()
+	{
+		this.OnPreProcess();
+		ForcePushManager.warningEvent.Register(this, ref this.warningHandle);
+	}
+
+	// Token: 0x06000C6A RID: 3178 RVA: 0x00078908 File Offset: 0x00076B08
+	public void OnFastEvent(FastEvent sender)
+	{
+		if (sender == ForcePushManager.warningEvent && this.isActive)
+		{
+			this.SetWarningState();
+		}
+	}
+
+	// Token: 0x06000C6B RID: 3179 RVA: 0x00078928 File Offset: 0x00076B28
+	private void OnDestroy()
+	{
+		ForcePushManager.warningEvent.Unregister(ref this.warningHandle);
+	}
+
+	// Token: 0x06000C6C RID: 3180 RVA: 0x0007893C File Offset: 0x00076B3C
+	private void SetIdleState()
+	{
+		this.PlayEffect(this.idle);
+		this.state = ForcePushObject.State.None;
+	}
+
+	// Token: 0x06000C6D RID: 3181 RVA: 0x00078954 File Offset: 0x00076B54
+	private void SetWarningState()
+	{
+		if (this.prepares.Length > 0)
+		{
+			int num = Random.Range(0, this.prepares.Length);
+			this.PlayEffect(this.prepares[num]);
+		}
+		this.state = ForcePushObject.State.Warning;
+	}
+
+	// Token: 0x06000C6E RID: 3182 RVA: 0x00078994 File Offset: 0x00076B94
+	private void WarningState()
+	{
+		ForcePushManager forcePushManager = LevelGlobals.forcePushManager;
+		if (forcePushManager && forcePushManager.explosionPos < base.transform.position.z)
+		{
+			if (this.currentDestroyIndex > 0 || this.boyCloseEnough)
+			{
+				this.SetDestroyState();
+			}
+			else
+			{
+				this.SetBlowState();
+			}
+		}
+	}
+
+	// Token: 0x06000C6F RID: 3183 RVA: 0x000789F8 File Offset: 0x00076BF8
+	private void SetBlowState()
+	{
+		this.blow.Signal();
+		ForcePushObject.ForcePushEffect[] array = (!this.useBlowAlternative) ? this.blows : this.alternativeBlows;
+		ForcePushObject.ForcePushEffect forcePushEffect = null;
+		if (array.Length > 0)
+		{
+			int num = Random.Range(0, array.Length);
+			forcePushEffect = array[num];
+			this.PlayEffect(array[num]);
+		}
+		if (forcePushEffect != null && forcePushEffect.clip)
+		{
+			this.state = ForcePushObject.State.Blow;
+		}
+		else
+		{
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x06000C70 RID: 3184 RVA: 0x00078A78 File Offset: 0x00076C78
+	private void BlowState()
+	{
+		if (this.animations)
+		{
+			if (this.currentAnimState != null)
+			{
+				if (this.currentAnimState.normalizedTime >= 1f)
+				{
+					this.SetIdleState();
+				}
+			}
+			else
+			{
+				this.SetIdleState();
+			}
+		}
+	}
+
+	// Token: 0x06000C71 RID: 3185 RVA: 0x00078ACC File Offset: 0x00076CCC
+	private void SetDestroyState()
+	{
+		this.destroy.Signal();
+		if (this.audioActive && this.audioEvents && this.isActive && this.destroys.Length > 0 && this.currentDestroyIndex < this.destroys.Length)
+		{
+			this.audioDestroyArray[this.currentDestroyIndex].PostFast(AudioKeyObject.AkGameObjs.boy);
+			if (this.currentDestroyIndex == this.destroys.Length - 1)
+			{
+				this.audioDeactivate.PostFast(AudioKeyObject.AkGameObjs.boy);
+				this.audioActive = false;
+				this.indexFinished = true;
+			}
+		}
+		this.PlayEffect(this.destroys[this.currentDestroyIndex]);
+		if (this.currentDestroyIndex < this.destroys.Length - 1)
+		{
+			this.currentDestroyIndex++;
+		}
+		if (!this.clampOnLast && this.currentDestroyIndex >= this.destroys.Length - 1)
+		{
+			ForcePushManager.warningEvent.Unregister(ref this.warningHandle);
+		}
+		this.state = ForcePushObject.State.Destroy;
+	}
+
+	// Token: 0x06000C72 RID: 3186 RVA: 0x00078BE0 File Offset: 0x00076DE0
+	private void DestroyState()
+	{
+		if (this.currentAnimState == null || this.currentAnimState.normalizedTime >= 1f)
+		{
+			if (!this.clampOnLast && this.currentDestroyIndex >= this.destroys.Length - 1)
+			{
+				this.state = ForcePushObject.State.None;
+				this.complete.Signal();
+			}
+		}
+	}
+
+	// Token: 0x06000C73 RID: 3187 RVA: 0x00078C4C File Offset: 0x00076E4C
+	private void UpdateBoyCloseEnough()
+	{
+		if (this.destroyDist > 0f && this.destroys.Length > 0 && ScriptGlobals.boy != null)
+		{
+			Vector3 vector = ScriptGlobals.boy.pos3 - base.transform.position;
+			vector.z = 0f;
+			this.boyCloseEnough = (vector.magnitude < this.destroyDist);
+		}
+		if (this.isActive && this.audioEvents && this.boyCloseEnough != this.boyCloseEnoughLastFrame)
+		{
+			if (this.boyCloseEnough && !this.audioActive)
+			{
+				this.audioActive = true;
+			}
+			else if (this.audioActive)
+			{
+				this.audioActive = false;
+			}
+		}
+		this.boyCloseEnoughLastFrame = this.boyCloseEnough;
+	}
+
+	// Token: 0x06000C74 RID: 3188 RVA: 0x00078D2C File Offset: 0x00076F2C
+	public void UmbrellaUpdate()
+	{
+		this.UpdateBoyCloseEnough();
+		if (this.state != ForcePushObject.State.None)
+		{
+			switch (this.state)
+			{
+			case ForcePushObject.State.Warning:
+				this.WarningState();
+				break;
+			case ForcePushObject.State.Blow:
+				this.BlowState();
+				break;
+			case ForcePushObject.State.Destroy:
+				this.DestroyState();
+				break;
+			}
+		}
+	}
+
+	// Token: 0x06000C75 RID: 3189 RVA: 0x00078D8C File Offset: 0x00076F8C
+	private void PlayEffect(ForcePushObject.ForcePushEffect effect)
+	{
+		if (effect != null)
+		{
+			if (this.animations && effect.clip)
+			{
+				this.currentAnimState = this.animations.CrossFadeQueued(effect.clip.name, 0.2f, 2);
+				this.currentAnimState.speed = this.animSpeed;
+			}
+			if (effect.particles.Length > 0)
+			{
+				int i = 0;
+				int num = effect.particles.Length;
+				while (i < num)
+				{
+					ParticleSystem particleSystem = effect.particles[i];
+					if (particleSystem)
+					{
+						particleSystem.Play(true);
+					}
+					i++;
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000C76 RID: 3190 RVA: 0x00078E38 File Offset: 0x00077038
+	private void OnDeactivate()
+	{
+		if (this.audioEvents && this.audioActive && !this.indexFinished)
+		{
+			this.audioActive = false;
+		}
+		this.isActive = false;
+	}
+
+	// Token: 0x06000C77 RID: 3191 RVA: 0x00078E6C File Offset: 0x0007706C
+	private void OnActivate()
+	{
+		if (this.audioEvents && !this.audioActive && !this.indexFinished)
+		{
+			this.audioActive = true;
+		}
+		this.isActive = true;
+	}
+
+	// Token: 0x06000C78 RID: 3192 RVA: 0x00078EA0 File Offset: 0x000770A0
+	private void OnDefaultBlows()
+	{
+		this.useBlowAlternative = false;
+	}
+
+	// Token: 0x06000C79 RID: 3193 RVA: 0x00078EAC File Offset: 0x000770AC
+	private void OnAlternativeBlows()
+	{
+		this.useBlowAlternative = true;
+	}
+
+	// Token: 0x06000C7A RID: 3194 RVA: 0x00078EB8 File Offset: 0x000770B8
+	private void OnWarning()
+	{
+		if (this.isActive)
+		{
+			this.SetWarningState();
+		}
+	}
+
+	// Token: 0x06000C7B RID: 3195 RVA: 0x00078ECC File Offset: 0x000770CC
+	private void OnEarlyBlow()
+	{
+	}
+
+	// Token: 0x06000C7C RID: 3196 RVA: 0x00078ED0 File Offset: 0x000770D0
+	private void OnLoadComplete()
+	{
+		if (this.clampOnLast)
+		{
+			this.currentDestroyIndex = this.destroys.Length - 1;
+			string name = this.destroys[this.currentDestroyIndex].clip.name;
+			this.animations.Play(name);
+			AnimationState animationState = this.animations[name];
+			animationState.normalizedTime = 1f;
+		}
+	}
+
+	// Token: 0x06000C7D RID: 3197 RVA: 0x00078F38 File Offset: 0x00077138
+	private void OnDrawGizmos()
+	{
+		if (this.debug)
+		{
+			Gizmos.color = Color.green;
+			if (this.state == ForcePushObject.State.Blow)
+			{
+				Gizmos.color = new Color(1f, 0.5f, 0f);
+			}
+			Gizmos.DrawSphere(base.transform.position, 0.5f);
+		}
+	}
+
+	// Token: 0x04001598 RID: 5528
+	public Animation animations;
+
+	// Token: 0x04001599 RID: 5529
+	public ForcePushObject.ForcePushEffect idle;
+
+	// Token: 0x0400159A RID: 5530
+	public ForcePushObject.ForcePushEffect[] prepares;
+
+	// Token: 0x0400159B RID: 5531
+	public ForcePushObject.ForcePushEffect[] blows;
+
+	// Token: 0x0400159C RID: 5532
+	public ForcePushObject.ForcePushEffect[] destroys;
+
+	// Token: 0x0400159D RID: 5533
+	public float destroyDist;
+
+	// Token: 0x0400159E RID: 5534
+	public bool clampOnLast;
+
+	// Token: 0x0400159F RID: 5535
+	public ForcePushObject.ForcePushEffect[] alternativeBlows;
+
+	// Token: 0x040015A0 RID: 5536
+	public bool useBlowAlternative;
+
+	// Token: 0x040015A1 RID: 5537
+	public float animSpeed = 1f;
+
+	// Token: 0x040015A2 RID: 5538
+	public bool isActive = true;
+
+	// Token: 0x040015A3 RID: 5539
+	public bool audioEvents;
+
+	// Token: 0x040015A4 RID: 5540
+	public string audioPrefix = "env_xxx_yyy_forceObejct";
+
+	// Token: 0x040015A5 RID: 5541
+	public bool debug;
+
+	// Token: 0x040015A6 RID: 5542
+	public SignalOut blow;
+
+	// Token: 0x040015A7 RID: 5543
+	public SignalOut destroy;
+
+	// Token: 0x040015A8 RID: 5544
+	public SignalOut complete;
+
+	// Token: 0x040015A9 RID: 5545
+	public SignalIn useAlternativeBlows;
+
+	// Token: 0x040015AA RID: 5546
+	public SignalIn useDefaultBlows;
+
+	// Token: 0x040015AB RID: 5547
+	public SignalIn deactivate;
+
+	// Token: 0x040015AC RID: 5548
+	public SignalIn activate;
+
+	// Token: 0x040015AD RID: 5549
+	public SignalIn loadComplete;
+
+	// Token: 0x040015AE RID: 5550
+	private ForcePushObject.State state;
+
+	// Token: 0x040015AF RID: 5551
+	private AnimationState currentAnimState;
+
+	// Token: 0x040015B0 RID: 5552
+	private bool boyCloseEnough;
+
+	// Token: 0x040015B1 RID: 5553
+	private bool boyCloseEnoughLastFrame;
+
+	// Token: 0x040015B2 RID: 5554
+	private bool audioActive;
+
+	// Token: 0x040015B3 RID: 5555
+	private bool indexFinished;
+
+	// Token: 0x040015B4 RID: 5556
+	private int warningHandle = -1;
+
+	// Token: 0x040015B5 RID: 5557
+	[HideInInspector]
+	public int currentDestroyIndex;
+
+	// Token: 0x040015B6 RID: 5558
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple[] audioDestroyArray;
+
+	// Token: 0x040015B7 RID: 5559
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x040015B8 RID: 5560
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioActivate;
+
+	// Token: 0x040015B9 RID: 5561
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioDeactivate;
+
+	// Token: 0x020001A8 RID: 424
+	private enum State
+	{
+		// Token: 0x040015BB RID: 5563
+		None,
+		// Token: 0x040015BC RID: 5564
+		Warning,
+		// Token: 0x040015BD RID: 5565
+		Blow,
+		// Token: 0x040015BE RID: 5566
+		Destroy
+	}
+
+	// Token: 0x020001A9 RID: 425
+	[Serializable]
+	public class ForcePushEffect
+	{
+		// Token: 0x040015BF RID: 5567
+		public AnimationClip clip;
+
+		// Token: 0x040015C0 RID: 5568
+		public ParticleSystem[] particles;
+	}
+}

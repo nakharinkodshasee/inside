@@ -1,0 +1,363 @@
+using System;
+using System.Runtime.InteropServices;
+
+// Token: 0x02000566 RID: 1382
+public class FluidSimulation
+{
+	// Token: 0x060023E0 RID: 9184 RVA: 0x00129C48 File Offset: 0x00127E48
+	public FluidSimulation(int dimension, float viscosity, float diffusion, bool native)
+	{
+		this.dimension = dimension;
+		this.visc = viscosity;
+		this.diff = diffusion;
+		this.size = (dimension + 2) * (dimension + 2);
+		this.u = new float[this.size];
+		this.v = new float[this.size];
+		this.u_prev = new float[this.size];
+		this.v_prev = new float[this.size];
+		this.dens = new float[this.size];
+		this.dens_prev = new float[this.size];
+		if (native)
+		{
+			this.simulation = new FluidSimulation.SimulationNative();
+		}
+		else
+		{
+			this.simulation = new FluidSimulation.SimulationManaged();
+		}
+	}
+
+	// Token: 0x060023E1 RID: 9185 RVA: 0x00129D08 File Offset: 0x00127F08
+	public void Simulate(float dt)
+	{
+		this.simulation.VelocityStep(this.dimension, ref this.u, ref this.v, ref this.u_prev, ref this.v_prev, this.visc, dt);
+		this.simulation.DensityStep(this.dimension, ref this.dens, ref this.dens_prev, ref this.u, ref this.v, this.diff, dt);
+	}
+
+	// Token: 0x170000A5 RID: 165
+	// (get) Token: 0x060023E2 RID: 9186 RVA: 0x00129D78 File Offset: 0x00127F78
+	public float[] velocities
+	{
+		get
+		{
+			return this.v;
+		}
+	}
+
+	// Token: 0x170000A6 RID: 166
+	// (get) Token: 0x060023E3 RID: 9187 RVA: 0x00129D80 File Offset: 0x00127F80
+	public float[] pressures
+	{
+		get
+		{
+			return this.u;
+		}
+	}
+
+	// Token: 0x170000A7 RID: 167
+	// (get) Token: 0x060023E4 RID: 9188 RVA: 0x00129D88 File Offset: 0x00127F88
+	public float[] densities
+	{
+		get
+		{
+			return this.dens;
+		}
+	}
+
+	// Token: 0x170000A8 RID: 168
+	// (get) Token: 0x060023E5 RID: 9189 RVA: 0x00129D90 File Offset: 0x00127F90
+	// (set) Token: 0x060023E6 RID: 9190 RVA: 0x00129D98 File Offset: 0x00127F98
+	public int dimension { get; private set; }
+
+	// Token: 0x060023E7 RID: 9191 RVA: 0x00129DA4 File Offset: 0x00127FA4
+	private int Idx(int i, int j)
+	{
+		return i + (this.dimension + 2) * j;
+	}
+
+	// Token: 0x060023E8 RID: 9192 RVA: 0x00129DB4 File Offset: 0x00127FB4
+	private bool BoundCheck(int i, int j)
+	{
+		return i >= 1 && i <= this.dimension - 1 && j >= 1 && j <= this.dimension - 1;
+	}
+
+	// Token: 0x060023E9 RID: 9193 RVA: 0x00129DF4 File Offset: 0x00127FF4
+	public void ClearPrev()
+	{
+		for (int i = 0; i < this.size; i++)
+		{
+			this.u_prev[i] = 0f;
+			this.v_prev[i] = 0f;
+			this.dens_prev[i] = 0f;
+		}
+	}
+
+	// Token: 0x060023EA RID: 9194 RVA: 0x00129E40 File Offset: 0x00128040
+	public void ClearAll()
+	{
+		for (int i = 0; i < this.size; i++)
+		{
+			this.u_prev[i] = 0f;
+			this.v_prev[i] = 0f;
+			this.dens_prev[i] = 0f;
+			this.u[i] = 0f;
+			this.v[i] = 0f;
+			this.dens[i] = 0f;
+		}
+	}
+
+	// Token: 0x060023EB RID: 9195 RVA: 0x00129EB4 File Offset: 0x001280B4
+	public void SetPressure(int i, int j, float value)
+	{
+		if (this.BoundCheck(i, j))
+		{
+			this.u_prev[this.Idx(i, j)] = value;
+		}
+	}
+
+	// Token: 0x060023EC RID: 9196 RVA: 0x00129ED4 File Offset: 0x001280D4
+	public void SetVelocity(int i, int j, float value)
+	{
+		if (this.BoundCheck(i, j))
+		{
+			this.v_prev[this.Idx(i, j)] = value;
+		}
+	}
+
+	// Token: 0x060023ED RID: 9197 RVA: 0x00129EF4 File Offset: 0x001280F4
+	public void SetDensity(int i, int j, float value)
+	{
+		if (this.BoundCheck(i, j))
+		{
+			this.dens_prev[this.Idx(i, j)] = value;
+		}
+	}
+
+	// Token: 0x0400424B RID: 16971
+	private readonly FluidSimulation.IFluidSimulation simulation;
+
+	// Token: 0x0400424C RID: 16972
+	private int size;
+
+	// Token: 0x0400424D RID: 16973
+	private float visc;
+
+	// Token: 0x0400424E RID: 16974
+	private float diff;
+
+	// Token: 0x0400424F RID: 16975
+	private float[] u;
+
+	// Token: 0x04004250 RID: 16976
+	private float[] v;
+
+	// Token: 0x04004251 RID: 16977
+	private float[] u_prev;
+
+	// Token: 0x04004252 RID: 16978
+	private float[] v_prev;
+
+	// Token: 0x04004253 RID: 16979
+	private float[] dens;
+
+	// Token: 0x04004254 RID: 16980
+	private float[] dens_prev;
+
+	// Token: 0x02000567 RID: 1383
+	private interface IFluidSimulation
+	{
+		// Token: 0x060023EE RID: 9198
+		void DensityStep(int N, ref float[] x, ref float[] x0, ref float[] u, ref float[] v, float diff, float dt);
+
+		// Token: 0x060023EF RID: 9199
+		void VelocityStep(int N, ref float[] u, ref float[] v, ref float[] u0, ref float[] v0, float visc, float dt);
+	}
+
+	// Token: 0x02000568 RID: 1384
+	private class SimulationNative : FluidSimulation.IFluidSimulation
+	{
+		// Token: 0x060023F1 RID: 9201 RVA: 0x00129F1C File Offset: 0x0012811C
+		public void DensityStep(int N, ref float[] x, ref float[] x0, ref float[] u, ref float[] v, float diff, float dt)
+		{
+			FluidSimulation.SimulationNative.DensityStepNative(N, x, x0, u, v, diff, dt);
+		}
+
+		// Token: 0x060023F2 RID: 9202 RVA: 0x00129F34 File Offset: 0x00128134
+		public void VelocityStep(int N, ref float[] u, ref float[] v, ref float[] u0, ref float[] v0, float visc, float dt)
+		{
+			FluidSimulation.SimulationNative.VelocityStepNative(N, u, v, u0, v0, visc, dt);
+		}
+
+		// Token: 0x060023F3 RID: 9203
+		[DllImport("FluidSimulation")]
+		private static extern float Square(float x, float y);
+
+		// Token: 0x060023F4 RID: 9204
+		[DllImport("FluidSimulation", EntryPoint = "DensityStep")]
+		private static extern void DensityStepNative(int N, [In] [Out] float[] x, [In] [Out] float[] x0, [In] [Out] float[] u, [In] [Out] float[] v, float diff, float dt);
+
+		// Token: 0x060023F5 RID: 9205
+		[DllImport("FluidSimulation", EntryPoint = "VelocityStep")]
+		private static extern void VelocityStepNative(int N, [In] [Out] float[] u, [In] [Out] float[] v, [In] [Out] float[] u0, [In] [Out] float[] v0, float visc, float dt);
+	}
+
+	// Token: 0x02000569 RID: 1385
+	private class SimulationManaged : FluidSimulation.IFluidSimulation
+	{
+		// Token: 0x060023F7 RID: 9207 RVA: 0x00129F54 File Offset: 0x00128154
+		private static int Idx(int i, int j, int N)
+		{
+			return i + (N + 2) * j;
+		}
+
+		// Token: 0x060023F8 RID: 9208 RVA: 0x00129F60 File Offset: 0x00128160
+		private static void Swap(ref float[] a, ref float[] b)
+		{
+			float[] array = a;
+			a = b;
+			b = array;
+		}
+
+		// Token: 0x060023F9 RID: 9209 RVA: 0x00129F78 File Offset: 0x00128178
+		private static void AddSource(int N, ref float[] x, ref float[] s, float dt)
+		{
+			int num = (N + 2) * (N + 2);
+			for (int i = 0; i < num; i++)
+			{
+				x[i] += dt * s[i];
+			}
+		}
+
+		// Token: 0x060023FA RID: 9210 RVA: 0x00129FB4 File Offset: 0x001281B4
+		private static void SetBoundary(int N, int b, ref float[] x)
+		{
+			for (int i = 1; i <= N; i++)
+			{
+				x[FluidSimulation.SimulationManaged.Idx(0, i, N)] = ((b != 1) ? x[FluidSimulation.SimulationManaged.Idx(1, i, N)] : (-x[FluidSimulation.SimulationManaged.Idx(1, i, N)]));
+				x[FluidSimulation.SimulationManaged.Idx(N + 1, i, N)] = ((b != 1) ? x[FluidSimulation.SimulationManaged.Idx(N, i, N)] : (-x[FluidSimulation.SimulationManaged.Idx(N, i, N)]));
+				x[FluidSimulation.SimulationManaged.Idx(i, 0, N)] = ((b != 2) ? x[FluidSimulation.SimulationManaged.Idx(i, 1, N)] : (-x[FluidSimulation.SimulationManaged.Idx(i, 1, N)]));
+				x[FluidSimulation.SimulationManaged.Idx(i, N + 1, N)] = ((b != 2) ? x[FluidSimulation.SimulationManaged.Idx(i, N, N)] : (-x[FluidSimulation.SimulationManaged.Idx(i, N, N)]));
+			}
+			x[FluidSimulation.SimulationManaged.Idx(0, 0, N)] = 0.5f * (x[FluidSimulation.SimulationManaged.Idx(1, 0, N)] + x[FluidSimulation.SimulationManaged.Idx(0, 1, N)]);
+			x[FluidSimulation.SimulationManaged.Idx(0, N + 1, N)] = 0.5f * (x[FluidSimulation.SimulationManaged.Idx(1, N + 1, N)] + x[FluidSimulation.SimulationManaged.Idx(0, N, N)]);
+			x[FluidSimulation.SimulationManaged.Idx(N + 1, 0, N)] = 0.5f * (x[FluidSimulation.SimulationManaged.Idx(N, 0, N)] + x[FluidSimulation.SimulationManaged.Idx(N + 1, 1, N)]);
+			x[FluidSimulation.SimulationManaged.Idx(N + 1, N + 1, N)] = 0.5f * (x[FluidSimulation.SimulationManaged.Idx(N, N + 1, N)] + x[FluidSimulation.SimulationManaged.Idx(N + 1, N, N)]);
+		}
+
+		// Token: 0x060023FB RID: 9211 RVA: 0x0012A140 File Offset: 0x00128340
+		private static void LinearSolve(int N, int b, ref float[] x, ref float[] x0, float a, float c)
+		{
+			for (int i = 0; i < 20; i++)
+			{
+				for (int j = 1; j <= N; j++)
+				{
+					for (int k = 1; k <= N; k++)
+					{
+						x[FluidSimulation.SimulationManaged.Idx(j, k, N)] = (x0[FluidSimulation.SimulationManaged.Idx(j, k, N)] + a * (x[FluidSimulation.SimulationManaged.Idx(j - 1, k, N)] + x[FluidSimulation.SimulationManaged.Idx(j + 1, k, N)] + x[FluidSimulation.SimulationManaged.Idx(j, k - 1, N)] + x[FluidSimulation.SimulationManaged.Idx(j, k + 1, N)])) / c;
+					}
+				}
+				FluidSimulation.SimulationManaged.SetBoundary(N, b, ref x);
+			}
+		}
+
+		// Token: 0x060023FC RID: 9212 RVA: 0x0012A1E0 File Offset: 0x001283E0
+		private static void Diffuse(int N, int b, ref float[] x, ref float[] x0, float diff, float dt)
+		{
+			float num = dt * diff * (float)N * (float)N;
+			FluidSimulation.SimulationManaged.LinearSolve(N, b, ref x, ref x0, num, 1f + 4f * num);
+		}
+
+		// Token: 0x060023FD RID: 9213 RVA: 0x0012A210 File Offset: 0x00128410
+		private static void Advect(int N, int b, ref float[] d, ref float[] d0, ref float[] u, ref float[] v, float dt)
+		{
+			float num = dt * (float)N;
+			for (int i = 1; i <= N; i++)
+			{
+				for (int j = 1; j <= N; j++)
+				{
+					float num2 = (float)i - num * u[FluidSimulation.SimulationManaged.Idx(i, j, N)];
+					float num3 = (float)j - num * v[FluidSimulation.SimulationManaged.Idx(i, j, N)];
+					if (num2 < 0.5f)
+					{
+						num2 = 0.5f;
+					}
+					if (num2 > (float)N + 0.5f)
+					{
+						num2 = (float)N + 0.5f;
+					}
+					int num4 = (int)num2;
+					int i2 = num4 + 1;
+					if (num3 < 0.5f)
+					{
+						num3 = 0.5f;
+					}
+					if (num3 > (float)N + 0.5f)
+					{
+						num3 = (float)N + 0.5f;
+					}
+					int num5 = (int)num3;
+					int j2 = num5 + 1;
+					float num6 = num2 - (float)num4;
+					float num7 = 1f - num6;
+					float num8 = num3 - (float)num5;
+					float num9 = 1f - num8;
+					d[FluidSimulation.SimulationManaged.Idx(i, j, N)] = num7 * (num9 * d0[FluidSimulation.SimulationManaged.Idx(num4, num5, N)] + num8 * d0[FluidSimulation.SimulationManaged.Idx(num4, j2, N)]) + num6 * (num9 * d0[FluidSimulation.SimulationManaged.Idx(i2, num5, N)] + num8 * d0[FluidSimulation.SimulationManaged.Idx(i2, j2, N)]);
+				}
+			}
+			FluidSimulation.SimulationManaged.SetBoundary(N, b, ref d);
+		}
+
+		// Token: 0x060023FE RID: 9214 RVA: 0x0012A360 File Offset: 0x00128560
+		private static void Project(int N, ref float[] u, ref float[] v, ref float[] p, ref float[] div)
+		{
+			for (int i = 1; i <= N; i++)
+			{
+				for (int j = 1; j <= N; j++)
+				{
+					div[FluidSimulation.SimulationManaged.Idx(i, j, N)] = -0.5f * (u[FluidSimulation.SimulationManaged.Idx(i + 1, j, N)] - u[FluidSimulation.SimulationManaged.Idx(i - 1, j, N)] + v[FluidSimulation.SimulationManaged.Idx(i, j + 1, N)] - v[FluidSimulation.SimulationManaged.Idx(i, j - 1, N)]) / (float)N;
+					p[FluidSimulation.SimulationManaged.Idx(i, j, N)] = 0f;
+				}
+			}
+			FluidSimulation.SimulationManaged.SetBoundary(N, 0, ref div);
+			FluidSimulation.SimulationManaged.SetBoundary(N, 0, ref p);
+			FluidSimulation.SimulationManaged.LinearSolve(N, 0, ref p, ref div, 1f, 4f);
+			for (int k = 1; k <= N; k++)
+			{
+				for (int l = 1; l <= N; l++)
+				{
+					u[FluidSimulation.SimulationManaged.Idx(k, l, N)] -= 0.5f * (float)N * (p[FluidSimulation.SimulationManaged.Idx(k + 1, l, N)] - p[FluidSimulation.SimulationManaged.Idx(k - 1, l, N)]);
+					v[FluidSimulation.SimulationManaged.Idx(k, l, N)] -= 0.5f * (float)N * (p[FluidSimulation.SimulationManaged.Idx(k, l + 1, N)] - p[FluidSimulation.SimulationManaged.Idx(k, l - 1, N)]);
+				}
+			}
+			FluidSimulation.SimulationManaged.SetBoundary(N, 1, ref u);
+			FluidSimulation.SimulationManaged.SetBoundary(N, 2, ref v);
+		}
+
+		// Token: 0x060023FF RID: 9215 RVA: 0x0012A4B4 File Offset: 0x001286B4
+		public void DensityStep(int N, ref float[] x, ref float[] x0, ref float[] u, ref float[] v, float diff, float dt)
+		{
+			FluidSimulation.SimulationManaged.AddSource(N, ref x, ref x0, dt);
+			FluidSimulation.SimulationManaged.Swap(ref x0, ref x);
+			FluidSimulation.SimulationManaged.Diffuse(N, 0, ref x, ref x0, diff, dt);
+			FluidSimulation.SimulationManaged.Swap(ref x0, ref x);
+			FluidSimulation.SimulationManaged.Advect(N, 0, ref x, ref x0, ref u, ref v, dt);
+		}
+
+		// Token: 0x06002400 RID: 9216 RVA: 0x0012A4F8 File Offset: 0x001286F8
+		public void VelocityStep(int N, ref float[] u, ref float[] v, ref float[] u0, ref float[] v0, float visc, float dt)
+		{
+			FluidSimulation.SimulationManaged.AddSource(N, ref u, ref u0, dt);
+			FluidSimulation.SimulationManaged.AddSource(N, ref v, ref v0, dt);
+			FluidSimulation.SimulationManaged.Swap(ref u0, ref u);
+			FluidSimulation.SimulationManaged.Diffuse(N, 1, ref u, ref u0, visc, dt);
+			FluidSimulation.SimulationManaged.Swap(ref v0, ref v);
+			FluidSimulation.SimulationManaged.Diffuse(N, 2, ref v, ref v0, visc, dt);
+			FluidSimulation.SimulationManaged.Project(N, ref u, ref v, ref u0, ref v0);
+			FluidSimulation.SimulationManaged.Swap(ref u0, ref u);
+			FluidSimulation.SimulationManaged.Swap(ref v0, ref v);
+			FluidSimulation.SimulationManaged.Advect(N, 1, ref u, ref u0, ref u0, ref v0, dt);
+			FluidSimulation.SimulationManaged.Advect(N, 2, ref v, ref v0, ref u0, ref v0, dt);
+			FluidSimulation.SimulationManaged.Project(N, ref u, ref v, ref u0, ref v0);
+		}
+	}
+}

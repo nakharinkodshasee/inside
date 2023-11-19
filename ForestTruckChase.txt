@@ -1,0 +1,559 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200044F RID: 1103
+public class ForestTruckChase : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06001CF0 RID: 7408 RVA: 0x000FB204 File Offset: 0x000F9404
+	public bool PreAwake(int callcount)
+	{
+		this.startChase = SignalIn.Create("startChase", base.gameObject, new Action(this.OnStartChase));
+		this.loadCompleted = SignalIn.Create("loadCompleted", base.gameObject, new Action(this.OnLoadCompleted));
+		this.stopTruck = SignalOut.Create("stopTruck", base.gameObject);
+		this.boySafe = SignalOut.Create("boySafe", base.gameObject);
+		this.boyFranticStarted = SignalOut.Create("boyFranticStarted", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001CF1 RID: 7409 RVA: 0x000FB298 File Offset: 0x000F9498
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy;
+		this.caveCoverTrigger.enterTrigger.Register(this, ref this.caveCoverTriggerEnterHandle);
+		this.caveCoverTrigger.exitTrigger.Register(this, ref this.caveCoverTriggerExitHandle);
+		this.catchTrigger.enterTrigger.Register(this, ref this.catchTriggerEnterHandle);
+		this.catchTrigger.exitTrigger.Register(this, ref this.catchTriggerExitHandle);
+		this.almostInCoverTrigger.enterTrigger.Register(this, ref this.almostCoverTriggerEnterHandle);
+		this.almostInCoverTrigger.exitTrigger.Register(this, ref this.almostCoverTriggerExitHandle);
+		this.SetIdleState();
+	}
+
+	// Token: 0x06001CF2 RID: 7410 RVA: 0x000FB340 File Offset: 0x000F9540
+	private void OnLoadCompleted()
+	{
+		this.state = ForestTruckChase.State.LoadCompleted;
+		this.caveCoverTrigger.transform.position = this.caveCoverTriggerCOMPLETEDPOS.position;
+	}
+
+	// Token: 0x06001CF3 RID: 7411 RVA: 0x000FB370 File Offset: 0x000F9570
+	private void LoadCompletedState()
+	{
+	}
+
+	// Token: 0x06001CF4 RID: 7412 RVA: 0x000FB374 File Offset: 0x000F9574
+	private void SetIdleState()
+	{
+		this.state = ForestTruckChase.State.Idle;
+	}
+
+	// Token: 0x06001CF5 RID: 7413 RVA: 0x000FB380 File Offset: 0x000F9580
+	private void IdleState()
+	{
+	}
+
+	// Token: 0x06001CF6 RID: 7414 RVA: 0x000FB384 File Offset: 0x000F9584
+	private void SetChaseState()
+	{
+		this.themeTimer = this.themeDelay;
+		this.state = ForestTruckChase.State.Chase;
+	}
+
+	// Token: 0x06001CF7 RID: 7415 RVA: 0x000FB39C File Offset: 0x000F959C
+	private void ChaseState()
+	{
+		if (this.boyInDanger)
+		{
+			this.SetTranquiliseState(false);
+			return;
+		}
+		if (this.boy.pos.x < this.minPos.position.x)
+		{
+			this.SetTranquiliseState(true);
+			return;
+		}
+		if (this.themeTimer > 0f)
+		{
+			this.themeTimer -= Time.deltaTime;
+			if (this.themeTimer <= 0f)
+			{
+				ThemeUtils.SetBoyTheme(this.boy.visualBoy, "Frantic", VisualBoy.ThemePriority.Low);
+				this.boyFranticStarted.Signal();
+			}
+		}
+		Vector3 position = this.target.position;
+		Vector3 vector = Vector3.MoveTowards(this.truck.position, position, this.truckChaseSpeed * Time.deltaTime);
+		this.truck.MovePosition(vector);
+		float num = Vector3.Distance(this.truck.position, position);
+		if (num < 0.01f)
+		{
+			this.SetCaveChaseState();
+		}
+	}
+
+	// Token: 0x06001CF8 RID: 7416 RVA: 0x000FB49C File Offset: 0x000F969C
+	private void SetCaveChaseState()
+	{
+		this.hideTimer = this.hideDelay;
+		this.state = ForestTruckChase.State.CaveChase;
+	}
+
+	// Token: 0x06001CF9 RID: 7417 RVA: 0x000FB4B4 File Offset: 0x000F96B4
+	private void CaveChaseState()
+	{
+		if (this.hideTimer > 0f)
+		{
+			this.hideTimer -= Time.deltaTime;
+			return;
+		}
+		if (this.boyInCover || (this.almostInCover && this.boy.input.stick.x < -0.5f))
+		{
+			if (this.visualTruck.position.x > this.visualTruckSafePos.position.x)
+			{
+				this.SetSafeState();
+			}
+		}
+		else if (this.almostInCover)
+		{
+			this.SetTranquiliseState(true);
+		}
+		else
+		{
+			this.SetTranquiliseState(false);
+		}
+	}
+
+	// Token: 0x06001CFA RID: 7418 RVA: 0x000FB570 File Offset: 0x000F9770
+	private void SetSafeState()
+	{
+		this.restTimer = this.restDelay;
+		SoundEngine.Events.truckChaseSafeAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+		SoundEngine.Events.truckChaseSafeMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.boySafe.Signal();
+		this.state = ForestTruckChase.State.Safe;
+	}
+
+	// Token: 0x06001CFB RID: 7419 RVA: 0x000FB5BC File Offset: 0x000F97BC
+	private void SafeState()
+	{
+		if (this.restTimer > 0f)
+		{
+			this.restTimer -= Time.deltaTime;
+			if (this.restTimer <= 0f)
+			{
+				this.restinInCoverConfig.SetVoiceConfig();
+			}
+		}
+		this.safeTimer += Time.deltaTime;
+		if (this.safeTimer >= 7f)
+		{
+			this.SetCompletedState();
+		}
+	}
+
+	// Token: 0x06001CFC RID: 7420 RVA: 0x000FB630 File Offset: 0x000F9830
+	private void SetCompletedState()
+	{
+		this.completedConfig.SetVoiceConfig();
+		this.state = ForestTruckChase.State.Completed;
+	}
+
+	// Token: 0x06001CFD RID: 7421 RVA: 0x000FB644 File Offset: 0x000F9844
+	private void CompletedState()
+	{
+	}
+
+	// Token: 0x06001CFE RID: 7422 RVA: 0x000FB648 File Offset: 0x000F9848
+	private void SetTranquiliseState(bool instant)
+	{
+		this.stopTruck.Signal();
+		if (instant)
+		{
+			this.dartLogic.OnKill();
+			this.SetKillState();
+		}
+		else
+		{
+			if (this.killDelay <= 0f)
+			{
+				this.dartLogic.OnTranquilise();
+			}
+			else
+			{
+				this.killTimer = this.killDelay;
+			}
+			this.state = ForestTruckChase.State.Tranquilise;
+		}
+	}
+
+	// Token: 0x06001CFF RID: 7423 RVA: 0x000FB6B0 File Offset: 0x000F98B0
+	private void TranquiliseState()
+	{
+		if (this.boy.pos.x < this.minPos.position.x || (this.almostInCover && this.boy.input.stick.x < -0.3f))
+		{
+			this.dartLogic.OnKill();
+			this.SetKillState();
+		}
+		else if (this.killTimer > 0f)
+		{
+			this.killTimer -= Time.deltaTime;
+			if (this.killTimer <= 0f)
+			{
+				this.dartLogic.OnTranquilise();
+			}
+		}
+	}
+
+	// Token: 0x06001D00 RID: 7424 RVA: 0x000FB768 File Offset: 0x000F9968
+	private void SetKillState()
+	{
+		this.state = ForestTruckChase.State.Kill;
+	}
+
+	// Token: 0x06001D01 RID: 7425 RVA: 0x000FB774 File Offset: 0x000F9974
+	private void KillState()
+	{
+	}
+
+	// Token: 0x06001D02 RID: 7426 RVA: 0x000FB778 File Offset: 0x000F9978
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case ForestTruckChase.State.Idle:
+			this.IdleState();
+			break;
+		case ForestTruckChase.State.Safe:
+			this.SafeState();
+			break;
+		case ForestTruckChase.State.Chase:
+			this.ChaseState();
+			break;
+		case ForestTruckChase.State.CaveChase:
+			this.CaveChaseState();
+			break;
+		case ForestTruckChase.State.Completed:
+			this.CompletedState();
+			break;
+		case ForestTruckChase.State.Tranquilise:
+			this.TranquiliseState();
+			break;
+		case ForestTruckChase.State.Kill:
+			this.KillState();
+			break;
+		case ForestTruckChase.State.LoadCompleted:
+			this.LoadCompletedState();
+			break;
+		}
+	}
+
+	// Token: 0x06001D03 RID: 7427 RVA: 0x000FB814 File Offset: 0x000F9A14
+	private void OnStartChase()
+	{
+		if (this.state == ForestTruckChase.State.Idle)
+		{
+			this.SetChaseState();
+		}
+	}
+
+	// Token: 0x06001D04 RID: 7428 RVA: 0x000FB828 File Offset: 0x000F9A28
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.caveCoverTrigger.enterTrigger)
+		{
+			this.OnCoverEnter(collider);
+		}
+		else if (sender == this.caveCoverTrigger.exitTrigger)
+		{
+			this.OnCoverExit(collider);
+		}
+		else if (sender == this.catchTrigger.enterTrigger)
+		{
+			this.OnCatchEnter(collider);
+		}
+		else if (sender == this.catchTrigger.exitTrigger)
+		{
+			this.OnCatchExit(collider);
+		}
+		else if (sender == this.almostInCoverTrigger.enterTrigger)
+		{
+			this.OnAlmostInCoverEnter(collider);
+		}
+		else if (sender == this.almostInCoverTrigger.exitTrigger)
+		{
+			this.OnAlmostInCoverExit(collider);
+		}
+	}
+
+	// Token: 0x06001D05 RID: 7429 RVA: 0x000FB8E4 File Offset: 0x000F9AE4
+	private void OnCoverEnter(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>() && !this.boyInCover)
+		{
+			this.boyInCover = true;
+			if (this.state == ForestTruckChase.State.Safe)
+			{
+				this.safeEnterCoverConfig.SetVoiceConfig();
+				ThemeUtils.SetBoyTheme(this.boy.visualBoy, "Sneaky", VisualBoy.ThemePriority.Low);
+			}
+			else if (this.state == ForestTruckChase.State.LoadCompleted || this.state == ForestTruckChase.State.Completed)
+			{
+				ThemeUtils.SetBoyTheme(this.boy.visualBoy, "Sneaky", VisualBoy.ThemePriority.Low);
+			}
+			else
+			{
+				this.chaseEnterCoverConfig.SetVoiceConfig();
+				ThemeUtils.SetBoyTheme(this.boy.visualBoy, "SneakyCoverL", VisualBoy.ThemePriority.Low);
+			}
+		}
+	}
+
+	// Token: 0x06001D06 RID: 7430 RVA: 0x000FB99C File Offset: 0x000F9B9C
+	private void OnCoverExit(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>() && this.boyInCover)
+		{
+			this.boyInCover = false;
+			ThemeUtils.SetBoyTheme(this.boy.visualBoy, string.Empty, VisualBoy.ThemePriority.Low);
+			if (this.state == ForestTruckChase.State.Safe)
+			{
+				this.caveCoverTrigger.transform.position = this.caveCoverTriggerCOMPLETEDPOS.position;
+				this.safeExitCoverConfig.SetVoiceConfig();
+			}
+			else if (this.state == ForestTruckChase.State.Completed || this.state == ForestTruckChase.State.LoadCompleted)
+			{
+				this.caveCoverTrigger.transform.position = this.caveCoverTriggerCOMPLETEDPOS.position;
+			}
+			else
+			{
+				this.chaseExitCoverConfig.SetVoiceConfig();
+			}
+		}
+	}
+
+	// Token: 0x06001D07 RID: 7431 RVA: 0x000FBA5C File Offset: 0x000F9C5C
+	private void OnCatchEnter(Collider collider)
+	{
+		if (this.state == ForestTruckChase.State.LoadCompleted || this.state == ForestTruckChase.State.Completed)
+		{
+			return;
+		}
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.boyInDanger = true;
+		}
+	}
+
+	// Token: 0x06001D08 RID: 7432 RVA: 0x000FBA9C File Offset: 0x000F9C9C
+	private void OnCatchExit(Collider collider)
+	{
+		if (this.state == ForestTruckChase.State.LoadCompleted || this.state == ForestTruckChase.State.Completed)
+		{
+			return;
+		}
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.boyInDanger = false;
+		}
+	}
+
+	// Token: 0x06001D09 RID: 7433 RVA: 0x000FBADC File Offset: 0x000F9CDC
+	private void OnAlmostInCoverEnter(Collider collider)
+	{
+		if (this.state == ForestTruckChase.State.LoadCompleted || this.state == ForestTruckChase.State.Completed)
+		{
+			return;
+		}
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.almostInCover = true;
+			this.dartLogic.minDartPos = this.minDartPosCave;
+			this.dartLogic.maxDartPos = null;
+		}
+	}
+
+	// Token: 0x06001D0A RID: 7434 RVA: 0x000FBB38 File Offset: 0x000F9D38
+	private void OnAlmostInCoverExit(Collider collider)
+	{
+		if (this.state == ForestTruckChase.State.LoadCompleted || this.state == ForestTruckChase.State.Completed)
+		{
+			return;
+		}
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.almostInCover = false;
+		}
+	}
+
+	// Token: 0x06001D0B RID: 7435 RVA: 0x000FBB78 File Offset: 0x000F9D78
+	private void OnDrawGizmos()
+	{
+		if (this.debug && EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay) && this.minPos)
+		{
+			Debug.DrawLine(this.minPos.position, this.minPos.position + Vector3.up * 2f, Color.green);
+		}
+	}
+
+	// Token: 0x0400351A RID: 13594
+	public Dart dartLogic;
+
+	// Token: 0x0400351B RID: 13595
+	public Rigidbody truck;
+
+	// Token: 0x0400351C RID: 13596
+	public Transform target;
+
+	// Token: 0x0400351D RID: 13597
+	public Transform minPos;
+
+	// Token: 0x0400351E RID: 13598
+	public Transform minDartPosCave;
+
+	// Token: 0x0400351F RID: 13599
+	public Transform visualTruck;
+
+	// Token: 0x04003520 RID: 13600
+	public Transform visualTruckSafePos;
+
+	// Token: 0x04003521 RID: 13601
+	public float truckChaseSpeed = 4.2f;
+
+	// Token: 0x04003522 RID: 13602
+	public float truckSwipeSpeed = 35f;
+
+	// Token: 0x04003523 RID: 13603
+	public float truckSafeSpeed = 10f;
+
+	// Token: 0x04003524 RID: 13604
+	public CollisionEvents caveCoverTrigger;
+
+	// Token: 0x04003525 RID: 13605
+	public Transform caveCoverTriggerCOMPLETEDPOS;
+
+	// Token: 0x04003526 RID: 13606
+	public CollisionEvents catchTrigger;
+
+	// Token: 0x04003527 RID: 13607
+	public CollisionEvents almostInCoverTrigger;
+
+	// Token: 0x04003528 RID: 13608
+	public float themeDelay = 0.25f;
+
+	// Token: 0x04003529 RID: 13609
+	public float hideDelay = 0.45f;
+
+	// Token: 0x0400352A RID: 13610
+	public float restDelay = 2.5f;
+
+	// Token: 0x0400352B RID: 13611
+	public float killDelay;
+
+	// Token: 0x0400352C RID: 13612
+	public VoiceConfigBehaviour chaseEnterCoverConfig;
+
+	// Token: 0x0400352D RID: 13613
+	public VoiceConfigBehaviour chaseExitCoverConfig;
+
+	// Token: 0x0400352E RID: 13614
+	public VoiceConfigBehaviour safeEnterCoverConfig;
+
+	// Token: 0x0400352F RID: 13615
+	public VoiceConfigBehaviour safeExitCoverConfig;
+
+	// Token: 0x04003530 RID: 13616
+	public VoiceConfigBehaviour restinInCoverConfig;
+
+	// Token: 0x04003531 RID: 13617
+	public VoiceConfigBehaviour completedConfig;
+
+	// Token: 0x04003532 RID: 13618
+	public bool debug;
+
+	// Token: 0x04003533 RID: 13619
+	private SignalIn startChase;
+
+	// Token: 0x04003534 RID: 13620
+	private SignalIn loadCompleted;
+
+	// Token: 0x04003535 RID: 13621
+	private SignalOut stopTruck;
+
+	// Token: 0x04003536 RID: 13622
+	private SignalOut boySafe;
+
+	// Token: 0x04003537 RID: 13623
+	private SignalOut boyFranticStarted;
+
+	// Token: 0x04003538 RID: 13624
+	private ForestTruckChase.State state;
+
+	// Token: 0x04003539 RID: 13625
+	private Boy boy;
+
+	// Token: 0x0400353A RID: 13626
+	private Vector3 truckPos;
+
+	// Token: 0x0400353B RID: 13627
+	private float themeTimer;
+
+	// Token: 0x0400353C RID: 13628
+	private float hideTimer;
+
+	// Token: 0x0400353D RID: 13629
+	private bool boyInCover;
+
+	// Token: 0x0400353E RID: 13630
+	private bool boyInDanger;
+
+	// Token: 0x0400353F RID: 13631
+	private bool almostInCover;
+
+	// Token: 0x04003540 RID: 13632
+	private float restTimer;
+
+	// Token: 0x04003541 RID: 13633
+	private float killTimer;
+
+	// Token: 0x04003542 RID: 13634
+	private int caveCoverTriggerEnterHandle = -1;
+
+	// Token: 0x04003543 RID: 13635
+	private int caveCoverTriggerExitHandle = -1;
+
+	// Token: 0x04003544 RID: 13636
+	private int catchTriggerEnterHandle = -1;
+
+	// Token: 0x04003545 RID: 13637
+	private int catchTriggerExitHandle = -1;
+
+	// Token: 0x04003546 RID: 13638
+	private int almostCoverTriggerEnterHandle = -1;
+
+	// Token: 0x04003547 RID: 13639
+	private int almostCoverTriggerExitHandle = -1;
+
+	// Token: 0x04003548 RID: 13640
+	private float safeTimer;
+
+	// Token: 0x02000450 RID: 1104
+	private enum State
+	{
+		// Token: 0x0400354A RID: 13642
+		None,
+		// Token: 0x0400354B RID: 13643
+		Idle,
+		// Token: 0x0400354C RID: 13644
+		Safe,
+		// Token: 0x0400354D RID: 13645
+		Chase,
+		// Token: 0x0400354E RID: 13646
+		CaveChase,
+		// Token: 0x0400354F RID: 13647
+		Completed,
+		// Token: 0x04003550 RID: 13648
+		Tranquilise,
+		// Token: 0x04003551 RID: 13649
+		Kill,
+		// Token: 0x04003552 RID: 13650
+		LoadCompleted
+	}
+}

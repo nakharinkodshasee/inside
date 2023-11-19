@@ -1,0 +1,64 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004C6 RID: 1222
+public class ForcePushMovingVoiceLogic : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001FF2 RID: 8178 RVA: 0x0010F5A4 File Offset: 0x0010D7A4
+	public bool PreAwake(int callcount)
+	{
+		this.enterCover = SignalOut.Create("enterCover", base.gameObject);
+		this.exitCover = SignalOut.Create("exitCover", base.gameObject);
+		this.logicStarted = SignalOut.Create("logicStarted", base.gameObject);
+		this.deactivate = SignalIn.Create("deactivate", base.gameObject, delegate
+		{
+			this.isActive = false;
+		});
+		return true;
+	}
+
+	// Token: 0x06001FF3 RID: 8179 RVA: 0x0010F618 File Offset: 0x0010D818
+	private void Update()
+	{
+		if (!this.isActive && this.startCover.isInsideThisTrigger())
+		{
+			this.logicStarted.Signal();
+			this.isActive = true;
+		}
+		if (!this.isActive)
+		{
+			return;
+		}
+		bool inCover = ForcePushManager.GetInCover();
+		if (!inCover && this.boyInCoverLastFrame)
+		{
+			this.exitCover.Signal();
+		}
+		else if (inCover && !this.boyInCoverLastFrame)
+		{
+			this.enterCover.Signal();
+		}
+		this.boyInCoverLastFrame = inCover;
+	}
+
+	// Token: 0x04003B2C RID: 15148
+	public ForcePushCover startCover;
+
+	// Token: 0x04003B2D RID: 15149
+	private SignalIn deactivate;
+
+	// Token: 0x04003B2E RID: 15150
+	private SignalOut enterCover;
+
+	// Token: 0x04003B2F RID: 15151
+	private SignalOut exitCover;
+
+	// Token: 0x04003B30 RID: 15152
+	private SignalOut logicStarted;
+
+	// Token: 0x04003B31 RID: 15153
+	private bool boyInCoverLastFrame;
+
+	// Token: 0x04003B32 RID: 15154
+	private bool isActive;
+}

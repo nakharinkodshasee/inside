@@ -1,0 +1,112 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200031F RID: 799
+public class FadeColorOnDistance : MonoBehaviour
+{
+	// Token: 0x06001696 RID: 5782 RVA: 0x000C6398 File Offset: 0x000C4598
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.direction == FadeColorOnDistance.Direction.Vertical)
+		{
+			this.minPos = this.min.position.y;
+			this.maxPos = this.max.position.y;
+		}
+		else
+		{
+			this.minPos = this.min.position.x;
+			this.maxPos = this.max.position.x;
+		}
+	}
+
+	// Token: 0x06001697 RID: 5783 RVA: 0x000C6430 File Offset: 0x000C4630
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.colorProperty = this.materialInstace.GetOrAddColorProperty(this.propertyName);
+	}
+
+	// Token: 0x06001698 RID: 5784 RVA: 0x000C6450 File Offset: 0x000C4650
+	private void Update()
+	{
+		Vector3 vector = (!this.useBoyProbe) ? this.probe.position : ScriptGlobals.boy.pos3;
+		if (ScriptGlobals.huddleActive && this.useBoyProbe && this.useHuddleInsteadIfActive)
+		{
+			vector = ScriptGlobals.huddle.transform.position;
+		}
+		float num = (this.direction != FadeColorOnDistance.Direction.Vertical) ? vector.x : vector.y;
+		float num2 = Mathf.Clamp01((this.minPos - num) / (this.minPos - this.maxPos));
+		if (num2 != this.currentFraction)
+		{
+			Color value = Color.Lerp(this.minColor, this.maxColor, num2);
+			this.materialInstace.SetColorProperty(this.colorProperty, value);
+			this.currentFraction = num2;
+		}
+	}
+
+	// Token: 0x04002809 RID: 10249
+	public Transform min;
+
+	// Token: 0x0400280A RID: 10250
+	public Transform max;
+
+	// Token: 0x0400280B RID: 10251
+	public MaterialInstance materialInstace;
+
+	// Token: 0x0400280C RID: 10252
+	public FadeColorOnDistance.Direction direction;
+
+	// Token: 0x0400280D RID: 10253
+	public Color minColor;
+
+	// Token: 0x0400280E RID: 10254
+	public Color maxColor;
+
+	// Token: 0x0400280F RID: 10255
+	public string propertyName = "_Color";
+
+	// Token: 0x04002810 RID: 10256
+	public bool useBoyProbe = true;
+
+	// Token: 0x04002811 RID: 10257
+	public bool useHuddleInsteadIfActive;
+
+	// Token: 0x04002812 RID: 10258
+	public Transform probe;
+
+	// Token: 0x04002813 RID: 10259
+	private float currentFraction = -1f;
+
+	// Token: 0x04002814 RID: 10260
+	private MaterialInstance.ColorProperty colorProperty;
+
+	// Token: 0x04002815 RID: 10261
+	[HideInInspector]
+	[SerializeField]
+	private float minPos;
+
+	// Token: 0x04002816 RID: 10262
+	[HideInInspector]
+	[SerializeField]
+	private float maxPos;
+
+	// Token: 0x04002817 RID: 10263
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x02000320 RID: 800
+	public enum Direction
+	{
+		// Token: 0x04002819 RID: 10265
+		Horizontal,
+		// Token: 0x0400281A RID: 10266
+		Vertical
+	}
+}

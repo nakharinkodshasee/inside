@@ -1,0 +1,18 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005AA RID: 1450
+public class DynamiteFuse : MonoBehaviour
+{
+	// Token: 0x040043D1 RID: 17361
+	public Transform sparkPrefab;
+
+	// Token: 0x040043D2 RID: 17362
+	public Transform tip;
+
+	// Token: 0x040043D3 RID: 17363
+	public Transform end;
+
+	// Token: 0x040043D4 RID: 17364
+	public float burnSpeed = 1.5f;
+}

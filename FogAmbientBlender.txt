@@ -1,0 +1,12 @@
+using System;
+
+// Token: 0x02000329 RID: 809
+[Serializable]
+public class FogAmbientBlender
+{
+	// Token: 0x04002876 RID: 10358
+	public static FogAmbientBlendValues currentBlendVal = new FogAmbientBlendValues();
+
+	// Token: 0x04002877 RID: 10359
+	public FogAmbientBlendValues blendValues = new FogAmbientBlendValues();
+}

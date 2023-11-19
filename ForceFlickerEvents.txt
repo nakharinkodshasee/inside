@@ -1,0 +1,154 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000333 RID: 819
+public class ForceFlickerEvents : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060016EE RID: 5870 RVA: 0x000C9654 File Offset: 0x000C7854
+	public bool PreAwake(int callcount)
+	{
+		this.event_1 = SignalOut.Create("event_1", base.gameObject);
+		this.event_2 = SignalOut.Create("event_2", base.gameObject);
+		this.event_3 = SignalOut.Create("event_3", base.gameObject);
+		this.activateEvents = SignalIn.Create("activateEvents", base.gameObject, new Action(this.DoActivate));
+		if (this.startActive)
+		{
+			this.isActive = true;
+		}
+		return true;
+	}
+
+	// Token: 0x060016EF RID: 5871 RVA: 0x000C96D8 File Offset: 0x000C78D8
+	private void DoActivate()
+	{
+		this.isActive = true;
+	}
+
+	// Token: 0x060016F0 RID: 5872 RVA: 0x000C96E4 File Offset: 0x000C78E4
+	private void ResetValues()
+	{
+		if (!this.oneShot1)
+		{
+			this.event1Send = false;
+		}
+		if (!this.oneShot2)
+		{
+			this.event2Send = false;
+		}
+		if (!this.oneShot3)
+		{
+			this.event3Send = false;
+		}
+		if (this.debugLog)
+		{
+		}
+	}
+
+	// Token: 0x060016F1 RID: 5873 RVA: 0x000C9734 File Offset: 0x000C7934
+	private void FixedUpdate()
+	{
+		if (!this.flickerScript || !this.isActive)
+		{
+			return;
+		}
+		this.timeToCompare = this.flickerScript.GetSampleTime();
+		if (this.debugLog)
+		{
+		}
+		if (this.timeToCompare < this.timeToCompareLastFrame)
+		{
+			this.ResetValues();
+		}
+		if (this.sendEvent_1 && !this.event1Send && this.timeToCompare >= this.timeToSend_1)
+		{
+			if (this.debugLog)
+			{
+			}
+			this.event_1.Signal();
+			this.event1Send = true;
+		}
+		if (this.sendEvent_2 && !this.event2Send && this.timeToCompare >= this.timeToSend_2)
+		{
+			if (this.debugLog)
+			{
+			}
+			this.event_2.Signal();
+			this.event2Send = true;
+		}
+		if (this.sendEvent_3 && !this.event3Send && this.timeToCompare >= this.timeToSend_3)
+		{
+			if (this.debugLog)
+			{
+			}
+			this.event_3.Signal();
+			this.event3Send = true;
+		}
+		this.timeToCompareLastFrame = this.timeToCompare;
+	}
+
+	// Token: 0x040028F9 RID: 10489
+	public ForceFlicker flickerScript;
+
+	// Token: 0x040028FA RID: 10490
+	public bool startActive;
+
+	// Token: 0x040028FB RID: 10491
+	public bool sendEvent_1;
+
+	// Token: 0x040028FC RID: 10492
+	public bool oneShot1;
+
+	// Token: 0x040028FD RID: 10493
+	public float timeToSend_1;
+
+	// Token: 0x040028FE RID: 10494
+	private bool event1Send;
+
+	// Token: 0x040028FF RID: 10495
+	private SignalOut event_1;
+
+	// Token: 0x04002900 RID: 10496
+	public bool sendEvent_2;
+
+	// Token: 0x04002901 RID: 10497
+	public bool oneShot2;
+
+	// Token: 0x04002902 RID: 10498
+	public float timeToSend_2;
+
+	// Token: 0x04002903 RID: 10499
+	private bool event2Send;
+
+	// Token: 0x04002904 RID: 10500
+	private SignalOut event_2;
+
+	// Token: 0x04002905 RID: 10501
+	public bool sendEvent_3;
+
+	// Token: 0x04002906 RID: 10502
+	public bool oneShot3;
+
+	// Token: 0x04002907 RID: 10503
+	public float timeToSend_3;
+
+	// Token: 0x04002908 RID: 10504
+	private bool event3Send;
+
+	// Token: 0x04002909 RID: 10505
+	private SignalOut event_3;
+
+	// Token: 0x0400290A RID: 10506
+	public bool debugLog;
+
+	// Token: 0x0400290B RID: 10507
+	private bool isActive;
+
+	// Token: 0x0400290C RID: 10508
+	private SignalIn activateEvents;
+
+	// Token: 0x0400290D RID: 10509
+	private float timeToCompare;
+
+	// Token: 0x0400290E RID: 10510
+	private float timeToCompareLastFrame = 1f;
+}

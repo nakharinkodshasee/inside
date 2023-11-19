@@ -1,0 +1,66 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000449 RID: 1097
+public class FinalChaseDudesAmbient : MonoBehaviour
+{
+	// Token: 0x06001CAF RID: 7343 RVA: 0x000F9C3C File Offset: 0x000F7E3C
+	private void Start()
+	{
+		this.propertyConstantAmbientColor = this.dude1Material.GetOrAddColorProperty("_AmbientColor");
+		this.propertyOverrideColor = this.dude1Material.GetOrAddColorProperty("_OverrideColor");
+		this.orgDude1ConsAmbColor = this.dude1Material.GetColorValue(this.propertyConstantAmbientColor);
+		this.orgDude1OverideColor = this.dude1Material.GetColorValue(this.propertyOverrideColor);
+	}
+
+	// Token: 0x06001CB0 RID: 7344 RVA: 0x000F9CA4 File Offset: 0x000F7EA4
+	private void Update()
+	{
+		float magnitude = (ScriptGlobals.boy.pos3 - this.dude1.position).magnitude;
+		if (magnitude <= this.fadeDistance)
+		{
+			this.colorLerpFactor = Mathf.InverseLerp(this.fadeDistance, 0f, magnitude);
+			this.constAmbBoy = ScriptGlobals.boy.visualBoy.visualBoyMaterialInstance.boyAmbientColor;
+			this.newAmbientColor = Color.Lerp(this.orgDude1ConsAmbColor, this.constAmbBoy, this.colorLerpFactor);
+			this.newConstOverrideColor = Color.Lerp(this.orgDude1OverideColor, this.targetOverrideColor, this.colorLerpFactor);
+			this.dude1Material.SetColorProperty(this.propertyConstantAmbientColor, this.newAmbientColor);
+			this.dude1Material.SetColorProperty(this.propertyOverrideColor, this.newConstOverrideColor);
+		}
+	}
+
+	// Token: 0x0400348D RID: 13453
+	public Transform dude1;
+
+	// Token: 0x0400348E RID: 13454
+	public MaterialInstance dude1Material;
+
+	// Token: 0x0400348F RID: 13455
+	public float fadeDistance = 4f;
+
+	// Token: 0x04003490 RID: 13456
+	public Color targetOverrideColor;
+
+	// Token: 0x04003491 RID: 13457
+	private MaterialInstance.ColorProperty propertyConstantAmbientColor;
+
+	// Token: 0x04003492 RID: 13458
+	private MaterialInstance.ColorProperty propertyOverrideColor;
+
+	// Token: 0x04003493 RID: 13459
+	private Color orgDude1ConsAmbColor;
+
+	// Token: 0x04003494 RID: 13460
+	private Color orgDude1OverideColor;
+
+	// Token: 0x04003495 RID: 13461
+	private Color constAmbBoy;
+
+	// Token: 0x04003496 RID: 13462
+	private Color newAmbientColor;
+
+	// Token: 0x04003497 RID: 13463
+	private Color newConstOverrideColor;
+
+	// Token: 0x04003498 RID: 13464
+	private float colorLerpFactor;
+}

@@ -1,0 +1,434 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000259 RID: 601
+public class FakeSpring : MonoBehaviour
+{
+	// Token: 0x0600128A RID: 4746 RVA: 0x000ADCDC File Offset: 0x000ABEDC
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		Rigidbody componentInParents = this.GetComponentInParents<Rigidbody>();
+		if (componentInParents != null)
+		{
+			this.akGameObjJetCrate = AudioUtils.EnsureAkGameObj(componentInParents.gameObject, null);
+		}
+		else
+		{
+			this.akGameObjJetCrate = AudioUtils.EnsureAkGameObj(base.gameObject, null);
+		}
+		this.audioInsideMove = new AudioEventSimpleLocal("phy_mechanisms_jetCrateInside_move", this.akGameObjJetCrate);
+		this.audioInsideStop = new AudioEventSimpleLocal("phy_mechanisms_jetCrateInside_move_stop", this.akGameObjJetCrate);
+		this.audioInsideF = new AudioEventSimpleLocal("phy_mechanisms_jetCrateInside_f", this.akGameObjJetCrate);
+		this.audioInsideMF = new AudioEventSimpleLocal("phy_mechanisms_jetCrateInside_mf", this.akGameObjJetCrate);
+		this.audioInsideMP = new AudioEventSimpleLocal("phy_mechanisms_jetCrateInside_mp", this.akGameObjJetCrate);
+		this.audioInsideP = new AudioEventSimpleLocal("phy_mechanisms_jetCrateInside_p", this.akGameObjJetCrate);
+		this.rptcFakeMove = new RTPCFiltered("rtpc_fake_move", this.attackFiltering, this.releaseFiltering);
+	}
+
+	// Token: 0x0600128B RID: 4747 RVA: 0x000ADDD8 File Offset: 0x000ABFD8
+	private void Start()
+	{
+		this.OnPreProcess();
+		this._transform = base.transform;
+		this._transformParent = this._transform.parent;
+		this._transformParentParent = this._transformParent.parent;
+		this._transformParentParentJetCrate = this._transformParentParent.GetComponent<JetCrate>();
+		this.orgLocalPos = this._transform.localPosition;
+		this.posLastFrame = this._transform.position;
+		this.actualPosLastFrame = this.posLastFrame;
+		this.parentPosLastFrame = this._transformParent.position;
+		this.parentVelocityLastFrame = Vector3.zero;
+		this.velocity = Vector3.zero;
+		this.initialLocalPos = this._transform.localPosition;
+		this.localPosLastFrame = this._transform.localPosition;
+		this.rptcFakeMove.SetFast(0f, this.akGameObjJetCrate);
+		this.frameCount = 0;
+	}
+
+	// Token: 0x0600128C RID: 4748 RVA: 0x000ADEC0 File Offset: 0x000AC0C0
+	private void OnEnable()
+	{
+		this.setup = true;
+		this.rptcFakeMove.SetFast(0f, this.akGameObjJetCrate);
+	}
+
+	// Token: 0x0600128D RID: 4749 RVA: 0x000ADEE0 File Offset: 0x000AC0E0
+	private void OnDisable()
+	{
+		if (this.audioInsideStop != null && this.audioInsideStop.akGameObj != null)
+		{
+			this.audioInsideStop.PostFast();
+		}
+	}
+
+	// Token: 0x0600128E RID: 4750 RVA: 0x000ADF10 File Offset: 0x000AC110
+	private void Setup()
+	{
+		this._transform = base.transform;
+		this._transformParent = this._transform.parent;
+		this._transformParentParent = this._transformParent.parent;
+		this._transformParentParentJetCrate = this._transformParentParent.GetComponent<JetCrate>();
+		this.posLastFrame = this._transform.position;
+		this.actualPosLastFrame = this.posLastFrame;
+		this.parentPosLastFrame = this._transformParent.position;
+		this.parentVelocityLastFrame = Vector3.zero;
+		this.velocity = Vector3.zero;
+		this.localPosLastFrame = this.initialLocalPos;
+	}
+
+	// Token: 0x0600128F RID: 4751 RVA: 0x000ADFAC File Offset: 0x000AC1AC
+	private void UpdateAudio()
+	{
+		float sqrMagnitude = (this.orgLocalPos - this._transform.localPosition).sqrMagnitude;
+		this.forceUpdateCount--;
+		if (sqrMagnitude > 0.0025f && sqrMagnitude < this.distFromCenterLastFrame)
+		{
+			if (sqrMagnitude >= 0.0576f && (this.forceUpdateCount <= 0 || this.lastUpdateType < 4))
+			{
+				this.forceUpdateCount = Random.Range(8, 12);
+				this.lastUpdateType = 4;
+				this.audioInsideF.PostFast();
+			}
+			else if (sqrMagnitude >= 0.04f && sqrMagnitude < 0.0576f && (this.forceUpdateCount <= 0 || this.lastUpdateType < 3))
+			{
+				this.forceUpdateCount = Random.Range(8, 12);
+				this.lastUpdateType = 3;
+				this.audioInsideMF.PostFast();
+			}
+			else if (sqrMagnitude >= 0.0225f && sqrMagnitude < 0.04f && (this.forceUpdateCount <= 0 || this.lastUpdateType < 2))
+			{
+				this.forceUpdateCount = Random.Range(8, 12);
+				this.lastUpdateType = 2;
+				this.audioInsideMP.PostFast();
+			}
+			else if (sqrMagnitude >= 0.003025f && sqrMagnitude < 0.0225f && (this.forceUpdateCount <= 0 || this.lastUpdateType < 1))
+			{
+				this.forceUpdateCount = Random.Range(8, 12);
+				this.lastUpdateType = 1;
+				this.audioInsideP.PostFast();
+			}
+		}
+		this.distFromCenterLastFrame = sqrMagnitude;
+	}
+
+	// Token: 0x06001290 RID: 4752 RVA: 0x000AE144 File Offset: 0x000AC344
+	private void Update()
+	{
+		if (!this.onlyExternalUpdate && this.visualUpdate)
+		{
+			float num;
+			for (num = Time.deltaTime; num > 0.017f; num -= 0.017f)
+			{
+				this.DoTheUpdate(0.017f);
+			}
+			if (num > 0f)
+			{
+				this.DoTheUpdate(num);
+			}
+		}
+	}
+
+	// Token: 0x06001291 RID: 4753 RVA: 0x000AE1A4 File Offset: 0x000AC3A4
+	public void AddVelocity(Vector3 vel)
+	{
+		this.velocity += vel;
+	}
+
+	// Token: 0x06001292 RID: 4754 RVA: 0x000AE1B8 File Offset: 0x000AC3B8
+	public void SetWorldOffset(Vector3 offset)
+	{
+		this.worldOffset = offset;
+	}
+
+	// Token: 0x06001293 RID: 4755 RVA: 0x000AE1C4 File Offset: 0x000AC3C4
+	private void FixedUpdate()
+	{
+		if (!this.visualUpdate && !this.onlyExternalUpdate)
+		{
+			this.DoTheUpdate(Time.deltaTime);
+		}
+	}
+
+	// Token: 0x06001294 RID: 4756 RVA: 0x000AE1E8 File Offset: 0x000AC3E8
+	public void DoTheUpdate(float deltaTime)
+	{
+		if (deltaTime == 0f)
+		{
+			return;
+		}
+		if (this.setup)
+		{
+			this.Setup();
+			this.setup = false;
+		}
+		Vector3 position = this._transformParent.position;
+		Vector3 vector = position;
+		float num = 1f / deltaTime;
+		vector.x -= this.parentPosLastFrame.x;
+		vector.x *= num;
+		vector.y -= this.parentPosLastFrame.y;
+		vector.y *= num;
+		vector.z -= this.parentPosLastFrame.z;
+		vector.z *= num;
+		this.velocity.x = this.velocity.x - (vector.x - this.parentVelocityLastFrame.x);
+		this.velocity.y = this.velocity.y - (vector.y - this.parentVelocityLastFrame.y);
+		this.velocity.z = this.velocity.z - (vector.z - this.parentVelocityLastFrame.z);
+		this.parentVelocityLastFrame = vector;
+		this.parentPosLastFrame = position;
+		bool flag = false;
+		Vector3 position2 = this._transform.position;
+		Vector3 vector2 = this._transformParent.TransformPoint(this.initialLocalPos);
+		Vector3 vector3 = vector2;
+		vector3.x -= position2.x - this.lastWorldOffset.x;
+		vector3.y -= position2.y - this.lastWorldOffset.y;
+		vector3.z -= position2.z - this.lastWorldOffset.z;
+		if (vector3.sqrMagnitude > this.hardDist * this.hardDist)
+		{
+			flag = true;
+		}
+		if (this.fakeRotationObject != null)
+		{
+			float num2 = Mathf.InverseLerp(0.01f, 7f, this.velocity.magnitude);
+			float num3 = Mathf.Lerp(0f, 1f, num2) * 100f;
+			if (this.frameCount >= 120)
+			{
+				if (num3 > this.rptcThreshold && !this.sendingRTPC)
+				{
+					this.rptcFakeMove.SetFast(num3, this.akGameObjJetCrate);
+					this.audioInsideMove.PostFast();
+					this.sendingRTPC = true;
+				}
+				else if (num3 < this.rptcThreshold && this.sendingRTPC)
+				{
+					this.audioInsideStop.PostFast();
+					this.rptcFakeMove.SetFast(0f, this.akGameObjJetCrate);
+					this.sendingRTPC = false;
+				}
+				if (this.sendingRTPC)
+				{
+					this.rptcFakeMove.SetFast(num3, this.akGameObjJetCrate);
+				}
+			}
+		}
+		if (flag)
+		{
+			this.velocity.x = this.velocity.x + (vector2.x - position2.x) * this.hardPower;
+			this.velocity.y = this.velocity.y + (vector2.y - position2.y) * this.hardPower;
+			this.velocity.z = this.velocity.z + (vector2.z - position2.z) * this.hardPower;
+		}
+		else
+		{
+			this.velocity.x = this.velocity.x + (vector2.x - position2.x) * this.power;
+			this.velocity.y = this.velocity.y + (vector2.y - position2.y) * this.power;
+			this.velocity.z = this.velocity.z + (vector2.z - position2.z) * this.power;
+		}
+		this.posLastFrame.x = this.posLastFrame.x + (this.velocity.x + vector.x) * deltaTime;
+		this.posLastFrame.y = this.posLastFrame.y + (this.velocity.y + vector.y) * deltaTime;
+		this.posLastFrame.z = this.posLastFrame.z + (this.velocity.z + vector.z) * deltaTime;
+		float num4;
+		if (flag)
+		{
+			num4 = this.hardDamping;
+		}
+		else
+		{
+			num4 = this.damping;
+		}
+		this.velocity.x = this.velocity.x * Mathf.Max(0f, 1f - deltaTime * num4);
+		this.velocity.y = this.velocity.y * Mathf.Max(0f, 1f - deltaTime * num4 * this.yDampingBoost);
+		this.velocity.z = this.velocity.z * Mathf.Max(0f, 1f - deltaTime * num4);
+		float magnitude = this.velocity.magnitude;
+		if (magnitude > this.maxVelocity)
+		{
+			float num5 = this.maxVelocity / magnitude;
+			this.velocity.x = this.velocity.x * num5;
+			this.velocity.y = this.velocity.y * num5;
+			this.velocity.z = this.velocity.z * num5;
+		}
+		bool flag2 = false;
+		Vector3 position3 = this.posLastFrame;
+		position3.x += this.worldOffset.x;
+		position3.y += this.worldOffset.y;
+		position3.z += this.worldOffset.z;
+		if (!this.positionOptimized || FastMath.Abs(position3.x - this.actualPosLastFrame.x) > 0.001f || FastMath.Abs(position3.y - this.actualPosLastFrame.y) > 0.001f || FastMath.Abs(position3.z - this.actualPosLastFrame.z) > 0.001f)
+		{
+			this._transform.position = position3;
+			this.actualPosLastFrame = position3;
+			flag2 = true;
+		}
+		this.lastWorldOffset = this.worldOffset;
+		this.worldOffset *= 1f - deltaTime;
+		Vector3 vector4 = (!(this.fakeRotationObject != null)) ? this._transform.localPosition : this.fakeRotationObject.localPosition;
+		this._transform.localEulerAngles = new Vector3(-vector4.y + Mathf.Abs(vector4.x) * 0.4f, vector4.x, Mathf.Abs(vector4.x) * 0.4f) * this.fakeRotation;
+		if (this.frameCount < 120)
+		{
+			this.frameCount++;
+		}
+		if (this.frameCount >= 120 && flag2)
+		{
+			this.UpdateAudio();
+		}
+	}
+
+	// Token: 0x0400220D RID: 8717
+	private Transform _transform;
+
+	// Token: 0x0400220E RID: 8718
+	private Transform _transformParent;
+
+	// Token: 0x0400220F RID: 8719
+	private Transform _transformParentParent;
+
+	// Token: 0x04002210 RID: 8720
+	private JetCrate _transformParentParentJetCrate;
+
+	// Token: 0x04002211 RID: 8721
+	public float power = 2f;
+
+	// Token: 0x04002212 RID: 8722
+	public float damping = 3f;
+
+	// Token: 0x04002213 RID: 8723
+	public float hardDist = 0.08f;
+
+	// Token: 0x04002214 RID: 8724
+	public float hardPower = 15f;
+
+	// Token: 0x04002215 RID: 8725
+	public float hardDamping = 10f;
+
+	// Token: 0x04002216 RID: 8726
+	public float yDampingBoost = 1f;
+
+	// Token: 0x04002217 RID: 8727
+	public float fakeRotation = 100f;
+
+	// Token: 0x04002218 RID: 8728
+	public float maxVelocity = 10f;
+
+	// Token: 0x04002219 RID: 8729
+	public Transform fakeRotationObject;
+
+	// Token: 0x0400221A RID: 8730
+	public bool visualUpdate = true;
+
+	// Token: 0x0400221B RID: 8731
+	public bool onlyExternalUpdate;
+
+	// Token: 0x0400221C RID: 8732
+	public int attackFiltering = 8;
+
+	// Token: 0x0400221D RID: 8733
+	public int releaseFiltering = 8;
+
+	// Token: 0x0400221E RID: 8734
+	public bool positionOptimized = true;
+
+	// Token: 0x0400221F RID: 8735
+	private Vector3 initialLocalPos = Vector3.zero;
+
+	// Token: 0x04002220 RID: 8736
+	private Vector3 posLastFrame;
+
+	// Token: 0x04002221 RID: 8737
+	private Vector3 actualPosLastFrame = Vector3.zero;
+
+	// Token: 0x04002222 RID: 8738
+	private Vector3 parentPosLastFrame;
+
+	// Token: 0x04002223 RID: 8739
+	private Vector3 parentVelocityLastFrame;
+
+	// Token: 0x04002224 RID: 8740
+	private Vector3 localPosLastFrame;
+
+	// Token: 0x04002225 RID: 8741
+	private Vector3 velocity = Vector3.zero;
+
+	// Token: 0x04002226 RID: 8742
+	private Vector3 localVelocity = Vector3.zero;
+
+	// Token: 0x04002227 RID: 8743
+	private Vector3 worldOffset = Vector3.zero;
+
+	// Token: 0x04002228 RID: 8744
+	private Vector3 lastWorldOffset = Vector3.zero;
+
+	// Token: 0x04002229 RID: 8745
+	private bool setup;
+
+	// Token: 0x0400222A RID: 8746
+	private bool sendingRTPC;
+
+	// Token: 0x0400222B RID: 8747
+	private bool sendingRTPCLastFrame;
+
+	// Token: 0x0400222C RID: 8748
+	private float rptcThreshold = 0.6f;
+
+	// Token: 0x0400222D RID: 8749
+	private Vector3 orgLocalPos = Vector3.zero;
+
+	// Token: 0x0400222E RID: 8750
+	private float distFromCenterLastFrame;
+
+	// Token: 0x0400222F RID: 8751
+	private int frameCount;
+
+	// Token: 0x04002230 RID: 8752
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioInsideMove;
+
+	// Token: 0x04002231 RID: 8753
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioInsideStop;
+
+	// Token: 0x04002232 RID: 8754
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioInsideF;
+
+	// Token: 0x04002233 RID: 8755
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioInsideMF;
+
+	// Token: 0x04002234 RID: 8756
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioInsideMP;
+
+	// Token: 0x04002235 RID: 8757
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioInsideP;
+
+	// Token: 0x04002236 RID: 8758
+	[SerializeField]
+	[HideInInspector]
+	private AkGameObj akGameObjJetCrate;
+
+	// Token: 0x04002237 RID: 8759
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04002238 RID: 8760
+	[HideInInspector]
+	[SerializeField]
+	private RTPCFiltered rptcFakeMove;
+
+	// Token: 0x04002239 RID: 8761
+	private int forceUpdateCount;
+
+	// Token: 0x0400223A RID: 8762
+	private int lastUpdateType;
+}

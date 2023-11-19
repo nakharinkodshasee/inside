@@ -1,0 +1,96 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000183 RID: 387
+public class FadeIntensity : MonoBehaviour
+{
+	// Token: 0x06000B62 RID: 2914 RVA: 0x00070BB4 File Offset: 0x0006EDB4
+	public void FadeTo1()
+	{
+		this.targetIntensity = this.intensity1;
+		this.currentSpeed = this.speed1;
+		this.fadeActive = true;
+		this.currentFadeId = 1;
+	}
+
+	// Token: 0x06000B63 RID: 2915 RVA: 0x00070BE8 File Offset: 0x0006EDE8
+	public void FadeTo2()
+	{
+		this.targetIntensity = this.intensity2;
+		this.currentSpeed = this.speed2;
+		this.fadeActive = true;
+		this.currentFadeId = 2;
+	}
+
+	// Token: 0x06000B64 RID: 2916 RVA: 0x00070C1C File Offset: 0x0006EE1C
+	private void UpdateFade()
+	{
+		float num = this.targetIntensity - this.targetLight.intensity;
+		float num2 = this.currentSpeed * Time.deltaTime;
+		if (num2 > Mathf.Abs(num))
+		{
+			num2 = Mathf.Abs(num);
+			if (this.currentFadeId == 1)
+			{
+				this.intensityReached1.OnEvent(this);
+			}
+			else
+			{
+				this.intensityReached2.OnEvent(this);
+			}
+			this.fadeActive = false;
+		}
+		base.GetComponent<Light>().intensity = base.GetComponent<Light>().intensity + num2 * Mathf.Sign(num);
+	}
+
+	// Token: 0x06000B65 RID: 2917 RVA: 0x00070CAC File Offset: 0x0006EEAC
+	private void Start()
+	{
+		if (this.targetLight == null)
+		{
+			this.targetLight = base.gameObject.GetComponent<Light>();
+		}
+	}
+
+	// Token: 0x06000B66 RID: 2918 RVA: 0x00070CDC File Offset: 0x0006EEDC
+	private void FixedUpdate()
+	{
+		if (this.fadeActive)
+		{
+			this.UpdateFade();
+		}
+	}
+
+	// Token: 0x040013B8 RID: 5048
+	public Light targetLight;
+
+	// Token: 0x040013B9 RID: 5049
+	public float intensity1;
+
+	// Token: 0x040013BA RID: 5050
+	public float intensity2;
+
+	// Token: 0x040013BB RID: 5051
+	public float speed1;
+
+	// Token: 0x040013BC RID: 5052
+	public float speed2;
+
+	// Token: 0x040013BD RID: 5053
+	private SimpleEvent<FadeIntensity> intensityReached1 = new SimpleEvent<FadeIntensity>("intensityReached1");
+
+	// Token: 0x040013BE RID: 5054
+	private SimpleEvent<FadeIntensity> intensityReached2 = new SimpleEvent<FadeIntensity>("intensityReached2");
+
+	// Token: 0x040013BF RID: 5055
+	private float targetIntensity;
+
+	// Token: 0x040013C0 RID: 5056
+	private float currentSpeed;
+
+	// Token: 0x040013C1 RID: 5057
+	private bool fadeActive;
+
+	// Token: 0x040013C2 RID: 5058
+	private int currentFadeId;
+}

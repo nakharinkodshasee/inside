@@ -1,0 +1,78 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000258 RID: 600
+public class FakeRopeEndController : MonoBehaviour
+{
+	// Token: 0x06001286 RID: 4742 RVA: 0x000ADA1C File Offset: 0x000ABC1C
+	private void Start()
+	{
+		this.ropeEnd = base.GetComponent<FakeRopeEnd>();
+		this.lastXPos = base.transform.position.x;
+	}
+
+	// Token: 0x06001287 RID: 4743 RVA: 0x000ADA50 File Offset: 0x000ABC50
+	public void AddForce(float force)
+	{
+		this.angularSpeed += force * 100f;
+	}
+
+	// Token: 0x06001288 RID: 4744 RVA: 0x000ADA68 File Offset: 0x000ABC68
+	private void Update()
+	{
+		float deltaTime = Time.deltaTime;
+		if (deltaTime > 0f)
+		{
+			float num = this.lastXPos + (base.transform.position.x - this.lastXPos) * deltaTime * 10f;
+			if (Mathf.Abs(num - this.lastXPos) > 0.001f)
+			{
+				float num2 = (num - this.lastXPos) / deltaTime;
+				float num3 = num2 - this.lastXVelocity;
+				this.angularSpeed -= num3 * this.velFactor;
+				this.lastXVelocity += (num2 - this.lastXVelocity) * deltaTime * 10f;
+				this.lastXPos = num;
+			}
+			this.angularSpeed *= Mathf.Max(0f, 1f - this.damping * deltaTime);
+			this.angularSpeed = Mathf.Clamp(this.angularSpeed, -this.maxAngularSpeed, this.maxAngularSpeed);
+			this.curAngle += this.angularSpeed * deltaTime;
+			float num4 = Mathf.Abs(this.curAngle);
+			float num5 = 1f;
+			if ((double)num4 > (double)this.maxAngle * 0.5 && this.angularSpeed * this.curAngle > 0f && this.maxAngle > 0f)
+			{
+				num5 = 2.5f;
+			}
+			this.angularSpeed += -this.curAngle * deltaTime * this.springPower * num5;
+			this.ropeEnd.angle = this.curAngle;
+		}
+	}
+
+	// Token: 0x04002203 RID: 8707
+	public float velFactor = 5f;
+
+	// Token: 0x04002204 RID: 8708
+	public float damping = 2f;
+
+	// Token: 0x04002205 RID: 8709
+	public float springPower = 30f;
+
+	// Token: 0x04002206 RID: 8710
+	public float maxAngularSpeed = 400f;
+
+	// Token: 0x04002207 RID: 8711
+	public float maxAngle = 20f;
+
+	// Token: 0x04002208 RID: 8712
+	private FakeRopeEnd ropeEnd;
+
+	// Token: 0x04002209 RID: 8713
+	private float angularSpeed;
+
+	// Token: 0x0400220A RID: 8714
+	private float lastXVelocity;
+
+	// Token: 0x0400220B RID: 8715
+	private float lastXPos;
+
+	// Token: 0x0400220C RID: 8716
+	private float curAngle;
+}

@@ -1,0 +1,528 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020001A6 RID: 422
+public class ForcePushManager : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000C4E RID: 3150 RVA: 0x00077E0C File Offset: 0x0007600C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioSideChaingEnvelope = new AudioEventSimple("mine_blow_triggerSidechainEnvelope");
+		this.audioCoverDeath = new AudioEventSimple("boy_impulse_cover_death");
+		this.audioCoverEnter = new AudioEventSimple("boy_impulse_cover_enter");
+		this.audioCoverExit = new AudioEventSimple("boy_impulse_cover_exit");
+	}
+
+	// Token: 0x06000C4F RID: 3151 RVA: 0x00077E6C File Offset: 0x0007606C
+	public bool PreAwake(int callcount)
+	{
+		this.blowInternal = SignalOut.Create("blowInternal", base.gameObject);
+		this.blowInternalDistant = SignalOut.Create("blowInternalDistant", base.gameObject);
+		this.kill = SignalOut.Create("kill", base.gameObject);
+		this.killHeadless = SignalOut.Create("killHeadless", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000C50 RID: 3152 RVA: 0x00077ED4 File Offset: 0x000760D4
+	private void Awake()
+	{
+		this.OnPreProcess();
+		LevelGlobals.forcePushManager = this;
+		this.warningChecker = new MusicEventChecker(this.musicCycleTime - this.explosionTime + this.offset);
+		ForcePushManager.currentlyInCover = false;
+		this.ResetWall();
+	}
+
+	// Token: 0x06000C51 RID: 3153 RVA: 0x00077F10 File Offset: 0x00076110
+	private void OnDestroy()
+	{
+		LevelGlobals.forcePushManager = null;
+		if (this.motionBlur)
+		{
+			Object.Destroy(this.motionBlur);
+		}
+	}
+
+	// Token: 0x06000C52 RID: 3154 RVA: 0x00077F34 File Offset: 0x00076134
+	private void InitBlow()
+	{
+		this.audioSideChaingEnvelope.PostFast(AudioKeyObject.AkGameObjs.global);
+		ForcePushManager.blowEvent.Dispatch();
+		if (this.IsInsideDeadly())
+		{
+			if (!ForcePushManager.currentlyInCover && this.killEnabled)
+			{
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 1f, 0.2f, 0, 0f);
+			}
+			else
+			{
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.15f, 0.4f, 0, 0f);
+			}
+			if (!ForcePushManager.currentlyInCover)
+			{
+				if (this.killEnabled)
+				{
+					this.killTimer = this.killDelay;
+				}
+			}
+			else
+			{
+				int i = 0;
+				int count = ForcePushManager.coverTriggers.Count;
+				while (i < count)
+				{
+					ForcePushCover forcePushCover = ForcePushManager.coverTriggers[i];
+					i++;
+				}
+			}
+		}
+		else if (this.IsInsideShakeNotDeadly())
+		{
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.15f, 0.4f, 0, 0f);
+		}
+		if (ForcePushManager.activeZones.Count > 0)
+		{
+			if (this.IsInsideDistant())
+			{
+				this.blowInternalDistant.Signal();
+			}
+			else
+			{
+				this.blowInternal.Signal();
+			}
+		}
+	}
+
+	// Token: 0x06000C53 RID: 3155 RVA: 0x00078068 File Offset: 0x00076268
+	private void StartWall()
+	{
+		ForcePushManager.warningEvent.Dispatch();
+		this.applyMotinBlur = true;
+		Vector3 pos = ScriptGlobals.boy.pos3;
+		pos.z = this.explosionDistance;
+		this.visualsWall.transform.position = pos;
+		this.explosionSpeed = this.explosionDistance / this.explosionTime;
+		this.exploding = true;
+		if (this.visualsWall != null && ForcePushManager.activeZones.Count > 0)
+		{
+			bool flag = false;
+			int i = 0;
+			int count = ForcePushManager.activeZones.Count;
+			while (i < count)
+			{
+				if (ForcePushManager.activeZones[i].visualizeWave)
+				{
+					flag = true;
+				}
+				i++;
+			}
+			if (flag)
+			{
+				this.visualsWall.SetActive(true);
+			}
+		}
+	}
+
+	// Token: 0x06000C54 RID: 3156 RVA: 0x00078134 File Offset: 0x00076334
+	private void ResetWall()
+	{
+		this.explosionPos = this.explosionDistance;
+		this.exploding = false;
+		if (this.visualsWall != null)
+		{
+			this.visualsWall.SetActive(false);
+		}
+	}
+
+	// Token: 0x06000C55 RID: 3157 RVA: 0x00078174 File Offset: 0x00076374
+	private void Update()
+	{
+		this.UpdateMusicEvents();
+		this.MusicTime();
+		this.UpdateKillState();
+		if (this.useBlur && this.applyMotinBlur && this.motionBlurCurve.length != 0)
+		{
+			this.motionBlurTimer += this.musicDeltaTime;
+			Keyframe keyframe = this.motionBlurCurve.keys[this.motionBlurCurve.length - 1];
+			if (this.motionBlurTimer > keyframe.time)
+			{
+				this.motionBlurTimer = 0f;
+				this.applyMotinBlur = false;
+			}
+			this.motionBlur.blurAmount = this.motionBlurCurve.Evaluate(this.motionBlurTimer);
+		}
+		if (this.exploding)
+		{
+			this.explosionPos -= this.musicDeltaTime * this.explosionSpeed;
+			this.explosionPos = Mathf.Max(this.explosionPos, -20f);
+		}
+		if (this.killTimer > 0f)
+		{
+			this.killTimer -= this.musicDeltaTime;
+			if (this.killTimer <= 0f && this.killEnabled)
+			{
+				this.kill.Signal();
+				this.killSignalSend = true;
+			}
+		}
+		if (this.visualsWall != null)
+		{
+			Vector3 position = this.visualsWall.transform.position;
+			position.z = this.explosionPos;
+			this.visualsWall.transform.position = position;
+		}
+		bool flag = this.inCover();
+		bool isDead = ScriptGlobals.boy.isDead;
+		if (this.killSignalSend && !this.killAudioEventSend)
+		{
+			this.audioCoverDeath.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.killAudioEventSend = true;
+		}
+		else if (!this.killAudioEventSend)
+		{
+			if (flag && !ForcePushManager.currentlyInCover && !isDead)
+			{
+				this.audioCoverEnter.PostFast(AudioKeyObject.AkGameObjs.global);
+			}
+			else if (!flag && ForcePushManager.currentlyInCover && !isDead)
+			{
+				this.audioCoverExit.PostFast(AudioKeyObject.AkGameObjs.global);
+			}
+		}
+		this.deadLastFrame = isDead;
+		ForcePushManager.currentlyInCover = flag;
+	}
+
+	// Token: 0x06000C56 RID: 3158 RVA: 0x000783A8 File Offset: 0x000765A8
+	private void UpdateMusicEvents()
+	{
+		this.blowChecker.Update();
+		this.warningChecker.Update();
+		this.resetChecker.Update();
+		if (this.blowChecker.didEventOccurThisUpdate)
+		{
+			this.InitBlow();
+		}
+		if (this.warningChecker.didEventOccurThisUpdate && !this.exploding)
+		{
+			this.StartWall();
+		}
+		if (this.resetChecker.didEventOccurThisUpdate && this.exploding)
+		{
+			this.ResetWall();
+		}
+	}
+
+	// Token: 0x06000C57 RID: 3159 RVA: 0x00078430 File Offset: 0x00076630
+	private void UpdateKillState()
+	{
+		if (!GameManager.IsLoading() && !this.killEnabled)
+		{
+			this.timeSinceLoad += Time.deltaTime;
+			if (this.timeSinceLoad >= 0.2f)
+			{
+				this.killEnabled = true;
+			}
+		}
+	}
+
+	// Token: 0x06000C58 RID: 3160 RVA: 0x0007847C File Offset: 0x0007667C
+	private bool IsInsideDistant()
+	{
+		int i = 0;
+		int count = ForcePushManager.activeZones.Count;
+		while (i < count)
+		{
+			if (!ForcePushManager.activeZones[i].distant)
+			{
+				return false;
+			}
+			i++;
+		}
+		return true;
+	}
+
+	// Token: 0x06000C59 RID: 3161 RVA: 0x000784C0 File Offset: 0x000766C0
+	private bool IsInsideDeadly()
+	{
+		int i = 0;
+		int count = ForcePushManager.activeZones.Count;
+		while (i < count)
+		{
+			if (ForcePushManager.activeZones[i].deadly)
+			{
+				return true;
+			}
+			i++;
+		}
+		return false;
+	}
+
+	// Token: 0x06000C5A RID: 3162 RVA: 0x00078504 File Offset: 0x00076704
+	private bool IsInsideShakeNotDeadly()
+	{
+		int i = 0;
+		int count = ForcePushManager.activeZones.Count;
+		while (i < count)
+		{
+			if (ForcePushManager.activeZones[i].shakeWhenNotDeadly)
+			{
+				return true;
+			}
+			i++;
+		}
+		return false;
+	}
+
+	// Token: 0x06000C5B RID: 3163 RVA: 0x00078548 File Offset: 0x00076748
+	public static bool GetInCover()
+	{
+		return ForcePushManager.currentlyInCover;
+	}
+
+	// Token: 0x06000C5C RID: 3164 RVA: 0x00078550 File Offset: 0x00076750
+	private void MusicTime()
+	{
+		this.musicTime = PersistentBehaviour<GlobalAudio>.instance.music.GetMusicPosition_s();
+		if (this.musicTime > this.musicCycleTime)
+		{
+			this.musicTime -= this.musicCycleTime;
+		}
+		this.musicDeltaTime = this.musicTime - this.previousMusicTime;
+		if (this.musicTime < this.previousMusicTime)
+		{
+			this.musicDeltaTime += this.musicCycleTime;
+		}
+		this.previousMusicTime = this.musicTime;
+	}
+
+	// Token: 0x06000C5D RID: 3165 RVA: 0x000785DC File Offset: 0x000767DC
+	private void OnDrawGizmos()
+	{
+		if (this.debug)
+		{
+			Gizmos.color = Color.green;
+			Vector3 pos = ScriptGlobals.boy.pos3;
+			pos.z = this.explosionPos;
+			Gizmos.DrawSphere(pos, 1f);
+		}
+	}
+
+	// Token: 0x06000C5E RID: 3166 RVA: 0x00078624 File Offset: 0x00076824
+	public void KillHeadless()
+	{
+		this.killHeadless.Signal();
+	}
+
+	// Token: 0x06000C5F RID: 3167 RVA: 0x00078634 File Offset: 0x00076834
+	public float GetKillTimer()
+	{
+		return this.killTimer;
+	}
+
+	// Token: 0x06000C60 RID: 3168 RVA: 0x0007863C File Offset: 0x0007683C
+	public bool inCover()
+	{
+		int i = 0;
+		int count = ForcePushManager.coverTriggers.Count;
+		while (i < count)
+		{
+			ForcePushCover forcePushCover = ForcePushManager.coverTriggers[i];
+			if (forcePushCover.isInsideThisTrigger() && forcePushCover.isInEnabledState())
+			{
+				return true;
+			}
+			i++;
+		}
+		return false;
+	}
+
+	// Token: 0x06000C61 RID: 3169 RVA: 0x0007868C File Offset: 0x0007688C
+	public static void addCover(ForcePushCover fpc)
+	{
+		if (!ForcePushManager.coverTriggers.Contains(fpc))
+		{
+			ForcePushManager.coverTriggers.Add(fpc);
+		}
+	}
+
+	// Token: 0x06000C62 RID: 3170 RVA: 0x000786AC File Offset: 0x000768AC
+	public static void removeCover(ForcePushCover fpc)
+	{
+		if (ForcePushManager.coverTriggers.Contains(fpc))
+		{
+			ForcePushManager.coverTriggers.Remove(fpc);
+		}
+	}
+
+	// Token: 0x06000C63 RID: 3171 RVA: 0x000786CC File Offset: 0x000768CC
+	public static int getActiveZoneCount()
+	{
+		return ForcePushManager.activeZones.Count;
+	}
+
+	// Token: 0x06000C64 RID: 3172 RVA: 0x000786D8 File Offset: 0x000768D8
+	public static void addActiveZone(ForcePushReceiver fpr)
+	{
+		if (!ForcePushManager.activeZones.Contains(fpr))
+		{
+			ForcePushManager.activeZones.Add(fpr);
+		}
+	}
+
+	// Token: 0x06000C65 RID: 3173 RVA: 0x000786F8 File Offset: 0x000768F8
+	public static void removeActiveZone(ForcePushReceiver fpr)
+	{
+		if (ForcePushManager.activeZones.Contains(fpr))
+		{
+			ForcePushManager.activeZones.Remove(fpr);
+		}
+	}
+
+	// Token: 0x0400156E RID: 5486
+	public GameObject visualsWall;
+
+	// Token: 0x0400156F RID: 5487
+	public float explosionTime = 0.5f;
+
+	// Token: 0x04001570 RID: 5488
+	public float explosionDistance = 50f;
+
+	// Token: 0x04001571 RID: 5489
+	public float offset;
+
+	// Token: 0x04001572 RID: 5490
+	public float musicCycleTime = 6f;
+
+	// Token: 0x04001573 RID: 5491
+	public bool useBlur;
+
+	// Token: 0x04001574 RID: 5492
+	public AnimationCurve motionBlurCurve;
+
+	// Token: 0x04001575 RID: 5493
+	public bool debug;
+
+	// Token: 0x04001576 RID: 5494
+	[HideInInspector]
+	public float explosionPos;
+
+	// Token: 0x04001577 RID: 5495
+	[HideInInspector]
+	public float explosionSpeed;
+
+	// Token: 0x04001578 RID: 5496
+	[HideInInspector]
+	public float musicTime;
+
+	// Token: 0x04001579 RID: 5497
+	[HideInInspector]
+	public float musicDeltaTime;
+
+	// Token: 0x0400157A RID: 5498
+	public static FastEvent warningEvent = new FastEvent(128);
+
+	// Token: 0x0400157B RID: 5499
+	public static FastEvent blowEvent = new FastEvent(128);
+
+	// Token: 0x0400157C RID: 5500
+	private SignalOut blowInternal;
+
+	// Token: 0x0400157D RID: 5501
+	private SignalOut blowInternalDistant;
+
+	// Token: 0x0400157E RID: 5502
+	private SignalOut kill;
+
+	// Token: 0x0400157F RID: 5503
+	private SignalOut killHeadless;
+
+	// Token: 0x04001580 RID: 5504
+	private static List<ForcePushReceiver> activeZones = new List<ForcePushReceiver>();
+
+	// Token: 0x04001581 RID: 5505
+	private static List<ForcePushCover> coverTriggers = new List<ForcePushCover>();
+
+	// Token: 0x04001582 RID: 5506
+	private static bool currentlyInCover = false;
+
+	// Token: 0x04001583 RID: 5507
+	private bool exploding;
+
+	// Token: 0x04001584 RID: 5508
+	private bool applyMotinBlur;
+
+	// Token: 0x04001585 RID: 5509
+	private bool killEnabled;
+
+	// Token: 0x04001586 RID: 5510
+	private bool deadLastFrame;
+
+	// Token: 0x04001587 RID: 5511
+	private float timer;
+
+	// Token: 0x04001588 RID: 5512
+	private float motionBlurTimer;
+
+	// Token: 0x04001589 RID: 5513
+	private float previousMusicTime;
+
+	// Token: 0x0400158A RID: 5514
+	private float timeSinceLoad;
+
+	// Token: 0x0400158B RID: 5515
+	private float killTimer;
+
+	// Token: 0x0400158C RID: 5516
+	private float killDelay = 0.15f;
+
+	// Token: 0x0400158D RID: 5517
+	private bool killAudioEventSend;
+
+	// Token: 0x0400158E RID: 5518
+	private bool killSignalSend;
+
+	// Token: 0x0400158F RID: 5519
+	private MotionBlur motionBlur;
+
+	// Token: 0x04001590 RID: 5520
+	private MusicEventChecker blowChecker = new MusicEventChecker(5.9f);
+
+	// Token: 0x04001591 RID: 5521
+	private MusicEventChecker warningChecker;
+
+	// Token: 0x04001592 RID: 5522
+	private MusicEventChecker resetChecker = new MusicEventChecker(2.5f);
+
+	// Token: 0x04001593 RID: 5523
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioSideChaingEnvelope;
+
+	// Token: 0x04001594 RID: 5524
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioCoverDeath;
+
+	// Token: 0x04001595 RID: 5525
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioCoverEnter;
+
+	// Token: 0x04001596 RID: 5526
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioCoverExit;
+
+	// Token: 0x04001597 RID: 5527
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

@@ -1,0 +1,111 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004C7 RID: 1223
+public class ForcePushRotaterVoiceLogic : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001FF6 RID: 8182 RVA: 0x0010F6D0 File Offset: 0x0010D8D0
+	public bool PreAwake(int callcount)
+	{
+		this.spawnSaveEnd = SignalIn.Create("spawnSaveEnd", base.gameObject, new Action(this.DoSpawnEnd));
+		this.firstSurvive = SignalIn.Create("firstSurvive", base.gameObject, new Action(this.DoFirstSurvive));
+		this.enterCover = SignalOut.Create("enterCover", base.gameObject);
+		this.exitCover = SignalOut.Create("exitCover", base.gameObject);
+		this.closeCall = SignalOut.Create("closeCall", base.gameObject);
+		this.spawnAtEnd = SignalOut.Create("spawnAtEnd", base.gameObject);
+		this.logicStarted = SignalOut.Create("logicStarted", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001FF7 RID: 8183 RVA: 0x0010F790 File Offset: 0x0010D990
+	private void DoFirstSurvive()
+	{
+		this.calculateDeathPanic = false;
+	}
+
+	// Token: 0x06001FF8 RID: 8184 RVA: 0x0010F79C File Offset: 0x0010D99C
+	private void Update()
+	{
+		if (!this.isActive && this.startCover.isInsideThisTrigger())
+		{
+			this.logicStarted.Signal();
+			this.isActive = true;
+		}
+		if (!this.isActive)
+		{
+			return;
+		}
+		bool inCover = ForcePushManager.GetInCover();
+		if (this.calculateDeathPanic && !inCover)
+		{
+			this.musicPos = PersistentBehaviour<GlobalAudio>.instance.music.GetMusicPosition_s();
+			if (this.musicPos >= this.musicLength - 1f && !this.closeCallWarningSent)
+			{
+				this.closeCall.Signal();
+				this.closeCallWarningSent = true;
+			}
+			else if (this.musicPos <= this.musicLength - 1f && this.closeCallWarningSent)
+			{
+				this.closeCallWarningSent = false;
+			}
+		}
+		if (!inCover && this.boyInCoverLastFrame)
+		{
+			this.exitCover.Signal();
+		}
+		else if (inCover && !this.boyInCoverLastFrame)
+		{
+			this.enterCover.Signal();
+		}
+		this.boyInCoverLastFrame = inCover;
+	}
+
+	// Token: 0x06001FF9 RID: 8185 RVA: 0x0010F8B4 File Offset: 0x0010DAB4
+	private void DoSpawnEnd()
+	{
+		this.isActive = true;
+		this.calculateDeathPanic = false;
+	}
+
+	// Token: 0x04003B33 RID: 15155
+	public ForcePushCover startCover;
+
+	// Token: 0x04003B34 RID: 15156
+	private SignalIn spawnSaveEnd;
+
+	// Token: 0x04003B35 RID: 15157
+	private SignalIn firstSurvive;
+
+	// Token: 0x04003B36 RID: 15158
+	private SignalOut enterCover;
+
+	// Token: 0x04003B37 RID: 15159
+	private SignalOut exitCover;
+
+	// Token: 0x04003B38 RID: 15160
+	private SignalOut closeCall;
+
+	// Token: 0x04003B39 RID: 15161
+	private SignalOut spawnAtEnd;
+
+	// Token: 0x04003B3A RID: 15162
+	private SignalOut logicStarted;
+
+	// Token: 0x04003B3B RID: 15163
+	private float musicPos;
+
+	// Token: 0x04003B3C RID: 15164
+	private float musicLength = 6f;
+
+	// Token: 0x04003B3D RID: 15165
+	private bool boyInCoverLastFrame;
+
+	// Token: 0x04003B3E RID: 15166
+	private bool isActive;
+
+	// Token: 0x04003B3F RID: 15167
+	private bool closeCallWarningSent;
+
+	// Token: 0x04003B40 RID: 15168
+	private bool calculateDeathPanic = true;
+}

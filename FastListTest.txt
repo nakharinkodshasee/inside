@@ -1,0 +1,46 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000583 RID: 1411
+[ExecuteInEditMode]
+public class FastListTest : MonoBehaviour
+{
+	// Token: 0x0600244A RID: 9290 RVA: 0x0012BA44 File Offset: 0x00129C44
+	private void Update()
+	{
+		if ((!Application.isEditor && GameManager.controller != null && GameManager.controller.A) || Input.GetKeyDown(32))
+		{
+			this.benchmark = true;
+		}
+		if (this.benchmark)
+		{
+			this.benchmark = false;
+			this.Benchmark();
+		}
+	}
+
+	// Token: 0x0600244B RID: 9291 RVA: 0x0012BAA4 File Offset: 0x00129CA4
+	private void Benchmark()
+	{
+		int[] array = new int[]
+		{
+			12000,
+			24000,
+			4000
+		};
+		int numIterations = 100;
+		long[] array2;
+		long[] array3;
+		long[] array4;
+		long[] array5;
+		long[] array6;
+		long[] array7;
+		bool flag = FastListBenchmark.Run(array, numIterations, out array2, out array3, out array4, out array5, out array6, out array7);
+		for (int i = 0; i < array.Length; i++)
+		{
+		}
+	}
+
+	// Token: 0x04004299 RID: 17049
+	public bool benchmark;
+}
