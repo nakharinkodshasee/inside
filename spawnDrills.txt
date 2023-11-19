@@ -1,0 +1,75 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020005EB RID: 1515
+public class spawnDrills : MonoBehaviour
+{
+	// Token: 0x06002638 RID: 9784 RVA: 0x00136F68 File Offset: 0x00135168
+	public void spawnDrill()
+	{
+		this.drillsSpawned = true;
+		this.timePassed = 0f;
+		Vector3 position = base.gameObject.transform.position;
+		List<Vector3> list = new List<Vector3>();
+		float num = position.x - 12f;
+		float y = position.y - 2f;
+		for (int i = 0; i < 12; i++)
+		{
+			Vector3 zero = Vector3.zero;
+			zero.x = num;
+			zero.y = y;
+			if (num >= this.leftSide.position.x && num <= this.rightSide.position.x && (zero - position).magnitude >= 2.5f)
+			{
+				list.Add(zero);
+			}
+			num += 2.5f;
+		}
+		foreach (Vector3 vector in list)
+		{
+			GameObject gameObject = Object.Instantiate(this.drillPrefab, vector, new Quaternion(0f, 0f, 0f, 0f)) as GameObject;
+			gameObject.transform.parent = base.gameObject.transform;
+			this.listOfSpawnedDrills.Add(gameObject);
+		}
+	}
+
+	// Token: 0x06002639 RID: 9785 RVA: 0x001370E8 File Offset: 0x001352E8
+	private void Start()
+	{
+	}
+
+	// Token: 0x0600263A RID: 9786 RVA: 0x001370EC File Offset: 0x001352EC
+	private void Update()
+	{
+		if (this.drillsSpawned)
+		{
+			this.timePassed += Time.deltaTime;
+			if (this.timePassed >= 5f)
+			{
+				this.drillsSpawned = false;
+				foreach (GameObject gameObject in this.listOfSpawnedDrills)
+				{
+					Object.Destroy(gameObject);
+				}
+			}
+		}
+	}
+
+	// Token: 0x04004594 RID: 17812
+	public GameObject drillPrefab;
+
+	// Token: 0x04004595 RID: 17813
+	public Transform leftSide;
+
+	// Token: 0x04004596 RID: 17814
+	public Transform rightSide;
+
+	// Token: 0x04004597 RID: 17815
+	private bool drillsSpawned;
+
+	// Token: 0x04004598 RID: 17816
+	private float timePassed;
+
+	// Token: 0x04004599 RID: 17817
+	private List<GameObject> listOfSpawnedDrills = new List<GameObject>();
+}

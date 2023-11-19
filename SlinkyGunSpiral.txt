@@ -1,0 +1,463 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200022D RID: 557
+public class SlinkyGunSpiral : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001140 RID: 4416 RVA: 0x000A23BC File Offset: 0x000A05BC
+	public bool PreAwake(int callcount)
+	{
+		this.shootTarget = SignalIn.Create("shootTarget", base.gameObject, delegate
+		{
+			this.OnWakeUp(false);
+		});
+		this.shootBoy = SignalIn.Create("shootBoy", base.gameObject, delegate
+		{
+			this.OnWakeUp(true);
+		});
+		return true;
+	}
+
+	// Token: 0x06001141 RID: 4417 RVA: 0x000A2410 File Offset: 0x000A0610
+	private void Start()
+	{
+		GameObject gameObject = DynamicsSubscene.FindDynamicsGameObject(this);
+		int num = this.bodyList.Count * 2;
+		this.calculatedPoints = new FastList<Vector3>(num - 1, FastListExpandMode.Exponential, 100);
+		this.calculatedPoints.PreAllocate(num - 1);
+		for (int i = 0; i < this.bodyList.Count * 2 - 3; i++)
+		{
+			GameObject gameObject2 = Object.Instantiate<GameObject>(this.slinkyModel);
+			gameObject2.transform.parent = gameObject.transform;
+			this.slinkyParts.Add(gameObject2.transform);
+			gameObject2.SetActive(false);
+		}
+		this.arrowHead.localScale = new Vector3(this.diameterScale, this.diameterScale, this.diameterScale);
+		this.battery.localScale = this.arrowHead.localScale;
+		int j = 0;
+		int count = this.bodyList.Count;
+		while (j < count)
+		{
+			this.bodyList[j].gameObject.SetActive(false);
+			this.bodyList[j].transform.parent = gameObject.transform;
+			j++;
+		}
+		this.arrowHead.gameObject.SetActive(false);
+	}
+
+	// Token: 0x06001142 RID: 4418 RVA: 0x000A2548 File Offset: 0x000A0748
+	private void WakeAllElements()
+	{
+		if (!this.activated)
+		{
+			this.activated = true;
+			int i = 0;
+			int count = this.slinkyParts.Count;
+			while (i < count)
+			{
+				this.slinkyParts[i].gameObject.transform.position = base.transform.position;
+				this.slinkyParts[i].gameObject.SetActive(true);
+				i++;
+			}
+			Vector3 vector = this.battery.transform.TransformDirection(Vector3.back);
+			Quaternion rotation = Quaternion.LookRotation(vector, Vector3.back);
+			this.bodyList[this.bodyList.Count - 1].transform.rotation = rotation;
+			int j = 0;
+			int count2 = this.bodyList.Count;
+			while (j < count2)
+			{
+				this.bodyList[j].gameObject.transform.position = base.transform.position;
+				this.bodyList[j].gameObject.SetActive(true);
+				if (this.tightBundle)
+				{
+					this.bodyList[j].isKinematic = true;
+				}
+				j++;
+			}
+			this.arrowHead.gameObject.SetActive(true);
+			this.arrowHead.transform.position = base.transform.position;
+		}
+	}
+
+	// Token: 0x06001143 RID: 4419 RVA: 0x000A26B4 File Offset: 0x000A08B4
+	public void OnWakeUp(bool shootBoy = false)
+	{
+		this.WakeAllElements();
+		GameObject gameObject = DynamicsSubscene.FindDynamicsGameObject(this);
+		this.battery.transform.parent = gameObject.transform;
+		this.arrowHead.transform.parent = gameObject.transform;
+		this.boyKill = shootBoy;
+		if (this.boyKill)
+		{
+			RagdollSkeleton ragdoll = ScriptGlobals.boy.visualBoy.ragdoll;
+			this.targetObject = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.spineB].gameObject;
+		}
+		if (this.targetObject != null)
+		{
+			this.trailStartPos = base.transform.position;
+			Vector3 position = this.targetObject.transform.position;
+			float magnitude = (position - this.trailStartPos).magnitude;
+			this.timeFactor = this.speed / magnitude;
+			float num = magnitude / this.speed;
+			this.trailGravityPower = 4f * num * num;
+		}
+		if (this.speed > 20f)
+		{
+			this.blurLineRenderer.gameObject.SetActive(true);
+		}
+	}
+
+	// Token: 0x06001144 RID: 4420 RVA: 0x000A27DC File Offset: 0x000A09DC
+	private void RagdollBoneJerk()
+	{
+		RagdollSkeleton ragdoll = ScriptGlobals.boy.visualBoy.ragdoll;
+		Rigidbody rigidbody;
+		switch (Random.Range(0, 10))
+		{
+		case 0:
+		case 1:
+			rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.head];
+			break;
+		case 2:
+			rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.knees[0]];
+			break;
+		case 3:
+			rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.knees[1]];
+			break;
+		case 4:
+			rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.arms[0]];
+			break;
+		case 5:
+			rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.arms[1]];
+			break;
+		default:
+			rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.spineB];
+			break;
+		}
+		Vector3 vector;
+		vector..ctor(Random.Range(-2f, 2f), Random.Range(0.2f, 1f), Random.Range(-2f, 2f));
+		Vector3 normalized = vector.normalized;
+		rigidbody.AddForce(normalized * 0.005f, 1);
+	}
+
+	// Token: 0x06001145 RID: 4421 RVA: 0x000A2980 File Offset: 0x000A0B80
+	private void FixedUpdate()
+	{
+		if (this.addForceNextFrame)
+		{
+			RagdollSkeleton ragdoll = ScriptGlobals.boy.visualBoy.ragdoll;
+			Rigidbody rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.spineB];
+			if (rigidbody != null && !rigidbody.isKinematic)
+			{
+				ScriptGlobals.boy.visualBoy.additiveAnim = this.additiveElectrocuteAnim;
+				Vector3 normalized = (this.targetObject.transform.position - this.trailStartPos).normalized;
+				this.addForceNextFrame = false;
+				rigidbody.AddForce(normalized * 10f, 2);
+			}
+		}
+	}
+
+	// Token: 0x06001146 RID: 4422 RVA: 0x000A2A34 File Offset: 0x000A0C34
+	private void Update()
+	{
+		if (!this.activated)
+		{
+			return;
+		}
+		if (this.moveTime < 1f && this.targetObject != null)
+		{
+			Vector3 normalized = (this.targetObject.transform.position - this.trailStartPos).normalized;
+			if (this.firstShot && !this.tightBundle)
+			{
+				this.firstShot = false;
+				Vector3 vector = normalized + Vector3.up * this.trailGravityPower * 0.1f;
+				int i = 1;
+				int count = this.bodyList.Count;
+				while (i < count)
+				{
+					this.bodyList[i].velocity = vector * this.speed * 0.5f;
+					i++;
+				}
+			}
+			this.moveTime += Time.deltaTime * this.timeFactor;
+			this.trailMoveTime = this.moveTime;
+			bool flag = false;
+			if (this.moveTime > 1f)
+			{
+				flag = true;
+				this.moveTime = 1f;
+			}
+			Vector3 vector2 = this.targetObject.transform.position;
+			if (this.boyKill)
+			{
+				vector2 -= normalized * 0.2f;
+			}
+			int num = 0;
+			float num2 = this.moveTime;
+			bool flag2 = true;
+			Vector3 vector3 = Vector3.zero;
+			float num3 = Mathf.Max(this.tightLen - 0.4f, 0.1f) / (float)this.bodyList.Count;
+			while (flag2)
+			{
+				Vector3 vector4 = this.trailStartPos * (1f - num2) + vector2 * num2;
+				vector4.y += (0.25f - (num2 - 0.5f) * (num2 - 0.5f)) * this.trailGravityPower;
+				this.bodyList[num].transform.position = vector4;
+				if (num == 0 && flag)
+				{
+					this.bodyList[0].transform.position = vector4;
+				}
+				if (Time.deltaTime > 0f && num == 0)
+				{
+					Vector3 normalized2 = (vector4 - this.arrowHead.position).normalized;
+					Quaternion rotation = Quaternion.LookRotation(normalized2);
+					this.arrowHead.rotation = rotation;
+					this.arrowHead.position = this.bodyList[num].transform.position;
+				}
+				if (this.tightBundle)
+				{
+					if (num == this.bodyList.Count - 1)
+					{
+						Vector3 vector5 = (vector3 - vector4).normalized;
+						if (this.cannisterBlendIn < 1f)
+						{
+							this.cannisterBlendIn = Mathf.Min(this.cannisterBlendIn + Time.deltaTime * 10f, 1f);
+							Vector3 vector6 = this.bodyList[num].transform.TransformDirection(Vector3.forward);
+							vector5 = vector6 * (1f - this.cannisterBlendIn) + vector5 * this.cannisterBlendIn;
+						}
+						Quaternion rotation2 = Quaternion.LookRotation(vector5, Vector3.back);
+						this.bodyList[num].transform.rotation = rotation2;
+					}
+					num2 -= num3 * this.timeFactor / this.speed;
+					num++;
+					if (num >= this.bodyList.Count || num2 < 0f)
+					{
+						flag2 = false;
+					}
+				}
+				else
+				{
+					flag2 = false;
+				}
+				vector3 = vector4;
+			}
+			if (this.blurLineRenderer != null)
+			{
+				for (int j = 0; j < 10; j++)
+				{
+					num2 = Mathf.Clamp(this.trailMoveTime - (float)j * 0.015f * this.timeFactor, 0f, 1f);
+					Vector3 vector7 = this.trailStartPos * (1f - num2) + vector2 * num2;
+					vector7.y += (0.25f - (num2 - 0.5f) * (num2 - 0.5f)) * this.trailGravityPower;
+					this.blurLineRenderer.SetPosition(j, vector7);
+				}
+			}
+			if (flag)
+			{
+				if (this.tightBundle)
+				{
+					int k = 1;
+					int count2 = this.bodyList.Count;
+					while (k < count2)
+					{
+						this.bodyList[k].isKinematic = false;
+						this.bodyList[k].velocity = (this.bodyList[k - 1].transform.position - this.bodyList[k].transform.position).normalized * Mathf.Min(this.speed, 15f);
+						k++;
+					}
+					this.bodyList[this.bodyList.Count - 1].angularVelocity = new Vector3(0f, Random.Range(-10f, 10f), Random.Range(-25f, -10f));
+				}
+				if (this.boyKill)
+				{
+					this.bodyList[0].transform.parent = this.targetObject.transform;
+					this.arrowHead.transform.parent = this.targetObject.transform;
+					ScriptGlobals.boy.Kill();
+					this.addForceNextFrame = true;
+					if (this.battery.childCount > 0)
+					{
+						this.battery.GetChild(0).gameObject.SetActive(true);
+					}
+					if (this.arrowHead.childCount > 0)
+					{
+						this.arrowHead.GetChild(0).gameObject.SetActive(true);
+					}
+				}
+			}
+		}
+		else if (this.trailMoveTime > 0f && this.blurLineRenderer != null)
+		{
+			this.trailMoveTime += Time.deltaTime * this.timeFactor;
+			Vector3 vector8 = this.targetObject.transform.position;
+			Vector3 normalized3 = (vector8 - this.trailStartPos).normalized;
+			if (this.boyKill)
+			{
+				vector8 -= normalized3 * 0.2f;
+			}
+			bool flag3 = false;
+			for (int l = 0; l < 10; l++)
+			{
+				float num4 = Mathf.Clamp(this.trailMoveTime - (float)l * 0.015f * this.timeFactor, 0f, 1f);
+				Vector3 vector9 = this.trailStartPos * (1f - num4) + vector8 * num4;
+				vector9.y += (0.25f - (num4 - 0.5f) * (num4 - 0.5f)) * this.trailGravityPower;
+				this.blurLineRenderer.SetPosition(l, vector9);
+				flag3 = (flag3 || num4 < 1f);
+			}
+			if (!flag3)
+			{
+				this.blurLineRenderer.gameObject.SetActive(false);
+				this.trailMoveTime = -1f;
+			}
+		}
+		Vector3 vector10 = Vector3.zero;
+		this.calculatedPoints[0] = this.bodyList[0].transform.position;
+		int count3 = this.bodyList.Count;
+		Vector3 vector11 = Vector3.zero;
+		for (int m = 1; m < count3; m++)
+		{
+			this.calculatedPoints[2 * m] = this.bodyList[m].transform.position;
+			Vector3 vector12;
+			if (m == 1)
+			{
+				vector12 = this.calculatedPoints[2] - this.calculatedPoints[0];
+			}
+			else
+			{
+				vector12 = vector11;
+			}
+			if (m == count3 - 1)
+			{
+				vector11 = vector12;
+			}
+			else
+			{
+				vector11 = this.bodyList[m + 1].transform.position - this.calculatedPoints[2 * m];
+			}
+			this.calculatedPoints[2 * m - 1] = 0.5f * this.calculatedPoints[2 * m - 2] + 0.1f * vector12 + 0.5f * this.calculatedPoints[2 * m] - 0.1f * vector11;
+		}
+		int num5 = 2 * count3 - 2;
+		for (int n = 0; n < num5; n++)
+		{
+			Vector3 vector13 = this.calculatedPoints[n];
+			if (n < num5 - 1)
+			{
+				vector10 = this.calculatedPoints[n + 1] - vector13;
+				float magnitude = vector10.magnitude;
+				vector13.z += this.diameterScale * 0.02f;
+				Transform transform = this.slinkyParts[n].transform;
+				transform.position = vector13;
+				if (magnitude > 0.001f)
+				{
+					vector10 /= magnitude;
+					Quaternion rotation3 = Quaternion.LookRotation(vector10, Vector3.back);
+					transform.rotation = rotation3;
+					transform.localScale = new Vector3(this.diameterScale, this.diameterScale, magnitude * 10f);
+				}
+			}
+			else
+			{
+				vector10 = this.bodyList[count3 - 1].transform.TransformDirection(Vector3.back);
+				if (this.moveTime < 1f && this.targetObject != null && !this.tightBundle)
+				{
+					Vector3 vector14 = this.arrowHead.transform.TransformDirection(Vector3.back);
+					vector10 = this.moveTime * vector10 + (1f - this.moveTime) * vector14;
+				}
+				Quaternion rotation4 = Quaternion.LookRotation(vector10, Vector3.back);
+				this.battery.position = vector13;
+				this.battery.rotation = rotation4;
+			}
+		}
+		if (Time.deltaTime > 0f && this.boyKill)
+		{
+			Vector3 vector15 = this.bodyList[count3 - 1].transform.position - this.bodyList[0].transform.position;
+			float magnitude2 = vector15.magnitude;
+			if (magnitude2 > 2f)
+			{
+				Rigidbody component = this.bodyList[0].transform.parent.GetComponent<Rigidbody>();
+				if (component != null)
+				{
+					float num6 = (magnitude2 - 2f) / magnitude2;
+					component.AddForce(Time.deltaTime * 60f * num6 * vector15, 2);
+				}
+			}
+		}
+	}
+
+	// Token: 0x04001F8B RID: 8075
+	public Rigidbody rootNode;
+
+	// Token: 0x04001F8C RID: 8076
+	public List<Rigidbody> bodyList;
+
+	// Token: 0x04001F8D RID: 8077
+	public GameObject slinkyModel;
+
+	// Token: 0x04001F8E RID: 8078
+	public LineRenderer blurLineRenderer;
+
+	// Token: 0x04001F8F RID: 8079
+	public Transform arrowHead;
+
+	// Token: 0x04001F90 RID: 8080
+	public Transform battery;
+
+	// Token: 0x04001F91 RID: 8081
+	public AnimClipNode additiveElectrocuteAnim;
+
+	// Token: 0x04001F92 RID: 8082
+	public float diameterScale = 1.5f;
+
+	// Token: 0x04001F93 RID: 8083
+	public float arcScale = 1f;
+
+	// Token: 0x04001F94 RID: 8084
+	public GameObject targetObject;
+
+	// Token: 0x04001F95 RID: 8085
+	public float speed = 20f;
+
+	// Token: 0x04001F96 RID: 8086
+	public bool tightBundle = true;
+
+	// Token: 0x04001F97 RID: 8087
+	public float tightLen = 1f;
+
+	// Token: 0x04001F98 RID: 8088
+	private SignalIn shootTarget;
+
+	// Token: 0x04001F99 RID: 8089
+	private SignalIn shootBoy;
+
+	// Token: 0x04001F9A RID: 8090
+	private FastList<Vector3> calculatedPoints;
+
+	// Token: 0x04001F9B RID: 8091
+	private FastList<Transform> slinkyParts = new FastList<Transform>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04001F9C RID: 8092
+	private bool activated;
+
+	// Token: 0x04001F9D RID: 8093
+	private Vector3 trailStartPos;
+
+	// Token: 0x04001F9E RID: 8094
+	private float timeFactor;
+
+	// Token: 0x04001F9F RID: 8095
+	private float trailGravityPower;
+
+	// Token: 0x04001FA0 RID: 8096
+	private float moveTime;
+
+	// Token: 0x04001FA1 RID: 8097
+	private bool boyKill;
+
+	// Token: 0x04001FA2 RID: 8098
+	private bool addForceNextFrame;
+
+	// Token: 0x04001FA3 RID: 8099
+	private bool firstShot = true;
+
+	// Token: 0x04001FA4 RID: 8100
+	private float cannisterBlendIn;
+
+	// Token: 0x04001FA5 RID: 8101
+	private float trailMoveTime;
+}

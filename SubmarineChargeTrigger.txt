@@ -1,0 +1,113 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003B8 RID: 952
+public class SubmarineChargeTrigger : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060019B5 RID: 6581 RVA: 0x000DF3C0 File Offset: 0x000DD5C0
+	public bool PreAwake(int callcount)
+	{
+		this.triggered = SignalOut.Create("triggered", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060019B6 RID: 6582 RVA: 0x000DF3DC File Offset: 0x000DD5DC
+	private void SendEvents()
+	{
+		if (!this.onlyTriggerOnce || !this.triggeredOnce)
+		{
+			this.triggered.Signal();
+			this.triggeredEvent.OnEvent(this);
+			this.triggeredOnce = true;
+		}
+	}
+
+	// Token: 0x060019B7 RID: 6583 RVA: 0x000DF420 File Offset: 0x000DD620
+	private void FixedUpdate()
+	{
+		this.timeSinceLastValidImpact += Time.deltaTime;
+	}
+
+	// Token: 0x060019B8 RID: 6584 RVA: 0x000DF434 File Offset: 0x000DD634
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (this.timeSinceLastValidImpact < 1f)
+		{
+			return;
+		}
+		if (this.sub == null)
+		{
+			this.sub = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine).gameObject.GetComponent<Submarine>();
+		}
+		Rigidbody attachedRigidbody = collider.attachedRigidbody;
+		if (attachedRigidbody && attachedRigidbody.GetComponent<Submarine>())
+		{
+			float num = 1f;
+			SubmarineChargeBoost submarineChargeBoost = this.sub.booster as SubmarineChargeBoost;
+			float boostTimer = submarineChargeBoost.GetBoostTimer();
+			if (boostTimer < this.shortDistaceBoostTimer)
+			{
+				num = this.shortDistanceScaleRequirement;
+			}
+			if (boostTimer < this.maximumSubmarineBoostTime && attachedRigidbody.velocity.sqrMagnitude > this.requiredVelocity * num * (this.requiredVelocity * num) && Mathf.Abs(attachedRigidbody.velocity.x) >= this.requiredVelocityX * num && Mathf.Abs(attachedRigidbody.velocity.y) >= this.requiredVelocityY * num)
+			{
+				this.timeSinceLastValidImpact = 0f;
+				this.SendEvents();
+			}
+		}
+	}
+
+	// Token: 0x060019B9 RID: 6585 RVA: 0x000DF558 File Offset: 0x000DD758
+	private void OnCollisionEnter(Collision coll)
+	{
+		int i = 0;
+		int num = coll.contacts.Length;
+		while (i < num)
+		{
+			ContactPoint contactPoint = coll.contacts[i];
+			Rigidbody attachedRigidbody = contactPoint.otherCollider.attachedRigidbody;
+			if (attachedRigidbody && attachedRigidbody.GetComponent<Submarine>() && coll.relativeVelocity.magnitude > this.requiredVelocity && Mathf.Abs(coll.relativeVelocity.x) >= this.requiredVelocityX && Mathf.Abs(coll.relativeVelocity.y) >= this.requiredVelocityY)
+			{
+				this.SendEvents();
+				return;
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x04002E2D RID: 11821
+	public float requiredVelocity = 10f;
+
+	// Token: 0x04002E2E RID: 11822
+	public float requiredVelocityX;
+
+	// Token: 0x04002E2F RID: 11823
+	public float requiredVelocityY;
+
+	// Token: 0x04002E30 RID: 11824
+	public float maximumSubmarineBoostTime = 1.4f;
+
+	// Token: 0x04002E31 RID: 11825
+	public float shortDistaceBoostTimer = 0.2f;
+
+	// Token: 0x04002E32 RID: 11826
+	public bool onlyTriggerOnce;
+
+	// Token: 0x04002E33 RID: 11827
+	public float shortDistanceScaleRequirement = 0.4f;
+
+	// Token: 0x04002E34 RID: 11828
+	private bool triggeredOnce;
+
+	// Token: 0x04002E35 RID: 11829
+	private SignalOut triggered;
+
+	// Token: 0x04002E36 RID: 11830
+	private SimpleEvent<SubmarineChargeTrigger> triggeredEvent = new SimpleEvent<SubmarineChargeTrigger>("triggeredEvent");
+
+	// Token: 0x04002E37 RID: 11831
+	private Submarine sub;
+
+	// Token: 0x04002E38 RID: 11832
+	private float timeSinceLastValidImpact = 100f;
+}

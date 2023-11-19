@@ -1,0 +1,8 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000587 RID: 1415
+[ExecuteInEditMode]
+public class SVO : MonoBehaviour
+{
+}

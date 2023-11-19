@@ -1,0 +1,103 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000146 RID: 326
+public class Teleport : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060009DE RID: 2526 RVA: 0x00062E20 File Offset: 0x00061020
+	public bool PreAwake(int callcount)
+	{
+		this.teleportSignal = SignalIn.Create("teleportSignal", base.gameObject, new Action(this.OnTeleport));
+		return true;
+	}
+
+	// Token: 0x060009DF RID: 2527 RVA: 0x00062E48 File Offset: 0x00061048
+	private void Start()
+	{
+		if (this.teleportWithOffset)
+		{
+			if (!this.useXYDir)
+			{
+				this.dir_vector = (this.offsetEnd.position - this.offsetBegin.position).normalized;
+			}
+			if (this.calcOffset)
+			{
+				this.offset = (this.offsetEnd.position - this.offsetBegin.position).magnitude;
+			}
+			if (this.useXYDir)
+			{
+				Vector3 vector;
+				vector..ctor(this.dirX, this.dirY, 0f);
+				this.dir_vector = vector.normalized;
+			}
+		}
+	}
+
+	// Token: 0x060009E0 RID: 2528 RVA: 0x00062EF8 File Offset: 0x000610F8
+	private void OnTeleport()
+	{
+		Vector3 position;
+		if (this.teleportWithOffset)
+		{
+			position..ctor(this.offsetBegin.position.x + this.dir_vector.x * this.offset, this.offsetBegin.position.y + this.dir_vector.y * this.offset, this.offsetBegin.position.z);
+		}
+		else
+		{
+			position = this.destination.position;
+		}
+		this.target.position = position;
+		if (this.setOrientation)
+		{
+			this.target.rotation = this.destination.rotation;
+		}
+		if (this.signalReciever)
+		{
+			this.signalReciever.SendMessage(this.signalAfter, base.gameObject, 0);
+		}
+	}
+
+	// Token: 0x040010E8 RID: 4328
+	public Transform destination;
+
+	// Token: 0x040010E9 RID: 4329
+	public Transform target;
+
+	// Token: 0x040010EA RID: 4330
+	public string signalAfter;
+
+	// Token: 0x040010EB RID: 4331
+	public GameObject signalReciever;
+
+	// Token: 0x040010EC RID: 4332
+	public bool teleportWithOffset;
+
+	// Token: 0x040010ED RID: 4333
+	public Transform offsetBegin;
+
+	// Token: 0x040010EE RID: 4334
+	public Transform offsetEnd;
+
+	// Token: 0x040010EF RID: 4335
+	public float offset;
+
+	// Token: 0x040010F0 RID: 4336
+	public bool calcOffset;
+
+	// Token: 0x040010F1 RID: 4337
+	public bool useXYDir;
+
+	// Token: 0x040010F2 RID: 4338
+	public float dirX;
+
+	// Token: 0x040010F3 RID: 4339
+	public float dirY;
+
+	// Token: 0x040010F4 RID: 4340
+	public bool setOrientation;
+
+	// Token: 0x040010F5 RID: 4341
+	private Vector3 dir_vector;
+
+	// Token: 0x040010F6 RID: 4342
+	private SignalIn teleportSignal;
+}

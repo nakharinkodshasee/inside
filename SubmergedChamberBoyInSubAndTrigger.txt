@@ -1,0 +1,72 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000539 RID: 1337
+public class SubmergedChamberBoyInSubAndTrigger : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060022D1 RID: 8913 RVA: 0x00123CBC File Offset: 0x00121EBC
+	public bool PreAwake(int callcount)
+	{
+		this.boyInTriggerAndSub = SignalOut.Create("boyInTriggerAndSub", base.gameObject);
+		this.gateOpen = SignalIn.Create("gateOpen", base.gameObject, new Action(this.DoGateOpen));
+		return true;
+	}
+
+	// Token: 0x060022D2 RID: 8914 RVA: 0x00123D04 File Offset: 0x00121F04
+	private void Start()
+	{
+		this.subInteraction = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine).gameObject.GetComponent<SubmarineBoyInteraction>();
+	}
+
+	// Token: 0x060022D3 RID: 8915 RVA: 0x00123D2C File Offset: 0x00121F2C
+	private void DoGateOpen()
+	{
+		this.gateIsOpen = true;
+	}
+
+	// Token: 0x060022D4 RID: 8916 RVA: 0x00123D38 File Offset: 0x00121F38
+	private void FixedUpdate()
+	{
+		if (this.gateIsOpen && this.boyInTrigger && !this.signalSend && this.subInteraction.GetBoyIsInsideSubmarine())
+		{
+			this.boyInTriggerAndSub.Signal();
+			this.signalSend = true;
+		}
+	}
+
+	// Token: 0x060022D5 RID: 8917 RVA: 0x00123D88 File Offset: 0x00121F88
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyInTrigger = true;
+		}
+	}
+
+	// Token: 0x060022D6 RID: 8918 RVA: 0x00123DA4 File Offset: 0x00121FA4
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyInTrigger = false;
+		}
+	}
+
+	// Token: 0x040040FF RID: 16639
+	private SubmarineBoyInteraction subInteraction;
+
+	// Token: 0x04004100 RID: 16640
+	private bool boyInTrigger;
+
+	// Token: 0x04004101 RID: 16641
+	private SignalOut boyInTriggerAndSub;
+
+	// Token: 0x04004102 RID: 16642
+	private SignalIn gateOpen;
+
+	// Token: 0x04004103 RID: 16643
+	private bool signalSend;
+
+	// Token: 0x04004104 RID: 16644
+	private bool gateIsOpen;
+}

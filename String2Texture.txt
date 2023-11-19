@@ -1,0 +1,31 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000647 RID: 1607
+[ExecuteInEditMode]
+public class String2Texture : MonoBehaviour
+{
+	// Token: 0x060027AB RID: 10155 RVA: 0x0013EA3C File Offset: 0x0013CC3C
+	private void OnEnable()
+	{
+		int[,] array = new int[this.size, this.size];
+		for (int i = 0; i < this.size; i++)
+		{
+			int j = 0;
+			while (j < this.size)
+			{
+				array[i, j] = 0;
+				i++;
+			}
+		}
+		int num = 0;
+		while ((double)num < (double)(this.size * this.size) * 0.1)
+		{
+			array[Random.Range(0, this.size), Random.Range(0, this.size)] = 1;
+			num++;
+		}
+	}
+
+	// Token: 0x0400472D RID: 18221
+	public int size;
+}

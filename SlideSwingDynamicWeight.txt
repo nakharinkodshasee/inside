@@ -1,0 +1,25 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000476 RID: 1142
+public class SlideSwingDynamicWeight : MonoBehaviour
+{
+	// Token: 0x06001E0A RID: 7690 RVA: 0x001021E8 File Offset: 0x001003E8
+	private void Start()
+	{
+	}
+
+	// Token: 0x06001E0B RID: 7691 RVA: 0x001021EC File Offset: 0x001003EC
+	private void FixedUpdate()
+	{
+		float num = Mathf.InverseLerp(2f, 7f, Mathf.Abs(this.bodyUpper.velocity.x));
+		this.bodyUpper.mass = Mathf.Lerp(2f, 3f, num);
+		this.bodyLower.mass = Mathf.Lerp(2f, 3f, num);
+	}
+
+	// Token: 0x04003742 RID: 14146
+	public Rigidbody bodyUpper;
+
+	// Token: 0x04003743 RID: 14147
+	public Rigidbody bodyLower;
+}

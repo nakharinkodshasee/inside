@@ -1,0 +1,80 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000262 RID: 610
+public class StretchBoxColliderBetweenPivots : MonoBehaviour
+{
+	// Token: 0x060012BB RID: 4795 RVA: 0x000B0068 File Offset: 0x000AE268
+	private void Start()
+	{
+		this.startScale = base.transform.localScale;
+		this.startSign = Mathf.Sign(this.pivotStart.transform.position.x - base.transform.position.x);
+	}
+
+	// Token: 0x060012BC RID: 4796 RVA: 0x000B00C0 File Offset: 0x000AE2C0
+	private void Update()
+	{
+	}
+
+	// Token: 0x060012BD RID: 4797 RVA: 0x000B00C4 File Offset: 0x000AE2C4
+	private void FixedUpdate()
+	{
+		Vector3 vector = this.pivotEnd.transform.position + (this.pivotEnd.transform.position - this.pivotStart.transform.position).normalized * this.extraLength;
+		float num = Mathf.Sign(this.pivotStart.transform.position.x - base.transform.position.x);
+		base.transform.transform.position = (this.pivotStart.transform.position + vector) * 0.5f;
+		if (this.faceInDirection)
+		{
+			base.transform.LookAt(vector);
+		}
+		Vector3 localScale = this.startScale;
+		if (this.stretchX)
+		{
+			localScale.x = (this.pivotStart.transform.position - vector).magnitude;
+		}
+		else if (this.stretchY)
+		{
+			localScale.y = (this.pivotStart.transform.position - vector).magnitude;
+		}
+		else if (this.stretchZ)
+		{
+			localScale.z = (this.pivotStart.transform.position - vector).magnitude;
+		}
+		if (this.dontStretchNegativeX && num != this.startSign)
+		{
+			localScale.z = 0f;
+			localScale.x = 0f;
+			localScale.y = 0f;
+		}
+		base.transform.localScale = localScale;
+	}
+
+	// Token: 0x04002285 RID: 8837
+	public GameObject pivotStart;
+
+	// Token: 0x04002286 RID: 8838
+	public GameObject pivotEnd;
+
+	// Token: 0x04002287 RID: 8839
+	public float extraLength;
+
+	// Token: 0x04002288 RID: 8840
+	public bool dontStretchNegativeX;
+
+	// Token: 0x04002289 RID: 8841
+	public bool stretchX;
+
+	// Token: 0x0400228A RID: 8842
+	public bool stretchY;
+
+	// Token: 0x0400228B RID: 8843
+	public bool stretchZ = true;
+
+	// Token: 0x0400228C RID: 8844
+	public bool faceInDirection = true;
+
+	// Token: 0x0400228D RID: 8845
+	private Vector3 startScale;
+
+	// Token: 0x0400228E RID: 8846
+	private float startSign;
+}

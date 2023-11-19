@@ -1,0 +1,55 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000535 RID: 1333
+public class StealSubmarineExitWater : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060022BD RID: 8893 RVA: 0x00123568 File Offset: 0x00121768
+	public bool PreAwake(int callcount)
+	{
+		this.subAscendWater = SignalIn.Create("subAscendWater", base.gameObject, new Action(this.DoSubAscendWater));
+		this.startArrive = SignalIn.Create("startArrive", base.gameObject, new Action(this.DoStartArrive));
+		return true;
+	}
+
+	// Token: 0x060022BE RID: 8894 RVA: 0x001235BC File Offset: 0x001217BC
+	private void Start()
+	{
+		this.sub = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine).gameObject;
+		this.akGameObjSub = this.sub.GetComponent<AkGameObj>();
+	}
+
+	// Token: 0x060022BF RID: 8895 RVA: 0x001235F0 File Offset: 0x001217F0
+	private void DoStartArrive()
+	{
+		SoundEngine.States.submarineAndCameraWater.Set(SoundEngine.States.SubmarineAndCameraWater.cameraAboveSubmarineBelow);
+	}
+
+	// Token: 0x060022C0 RID: 8896 RVA: 0x00123604 File Offset: 0x00121804
+	private void DoSubAscendWater()
+	{
+		if (this.sub && !this.eventsHasBeenSent)
+		{
+			this.eventsHasBeenSent = true;
+			SoundEngine.States.submarineAndCameraWater.Set(SoundEngine.States.SubmarineAndCameraWater.cameraAboveSubmarineAbove);
+		}
+	}
+
+	// Token: 0x040040E2 RID: 16610
+	private SignalIn startArrive;
+
+	// Token: 0x040040E3 RID: 16611
+	private SignalIn subAscendWater;
+
+	// Token: 0x040040E4 RID: 16612
+	private GameObject sub;
+
+	// Token: 0x040040E5 RID: 16613
+	private bool isEnteringScene;
+
+	// Token: 0x040040E6 RID: 16614
+	private bool eventsHasBeenSent;
+
+	// Token: 0x040040E7 RID: 16615
+	private AkGameObj akGameObjSub;
+}

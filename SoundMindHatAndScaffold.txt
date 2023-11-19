@@ -1,0 +1,33 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000421 RID: 1057
+public class SoundMindHatAndScaffold : MonoBehaviour
+{
+	// Token: 0x0400326F RID: 12911
+	private SignalIn enterScene;
+
+	// Token: 0x04003270 RID: 12912
+	private SignalIn mindhatOn;
+
+	// Token: 0x04003271 RID: 12913
+	private SignalIn mindhatOff;
+
+	// Token: 0x04003272 RID: 12914
+	private SignalIn scaffoldInPlaceRight;
+
+	// Token: 0x04003273 RID: 12915
+	private SignalIn scaffoldNotInPlaceRight;
+
+	// Token: 0x04003274 RID: 12916
+	private SignalIn scaffoldAndPressure;
+
+	// Token: 0x04003275 RID: 12917
+	private SignalIn scaffoldAndNotPressure;
+
+	// Token: 0x04003276 RID: 12918
+	private SignalIn boyDownFromScaffold;
+
+	// Token: 0x04003277 RID: 12919
+	private SignalIn exitScene;
+}

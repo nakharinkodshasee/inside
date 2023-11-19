@@ -1,0 +1,297 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200022E RID: 558
+public class SpotLightDetector : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600114A RID: 4426 RVA: 0x000A35FC File Offset: 0x000A17FC
+	public bool PreAwake(int callcount)
+	{
+		this.disable = SignalIn.Create("disable", base.gameObject, new Action(this.doDisable));
+		this.enable = SignalIn.Create("enable", base.gameObject, new Action(this.doEnable));
+		this.boyInCoverSignal = SignalOut.Create("boyInCoverSignal", base.gameObject);
+		this.boyNotInCoverSignal = SignalOut.Create("boyNotInCoverSignal", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x0600114B RID: 4427 RVA: 0x000A367C File Offset: 0x000A187C
+	private void Start()
+	{
+		if (this.startActivated)
+		{
+			this.scriptActive = true;
+		}
+		else
+		{
+			this.scriptActive = false;
+		}
+		if (this.objectWithSpotlight)
+		{
+			this.objSpotLight = this.objectWithSpotlight;
+		}
+		else
+		{
+			this.objSpotLight = base.gameObject;
+		}
+		this.detectorLight = this.objSpotLight.GetComponent<Light>();
+		if (this.usePlayerBoy && !this.targetBoys.Contains(ScriptGlobals.boy))
+		{
+			this.targetBoys.Add(ScriptGlobals.boy);
+		}
+	}
+
+	// Token: 0x0600114C RID: 4428 RVA: 0x000A3718 File Offset: 0x000A1918
+	public void doDisable()
+	{
+		this.scriptActive = false;
+	}
+
+	// Token: 0x0600114D RID: 4429 RVA: 0x000A3724 File Offset: 0x000A1924
+	public void doEnable()
+	{
+		this.scriptActive = true;
+	}
+
+	// Token: 0x17000064 RID: 100
+	// (get) Token: 0x0600114E RID: 4430 RVA: 0x000A3730 File Offset: 0x000A1930
+	public bool BoyIsVisible
+	{
+		get
+		{
+			return this.boyIsVisible;
+		}
+	}
+
+	// Token: 0x0600114F RID: 4431 RVA: 0x000A3738 File Offset: 0x000A1938
+	private void UpdateBoyVisibility()
+	{
+		this.visibleBoys.Clear();
+		int i = 0;
+		int count = this.targetBoys.Count;
+		while (i < count)
+		{
+			Boy boy = this.targetBoys[i];
+			Vector3 position = boy.transform.position;
+			position.y -= boy.shrinkHeight;
+			Vector3 vector = position - this.objSpotLight.transform.position;
+			Vector3 vector2 = vector;
+			if (this.onlyHorizontal)
+			{
+				vector2.Normalize();
+				vector2.y = this.objSpotLight.transform.forward.y;
+			}
+			bool flag = false;
+			if (Vector3.Angle(this.objSpotLight.transform.forward, vector2) < this.detectorLight.spotAngle * 0.5f * (1f - this.lightAngleDeadZone * 0.5f) && this.detectorLight.intensity >= this.minIntensity)
+			{
+				float magnitude = vector.magnitude;
+				bool flag2;
+				if (this.coverColliders != null && this.coverColliders.Length != 0)
+				{
+					flag2 = true;
+					flag = false;
+					if (this.maxDetectionRange != 0f && magnitude > this.maxDetectionRange)
+					{
+						flag2 = false;
+						flag = true;
+					}
+					else
+					{
+						Ray ray;
+						ray..ctor(this.objSpotLight.transform.position, vector);
+						int j = 0;
+						int num = this.coverColliders.Length;
+						while (j < num)
+						{
+							Collider collider = this.coverColliders[j];
+							RaycastHit raycastHit;
+							if (collider != null && collider.Raycast(ray, ref raycastHit, 100f) && raycastHit.distance < magnitude)
+							{
+								flag2 = false;
+								flag = true;
+								break;
+							}
+							j++;
+						}
+					}
+				}
+				else
+				{
+					flag2 = false;
+					flag = true;
+					Ray ray2;
+					ray2..ctor(this.objSpotLight.transform.position, vector);
+					RaycastHit[] array = Physics.RaycastAll(ray2, 100f);
+					float num2 = float.PositiveInfinity;
+					RaycastHit raycastHit2 = default(RaycastHit);
+					int k = 0;
+					int num3 = array.Length;
+					while (k < num3)
+					{
+						RaycastHit raycastHit3 = array[k];
+						if (raycastHit3.distance < num2)
+						{
+							if (raycastHit3.collider.attachedRigidbody != null && raycastHit3.collider.attachedRigidbody.GetComponent<Boy>() == boy)
+							{
+								if (this.maxDetectionRange == 0f || magnitude < this.maxDetectionRange)
+								{
+									num2 = raycastHit3.distance;
+									flag2 = true;
+									flag = false;
+								}
+							}
+							else if (!raycastHit3.collider.isTrigger && !Physics.GetIgnoreLayerCollision(LayerMask.NameToLayer(this.collisionLayer), raycastHit3.collider.gameObject.layer))
+							{
+								num2 = raycastHit3.distance;
+								flag2 = false;
+							}
+						}
+						k++;
+					}
+				}
+				if (flag2)
+				{
+					this.visibleBoys.Add(boy);
+				}
+			}
+			if (flag && !this.boyInCoverLastFrame)
+			{
+				this.boyInCoverSignal.Signal();
+			}
+			else if (!flag && this.boyInCoverLastFrame)
+			{
+				this.boyNotInCoverSignal.Signal();
+			}
+			this.boyInCoverLastFrame = flag;
+			i++;
+		}
+		if (this.visibleBoys.Count > 0)
+		{
+			if (!this.boyIsVisible)
+			{
+				this.boyVisible.OnEvent(this);
+				this.boyIsVisible = true;
+			}
+		}
+		else if (this.boyIsVisible)
+		{
+			this.boyNotVisible.OnEvent(this);
+			this.boyIsVisible = false;
+		}
+		int l = 0;
+		int count2 = this.visibleBoys.Count;
+		while (l < count2)
+		{
+			Boy item = this.visibleBoys[l];
+			if (!this.previousVisibleBoys.Contains(item))
+			{
+				this.boyDetected.Dispatch(ref item);
+			}
+			l++;
+		}
+		int m = 0;
+		int count3 = this.previousVisibleBoys.Count;
+		while (m < count3)
+		{
+			Boy item2 = this.previousVisibleBoys[m];
+			if (!this.visibleBoys.Contains(item2))
+			{
+				this.boyLossOfSight.Dispatch(ref item2);
+			}
+			m++;
+		}
+		this.previousVisibleBoys.Clear();
+		int n = 0;
+		int count4 = this.visibleBoys.Count;
+		while (n < count4)
+		{
+			Boy item3 = this.visibleBoys[n];
+			this.previousVisibleBoys.Add(item3);
+			n++;
+		}
+	}
+
+	// Token: 0x06001150 RID: 4432 RVA: 0x000A3BDC File Offset: 0x000A1DDC
+	private void FixedUpdate()
+	{
+		if (this.scriptActive)
+		{
+			this.UpdateBoyVisibility();
+		}
+	}
+
+	// Token: 0x04001FA6 RID: 8102
+	public GameObject objectWithSpotlight;
+
+	// Token: 0x04001FA7 RID: 8103
+	public string collisionLayer = "Ungrouped";
+
+	// Token: 0x04001FA8 RID: 8104
+	public float minIntensity = 1f;
+
+	// Token: 0x04001FA9 RID: 8105
+	public float lightAngleDeadZone = 0.05f;
+
+	// Token: 0x04001FAA RID: 8106
+	public bool usePlayerBoy = true;
+
+	// Token: 0x04001FAB RID: 8107
+	public List<Boy> targetBoys = new List<Boy>();
+
+	// Token: 0x04001FAC RID: 8108
+	public float maxDetectionRange;
+
+	// Token: 0x04001FAD RID: 8109
+	public bool startActivated = true;
+
+	// Token: 0x04001FAE RID: 8110
+	public bool onlyHorizontal;
+
+	// Token: 0x04001FAF RID: 8111
+	public Collider[] coverColliders;
+
+	// Token: 0x04001FB0 RID: 8112
+	public FastEventEx<Boy> boyDetected = new FastEventEx<Boy>(4);
+
+	// Token: 0x04001FB1 RID: 8113
+	public FastEventEx<Boy> boyLossOfSight = new FastEventEx<Boy>(4);
+
+	// Token: 0x04001FB2 RID: 8114
+	private GameObject objSpotLight;
+
+	// Token: 0x04001FB3 RID: 8115
+	private bool scriptActive = true;
+
+	// Token: 0x04001FB4 RID: 8116
+	private bool boyInCoverLastFrame;
+
+	// Token: 0x04001FB5 RID: 8117
+	private SimpleEvent<SpotLightDetector> boyVisible = new SimpleEvent<SpotLightDetector>("boyVisible");
+
+	// Token: 0x04001FB6 RID: 8118
+	private SimpleEvent<SpotLightDetector> boyNotVisible = new SimpleEvent<SpotLightDetector>("boyNotVisible");
+
+	// Token: 0x04001FB7 RID: 8119
+	private SignalIn disable;
+
+	// Token: 0x04001FB8 RID: 8120
+	private SignalIn enable;
+
+	// Token: 0x04001FB9 RID: 8121
+	private SignalOut boyInCoverSignal;
+
+	// Token: 0x04001FBA RID: 8122
+	private SignalOut boyNotInCoverSignal;
+
+	// Token: 0x04001FBB RID: 8123
+	private List<Boy> previousVisibleBoys = new List<Boy>();
+
+	// Token: 0x04001FBC RID: 8124
+	private List<Boy> visibleBoys = new List<Boy>();
+
+	// Token: 0x04001FBD RID: 8125
+	private Light detectorLight;
+
+	// Token: 0x04001FBE RID: 8126
+	private bool boyIsVisible;
+}

@@ -1,0 +1,78 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003EF RID: 1007
+[ExecuteInEditMode]
+public class SmokeLight : UmbrellaBehaviour<SmokeLight>, IPreAwake
+{
+	// Token: 0x06001ABA RID: 6842 RVA: 0x000EAFE0 File Offset: 0x000E91E0
+	public bool PreAwake(int callcount)
+	{
+		this.matinstance = base.GetComponent<MaterialInstance>();
+		this.prop_lightPos = this.matinstance.GetOrAddVectorProperty("_FXLightPos");
+		this.prop_lightColor = this.matinstance.GetOrAddVectorProperty("_FXLightColor");
+		this.preAwoken = true;
+		return true;
+	}
+
+	// Token: 0x06001ABB RID: 6843 RVA: 0x000EB030 File Offset: 0x000E9230
+	protected override void OnEnable()
+	{
+		if (!this.preAwoken)
+		{
+			this.PreAwake(0);
+		}
+		base.OnEnable();
+	}
+
+	// Token: 0x06001ABC RID: 6844 RVA: 0x000EB04C File Offset: 0x000E924C
+	private void UpdateProperties()
+	{
+		this.matinstance = base.GetComponent<MaterialInstance>();
+		this.prop_lightPos = this.matinstance.GetOrAddVectorProperty("_FXLightPos");
+		this.prop_lightColor = this.matinstance.GetOrAddVectorProperty("_FXLightColor");
+		if (this.prop_lightPos == null || this.prop_lightColor == null)
+		{
+		}
+	}
+
+	// Token: 0x06001ABD RID: 6845 RVA: 0x000EB0A8 File Offset: 0x000E92A8
+	protected override void OnDisable()
+	{
+		this.matinstance.SetVectorProperty(this.prop_lightColor, Color.clear);
+		base.OnDisable();
+	}
+
+	// Token: 0x06001ABE RID: 6846 RVA: 0x000EB0CC File Offset: 0x000E92CC
+	public void UmbrellaUpdate()
+	{
+		if (this.lightProbe == null || this.prop_lightPos == null || this.prop_lightColor == null)
+		{
+			return;
+		}
+		this.matinstance.SetVectorProperty(this.prop_lightPos, new Vector4(this.lightProbe.position.x, this.lightProbe.position.y, this.lightProbe.position.z, -1f / this.range));
+		this.matinstance.SetVectorProperty(this.prop_lightColor, this.color);
+	}
+
+	// Token: 0x0400307D RID: 12413
+	public Transform lightProbe;
+
+	// Token: 0x0400307E RID: 12414
+	[Range(0f, 25f)]
+	public float range;
+
+	// Token: 0x0400307F RID: 12415
+	public Color color;
+
+	// Token: 0x04003080 RID: 12416
+	private MaterialInstance matinstance;
+
+	// Token: 0x04003081 RID: 12417
+	private MaterialInstance.VectorProperty prop_lightPos;
+
+	// Token: 0x04003082 RID: 12418
+	private MaterialInstance.VectorProperty prop_lightColor;
+
+	// Token: 0x04003083 RID: 12419
+	private bool preAwoken;
+}

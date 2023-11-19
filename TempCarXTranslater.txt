@@ -1,0 +1,34 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000456 RID: 1110
+public class TempCarXTranslater : MonoBehaviour
+{
+	// Token: 0x06001D43 RID: 7491 RVA: 0x000FD108 File Offset: 0x000FB308
+	private void Start()
+	{
+		this.startPos = base.transform.position;
+	}
+
+	// Token: 0x06001D44 RID: 7492 RVA: 0x000FD11C File Offset: 0x000FB31C
+	private void Update()
+	{
+		float num = Mathf.InverseLerp(20f, 57f, this.animRoot.transform.localPosition.x);
+		base.transform.position = this.startPos + Vector3.right * num * this.translationAmount;
+	}
+
+	// Token: 0x040035B9 RID: 13753
+	public Transform animRoot;
+
+	// Token: 0x040035BA RID: 13754
+	public float translationAmount = 10f;
+
+	// Token: 0x040035BB RID: 13755
+	public float xMin = 20f;
+
+	// Token: 0x040035BC RID: 13756
+	public float xMax = 57f;
+
+	// Token: 0x040035BD RID: 13757
+	private Vector3 startPos;
+}

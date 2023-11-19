@@ -1,0 +1,29 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003B0 RID: 944
+public class SubmarineBeachStuckTrigger : MonoBehaviour
+{
+	// Token: 0x06001954 RID: 6484 RVA: 0x000DBE4C File Offset: 0x000DA04C
+	private void OnTriggerEnter(Collider coll)
+	{
+		Submarine component = coll.GetComponent<Submarine>();
+		if (component != null)
+		{
+			component.SetBeachStuckTrigger(this);
+		}
+	}
+
+	// Token: 0x06001955 RID: 6485 RVA: 0x000DBE74 File Offset: 0x000DA074
+	private void OnTriggerExit(Collider coll)
+	{
+		Submarine component = coll.GetComponent<Submarine>();
+		if (component != null)
+		{
+			component.SetBeachStuckTrigger(null);
+		}
+	}
+
+	// Token: 0x04002DA8 RID: 11688
+	public GameObject subDune;
+}

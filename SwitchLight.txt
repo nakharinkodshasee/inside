@@ -1,0 +1,82 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001F5 RID: 501
+public class SwitchLight : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000F45 RID: 3909 RVA: 0x0009098C File Offset: 0x0008EB8C
+	public bool PreAwake(int callcount)
+	{
+		this.turnOn = SignalIn.Create("turnOn", base.gameObject, new Action(this.TurnOn));
+		this.turnOff = SignalIn.Create("turnOff", base.gameObject, new Action(this.TurnOff));
+		return true;
+	}
+
+	// Token: 0x06000F46 RID: 3910 RVA: 0x000909E0 File Offset: 0x0008EBE0
+	private void Start()
+	{
+		if (this.on)
+		{
+			this.TurnOn();
+		}
+		else
+		{
+			this.TurnOff();
+		}
+	}
+
+	// Token: 0x06000F47 RID: 3911 RVA: 0x00090A00 File Offset: 0x0008EC00
+	public void TurnOn()
+	{
+		this.on = true;
+		if (this.lightSource)
+		{
+			this.lightSource.color = this.onColour;
+		}
+		if (this.surface)
+		{
+			this.surface.material = this.onMaterial;
+		}
+	}
+
+	// Token: 0x06000F48 RID: 3912 RVA: 0x00090A58 File Offset: 0x0008EC58
+	public void TurnOff()
+	{
+		this.on = false;
+		if (this.lightSource)
+		{
+			this.lightSource.color = this.offColour;
+		}
+		if (this.surface)
+		{
+			this.surface.material = this.offMaterial;
+		}
+	}
+
+	// Token: 0x04001B9D RID: 7069
+	public Renderer surface;
+
+	// Token: 0x04001B9E RID: 7070
+	public Material onMaterial;
+
+	// Token: 0x04001B9F RID: 7071
+	public Material offMaterial;
+
+	// Token: 0x04001BA0 RID: 7072
+	public Light lightSource;
+
+	// Token: 0x04001BA1 RID: 7073
+	public Color onColour;
+
+	// Token: 0x04001BA2 RID: 7074
+	public Color offColour;
+
+	// Token: 0x04001BA3 RID: 7075
+	private SignalIn turnOn;
+
+	// Token: 0x04001BA4 RID: 7076
+	private SignalIn turnOff;
+
+	// Token: 0x04001BA5 RID: 7077
+	public bool on;
+}

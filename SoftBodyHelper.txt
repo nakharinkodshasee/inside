@@ -1,0 +1,99 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200065D RID: 1629
+public class SoftBodyHelper : MonoBehaviour
+{
+	// Token: 0x06002810 RID: 10256 RVA: 0x00142920 File Offset: 0x00140B20
+	private void Start()
+	{
+		if (this.watchObject == null)
+		{
+			this.watchObject = base.gameObject;
+		}
+		this.oldPos = this.watchObject.transform.position;
+		this.oldRot = this.watchObject.transform.rotation;
+	}
+
+	// Token: 0x06002811 RID: 10257 RVA: 0x00142978 File Offset: 0x00140B78
+	private Vector3 v3clamp(Vector3 v, float min, float max)
+	{
+		return new Vector3(Mathf.Clamp(v.x, min, max), Mathf.Clamp(v.y, min, max), Mathf.Clamp(v.z, min, max));
+	}
+
+	// Token: 0x06002812 RID: 10258 RVA: 0x001429AC File Offset: 0x00140BAC
+	private void FixedUpdate()
+	{
+		if (this.HuddleMaterial == null)
+		{
+			return;
+		}
+		Quaternion rotation = this.watchObject.transform.rotation;
+		Vector3 position = this.watchObject.transform.position;
+		float deltaTime = Time.deltaTime;
+		this.vel = (position - this.oldPos) / deltaTime;
+		Quaternion q = rotation * Quaternion.Inverse(this.oldRot);
+		this.angVel = MathUtils.QuaternionToAngularVelocity(q) / deltaTime;
+		this.wobble += this.vel;
+		this.wobble *= this.wobbleFalloff;
+		this.interpolatedVel = Vector3.Lerp(this.interpolatedVel, this.vel, deltaTime * this.lag);
+		this.interpolatedAngVel = Vector3.Lerp(this.interpolatedAngVel, this.angVel, deltaTime * this.lag);
+		float num = this.vel.x + this.vel.y + this.vel.z;
+		Vector3 v = this.wobbleStrength * this.wobble * (float)Math.Sin(Time.timeDbl * (double)this.wobbleFreq * 6.28000020980835) + this.interpolatedVel;
+		if (this.debug)
+		{
+		}
+		this.HuddleMaterial.SetVector("_Velocity", this.v3clamp(v, -this.maxVelocity, this.maxVelocity));
+		this.HuddleMaterial.SetVector("_AngVelocity", this.v3clamp(this.interpolatedAngVel, -this.maxAngVelocity, this.maxAngVelocity));
+		this.oldRot = rotation;
+		this.oldPos = position;
+	}
+
+	// Token: 0x040047BD RID: 18365
+	public float lag = 10f;
+
+	// Token: 0x040047BE RID: 18366
+	public float wobbleFreq = 3f;
+
+	// Token: 0x040047BF RID: 18367
+	public float wobbleStrength = 0.025f;
+
+	// Token: 0x040047C0 RID: 18368
+	public float wobbleFalloff = 0.95f;
+
+	// Token: 0x040047C1 RID: 18369
+	public float maxVelocity = 9.78f;
+
+	// Token: 0x040047C2 RID: 18370
+	public float maxAngVelocity = 9f;
+
+	// Token: 0x040047C3 RID: 18371
+	public GameObject watchObject;
+
+	// Token: 0x040047C4 RID: 18372
+	public Material HuddleMaterial;
+
+	// Token: 0x040047C5 RID: 18373
+	public bool debug;
+
+	// Token: 0x040047C6 RID: 18374
+	private Vector3 oldPos;
+
+	// Token: 0x040047C7 RID: 18375
+	private Quaternion oldRot;
+
+	// Token: 0x040047C8 RID: 18376
+	private Vector3 vel;
+
+	// Token: 0x040047C9 RID: 18377
+	private Vector3 angVel;
+
+	// Token: 0x040047CA RID: 18378
+	private Vector3 wobble;
+
+	// Token: 0x040047CB RID: 18379
+	private Vector3 interpolatedVel;
+
+	// Token: 0x040047CC RID: 18380
+	private Vector3 interpolatedAngVel;
+}

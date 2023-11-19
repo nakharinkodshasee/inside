@@ -1,0 +1,434 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003C1 RID: 961
+public class SubmarineSpotLightTilter : MonoBehaviour
+{
+	// Token: 0x060019F9 RID: 6649 RVA: 0x000E2CE4 File Offset: 0x000E0EE4
+	public void SetLookatPoint(GameObject newLookAtPoint, bool precise = true)
+	{
+		this.lookAtPoint = newLookAtPoint;
+		this.preciseAim = precise;
+	}
+
+	// Token: 0x060019FA RID: 6650 RVA: 0x000E2CF4 File Offset: 0x000E0EF4
+	private void Start()
+	{
+		this._transform = base.transform;
+		this.wantedLightLocalPos.z = 2f;
+		if (this.bounceLight != null)
+		{
+			MaterialInstance.FloatProperty orAddFloatProperty = this.bounceLight.GetOrAddFloatProperty("_Intensity");
+			this.bounceLightIntensity = orAddFloatProperty;
+			this.bounceLight.SetFloatProperty(this.bounceLightIntensity, 0f);
+			this.bounceLightColorProp = this.bounceLight.GetOrAddColorProperty("_Color");
+			this.bounceLightColorBackup = this.bounceLight.GetColorValue(this.bounceLightColorProp);
+			this.bounceLightRenderer = this.bounceLight.GetComponent<Renderer>();
+			this.bounceLightRenderer.enabled = false;
+		}
+		this.bounceLightWorldPos = this._transform.position;
+		this.activeLight = 0;
+	}
+
+	// Token: 0x060019FB RID: 6651 RVA: 0x000E2DC0 File Offset: 0x000E0FC0
+	private void UpdateLights(float deltaTime)
+	{
+		float num = Mathf.Min(deltaTime * 1.4f, 1f);
+		MaterialInstance.FloatProperty property = this.bounceLightIntensity;
+		if (this.bounceLight != null)
+		{
+			this.bounceLight.SetFloatProperty(property, this.distDifFactor * Mathf.Abs(this.rotatedFactor) * (this.maxIntensity * this.intensityFactor));
+		}
+	}
+
+	// Token: 0x060019FC RID: 6652 RVA: 0x000E2E24 File Offset: 0x000E1024
+	public void DoSnappyUpdate(float snappyTime, float nextFacing)
+	{
+		this.snappyCounter = snappyTime;
+		this.snappyFacing = nextFacing;
+	}
+
+	// Token: 0x060019FD RID: 6653 RVA: 0x000E2E34 File Offset: 0x000E1034
+	public void SetCurrentCabinFacing(float wantedFacing)
+	{
+		this.cabinWantedFacing = wantedFacing;
+	}
+
+	// Token: 0x060019FE RID: 6654 RVA: 0x000E2E40 File Offset: 0x000E1040
+	private bool ArePointsOnLine(Vector3 endWP, Vector3 centerWP, Vector3 startWP)
+	{
+		Vector3 vector = endWP - startWP;
+		vector.Normalize();
+		Vector3 vector2 = centerWP - startWP;
+		float magnitude = Vector3.Cross(vector, vector2).magnitude;
+		return magnitude < 0.4f;
+	}
+
+	// Token: 0x060019FF RID: 6655 RVA: 0x000E2E84 File Offset: 0x000E1084
+	private void Update()
+	{
+		float deltaTime = Time.deltaTime;
+		if (this.ownerSub != null)
+		{
+			if (this.ownerSub.Input == null || this.ownerSub.Input.gameObject == this.ownerSub.gameObject)
+			{
+				if (this.keepControlTime <= 0f)
+				{
+					return;
+				}
+				this.keepControlTime -= deltaTime;
+			}
+			else
+			{
+				this.keepControlTime = 2.5f;
+			}
+			vector2f stick = this.ownerSub.Input.stick;
+			Vector3 vector;
+			vector..ctor(stick.x, stick.y);
+			Vector3 position = this._transform.position;
+			Vector3 forward = this._transform.forward;
+			Vector3 up = this._transform.up;
+			this.wantedAngle = Vector3.Angle(vector, up) - 70f;
+			this.wantedAngle *= 0.6f;
+			Vector3 velocity = this.ownerSub.rigBod.velocity;
+			velocity.z = 0f;
+			float magnitude = velocity.magnitude;
+			if (magnitude > 5f)
+			{
+				vector = velocity.normalized;
+			}
+			bool flag = false;
+			float num = 0f;
+			Vector3 vector2 = Vector3Fast.zero;
+			bool flag2 = this.lookAtPoint != null;
+			if (flag2)
+			{
+				vector2 = this.lookAtPoint.transform.position;
+				num = vector2.x - position.x;
+			}
+			bool flag3 = num * forward.x >= 0f;
+			if (flag2 && magnitude <= 5f && flag3)
+			{
+				vector = vector2;
+				vector.x -= position.x;
+				vector.y -= position.y;
+				vector.z -= position.z;
+				vector.Normalize();
+				if (vector.x * forward.x < -0.1f || this.snappyCounter > 0f)
+				{
+					if (vector.x * this.snappyFacing < 0f && (this.snappyCounter > 0f || FastMath.Abs(num) > 3f || FastMath.Abs(this.lastxDist) > FastMath.Abs(num)))
+					{
+						vector..ctor(stick.x, stick.y);
+						if (this.snappyCounter > 0f)
+						{
+							this.lookatPointTimer = FastMath.Max(this.lookatPointTimer - deltaTime * 4f, 0f);
+						}
+						else
+						{
+							flag = true;
+							this.lookatPointTimer = FastMath.Max(this.lookatPointTimer - deltaTime * 0.5f, 0f);
+						}
+					}
+					else if (this.snappyCounter > 0f)
+					{
+						this.lookatPointTimer = 0.5f * (this.cabinWantedFacing * this.snappyFacing + 1f);
+					}
+					else
+					{
+						this.lookatPointTimer = FastMath.Min(this.lookatPointTimer + deltaTime * 0.5f, 1f);
+					}
+				}
+				else
+				{
+					this.lookatPointTimer = FastMath.Min(this.lookatPointTimer + deltaTime * 0.5f, 1f);
+				}
+				if (!this.preciseAim)
+				{
+					this.lastLookAtAngle = Vector3.Angle(vector, up) - 90f;
+				}
+				else
+				{
+					this.lastLookAtAngle = Vector3.Angle(vector, this._transform.parent.transform.up) - 90f;
+				}
+				this.lastxDist = num;
+			}
+			else if (this.snappyCounter > 0f || magnitude > 5f)
+			{
+				this.lookatPointTimer = FastMath.Max(this.lookatPointTimer - deltaTime * 4f, 0f);
+			}
+			else
+			{
+				this.lookatPointTimer = FastMath.Max(this.lookatPointTimer - deltaTime * 0.5f, 0f);
+			}
+			this.wantedAngle = this.wantedAngle * (1f - this.lookatPointTimer) + this.lookatPointTimer * this.lastLookAtAngle;
+			if (this.snappyCounter > 0f)
+			{
+				this.curAngle += (this.wantedAngle - this.curAngle) * FastMath.Min(deltaTime * 4f, 1f);
+			}
+			else if ((flag2 || stick.sqrMagnitude > 0f) && magnitude <= 5f && !flag)
+			{
+				this.curAngle += (this.wantedAngle - this.curAngle) * FastMath.Min(deltaTime * 4f, 1f);
+			}
+			else
+			{
+				this.curAngle += (this.wantedAngle - this.curAngle) * deltaTime * 1f;
+			}
+			this.curAngle = FastMath.Max(this.curAngle, -45f);
+			this._transform.localEulerAngles = new Vector3(this.curAngle, 0f, 0f);
+			Vector3 zero = Vector3Fast.zero;
+			if (this.bounceLight != null)
+			{
+				this.rotatedFactor = forward.x;
+				float y = forward.y;
+				float num2 = Mathf.Sqrt(forward.x * forward.x + forward.z * forward.z);
+				forward.x = Mathf.Sign(forward.x) * num2;
+				forward.z = 0f;
+				Vector3 vector3 = Quaternion.Euler(0f, 0f, 15f) * forward;
+				Vector3 direction = Quaternion.Euler(0f, 0f, -15f) * forward;
+				Vector3 center = position;
+				float num3 = 0.5f * this.lightMaxDistance;
+				center.x += forward.x * num3;
+				center.y += forward.y * num3;
+				center.z += forward.z * num3;
+				Vector3 vector4 = position;
+				vector4.x += vector3.x * this.lightMaxDistance - center.x;
+				vector4.y += vector3.y * this.lightMaxDistance - center.y;
+				vector4.z += vector3.z * this.lightMaxDistance - center.z;
+				float magnitude2 = vector4.magnitude;
+				CollisionUtils.AddCollidersInSphere(center, magnitude2, CollisionUtils.Type.Solid, SubmarineSpotLightTilter.temporaryColliders, 0, false, true);
+				Ray ray;
+				ray..ctor(position, vector3);
+				ColInfo3 colInfo = CollisionUtils.RayInsectOptimizedRayFindClosest(ref ray, this.lightMaxDistance, SubmarineSpotLightTilter.temporaryColliders);
+				ray.direction = direction;
+				ColInfo3 colInfo2 = CollisionUtils.RayInsectOptimizedRayFindClosest(ref ray, this.lightMaxDistance, SubmarineSpotLightTilter.temporaryColliders);
+				ray.direction = forward;
+				ColInfo3 colInfo3 = CollisionUtils.RayInsectOptimizedRayFindClosest(ref ray, this.lightMaxDistance, SubmarineSpotLightTilter.temporaryColliders);
+				SubmarineSpotLightTilter.temporaryColliders.Clear();
+				float num4 = 3f;
+				float num5 = 0f;
+				this.bounceBleedColor = this.bounceLightColorBackup;
+				BounceLightProperties bounceLightProperties = null;
+				BounceLightProperties bounceLightProperties2 = null;
+				BounceLightProperties bounceLightProperties3 = null;
+				float num6 = this.lightMaxDistance;
+				if (colInfo != null)
+				{
+					num6 = Mathf.Min(colInfo.distance, num6);
+					bounceLightProperties = colInfo.collider.GetComponent<BounceLightProperties>();
+				}
+				if (colInfo2 != null)
+				{
+					num6 = Mathf.Min(colInfo2.distance, num6);
+					bounceLightProperties2 = colInfo2.collider.GetComponent<BounceLightProperties>();
+				}
+				if (colInfo3 != null)
+				{
+					num6 = Mathf.Min(colInfo3.distance, num6);
+					bounceLightProperties3 = colInfo3.collider.GetComponent<BounceLightProperties>();
+				}
+				if (!object.ReferenceEquals(bounceLightProperties, null))
+				{
+					num5 += 0.333f;
+					this.bounceBleedColor = bounceLightProperties.bounceColor;
+				}
+				if (!object.ReferenceEquals(bounceLightProperties2, null))
+				{
+					num5 += 0.333f;
+					this.bounceBleedColor = bounceLightProperties2.bounceColor;
+				}
+				if (!object.ReferenceEquals(bounceLightProperties3, null))
+				{
+					num5 += 0.333f;
+					this.bounceBleedColor = bounceLightProperties3.bounceColor;
+				}
+				if (this.bounceBleedValue < num5)
+				{
+					this.bounceBleedValue = FastMath.Clamp(this.bounceBleedValue + deltaTime * num4, 0f, 1f);
+				}
+				if (this.bounceBleedValue > num5)
+				{
+					this.bounceBleedValue = FastMath.Clamp(this.bounceBleedValue - deltaTime * num4, 0f, 1f);
+				}
+				if (this.bounceBleedValue > 0f)
+				{
+					this.bounceLight.SetColorProperty(this.bounceLightColorProp, Color.Lerp(this.bounceLightColorBackup, this.bounceBleedColor, this.bounceBleedValue));
+				}
+				float num7 = 1f;
+				if (colInfo == null || num6 < colInfo.distance - 3f)
+				{
+					num7 -= 0.3333f;
+				}
+				if (colInfo2 == null || num6 < colInfo2.distance - 3f)
+				{
+					num7 -= 0.3333f;
+				}
+				if (colInfo3 == null || num6 < colInfo3.distance - 3f)
+				{
+					num7 -= 0.3333f;
+				}
+				this.distDifFactor += (num7 - this.distDifFactor) * FastMath.Min(deltaTime * 2f, 1f);
+				bool flag4 = false;
+				if (this.rotatedFactor * this.lastRotateFactor <= 0f)
+				{
+					this.shortestDist = num6;
+				}
+				else if (num6 < this.shortestDist)
+				{
+					this.shortestDist += (num6 - this.shortestDist) * FastMath.Min(deltaTime * 18f, 1f);
+					flag4 = true;
+				}
+				else
+				{
+					this.shortestDist += (num6 - this.shortestDist) * FastMath.Min(deltaTime * 2f, 1f);
+				}
+				float num8 = 2f;
+				if (this.shortestDist < 3.5f)
+				{
+					num8 = FastMath.Max(0.1f, 2f * this.shortestDist / 3.5f);
+				}
+				Vector3 position2 = position;
+				num3 = this.shortestDist - num8;
+				position2.x += forward.x * num3;
+				position2.y += forward.y * num3;
+				position2.z = this.ownerSub.pos3.z;
+				if (this.rotatedFactor * this.lastRotateFactor <= 0f)
+				{
+					this.bounceLight.transform.position = position2;
+					this.bounceLightWorldPos = position2;
+				}
+				else if (flag4)
+				{
+					Vector3 position3 = this.bounceLightWorldPos;
+					num3 = FastMath.Min(deltaTime * 18f, 1f);
+					position3.x += (position2.x - this.bounceLightWorldPos.x) * num3;
+					position3.y += (position2.y - this.bounceLightWorldPos.y) * num3;
+					position3.z = position2.z;
+					this.bounceLight.transform.position = position3;
+					this.bounceLightWorldPos = position3;
+				}
+				else
+				{
+					Vector3 position4 = this.bounceLightWorldPos;
+					num3 = FastMath.Min(deltaTime * 0.7f, 1f);
+					position4.x += (position2.x - this.bounceLightWorldPos.x) * num3;
+					position4.y += (position2.y - this.bounceLightWorldPos.y) * num3;
+					position4.z = position2.z;
+					this.bounceLight.transform.position = position4;
+					this.bounceLightWorldPos = position4;
+				}
+				if (!this.bounceLightRenderer.enabled)
+				{
+					this.bounceLightRenderer.enabled = true;
+				}
+				this.UpdateLights(deltaTime);
+				this.lastRotateFactor = this.rotatedFactor;
+				ColInfo3.ReleaseSafe(ref colInfo);
+				ColInfo3.ReleaseSafe(ref colInfo2);
+				ColInfo3.ReleaseSafe(ref colInfo3);
+			}
+		}
+		this.snappyCounter -= deltaTime;
+	}
+
+	// Token: 0x04002EA6 RID: 11942
+	public Submarine ownerSub;
+
+	// Token: 0x04002EA7 RID: 11943
+	public MaterialInstance bounceLight;
+
+	// Token: 0x04002EA8 RID: 11944
+	private Renderer bounceLightRenderer;
+
+	// Token: 0x04002EA9 RID: 11945
+	private float bounceBleedValue;
+
+	// Token: 0x04002EAA RID: 11946
+	private Color bounceBleedColor = Color.white;
+
+	// Token: 0x04002EAB RID: 11947
+	public float lightMaxDistance = 8f;
+
+	// Token: 0x04002EAC RID: 11948
+	public float lightRange = 15f;
+
+	// Token: 0x04002EAD RID: 11949
+	public float intensityFactor = 1f;
+
+	// Token: 0x04002EAE RID: 11950
+	public float maxIntensity = 0.35f;
+
+	// Token: 0x04002EAF RID: 11951
+	private float rotatedFactor = 1f;
+
+	// Token: 0x04002EB0 RID: 11952
+	private float lastRotateFactor = -1f;
+
+	// Token: 0x04002EB1 RID: 11953
+	private Vector3 bounceLightWorldPos = Vector3.zero;
+
+	// Token: 0x04002EB2 RID: 11954
+	private float curAngle;
+
+	// Token: 0x04002EB3 RID: 11955
+	private float wantedAngle;
+
+	// Token: 0x04002EB4 RID: 11956
+	private Vector3 wantedLightLocalPos = Vector3.zero;
+
+	// Token: 0x04002EB5 RID: 11957
+	private int activeLight = -1;
+
+	// Token: 0x04002EB6 RID: 11958
+	private MaterialInstance.FloatProperty bounceLightIntensity;
+
+	// Token: 0x04002EB7 RID: 11959
+	private MaterialInstance.ColorProperty bounceLightColorProp;
+
+	// Token: 0x04002EB8 RID: 11960
+	private Color bounceLightColorBackup;
+
+	// Token: 0x04002EB9 RID: 11961
+	private GameObject lookAtPoint;
+
+	// Token: 0x04002EBA RID: 11962
+	private bool preciseAim = true;
+
+	// Token: 0x04002EBB RID: 11963
+	private Transform _transform;
+
+	// Token: 0x04002EBC RID: 11964
+	private float actualLastZOffset;
+
+	// Token: 0x04002EBD RID: 11965
+	private Vector3 lastNormal = Vector3.zero;
+
+	// Token: 0x04002EBE RID: 11966
+	private float snappyCounter;
+
+	// Token: 0x04002EBF RID: 11967
+	private float snappyFacing;
+
+	// Token: 0x04002EC0 RID: 11968
+	private float cabinWantedFacing;
+
+	// Token: 0x04002EC1 RID: 11969
+	private float lookatPointTimer;
+
+	// Token: 0x04002EC2 RID: 11970
+	private float lastLookAtAngle;
+
+	// Token: 0x04002EC3 RID: 11971
+	private float lastxDist;
+
+	// Token: 0x04002EC4 RID: 11972
+	private float distDifFactor = 1f;
+
+	// Token: 0x04002EC5 RID: 11973
+	private float shortestDist = 1f;
+
+	// Token: 0x04002EC6 RID: 11974
+	private static FastList<Collider> temporaryColliders = new FastList<Collider>(16, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04002EC7 RID: 11975
+	private float keepControlTime;
+}

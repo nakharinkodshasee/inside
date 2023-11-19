@@ -1,0 +1,58 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001F4 RID: 500
+public class SwitchCircleTarget : MonoBehaviour
+{
+	// Token: 0x06000F40 RID: 3904 RVA: 0x000908D0 File Offset: 0x0008EAD0
+	public void startExecuting()
+	{
+		this.isExecuting = true;
+	}
+
+	// Token: 0x06000F41 RID: 3905 RVA: 0x000908DC File Offset: 0x0008EADC
+	public void stopExecuting()
+	{
+		this.isExecuting = false;
+	}
+
+	// Token: 0x06000F42 RID: 3906 RVA: 0x000908E8 File Offset: 0x0008EAE8
+	private void Start()
+	{
+		if (this.target == null)
+		{
+			this.target = base.GetComponent<Rigidbody>();
+		}
+		this.path = this.maxPos.position - this.minPos.position;
+	}
+
+	// Token: 0x06000F43 RID: 3907 RVA: 0x00090934 File Offset: 0x0008EB34
+	private void FixedUpdate()
+	{
+		if (!this.isExecuting)
+		{
+			return;
+		}
+		float rotationPercentage = this.switchCircle.rotationPercentage;
+		Vector3 vector = this.minPos.position + this.path * rotationPercentage;
+		this.target.MovePosition(vector);
+	}
+
+	// Token: 0x04001B97 RID: 7063
+	public SwitchCircle switchCircle;
+
+	// Token: 0x04001B98 RID: 7064
+	public Transform minPos;
+
+	// Token: 0x04001B99 RID: 7065
+	public Transform maxPos;
+
+	// Token: 0x04001B9A RID: 7066
+	public Rigidbody target;
+
+	// Token: 0x04001B9B RID: 7067
+	private Vector3 path;
+
+	// Token: 0x04001B9C RID: 7068
+	private bool isExecuting = true;
+}

@@ -1,0 +1,75 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020005FB RID: 1531
+public class TestAllThemes : MonoBehaviour
+{
+	// Token: 0x06002671 RID: 9841 RVA: 0x00137D3C File Offset: 0x00135F3C
+	private void Start()
+	{
+		List<string> allThemes = this.GetAllThemes();
+		int i = 0;
+		int count = allThemes.Count;
+		while (i < count)
+		{
+			Vector3 position;
+			position..ctor((float)(i - count / 2) * this.scale.x * 1.2f, 2f, 0f);
+			this.CreateThemeTrigger(position, this.scale, allThemes[i]);
+			i++;
+		}
+	}
+
+	// Token: 0x06002672 RID: 9842 RVA: 0x00137DA8 File Offset: 0x00135FA8
+	private List<string> GetAllThemes()
+	{
+		List<string> list = null;
+		Transform childComponentAE = ScriptGlobals.boy.visualBoy.transform.GetChildComponentAE("Themes");
+		if (!(childComponentAE == null))
+		{
+			list = new List<string>(childComponentAE.childCount);
+			foreach (object obj in childComponentAE)
+			{
+				Transform transform = (Transform)obj;
+				if (transform.name != "AIZombie" && transform.name != "HoldButton" && transform.name != "DiveHead" && transform.name != "DiveStraight" && transform.name != "DiveBomb")
+				{
+					list.Add(transform.name);
+				}
+			}
+			list.Sort(StringComparer.OrdinalIgnoreCase);
+		}
+		return list;
+	}
+
+	// Token: 0x06002673 RID: 9843 RVA: 0x00137EC8 File Offset: 0x001360C8
+	private void CreateThemeTrigger(Vector3 position, Vector3 scale, string themeName)
+	{
+		GameObject gameObject = GameObject.CreatePrimitive(3);
+		gameObject.name = themeName;
+		MeshRenderer meshRenderer = gameObject.AddComponent<MeshRenderer>();
+		IsTriggeredByProbe isTriggeredByProbe = gameObject.AddComponent<IsTriggeredByProbe>();
+		isTriggeredByProbe.useBoyProbe = true;
+		BoySetTheme boySetTheme = gameObject.AddComponent<BoySetTheme>();
+		boySetTheme.theme = themeName;
+		TextMesh textMesh = Object.Instantiate<TextMesh>(this.text);
+		textMesh.transform.parent = gameObject.transform;
+		textMesh.transform.localPosition = Vector3.zero;
+		textMesh.characterSize = 0.1f;
+		textMesh.alignment = 1;
+		textMesh.text = themeName;
+		gameObject.transform.position = position;
+		gameObject.transform.localScale = scale;
+		gameObject.GetComponent<Renderer>().material = this.mat;
+		gameObject.GetComponent<Renderer>().enabled = true;
+		gameObject.GetComponent<Collider>().isTrigger = true;
+	}
+
+	// Token: 0x040045BC RID: 17852
+	public Material mat;
+
+	// Token: 0x040045BD RID: 17853
+	public TextMesh text;
+
+	// Token: 0x040045BE RID: 17854
+	public Vector3 scale = new Vector3(2f, 4f, 1f);
+}

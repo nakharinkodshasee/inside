@@ -1,0 +1,37 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005A1 RID: 1441
+public class Test : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060024D9 RID: 9433 RVA: 0x0012EF34 File Offset: 0x0012D134
+	public void FixedUpdate()
+	{
+		if (this.timer < 10f)
+		{
+			this.timer += Time.deltaTime;
+			if (this.timer >= 10f)
+			{
+				int i = 0;
+				int num = this.list.Length;
+				while (i < num)
+				{
+					this.list[i].SetActive(false);
+					i++;
+				}
+			}
+		}
+	}
+
+	// Token: 0x060024DA RID: 9434 RVA: 0x0012EF9C File Offset: 0x0012D19C
+	public bool PreAwake(int callcount)
+	{
+		return true;
+	}
+
+	// Token: 0x04004391 RID: 17297
+	public GameObject[] list;
+
+	// Token: 0x04004392 RID: 17298
+	private float timer;
+}

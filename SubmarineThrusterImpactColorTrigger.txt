@@ -1,0 +1,66 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003C3 RID: 963
+public class SubmarineThrusterImpactColorTrigger : MonoBehaviour
+{
+	// Token: 0x06001A08 RID: 6664 RVA: 0x000E3DD0 File Offset: 0x000E1FD0
+	private void triggerEnter()
+	{
+		this.thrusterImpactColorManager.AddTrigger(this);
+	}
+
+	// Token: 0x06001A09 RID: 6665 RVA: 0x000E3DE0 File Offset: 0x000E1FE0
+	private void triggerExit()
+	{
+		this.thrusterImpactColorManager.RemoveTrigger(this);
+	}
+
+	// Token: 0x06001A0A RID: 6666 RVA: 0x000E3DF0 File Offset: 0x000E1FF0
+	private void OnTriggerEnter(Collider coll)
+	{
+		Submarine component = coll.GetComponent<Submarine>();
+		if (component != null && this.thrusterImpactColorManager != null)
+		{
+			if (this.thrusterImpactColorManager.sub == null)
+			{
+				this.thrusterImpactColorManager.InitializeSubmarineProperties(component);
+			}
+			this.triggerEnter();
+		}
+	}
+
+	// Token: 0x06001A0B RID: 6667 RVA: 0x000E3E4C File Offset: 0x000E204C
+	private void OnTriggerExit(Collider coll)
+	{
+		Submarine component = coll.GetComponent<Submarine>();
+		if (component != null && this.thrusterImpactColorManager != null)
+		{
+			this.triggerExit();
+		}
+	}
+
+	// Token: 0x04002ECF RID: 11983
+	public SubmarineThrusterImpactColorManager thrusterImpactColorManager;
+
+	// Token: 0x04002ED0 RID: 11984
+	public bool colorOverride = true;
+
+	// Token: 0x04002ED1 RID: 11985
+	public Color subThrusterImpactColor = Color.white;
+
+	// Token: 0x04002ED2 RID: 11986
+	public Gradient subThrusterImpactGradient;
+
+	// Token: 0x04002ED3 RID: 11987
+	public bool useGradient;
+
+	// Token: 0x04002ED4 RID: 11988
+	public bool offsetOverride;
+
+	// Token: 0x04002ED5 RID: 11989
+	public Vector3 subThrusterImpactOffset = Vector3.zero;
+
+	// Token: 0x04002ED6 RID: 11990
+	public bool disableThrusterOverride;
+}

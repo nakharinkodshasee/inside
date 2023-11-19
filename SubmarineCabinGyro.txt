@@ -1,0 +1,252 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003B5 RID: 949
+public class SubmarineCabinGyro : MonoBehaviour
+{
+	// Token: 0x0600198D RID: 6541 RVA: 0x000DDBAC File Offset: 0x000DBDAC
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(this.owner.gameObject, null);
+	}
+
+	// Token: 0x0600198E RID: 6542 RVA: 0x000DDBE4 File Offset: 0x000DBDE4
+	private void Start()
+	{
+		this.OnPreProcess();
+		this._transform = base.transform;
+	}
+
+	// Token: 0x0600198F RID: 6543 RVA: 0x000DDBF8 File Offset: 0x000DBDF8
+	public void Stop()
+	{
+		this.running = false;
+	}
+
+	// Token: 0x06001990 RID: 6544 RVA: 0x000DDC04 File Offset: 0x000DBE04
+	public void SetAllowTurning(bool allow)
+	{
+		this.allowTurning = allow;
+	}
+
+	// Token: 0x06001991 RID: 6545 RVA: 0x000DDC10 File Offset: 0x000DBE10
+	public void SetLookatPoint(GameObject newLookAtPoint, bool allow_LookAway = false)
+	{
+		this.lookAtPoint = newLookAtPoint;
+		this.allowLookAway = allow_LookAway;
+	}
+
+	// Token: 0x06001992 RID: 6546 RVA: 0x000DDC20 File Offset: 0x000DBE20
+	public float GetWantedFacing()
+	{
+		return this.wantedFacing;
+	}
+
+	// Token: 0x06001993 RID: 6547 RVA: 0x000DDC28 File Offset: 0x000DBE28
+	public float GetCurrentFacing()
+	{
+		return this.currentFacing;
+	}
+
+	// Token: 0x06001994 RID: 6548 RVA: 0x000DDC30 File Offset: 0x000DBE30
+	public bool IsFlicking()
+	{
+		return Mathf.Abs(this.wantedFacing - this.currentFacing) > 0.1f;
+	}
+
+	// Token: 0x06001995 RID: 6549 RVA: 0x000DDC4C File Offset: 0x000DBE4C
+	public void Reset(float yAngle = 0f, float facing = 1f)
+	{
+		this.wantedFacing = facing;
+		this.currentFacing = facing;
+		this.leftCounter = 0f;
+		this.rightCounter = 0f;
+		this.lookAtPoint = null;
+		if (object.ReferenceEquals(this._transform, null))
+		{
+			this._transform = base.transform;
+		}
+		this._transform.localEulerAngles = new Vector3(0f, yAngle, 0f);
+	}
+
+	// Token: 0x06001996 RID: 6550 RVA: 0x000DDCBC File Offset: 0x000DBEBC
+	private void UpdateCabinRotationRTPC(float rotation)
+	{
+		float value = Mathf.InverseLerp(1f, 60f, rotation) * 100f;
+		SoundEngine.RTPCs.SubmarineCabinGyro.SetFast(value, this.akGameObj, 0f);
+	}
+
+	// Token: 0x06001997 RID: 6551 RVA: 0x000DDCF8 File Offset: 0x000DBEF8
+	private void Update()
+	{
+		if (!this.running)
+		{
+			return;
+		}
+		float deltaTime = Time.deltaTime;
+		if (!this.velocityVersion)
+		{
+			Quaternion rotation = this._transform.rotation;
+			if (this.allowTurning)
+			{
+				float num = this.owner.Input.stick.x;
+				if (this.lookAtPoint != null)
+				{
+					float num2 = this.lookAtPoint.transform.position.x - this._transform.position.x;
+					if (Mathf.Abs(num2) > 1f)
+					{
+						float num3 = Mathf.Sign(num2);
+						if (!this.allowLookAway)
+						{
+							num = 0f;
+							if (this.owner.Input.stick.x * num3 > 0f)
+							{
+								num = num3;
+							}
+						}
+						else
+						{
+							float num4 = this.owner.Input.stick.x * num3;
+							if (num4 < 0f && num4 > -0.6f)
+							{
+								num = 0f;
+							}
+						}
+					}
+				}
+				float num5 = this.wantedFacing;
+				if (num < -0.2f)
+				{
+					this.wantedFacing = -1f;
+				}
+				else if (num > 0.2f)
+				{
+					this.wantedFacing = 1f;
+				}
+				if (this.wantedFacing * this.currentFacing < 0f && this.currentFacing != 0f)
+				{
+					this.stickFlipFrames++;
+					if (this.stickFlipFrames < 3)
+					{
+						this.wantedFacing = num5;
+					}
+				}
+				else
+				{
+					this.stickFlipFrames = 0;
+				}
+			}
+			this.currentFacing += (this.wantedFacing - this.currentFacing) * FastMath.Min(deltaTime * 6f, 1f);
+			this._transform.localEulerAngles = new Vector3(0f, -90f + 90f * this.currentFacing, 0f);
+		}
+		else
+		{
+			Vector3 eulerAngles = this._transform.rotation.eulerAngles;
+			float num6 = Vector3.Angle(Vector3Fast.left, this._transform.up);
+			num6 -= 90f;
+			Vector3 vector = this.owner.rigBod.velocity;
+			if (this.lookAtPoint != null)
+			{
+				float x = vector.x;
+				vector = Vector3Fast.zero;
+				float num7 = this.lookAtPoint.transform.position.x - this._transform.position.x;
+				if (FastMath.Abs(num7) > 1f)
+				{
+					float num8 = Mathf.Sign(num7);
+					if (x * num8 > 0f)
+					{
+						vector.x = num8 * 3f;
+					}
+				}
+			}
+			if (vector.x < -2f)
+			{
+				this.rightCounter = 0f;
+				this.leftCounter += deltaTime;
+				if (this.leftCounter > 0.6f)
+				{
+					this.wantedFacing = -1f;
+				}
+			}
+			else if (vector.x > 2f)
+			{
+				this.leftCounter = 0f;
+				this.rightCounter += deltaTime;
+				if (this.rightCounter > 0.2f)
+				{
+					this.wantedFacing = 1f;
+				}
+			}
+			if (this.currentFacing > this.wantedFacing)
+			{
+				this.currentFacing = FastMath.Max(this.wantedFacing, this.currentFacing - FastMath.Min(deltaTime * 2f, 1f));
+			}
+			else
+			{
+				this.currentFacing = FastMath.Min(this.wantedFacing, this.currentFacing + FastMath.Min(deltaTime * 2f, 1f));
+			}
+			float num9 = MathUtils.SmoothFraction(0.5f * this.currentFacing + 0.5f) * 2f - 1f;
+			if (eulerAngles.x > 180f)
+			{
+				eulerAngles.x -= 360f;
+			}
+			eulerAngles.x *= 1f - FastMath.Min(deltaTime * 3f, 1f);
+			eulerAngles.y = -90f * num9;
+			eulerAngles.z = 0f;
+			this._transform.rotation = Quaternion.Euler(eulerAngles);
+			this.UpdateCabinRotationRTPC(Mathf.Abs(eulerAngles.x));
+		}
+	}
+
+	// Token: 0x04002DF3 RID: 11763
+	public Submarine owner;
+
+	// Token: 0x04002DF4 RID: 11764
+	public bool velocityVersion = true;
+
+	// Token: 0x04002DF5 RID: 11765
+	private bool allowLookAway;
+
+	// Token: 0x04002DF6 RID: 11766
+	[SerializeField]
+	[HideInInspector]
+	private AkGameObj akGameObj;
+
+	// Token: 0x04002DF7 RID: 11767
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04002DF8 RID: 11768
+	private Transform _transform;
+
+	// Token: 0x04002DF9 RID: 11769
+	private float wantedFacing = 1f;
+
+	// Token: 0x04002DFA RID: 11770
+	private float currentFacing = 1f;
+
+	// Token: 0x04002DFB RID: 11771
+	private float leftCounter;
+
+	// Token: 0x04002DFC RID: 11772
+	private float rightCounter;
+
+	// Token: 0x04002DFD RID: 11773
+	private GameObject lookAtPoint;
+
+	// Token: 0x04002DFE RID: 11774
+	private bool running = true;
+
+	// Token: 0x04002DFF RID: 11775
+	private bool allowTurning = true;
+
+	// Token: 0x04002E00 RID: 11776
+	private int stickFlipFrames;
+}

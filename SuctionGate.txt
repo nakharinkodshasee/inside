@@ -1,0 +1,499 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000515 RID: 1301
+public class SuctionGate : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x060021E2 RID: 8674 RVA: 0x0011BED0 File Offset: 0x0011A0D0
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioOpen = new AudioEventSimpleLocal("env_prehuddle_waterOnCeiling_assHatch_open", akGameObj);
+		this.audioClose = new AudioEventSimpleLocal("env_prehuddle_waterOnCeiling_assHatch_close", akGameObj);
+		this.audioOpened = new AudioEventSimpleLocal("env_prehuddle_waterOnCeiling_assHatch_opened", akGameObj);
+		this.audioClosed = new AudioEventSimpleLocal("env_prehuddle_waterOnCeiling_assHatch_closed", akGameObj);
+		this.assColliderEvents = this.assCollider.GetComponent<CollisionEvents>();
+		this.gateColliderEvents = this.gateCollider.GetComponent<CollisionEvents>();
+	}
+
+	// Token: 0x060021E3 RID: 8675 RVA: 0x0011BF64 File Offset: 0x0011A164
+	public bool PreAwake(int callcount)
+	{
+		this.pullStarted = SignalIn.Create("pullStarted", base.gameObject, new Action(this.OnPullStarted));
+		this.pullStopped = SignalIn.Create("pullStopped", base.gameObject, new Action(this.OnPullStopped));
+		this.forceSucces = SignalIn.Create("forceSucces", base.gameObject, new Action(this.OnForceSuccess));
+		this.hatchOpened = SignalIn.Create("hatchOpened", base.gameObject, new Action(this.OnHatchOpened));
+		this.boySuckedIn = SignalOut.Create("boySuckedIn", base.gameObject);
+		this.boySnapKill = SignalOut.Create("boySnapKill", base.gameObject);
+		this.boyFailed = SignalOut.Create("boyFailed", base.gameObject);
+		if (this.bouncedLight)
+		{
+			this.bouncedLightProperty = this.bouncedLight.GetFloatProperty("_Intensity");
+			this.bouncedLightOriginalValue = this.bouncedLight.GetFloatValue(this.bouncedLightProperty);
+		}
+		return true;
+	}
+
+	// Token: 0x060021E4 RID: 8676 RVA: 0x0011C07C File Offset: 0x0011A27C
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.assColliderEvents.enterTrigger.Register(this, ref this.assTriggerEnterHandle);
+		this.gateColliderEvents.enterTrigger.Register(this, ref this.gateTriggerEnterHandle);
+		this.collEvents.enterTrigger.Register(this, ref this.killTriggerEnterHandle);
+		this.collEvents.exitTrigger.Register(this, ref this.killTriggerExitHandle);
+		this.animLinearOpenState = this.assHoleDoorAnim["LinearOpen"];
+		this.animLinearOpenState.speed = 0f;
+		this.assHoleDoorAnim.Play(this.animLinearOpenState.name);
+	}
+
+	// Token: 0x060021E5 RID: 8677 RVA: 0x0011C128 File Offset: 0x0011A328
+	private void OnDisable()
+	{
+		if (this.isPlayingCloseAudio)
+		{
+			this.audioClosed.PostFast();
+			this.isPlayingCloseAudio = false;
+		}
+	}
+
+	// Token: 0x060021E6 RID: 8678 RVA: 0x0011C148 File Offset: 0x0011A348
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.assColliderEvents.enterTrigger)
+		{
+			this.OnAssTriggerEnter(collider);
+		}
+		else if (sender == this.gateColliderEvents.enterTrigger)
+		{
+			this.OnGateColliderEnter(collider);
+		}
+		else if (sender == this.collEvents.enterTrigger)
+		{
+			this.OnBoyKillZoneEnter(collider);
+		}
+		else if (sender == this.collEvents.exitTrigger)
+		{
+			this.OnBoyKillZoneExit(collider);
+		}
+	}
+
+	// Token: 0x060021E7 RID: 8679 RVA: 0x0011C1C8 File Offset: 0x0011A3C8
+	private void OnForceSuccess()
+	{
+		if (this.hatchIsOpen)
+		{
+			this.b_forceSuccess = true;
+		}
+	}
+
+	// Token: 0x060021E8 RID: 8680 RVA: 0x0011C1DC File Offset: 0x0011A3DC
+	private void OnHatchOpened()
+	{
+		this.hatchIsOpen = true;
+	}
+
+	// Token: 0x060021E9 RID: 8681 RVA: 0x0011C1E8 File Offset: 0x0011A3E8
+	private void OnPullStarted()
+	{
+		this.pullIsActive = true;
+	}
+
+	// Token: 0x060021EA RID: 8682 RVA: 0x0011C1F4 File Offset: 0x0011A3F4
+	private void OnPullStopped()
+	{
+		this.pullIsActive = false;
+	}
+
+	// Token: 0x060021EB RID: 8683 RVA: 0x0011C200 File Offset: 0x0011A400
+	private void OnBoyKillZoneEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyInsideKillZone = true;
+		}
+	}
+
+	// Token: 0x060021EC RID: 8684 RVA: 0x0011C21C File Offset: 0x0011A41C
+	private void OnBoyKillZoneExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyInsideKillZone = false;
+		}
+	}
+
+	// Token: 0x060021ED RID: 8685 RVA: 0x0011C238 File Offset: 0x0011A438
+	private void OnGateColliderEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>() && this.hitCeilingTimer > 1f)
+		{
+			BoyCustomAnimState boyCustomAnimState = ScriptGlobals.boy.state as BoyCustomAnimState;
+			if (boyCustomAnimState != null && boyCustomAnimState.anim == this.sucktionAnim)
+			{
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.hitCeilingAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				this.hitCeilingAnim.transform.position = this.hitCeilingPos.position;
+				this.hitCeilingTimer = 0f;
+			}
+		}
+	}
+
+	// Token: 0x060021EE RID: 8686 RVA: 0x0011C2D0 File Offset: 0x0011A4D0
+	private void OnAssTriggerEnter(Collider coll)
+	{
+		if (this.boyKilledOrSuckedIn || !this.hatchIsOpen)
+		{
+			return;
+		}
+		if (coll.GetComponent<BoyProbe>() && this.hitCeilingTimer > 1f)
+		{
+			BoyCustomAnimState boyCustomAnimState = ScriptGlobals.boy.state as BoyCustomAnimState;
+			if (boyCustomAnimState != null && boyCustomAnimState.anim == this.sucktionAnim)
+			{
+				if (!this.openGate && this.openAssFrac < 0.4f && this.openAssFrac > 0.1f && !this.b_forceSuccess)
+				{
+					this.boySnapKill.Signal();
+					this.boyKilledOrSuckedIn = true;
+				}
+				else if (((this.openGate && this.openAssFrac < 0.2f) || this.openAssFrac < 0.4f) && !this.b_forceSuccess)
+				{
+					BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.hitCeilingAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+					this.hitCeilingAnim.transform.position = this.hitCeilingPos.position;
+					this.hitCeilingTimer = 0f;
+					this.boyFailed.Signal();
+				}
+				else
+				{
+					this.boySuckedIn.Signal();
+					this.fakeWaterForCamera.enabled = true;
+					this.boyKilledOrSuckedIn = true;
+				}
+			}
+		}
+	}
+
+	// Token: 0x060021EF RID: 8687 RVA: 0x0011C430 File Offset: 0x0011A630
+	private void UpdateAssCollisionLogic()
+	{
+		if (this.openAssFrac > 0.1f)
+		{
+			this.assCollider.isTrigger = true;
+			float num = Mathf.Abs(base.transform.position.y - ScriptGlobals.boy.pos.y);
+			float num2 = 12.5f;
+			if (!this.hatchIsOpen)
+			{
+				num2 *= 0.5f;
+			}
+			this.waterStream.strength = Vector3.down * num2 * (0.8f + 0.2f * this.openAssFrac) * Mathf.InverseLerp(6f, 0f, num) * Mathf.InverseLerp(-7f, 5f, ScriptGlobals.boy.velocity.y);
+		}
+		else if (this.assCollider.isTrigger)
+		{
+			this.assCollider.isTrigger = false;
+			this.waterStream.strength = Vector3.zero;
+		}
+	}
+
+	// Token: 0x060021F0 RID: 8688 RVA: 0x0011C538 File Offset: 0x0011A738
+	public float GetOpenFraction()
+	{
+		return this.openAssFrac;
+	}
+
+	// Token: 0x060021F1 RID: 8689 RVA: 0x0011C540 File Offset: 0x0011A740
+	private void UpdateAssGate()
+	{
+		if (this.pullIsActive)
+		{
+			this.openGate = true;
+		}
+		else
+		{
+			this.openGate = false;
+		}
+		if (this.openGate && this.pullActiveTimer > 0.25f)
+		{
+			this.openAssFrac = Mathf.MoveTowards(this.openAssFrac, 1f, Time.deltaTime * 0.25f);
+			if (this.openAssFrac >= 1f)
+			{
+				this.openGate = false;
+				this.pauseTimer = 0f;
+			}
+		}
+		else
+		{
+			this.pauseTimer += Time.deltaTime;
+			if (this.pauseTimer > 0.15f)
+			{
+				this.openAssFrac = Mathf.MoveTowards(this.openAssFrac, 0f, Time.deltaTime * 0.7f);
+			}
+		}
+		this.animLinearOpenState.normalizedTime = this.openAssFrac;
+	}
+
+	// Token: 0x060021F2 RID: 8690 RVA: 0x0011C624 File Offset: 0x0011A824
+	private void UpdateSoundEvents()
+	{
+		if (!this.isPlayingOpenAudio && this.openAssFrac >= 0.01f && this.openAssFracLastFrame < 0.01f)
+		{
+			this.audioOpen.PostFast();
+			this.isPlayingOpenAudio = true;
+		}
+		if (!this.isPlayingCloseAudio && this.openAssFrac <= 0.99f && this.openAssFracLastFrame > 0.99f)
+		{
+			this.audioClose.PostFast();
+			this.isPlayingCloseAudio = true;
+		}
+		if (this.isPlayingOpenAudio && this.openAssFrac < this.openAssFracLastFrame)
+		{
+			this.audioClose.PostFast();
+			this.isPlayingCloseAudio = true;
+			this.isPlayingOpenAudio = false;
+		}
+		else if (this.isPlayingCloseAudio && this.openAssFrac > this.openAssFracLastFrame)
+		{
+			this.audioOpen.PostFast();
+			this.isPlayingOpenAudio = true;
+			this.isPlayingCloseAudio = false;
+		}
+		if (this.isPlayingOpenAudio && this.openAssFrac >= 1f)
+		{
+			this.audioOpened.PostFast();
+			this.isPlayingOpenAudio = false;
+		}
+		if (this.isPlayingCloseAudio && this.openAssFrac <= 0f)
+		{
+			this.audioClosed.PostFast();
+			this.isPlayingCloseAudio = false;
+		}
+		this.openAssFracLastFrame = this.openAssFrac;
+		this.pullActiveLastFrame = this.pullIsActive;
+	}
+
+	// Token: 0x060021F3 RID: 8691 RVA: 0x0011C794 File Offset: 0x0011A994
+	private void CheckFakeWater()
+	{
+		if (this.boyKilledOrSuckedIn && this.fakeWaterForCamera.enabled && ScriptGlobals.huddleActive)
+		{
+			this.fakeWaterForCamera.enabled = false;
+		}
+	}
+
+	// Token: 0x060021F4 RID: 8692 RVA: 0x0011C7C8 File Offset: 0x0011A9C8
+	private void UpdateLight()
+	{
+		if (this.openAssFrac != this.previousLightFraction)
+		{
+			this.spotLight.SetActive(this.openAssFrac > 0f);
+			float value = Mathf.Lerp(this.bouncedLightOriginalValue, this.bouncedLightIntensity, this.openAssFrac);
+			this.bouncedLight.SetFloatProperty(this.bouncedLightProperty, value);
+			this.previousLightFraction = this.openAssFrac;
+		}
+	}
+
+	// Token: 0x060021F5 RID: 8693 RVA: 0x0011C834 File Offset: 0x0011AA34
+	private void Update()
+	{
+		this.UpdateAssGate();
+		this.UpdateSoundEvents();
+		this.CheckFakeWater();
+		this.UpdateLight();
+	}
+
+	// Token: 0x060021F6 RID: 8694 RVA: 0x0011C850 File Offset: 0x0011AA50
+	private void UpdateTimerSimple()
+	{
+		if (!this.pullIsActive)
+		{
+			this.pullActiveTimer = -0.1f;
+		}
+		else
+		{
+			this.pullActiveTimer += Time.deltaTime;
+		}
+	}
+
+	// Token: 0x060021F7 RID: 8695 RVA: 0x0011C880 File Offset: 0x0011AA80
+	private void FixedUpdate()
+	{
+		this.hitCeilingTimer += Time.deltaTime;
+		this.hitCeilingAnim.transform.position = Vector3.MoveTowards(this.hitCeilingAnim.transform.position, this.hitCeilingPos.position + Vector3.down, Time.deltaTime * Mathf.InverseLerp(2f, 0f, this.hitCeilingTimer));
+		this.UpdateTimerSimple();
+		this.UpdateAssCollisionLogic();
+	}
+
+	// Token: 0x04003F27 RID: 16167
+	public Collider assCollider;
+
+	// Token: 0x04003F28 RID: 16168
+	public Collider gateCollider;
+
+	// Token: 0x04003F29 RID: 16169
+	public Animation assHoleDoorAnim;
+
+	// Token: 0x04003F2A RID: 16170
+	public AnimClipNode hitCeilingAnim;
+
+	// Token: 0x04003F2B RID: 16171
+	public AnimClipNode sucktionAnim;
+
+	// Token: 0x04003F2C RID: 16172
+	public Transform hitCeilingPos;
+
+	// Token: 0x04003F2D RID: 16173
+	public WaterStream waterStream;
+
+	// Token: 0x04003F2E RID: 16174
+	public CollisionEvents collEvents;
+
+	// Token: 0x04003F2F RID: 16175
+	public Collider fakeWaterForCamera;
+
+	// Token: 0x04003F30 RID: 16176
+	public GameObject spotLight;
+
+	// Token: 0x04003F31 RID: 16177
+	public MaterialInstance bouncedLight;
+
+	// Token: 0x04003F32 RID: 16178
+	public float bouncedLightIntensity = 1.5f;
+
+	// Token: 0x04003F33 RID: 16179
+	private SignalIn pullStarted;
+
+	// Token: 0x04003F34 RID: 16180
+	private SignalIn pullStopped;
+
+	// Token: 0x04003F35 RID: 16181
+	private SignalIn forceSucces;
+
+	// Token: 0x04003F36 RID: 16182
+	private SignalIn hatchOpened;
+
+	// Token: 0x04003F37 RID: 16183
+	private SignalOut boySuckedIn;
+
+	// Token: 0x04003F38 RID: 16184
+	private SignalOut boySnapKill;
+
+	// Token: 0x04003F39 RID: 16185
+	private SignalOut boyFailed;
+
+	// Token: 0x04003F3A RID: 16186
+	private bool boyInsideKillZone;
+
+	// Token: 0x04003F3B RID: 16187
+	private bool b_forceSuccess;
+
+	// Token: 0x04003F3C RID: 16188
+	private AnimationState animLinearOpenState;
+
+	// Token: 0x04003F3D RID: 16189
+	private int killTriggerEnterHandle = -1;
+
+	// Token: 0x04003F3E RID: 16190
+	private int killTriggerExitHandle = -1;
+
+	// Token: 0x04003F3F RID: 16191
+	private int assTriggerEnterHandle = -1;
+
+	// Token: 0x04003F40 RID: 16192
+	private int gateTriggerEnterHandle = -1;
+
+	// Token: 0x04003F41 RID: 16193
+	private MaterialInstance.FloatProperty bouncedLightProperty;
+
+	// Token: 0x04003F42 RID: 16194
+	private float bouncedLightOriginalValue;
+
+	// Token: 0x04003F43 RID: 16195
+	private float previousLightFraction = -1f;
+
+	// Token: 0x04003F44 RID: 16196
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioOpen;
+
+	// Token: 0x04003F45 RID: 16197
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioClose;
+
+	// Token: 0x04003F46 RID: 16198
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioOpened;
+
+	// Token: 0x04003F47 RID: 16199
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioClosed;
+
+	// Token: 0x04003F48 RID: 16200
+	[HideInInspector]
+	[SerializeField]
+	private CollisionEvents assColliderEvents;
+
+	// Token: 0x04003F49 RID: 16201
+	[SerializeField]
+	[HideInInspector]
+	private CollisionEvents gateColliderEvents;
+
+	// Token: 0x04003F4A RID: 16202
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04003F4B RID: 16203
+	private float pullActiveTimer;
+
+	// Token: 0x04003F4C RID: 16204
+	private bool pullIsActive;
+
+	// Token: 0x04003F4D RID: 16205
+	private bool pullActiveLastFrame;
+
+	// Token: 0x04003F4E RID: 16206
+	private float hitCeilingTimer;
+
+	// Token: 0x04003F4F RID: 16207
+	private bool hatchIsOpen;
+
+	// Token: 0x04003F50 RID: 16208
+	private bool boyKilledOrSuckedIn;
+
+	// Token: 0x04003F51 RID: 16209
+	private float lampFrac;
+
+	// Token: 0x04003F52 RID: 16210
+	private bool openGate;
+
+	// Token: 0x04003F53 RID: 16211
+	private bool forceLampForward;
+
+	// Token: 0x04003F54 RID: 16212
+	private float pumpTimer;
+
+	// Token: 0x04003F55 RID: 16213
+	private float openAssFrac;
+
+	// Token: 0x04003F56 RID: 16214
+	private float openAssFracLastFrame;
+
+	// Token: 0x04003F57 RID: 16215
+	private float pauseTimer;
+
+	// Token: 0x04003F58 RID: 16216
+	private bool isPlayingOpenAudio;
+
+	// Token: 0x04003F59 RID: 16217
+	private bool isPlayingCloseAudio;
+
+	// Token: 0x04003F5A RID: 16218
+	private float timer;
+}

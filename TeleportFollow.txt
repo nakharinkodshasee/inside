@@ -1,0 +1,135 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000147 RID: 327
+public class TeleportFollow : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060009E2 RID: 2530 RVA: 0x00062FF8 File Offset: 0x000611F8
+	public bool PreAwake(int callcount)
+	{
+		SignalIn.Create("enableTeleport", base.gameObject, delegate
+		{
+			this.teleportActive = true;
+		});
+		SignalIn.Create("disableTeleport", base.gameObject, delegate
+		{
+			this.teleportActive = false;
+		});
+		this.rigBod = base.GetComponent<Rigidbody>();
+		this.hasRigBod = (this.rigBod != null);
+		this._transform = base.transform;
+		return true;
+	}
+
+	// Token: 0x060009E3 RID: 2531 RVA: 0x0006306C File Offset: 0x0006126C
+	private void Start()
+	{
+		this.startPos = base.transform.position;
+		if (this.autoStart)
+		{
+			this.teleportActive = true;
+		}
+	}
+
+	// Token: 0x060009E4 RID: 2532 RVA: 0x00063094 File Offset: 0x00061294
+	public void stopTeleporting()
+	{
+		this.teleportActive = false;
+	}
+
+	// Token: 0x060009E5 RID: 2533 RVA: 0x000630A0 File Offset: 0x000612A0
+	public void startTeleporting()
+	{
+		this.teleportActive = true;
+	}
+
+	// Token: 0x060009E6 RID: 2534 RVA: 0x000630AC File Offset: 0x000612AC
+	private void FixedUpdate()
+	{
+		if (this.teleportActive)
+		{
+			Vector3 vector = Vector3Fast.zero;
+			bool flag;
+			if (this.boyAsTarget && this.target == null && ScriptGlobals.boyActive)
+			{
+				vector = ScriptGlobals.boy.pos3;
+				flag = true;
+			}
+			else if (this.huddleAsTarget && this.target == null && ScriptGlobals.huddleActive)
+			{
+				vector = ScriptGlobals.huddle.pos3;
+				flag = true;
+			}
+			else
+			{
+				if (this.target)
+				{
+					vector = this.target.transform.position;
+				}
+				flag = true;
+			}
+			if (flag)
+			{
+				Vector3 vector2 = vector + this.offset;
+				if (this.ignoreY)
+				{
+					vector2.y = this.startPos.y;
+				}
+				if (vector2 != this.lastTargetVec)
+				{
+					if (this.hasRigBod && !this.rigBod.isKinematic)
+					{
+						this.rigBod.MovePosition(vector2);
+					}
+					else
+					{
+						this._transform.position = vector2;
+					}
+					this.lastTargetVec = vector2;
+				}
+			}
+		}
+	}
+
+	// Token: 0x040010F7 RID: 4343
+	public GameObject target;
+
+	// Token: 0x040010F8 RID: 4344
+	public bool boyAsTarget;
+
+	// Token: 0x040010F9 RID: 4345
+	public bool huddleAsTarget;
+
+	// Token: 0x040010FA RID: 4346
+	public Vector3 offset;
+
+	// Token: 0x040010FB RID: 4347
+	public bool autoStart = true;
+
+	// Token: 0x040010FC RID: 4348
+	public bool ignoreY;
+
+	// Token: 0x040010FD RID: 4349
+	private SignalIn enableTeleport;
+
+	// Token: 0x040010FE RID: 4350
+	private SignalIn disableTeleport;
+
+	// Token: 0x040010FF RID: 4351
+	private bool teleportActive;
+
+	// Token: 0x04001100 RID: 4352
+	private bool hasRigBod;
+
+	// Token: 0x04001101 RID: 4353
+	private Rigidbody rigBod;
+
+	// Token: 0x04001102 RID: 4354
+	private Vector3 lastTargetVec = Vector3Fast.zero;
+
+	// Token: 0x04001103 RID: 4355
+	private Transform _transform;
+
+	// Token: 0x04001104 RID: 4356
+	private Vector3 startPos;
+}

@@ -1,0 +1,277 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200065E RID: 1630
+public class TEST_DrawLines : MonoBehaviour
+{
+	// Token: 0x06002814 RID: 10260 RVA: 0x00142C00 File Offset: 0x00140E00
+	private void Start()
+	{
+		Vector3 vector = Vector3.zero;
+		this.vertices = new List<Vector3>();
+		this.gos = new List<GameObject>();
+		this.ps = this.trans.GetComponent<ParticleSystem>();
+		if (this.useProcedural)
+		{
+			float num = (1f + Mathf.Sqrt(5f)) / 2f;
+			List<Vector3> list = this.vertices;
+			Vector3 vector2;
+			vector2..ctor(-1f, num, 0f);
+			list.Add(vector2.normalized * this.radius);
+			List<Vector3> list2 = this.vertices;
+			Vector3 vector3;
+			vector3..ctor(1f, num, 0f);
+			list2.Add(vector3.normalized * this.radius);
+			List<Vector3> list3 = this.vertices;
+			Vector3 vector4;
+			vector4..ctor(-1f, -num, 0f);
+			list3.Add(vector4.normalized * this.radius);
+			List<Vector3> list4 = this.vertices;
+			Vector3 vector5;
+			vector5..ctor(1f, -num, 0f);
+			list4.Add(vector5.normalized * this.radius);
+			List<Vector3> list5 = this.vertices;
+			Vector3 vector6;
+			vector6..ctor(0f, -1f, num);
+			list5.Add(vector6.normalized * this.radius);
+			List<Vector3> list6 = this.vertices;
+			Vector3 vector7;
+			vector7..ctor(0f, 1f, num);
+			list6.Add(vector7.normalized * this.radius);
+			List<Vector3> list7 = this.vertices;
+			Vector3 vector8;
+			vector8..ctor(0f, -1f, -num);
+			list7.Add(vector8.normalized * this.radius);
+			List<Vector3> list8 = this.vertices;
+			Vector3 vector9;
+			vector9..ctor(0f, 1f, -num);
+			list8.Add(vector9.normalized * this.radius);
+			List<Vector3> list9 = this.vertices;
+			Vector3 vector10;
+			vector10..ctor(num, 0f, -1f);
+			list9.Add(vector10.normalized * this.radius);
+			List<Vector3> list10 = this.vertices;
+			Vector3 vector11;
+			vector11..ctor(num, 0f, 1f);
+			list10.Add(vector11.normalized * this.radius);
+			List<Vector3> list11 = this.vertices;
+			Vector3 vector12;
+			vector12..ctor(-num, 0f, -1f);
+			list11.Add(vector12.normalized * this.radius);
+			List<Vector3> list12 = this.vertices;
+			Vector3 vector13;
+			vector13..ctor(-num, 0f, 1f);
+			list12.Add(vector13.normalized * this.radius);
+		}
+		else if (this.mesh != null)
+		{
+			int i = 0;
+			int num2 = this.mesh.vertices.Length;
+			while (i < num2)
+			{
+				if (i <= 0 || !(vector == this.mesh.vertices[i]))
+				{
+					this.vertices.Add(this.mesh.vertices[i]);
+					vector = this.mesh.vertices[i];
+				}
+				i++;
+			}
+		}
+		if (this.buildTriangleMesh)
+		{
+			List<TEST_DrawLines.TriangleIndices> list13 = new List<TEST_DrawLines.TriangleIndices>();
+			list13.Add(new TEST_DrawLines.TriangleIndices(0, 11, 5));
+			list13.Add(new TEST_DrawLines.TriangleIndices(0, 5, 1));
+			list13.Add(new TEST_DrawLines.TriangleIndices(0, 1, 7));
+			list13.Add(new TEST_DrawLines.TriangleIndices(0, 7, 10));
+			list13.Add(new TEST_DrawLines.TriangleIndices(0, 10, 11));
+			list13.Add(new TEST_DrawLines.TriangleIndices(1, 5, 9));
+			list13.Add(new TEST_DrawLines.TriangleIndices(5, 11, 4));
+			list13.Add(new TEST_DrawLines.TriangleIndices(11, 10, 2));
+			list13.Add(new TEST_DrawLines.TriangleIndices(10, 7, 6));
+			list13.Add(new TEST_DrawLines.TriangleIndices(7, 1, 8));
+			list13.Add(new TEST_DrawLines.TriangleIndices(3, 9, 4));
+			list13.Add(new TEST_DrawLines.TriangleIndices(3, 4, 2));
+			list13.Add(new TEST_DrawLines.TriangleIndices(3, 2, 6));
+			list13.Add(new TEST_DrawLines.TriangleIndices(3, 6, 8));
+			list13.Add(new TEST_DrawLines.TriangleIndices(3, 8, 9));
+			list13.Add(new TEST_DrawLines.TriangleIndices(4, 9, 5));
+			list13.Add(new TEST_DrawLines.TriangleIndices(2, 4, 11));
+			list13.Add(new TEST_DrawLines.TriangleIndices(6, 2, 10));
+			list13.Add(new TEST_DrawLines.TriangleIndices(8, 6, 7));
+			list13.Add(new TEST_DrawLines.TriangleIndices(9, 8, 1));
+			List<int> list14 = new List<int>();
+			foreach (TEST_DrawLines.TriangleIndices triangleIndices in list13)
+			{
+				list14.Add(triangleIndices.v1);
+				list14.Add(triangleIndices.v2);
+				list14.Add(triangleIndices.v3);
+			}
+			Mesh mesh = new Mesh();
+			mesh.name = "WireMesh";
+			mesh.vertices = this.vertices.ToArray();
+			mesh.SetIndices(list14.ToArray(), 0, 0);
+			mesh.RecalculateNormals();
+			GameObject gameObject = new GameObject("Wire Mesh");
+			gameObject.transform.position = this.trans.position;
+			gameObject.transform.parent = this.trans;
+			MeshFilter meshFilter = gameObject.AddComponent<MeshFilter>();
+			meshFilter.mesh = mesh;
+			MeshRenderer meshRenderer = gameObject.AddComponent<MeshRenderer>();
+			if (this.triangleMeshMat)
+			{
+				meshRenderer.GetComponent<Renderer>().material = this.triangleMeshMat;
+			}
+		}
+		int j = 0;
+		int count = this.vertices.Count;
+		while (j < count)
+		{
+			GameObject gameObject2 = new GameObject("Vertex" + j);
+			gameObject2.transform.parent = this.trans;
+			gameObject2.transform.localPosition = this.vertices[j];
+			this.gos.Add(gameObject2);
+			if (this.ps)
+			{
+				Vector3 vector14 = this.vertices[j];
+				this.ps.Emit(vector14, Vector3.zero, this.particleSize, 999f, Color.white);
+			}
+			j++;
+		}
+		if (this.trans != null)
+		{
+			this.pos = this.trans.position;
+		}
+	}
+
+	// Token: 0x06002815 RID: 10261 RVA: 0x0014328C File Offset: 0x0014148C
+	private void Update()
+	{
+		if (this.trans != null)
+		{
+			this.startVertex = this.pos;
+			this.startVertex.y = this.startVertex.y + Mathf.Sin(Mathf.Abs((float)Math.Cos(Time.timeDbl * (double)this.bounceSpeed))) * this.bounceHeight;
+			this.trans.position = this.startVertex;
+			float num = (float)Math.Sin(Time.timeDbl) * this.rotationSpeed;
+			float num2 = (float)Math.Cos(Time.timeDbl) * -this.rotationSpeed;
+			float num3 = (float)Math.Sin(Time.timeDbl + 0.5) * this.rotationSpeed;
+			this.trans.Rotate(new Vector3(num, num2, num3));
+			this.wireColor = Color.Lerp(this.wireColorA, this.wireColorB, (float)Math.Sin(Time.timeDbl) + 0.5f);
+		}
+	}
+
+	// Token: 0x06002816 RID: 10262 RVA: 0x0014337C File Offset: 0x0014157C
+	private void OnPostRender()
+	{
+		if (!this.mat)
+		{
+			Debug.LogError("Please Assign a material on the inspector");
+			return;
+		}
+		GL.PushMatrix();
+		this.mat.SetPass(0);
+		int i = 0;
+		int count = this.gos.Count;
+		while (i < count)
+		{
+			int j = 0;
+			int count2 = this.gos.Count;
+			while (j < count2)
+			{
+				if (i != j)
+				{
+					GL.Begin(1);
+					GL.Color(this.wireColor);
+					GL.Vertex(this.gos[i].transform.position);
+					GL.Vertex(this.gos[j].transform.position);
+					GL.End();
+				}
+				j++;
+			}
+			i++;
+		}
+		GL.PopMatrix();
+	}
+
+	// Token: 0x040047CD RID: 18381
+	public Material mat;
+
+	// Token: 0x040047CE RID: 18382
+	public Mesh mesh;
+
+	// Token: 0x040047CF RID: 18383
+	public bool useProcedural;
+
+	// Token: 0x040047D0 RID: 18384
+	public bool buildTriangleMesh;
+
+	// Token: 0x040047D1 RID: 18385
+	public Material triangleMeshMat;
+
+	// Token: 0x040047D2 RID: 18386
+	public float radius = 0.5f;
+
+	// Token: 0x040047D3 RID: 18387
+	public Transform trans;
+
+	// Token: 0x040047D4 RID: 18388
+	public float bounceSpeed = 1f;
+
+	// Token: 0x040047D5 RID: 18389
+	public float bounceHeight = 1f;
+
+	// Token: 0x040047D6 RID: 18390
+	public float rotationSpeed = 0.5f;
+
+	// Token: 0x040047D7 RID: 18391
+	public Color wireColorA = Color.red;
+
+	// Token: 0x040047D8 RID: 18392
+	public Color wireColorB = Color.green;
+
+	// Token: 0x040047D9 RID: 18393
+	private Color wireColor = Color.white;
+
+	// Token: 0x040047DA RID: 18394
+	public float particleSize = 0.3f;
+
+	// Token: 0x040047DB RID: 18395
+	private Vector3 startVertex;
+
+	// Token: 0x040047DC RID: 18396
+	private Vector3 mousePos;
+
+	// Token: 0x040047DD RID: 18397
+	private List<Vector3> vertices = new List<Vector3>();
+
+	// Token: 0x040047DE RID: 18398
+	private List<GameObject> gos = new List<GameObject>();
+
+	// Token: 0x040047DF RID: 18399
+	private Vector3 pos = Vector3.zero;
+
+	// Token: 0x040047E0 RID: 18400
+	private ParticleSystem ps;
+
+	// Token: 0x0200065F RID: 1631
+	private struct TriangleIndices
+	{
+		// Token: 0x06002817 RID: 10263 RVA: 0x00143450 File Offset: 0x00141650
+		public TriangleIndices(int v1, int v2, int v3)
+		{
+			this.v1 = v1;
+			this.v2 = v2;
+			this.v3 = v3;
+		}
+
+		// Token: 0x040047E1 RID: 18401
+		public int v1;
+
+		// Token: 0x040047E2 RID: 18402
+		public int v2;
+
+		// Token: 0x040047E3 RID: 18403
+		public int v3;
+	}
+}

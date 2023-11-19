@@ -1,0 +1,44 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003BC RID: 956
+public class SubmarineFlareRenderHack : MonoBehaviour
+{
+	// Token: 0x060019D9 RID: 6617 RVA: 0x000E1E90 File Offset: 0x000E0090
+	private void Update()
+	{
+		Vector3 position = this.subRigidBody.position;
+		bool flag = position.x <= this.leftHackX || position.x >= this.rightHackX || position.y >= this.upperHackY;
+		if (flag != this.lensFlareToHack.renderOnTop)
+		{
+			this.lensFlareToHack.renderOnTop = flag;
+			Renderer renderer = this.lensFlareToHack.GetRenderer();
+			if (renderer)
+			{
+				if (flag)
+				{
+					renderer.sortingLayerName = "Flare";
+				}
+				else
+				{
+					renderer.sortingLayerID = 0;
+				}
+			}
+		}
+	}
+
+	// Token: 0x04002E63 RID: 11875
+	public LensFlareSimple lensFlareToHack;
+
+	// Token: 0x04002E64 RID: 11876
+	public float leftHackX;
+
+	// Token: 0x04002E65 RID: 11877
+	public float rightHackX;
+
+	// Token: 0x04002E66 RID: 11878
+	public float upperHackY;
+
+	// Token: 0x04002E67 RID: 11879
+	public Rigidbody subRigidBody;
+}

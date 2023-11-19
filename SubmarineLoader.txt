@@ -1,0 +1,52 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003C7 RID: 967
+public class SubmarineLoader : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001A15 RID: 6677 RVA: 0x000E3F78 File Offset: 0x000E2178
+	public bool PreAwake(int callcount)
+	{
+		SignalIn.Create("placeSubmarine", base.gameObject, new Action(this.doPlaceSubmarine));
+		return true;
+	}
+
+	// Token: 0x06001A16 RID: 6678 RVA: 0x000E3F98 File Offset: 0x000E2198
+	private void Start()
+	{
+		if (this.sewerSubmarine)
+		{
+			this.submarine = LevelGlobals.sewerSubmarine;
+		}
+	}
+
+	// Token: 0x06001A17 RID: 6679 RVA: 0x000E3FB0 File Offset: 0x000E21B0
+	private void doPlaceSubmarine()
+	{
+		if (this.submarine)
+		{
+			this.submarine.transform.position = this.placeToLoad.position;
+			this.submarine.GetComponent<Rigidbody>().isKinematic = this.kinematic;
+		}
+	}
+
+	// Token: 0x06001A18 RID: 6680 RVA: 0x000E4000 File Offset: 0x000E2200
+	private void Update()
+	{
+	}
+
+	// Token: 0x04002EDB RID: 11995
+	public Transform placeToLoad;
+
+	// Token: 0x04002EDC RID: 11996
+	public bool sewerSubmarine;
+
+	// Token: 0x04002EDD RID: 11997
+	public bool kinematic;
+
+	// Token: 0x04002EDE RID: 11998
+	private SignalIn placeSubmarine;
+
+	// Token: 0x04002EDF RID: 11999
+	private SewerSubmarine submarine;
+}

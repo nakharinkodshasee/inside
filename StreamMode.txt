@@ -1,0 +1,14 @@
+using System;
+
+// Token: 0x020004AC RID: 1196
+public enum StreamMode
+{
+	// Token: 0x04003A17 RID: 14871
+	FullOff,
+	// Token: 0x04003A18 RID: 14872
+	FullOn,
+	// Token: 0x04003A19 RID: 14873
+	Starting,
+	// Token: 0x04003A1A RID: 14874
+	Stopping
+}

@@ -1,0 +1,157 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003BF RID: 959
+public class SubmarineSpotLightAimTrigger : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060019EA RID: 6634 RVA: 0x000E2898 File Offset: 0x000E0A98
+	public bool PreAwake(int callcount)
+	{
+		this.enableTrigger = SignalIn.Create("enableTrigger", base.gameObject, new Action(this.EnableTrigger));
+		this.disableTrigger = SignalIn.Create("disableTrigger", base.gameObject, new Action(this.DisableTrigger));
+		this.enableAllowLookAway = SignalIn.Create("enableAllowLookAway", base.gameObject, new Action(this.EnableAllowLookAway));
+		this.disableAllowLookAway = SignalIn.Create("disableAllowLookAway", base.gameObject, new Action(this.DisableAllowLookAway));
+		return true;
+	}
+
+	// Token: 0x060019EB RID: 6635 RVA: 0x000E2930 File Offset: 0x000E0B30
+	private void Start()
+	{
+		if (this.submarine == null)
+		{
+			this.submarine = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine).gameObject.GetComponent<Submarine>();
+		}
+	}
+
+	// Token: 0x060019EC RID: 6636 RVA: 0x000E296C File Offset: 0x000E0B6C
+	private void EnableAllowLookAway()
+	{
+		this.allowLookAway = true;
+		if (this.aimActive)
+		{
+			this.DoEnableAim();
+		}
+	}
+
+	// Token: 0x060019ED RID: 6637 RVA: 0x000E2988 File Offset: 0x000E0B88
+	private void DisableAllowLookAway()
+	{
+		this.allowLookAway = false;
+		if (this.aimActive)
+		{
+			this.DoEnableAim();
+		}
+	}
+
+	// Token: 0x060019EE RID: 6638 RVA: 0x000E29A4 File Offset: 0x000E0BA4
+	private void EnableTrigger()
+	{
+		this.isEnabled = true;
+		if (this.subInsideTrigger)
+		{
+			this.DoEnableAim();
+		}
+	}
+
+	// Token: 0x060019EF RID: 6639 RVA: 0x000E29C0 File Offset: 0x000E0BC0
+	private void DisableTrigger()
+	{
+		this.isEnabled = false;
+		if (this.subInsideTrigger)
+		{
+			this.DoDisableAim();
+		}
+	}
+
+	// Token: 0x060019F0 RID: 6640 RVA: 0x000E29DC File Offset: 0x000E0BDC
+	private void DoEnableAim()
+	{
+		if (this.submarine != null)
+		{
+			this.submarine.lightCabinGyro.SetLookatPoint(this.aimPoint, this.allowLookAway);
+			this.submarine.cabinGyro.SetLookatPoint(this.aimPoint, this.allowLookAway);
+			if (this.verticalAim)
+			{
+				this.submarine.lightTilter.SetLookatPoint(this.aimPoint, this.preciseAim);
+			}
+			this.aimActive = true;
+		}
+	}
+
+	// Token: 0x060019F1 RID: 6641 RVA: 0x000E2A60 File Offset: 0x000E0C60
+	private void DoDisableAim()
+	{
+		if (this.submarine != null)
+		{
+			this.submarine.lightCabinGyro.SetLookatPoint(null, false);
+			this.submarine.cabinGyro.SetLookatPoint(null, false);
+			if (this.verticalAim)
+			{
+				this.submarine.lightTilter.SetLookatPoint(null, this.preciseAim);
+			}
+			this.aimActive = false;
+		}
+	}
+
+	// Token: 0x060019F2 RID: 6642 RVA: 0x000E2ACC File Offset: 0x000E0CCC
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<Submarine>())
+		{
+			if (this.isEnabled)
+			{
+				this.DoEnableAim();
+			}
+			this.subInsideTrigger = true;
+		}
+	}
+
+	// Token: 0x060019F3 RID: 6643 RVA: 0x000E2B04 File Offset: 0x000E0D04
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<Submarine>())
+		{
+			if (this.isEnabled)
+			{
+				this.DoDisableAim();
+			}
+			this.subInsideTrigger = false;
+		}
+	}
+
+	// Token: 0x04002E96 RID: 11926
+	public GameObject aimPoint;
+
+	// Token: 0x04002E97 RID: 11927
+	public bool verticalAim = true;
+
+	// Token: 0x04002E98 RID: 11928
+	public Submarine submarine;
+
+	// Token: 0x04002E99 RID: 11929
+	public bool allowLookAway;
+
+	// Token: 0x04002E9A RID: 11930
+	public bool preciseAim;
+
+	// Token: 0x04002E9B RID: 11931
+	private SignalIn enableTrigger;
+
+	// Token: 0x04002E9C RID: 11932
+	private SignalIn disableTrigger;
+
+	// Token: 0x04002E9D RID: 11933
+	private SignalIn enableAllowLookAway;
+
+	// Token: 0x04002E9E RID: 11934
+	private SignalIn disableAllowLookAway;
+
+	// Token: 0x04002E9F RID: 11935
+	private bool isEnabled = true;
+
+	// Token: 0x04002EA0 RID: 11936
+	private bool subInsideTrigger;
+
+	// Token: 0x04002EA1 RID: 11937
+	private bool aimActive;
+}

@@ -1,0 +1,579 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001F6 RID: 502
+public class SwitchTallRod : Device, IPreAwake
+{
+	// Token: 0x06000F4A RID: 3914 RVA: 0x00090B34 File Offset: 0x0008ED34
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioGrab = new AudioEventSimpleLocal(this.audioPrefix + "_lever_grab", akGameObj);
+		this.audioRelease = new AudioEventSimpleLocal(this.audioPrefix + "_lever_release", akGameObj);
+		this.audioUp = new AudioEventSimpleLocal(this.audioPrefix + "_lever_up", akGameObj);
+		this.audioUpStop = new AudioEventSimpleLocal(this.audioPrefix + "_lever_upStop", akGameObj);
+		this.audioDown = new AudioEventSimpleLocal(this.audioPrefix + "_lever_down", akGameObj);
+		this.audioDownStop = new AudioEventSimpleLocal(this.audioPrefix + "_lever_downStop", akGameObj);
+		this.audioPushStart = new AudioEventSimpleLocal(this.audioPrefix + "_lever_pushStart", akGameObj);
+		this.audioPushStop = new AudioEventSimpleLocal(this.audioPrefix + "_lever_pushStop", akGameObj);
+	}
+
+	// Token: 0x06000F4B RID: 3915 RVA: 0x00090C44 File Offset: 0x0008EE44
+	public bool PreAwake(int callcount)
+	{
+		this.pushedUp = SignalOut.Create("pushedUp", base.gameObject);
+		this.pulledDown = SignalOut.Create("pulledDown", base.gameObject);
+		this.loadUp = SignalIn.Create("loadUp", base.gameObject, new Action(this.OnLoadUp));
+		return true;
+	}
+
+	// Token: 0x06000F4C RID: 3916 RVA: 0x00090CA0 File Offset: 0x0008EEA0
+	protected override void Start()
+	{
+		this.OnPreProcess();
+		base.Start();
+		this.visualsAnim = this.visuals.GetComponent<Animation>();
+		this.animDeviceGoUpState = this.visualsAnim[this.animDeviceGoUp.name];
+		this.animDevicePullDownState = this.visualsAnim[this.animDevicePullDown.name];
+		this.topTrigger.enterTrigger.Register(this, ref this.topTriggerEnterHandle);
+		this.wallJumpTrigger.enterTrigger.Register(this, ref this.wallJumpTriggerExitHandle);
+		if (this.state == SwitchTallRod.State.None)
+		{
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x06000F4D RID: 3917 RVA: 0x00090D44 File Offset: 0x0008EF44
+	private void SetIdleState()
+	{
+		this.boyGrabbing = null;
+		this.triggerAim.isActive = false;
+		this.switchLight.TurnOff();
+		this.state = SwitchTallRod.State.Idle;
+	}
+
+	// Token: 0x06000F4E RID: 3918 RVA: 0x00090D6C File Offset: 0x0008EF6C
+	private void IdleState()
+	{
+		if (this.regrabTimer > 0f)
+		{
+			this.regrabTimer -= Time.deltaTime;
+		}
+		if (this.releaseTimer > 0f)
+		{
+			this.releaseTimer -= Time.deltaTime;
+			return;
+		}
+		for (int i = 0; i < this.boysInside.Count; i++)
+		{
+			Boy boy = this.boysInside[i];
+			if (this.regrabTimer <= 0f || Mathf.Abs(boy.input.stick.x) <= 0.3f)
+			{
+				if (Device.GrabCheck(boy, true))
+				{
+					this.SetGrabState(boy);
+					return;
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000F4F RID: 3919 RVA: 0x00090E34 File Offset: 0x0008F034
+	private void SetGrabState(Boy boy)
+	{
+		this.boyGrabbing = boy;
+		float num = this.boyGrabbing.pos.x - base.transform.position.x;
+		if (num > 0.17f)
+		{
+			this.currentGrabAnim = this.animGrabRight;
+		}
+		else if (num < -0.17f)
+		{
+			this.currentGrabAnim = this.animGrabLeft;
+		}
+		else
+		{
+			this.currentGrabAnim = this.animIdle;
+		}
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.currentGrabAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		Device.SetVoicePassive();
+		this.grabTimer = this.grabDelay;
+		this.grabStunTimer = this.grabStunDelay;
+		this.state = SwitchTallRod.State.Grab;
+	}
+
+	// Token: 0x06000F50 RID: 3920 RVA: 0x00090EF4 File Offset: 0x0008F0F4
+	private void SetGrabStateNoTransition()
+	{
+		Device.SetVoicePassive();
+		this.state = SwitchTallRod.State.Grab;
+	}
+
+	// Token: 0x06000F51 RID: 3921 RVA: 0x00090F04 File Offset: 0x0008F104
+	private void GrabState()
+	{
+		if (this.grabStunTimer > 0f)
+		{
+			this.grabStunTimer -= Time.deltaTime;
+		}
+		if ((this.grabStunTimer <= 0f && !this.boyGrabbing.input.rawAction) || this.boyGrabbing.isDead)
+		{
+			this.Release();
+			return;
+		}
+		BoyCustomAnimState boyCustomAnimState = this.boyGrabbing.state as BoyCustomAnimState;
+		if (boyCustomAnimState != null && boyCustomAnimState.anim == this.currentGrabAnim && this.currentGrabAnim.frame >= this.currentGrabAnim.numFrames)
+		{
+			BoyUtils.StartCustomAnim(this.boyGrabbing, this.animIdle, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		if (this.grabTimer > 0f)
+		{
+			this.grabTimer -= Time.deltaTime;
+			if (this.grabTimer > 0f)
+			{
+				return;
+			}
+			this.audioGrab.PostFast();
+		}
+		float y = this.boyGrabbing.input.stick.y;
+		if (y > 0.35f)
+		{
+			this.SetPushState();
+		}
+	}
+
+	// Token: 0x06000F52 RID: 3922 RVA: 0x00091040 File Offset: 0x0008F240
+	private void SetPushState()
+	{
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animPushUp, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		Device.SetVoiceActive();
+		this.audioPushStart.PostFast();
+		this.state = SwitchTallRod.State.Push;
+	}
+
+	// Token: 0x06000F53 RID: 3923 RVA: 0x00091074 File Offset: 0x0008F274
+	private void PushState()
+	{
+		if (!this.boyGrabbing.input.rawAction)
+		{
+			this.Release();
+			return;
+		}
+		float y = this.boyGrabbing.input.stick.y;
+		if (y < 0.25f)
+		{
+			this.audioPushStop.PostFast();
+			this.SetGrabStateNoTransition();
+		}
+		float num = this.animPushUp.frame / this.animPushUp.numFrames;
+		if (num > this.completeFraction)
+		{
+			this.SetRaisedState();
+		}
+	}
+
+	// Token: 0x06000F54 RID: 3924 RVA: 0x00091100 File Offset: 0x0008F300
+	private void SetRaisedState()
+	{
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animPushSuccess, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.3f, 0.25f, 0, 0f);
+		this.boyGrabbing = null;
+		Device.SetVoiceNone();
+		this.audioRelease.PostFast();
+		this.audioPushStop.PostFast();
+		this.audioUp.PostFast();
+		this.visualsAnim.Play(this.animDeviceGoUpState.name);
+		this.state = SwitchTallRod.State.Raised;
+	}
+
+	// Token: 0x06000F55 RID: 3925 RVA: 0x00091190 File Offset: 0x0008F390
+	private void RaisedState()
+	{
+		if (this.animDeviceGoUpState.normalizedTime < this.pushedUpFraction)
+		{
+			return;
+		}
+		if (!this.turnedOn)
+		{
+			this.audioUpStop.PostFast();
+			this.turnedOn = true;
+			this.triggerAim.isActive = true;
+			this.switchLight.TurnOn();
+			this.pushedUp.Signal();
+		}
+	}
+
+	// Token: 0x06000F56 RID: 3926 RVA: 0x000911F4 File Offset: 0x0008F3F4
+	private void SetWallJumpState(Boy boy)
+	{
+		this.boyGrabbing = boy;
+		this.animHangingHolder.localRotation = Quaternion.Euler(0f, 180f, 0f);
+		this.pullDownTimer = this.pullDownDelay;
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animWallJump, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		Device.SetVoiceActive();
+		this.state = SwitchTallRod.State.WallJump;
+	}
+
+	// Token: 0x06000F57 RID: 3927 RVA: 0x00091258 File Offset: 0x0008F458
+	private void WallJumpState()
+	{
+		if (this.animWallJump.frame < this.animWallJump.numFrames)
+		{
+			return;
+		}
+		this.SetPullDownState(true);
+	}
+
+	// Token: 0x06000F58 RID: 3928 RVA: 0x00091280 File Offset: 0x0008F480
+	private void SetHangState(Boy boy)
+	{
+		this.boyGrabbing = boy;
+		float num = (float)((boy.facing != 1f) ? 0 : 180);
+		this.animHangingHolder.localRotation = Quaternion.Euler(0f, num, 0f);
+		this.animHang.mirror = (this.boyGrabbing.facing == 1f);
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animHang, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.pullDownTimer = this.pullDownDelay;
+		Device.SetVoiceActive();
+		this.grabAudioSend = false;
+		this.state = SwitchTallRod.State.Hang;
+	}
+
+	// Token: 0x06000F59 RID: 3929 RVA: 0x00091324 File Offset: 0x0008F524
+	private void HangState()
+	{
+		this.pullDownTimer -= Time.deltaTime;
+		if (!this.grabAudioSend && this.pullDownTimer <= 0.8f)
+		{
+			this.audioGrab.PostFast();
+			this.grabAudioSend = true;
+		}
+		if (this.pullDownTimer <= 0f)
+		{
+			this.SetPullDownState(this.boyGrabbing.facing == 1f);
+		}
+	}
+
+	// Token: 0x06000F5A RID: 3930 RVA: 0x0009139C File Offset: 0x0008F59C
+	private void SetPullDownState(bool mirror)
+	{
+		this.animPullDown.mirror = mirror;
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animPullDown, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.3f, 0.25f, 0, 0f);
+		this.boyGrabbing = null;
+		this.audioDown.PostFast();
+		this.visualsAnim.Play(this.animDevicePullDownState.name);
+		this.state = SwitchTallRod.State.PullDown;
+	}
+
+	// Token: 0x06000F5B RID: 3931 RVA: 0x0009141C File Offset: 0x0008F61C
+	private void PullDownState()
+	{
+		if (this.animDevicePullDownState.normalizedTime >= this.pulledDownFraction)
+		{
+			SoundEngine.RTPCs.boyImpact.SetFast(90f, AudioKeyObject.AkGameObjs.boy, 0f);
+			SingletonBehaviour<BoyAudio>.instance.ExhaleImmediatelyWithStateOverride(BoyVoiceState.ActionState.land);
+			this.pulledDown.Signal();
+			this.turnedOn = false;
+			Device.SetVoiceNone();
+			this.audioDownStop.PostFast();
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x06000F5C RID: 3932 RVA: 0x0009148C File Offset: 0x0008F68C
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case SwitchTallRod.State.Idle:
+			this.IdleState();
+			break;
+		case SwitchTallRod.State.Grab:
+			this.GrabState();
+			break;
+		case SwitchTallRod.State.Push:
+			this.PushState();
+			break;
+		case SwitchTallRod.State.Raised:
+			this.RaisedState();
+			break;
+		case SwitchTallRod.State.WallJump:
+			this.WallJumpState();
+			break;
+		case SwitchTallRod.State.Hang:
+			this.HangState();
+			break;
+		case SwitchTallRod.State.PullDown:
+			this.PullDownState();
+			break;
+		}
+	}
+
+	// Token: 0x06000F5D RID: 3933 RVA: 0x00091518 File Offset: 0x0008F718
+	public override void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		base.OnFastEventEx(sender, ref collider);
+		if (sender == this.topTrigger.enterTrigger)
+		{
+			this.OnTopTriggerEnter(collider);
+		}
+		else if (sender == this.wallJumpTrigger.enterTrigger)
+		{
+			this.OnWallJumpTriggerEnter(collider);
+		}
+	}
+
+	// Token: 0x06000F5E RID: 3934 RVA: 0x00091564 File Offset: 0x0008F764
+	private void OnTopTriggerEnter(Collider collider)
+	{
+		if (this.state != SwitchTallRod.State.Raised)
+		{
+			return;
+		}
+		BoyProbe component = collider.GetComponent<BoyProbe>();
+		if (component)
+		{
+			this.SetHangState(component.boy);
+		}
+	}
+
+	// Token: 0x06000F5F RID: 3935 RVA: 0x0009159C File Offset: 0x0008F79C
+	private void OnWallJumpTriggerEnter(Collider collider)
+	{
+		if (this.state != SwitchTallRod.State.Raised)
+		{
+			return;
+		}
+		BoyProbe component = collider.GetComponent<BoyProbe>();
+		if (component)
+		{
+			this.SetWallJumpState(component.boy);
+		}
+	}
+
+	// Token: 0x06000F60 RID: 3936 RVA: 0x000915D4 File Offset: 0x0008F7D4
+	private void OnLoadUp()
+	{
+		this.turnedOn = true;
+		this.switchLight.TurnOn();
+		this.triggerAim.isActive = true;
+		this.animDeviceGoUpState.normalizedTime = 1f;
+		this.visualsAnim.Play(this.animDeviceGoUpState.name);
+		this.state = SwitchTallRod.State.Raised;
+	}
+
+	// Token: 0x06000F61 RID: 3937 RVA: 0x00091630 File Offset: 0x0008F830
+	private void Release()
+	{
+		if (!ScriptGlobals.boy.isDead)
+		{
+			BoyUtils.ClearState(this.boyGrabbing, 0.27f);
+		}
+		Device.SetVoiceNone();
+		if (this.grabTimer <= 0f)
+		{
+			this.audioRelease.PostFast();
+		}
+		this.regrabTimer = this.regrabDelay;
+		this.releaseTimer = this.releaseDelay;
+		this.SetIdleState();
+	}
+
+	// Token: 0x04001BA6 RID: 7078
+	public CollisionEvents topTrigger;
+
+	// Token: 0x04001BA7 RID: 7079
+	public CollisionEvents wallJumpTrigger;
+
+	// Token: 0x04001BA8 RID: 7080
+	public AnimClipNode animGrabRight;
+
+	// Token: 0x04001BA9 RID: 7081
+	public AnimClipNode animGrabLeft;
+
+	// Token: 0x04001BAA RID: 7082
+	public AnimClipNode animIdle;
+
+	// Token: 0x04001BAB RID: 7083
+	public AnimClipNode animPushUp;
+
+	// Token: 0x04001BAC RID: 7084
+	public AnimClipNode animPushSuccess;
+
+	// Token: 0x04001BAD RID: 7085
+	public AnimClipNode animHang;
+
+	// Token: 0x04001BAE RID: 7086
+	public AnimClipNode animWallJump;
+
+	// Token: 0x04001BAF RID: 7087
+	public AnimClipNode animPullDown;
+
+	// Token: 0x04001BB0 RID: 7088
+	public Transform animHangingHolder;
+
+	// Token: 0x04001BB1 RID: 7089
+	public GameObject visuals;
+
+	// Token: 0x04001BB2 RID: 7090
+	public AnimationClip animDeviceGoUp;
+
+	// Token: 0x04001BB3 RID: 7091
+	public AnimationClip animDevicePullDown;
+
+	// Token: 0x04001BB4 RID: 7092
+	public SwitchLight switchLight;
+
+	// Token: 0x04001BB5 RID: 7093
+	public BoyJumpAimTrigger triggerAim;
+
+	// Token: 0x04001BB6 RID: 7094
+	public float completeFraction = 0.35f;
+
+	// Token: 0x04001BB7 RID: 7095
+	public float pullDownDelay = 0.65f;
+
+	// Token: 0x04001BB8 RID: 7096
+	public float pushedUpFraction = 0.4f;
+
+	// Token: 0x04001BB9 RID: 7097
+	public float pulledDownFraction = 0.38f;
+
+	// Token: 0x04001BBA RID: 7098
+	public float grabDelay = 0.21f;
+
+	// Token: 0x04001BBB RID: 7099
+	public string audioPrefix = string.Empty;
+
+	// Token: 0x04001BBC RID: 7100
+	public SignalOut pushedUp;
+
+	// Token: 0x04001BBD RID: 7101
+	public SignalOut pulledDown;
+
+	// Token: 0x04001BBE RID: 7102
+	public SignalIn loadUp;
+
+	// Token: 0x04001BBF RID: 7103
+	private SwitchTallRod.State state;
+
+	// Token: 0x04001BC0 RID: 7104
+	private AnimationState animDeviceGoUpState;
+
+	// Token: 0x04001BC1 RID: 7105
+	private AnimationState animDevicePullDownState;
+
+	// Token: 0x04001BC2 RID: 7106
+	private float grabTimer;
+
+	// Token: 0x04001BC3 RID: 7107
+	private float releaseTimer;
+
+	// Token: 0x04001BC4 RID: 7108
+	private float releaseDelay = 0.15f;
+
+	// Token: 0x04001BC5 RID: 7109
+	private float grabStunTimer;
+
+	// Token: 0x04001BC6 RID: 7110
+	private float grabStunDelay = 0.15f;
+
+	// Token: 0x04001BC7 RID: 7111
+	private float regrabTimer;
+
+	// Token: 0x04001BC8 RID: 7112
+	private float regrabDelay = 0.5f;
+
+	// Token: 0x04001BC9 RID: 7113
+	private float pullDownTimer;
+
+	// Token: 0x04001BCA RID: 7114
+	private Animation visualsAnim;
+
+	// Token: 0x04001BCB RID: 7115
+	private bool turnedOn;
+
+	// Token: 0x04001BCC RID: 7116
+	private bool grabAudioSend;
+
+	// Token: 0x04001BCD RID: 7117
+	private AnimClipNode currentGrabAnim;
+
+	// Token: 0x04001BCE RID: 7118
+	private int topTriggerEnterHandle = -1;
+
+	// Token: 0x04001BCF RID: 7119
+	private int wallJumpTriggerExitHandle = -1;
+
+	// Token: 0x04001BD0 RID: 7120
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04001BD1 RID: 7121
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioGrab;
+
+	// Token: 0x04001BD2 RID: 7122
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioRelease;
+
+	// Token: 0x04001BD3 RID: 7123
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioUp;
+
+	// Token: 0x04001BD4 RID: 7124
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioUpStop;
+
+	// Token: 0x04001BD5 RID: 7125
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioDown;
+
+	// Token: 0x04001BD6 RID: 7126
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioDownStop;
+
+	// Token: 0x04001BD7 RID: 7127
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioPushStart;
+
+	// Token: 0x04001BD8 RID: 7128
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioPushStop;
+
+	// Token: 0x020001F7 RID: 503
+	private enum State
+	{
+		// Token: 0x04001BDA RID: 7130
+		None,
+		// Token: 0x04001BDB RID: 7131
+		Idle,
+		// Token: 0x04001BDC RID: 7132
+		Grab,
+		// Token: 0x04001BDD RID: 7133
+		Push,
+		// Token: 0x04001BDE RID: 7134
+		Raised,
+		// Token: 0x04001BDF RID: 7135
+		WallJump,
+		// Token: 0x04001BE0 RID: 7136
+		Hang,
+		// Token: 0x04001BE1 RID: 7137
+		PullDown
+	}
+}

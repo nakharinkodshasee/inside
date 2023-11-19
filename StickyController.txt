@@ -1,0 +1,166 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200022F RID: 559
+public class StickyController : MonoBehaviour
+{
+	// Token: 0x06001152 RID: 4434 RVA: 0x000A3C24 File Offset: 0x000A1E24
+	protected void Start()
+	{
+		this.boyComponent = base.GetComponent<Boy>();
+		this.maxSpeedDown = this.boyComponent.properties.run.maxSpeedDown;
+		this.maxSpeedFlat = this.boyComponent.properties.run.maxSpeedFlat;
+		this.maxSpeedUp = this.boyComponent.properties.run.maxSpeedUp;
+		if (!this.boyComponent.isPlayer)
+		{
+			this.ladder = new GameObject();
+			this.ladder.transform.parent = base.transform.parent;
+			BoxCollider boxCollider = this.ladder.AddComponent<BoxCollider>();
+			boxCollider.isTrigger = true;
+			boxCollider.size = new Vector3(1f, 1f, 1f);
+			this.ladder.AddComponent<Ladder>();
+			this.ladder.SetActive(false);
+		}
+		this.groundNormal = this.startNormal;
+	}
+
+	// Token: 0x06001153 RID: 4435 RVA: 0x000A3D1C File Offset: 0x000A1F1C
+	public bool IsOnStickySurface()
+	{
+		return this.groundNormal != Vector3.zero;
+	}
+
+	// Token: 0x06001154 RID: 4436 RVA: 0x000A3D30 File Offset: 0x000A1F30
+	private void Update()
+	{
+	}
+
+	// Token: 0x06001155 RID: 4437 RVA: 0x000A3D34 File Offset: 0x000A1F34
+	private void UpdateGroundNormal()
+	{
+		Ray ray;
+		ray..ctor(base.transform.position, MathUtils.v3(-this.boyComponent.up, 0f));
+		int num = 1 << LayerMask.NameToLayer("Player");
+		RaycastHit[] array = Physics.SphereCastAll(ray, this.boyComponent.properties.radius + 0.2f, 0.75f, ~num);
+		RaycastHit raycastHit = default(RaycastHit);
+		foreach (RaycastHit raycastHit2 in array)
+		{
+			if (raycastHit.collider == null)
+			{
+				raycastHit = raycastHit2;
+			}
+			else if (raycastHit2.distance < raycastHit.distance)
+			{
+				raycastHit = raycastHit2;
+			}
+		}
+		if (raycastHit.collider && raycastHit.collider.GetComponent<StickySurface>())
+		{
+			this.groundNormal = raycastHit.normal;
+		}
+		else
+		{
+			this.groundNormal = Vector3.zero;
+		}
+	}
+
+	// Token: 0x06001156 RID: 4438 RVA: 0x000A3E4C File Offset: 0x000A204C
+	private float ProjectVectorOnVector(Vector2 v1, Vector2 v2)
+	{
+		return (v2.x * v1.x + v2.y * v1.y) / v2.magnitude;
+	}
+
+	// Token: 0x06001157 RID: 4439 RVA: 0x000A3E78 File Offset: 0x000A2078
+	private void SetLadderPos()
+	{
+		if (this.ladder)
+		{
+			this.ladder.transform.position = base.transform.position + MathUtils.v3(this.boyComponent.up, 0f);
+		}
+	}
+
+	// Token: 0x06001158 RID: 4440 RVA: 0x000A3ECC File Offset: 0x000A20CC
+	protected void FixedUpdate()
+	{
+		if (this.startDelay > 0f)
+		{
+			this.startDelay -= Time.deltaTime;
+		}
+		else
+		{
+			this.UpdateGroundNormal();
+		}
+		this.SetLadderPos();
+		if (this.groundNormal != Vector3.zero)
+		{
+			vector2f vector2f = new vector2f(-this.groundNormal.x, -this.groundNormal.y) * 10f;
+			this.boyComponent.properties.customGravity = new vector2fClass(vector2f.x, vector2f.y);
+			this.boyComponent.properties.climbDown.allow = false;
+			float num = Mathf.Max(0f, this.ProjectVectorOnVector(this.groundNormal, Vector2.up));
+			float num2 = Mathf.Max(0f, this.ProjectVectorOnVector(this.groundNormal, -Vector2.up));
+			float num3 = Mathf.Abs(this.ProjectVectorOnVector(this.groundNormal, Vector2.right));
+			float num4 = 0f;
+			if (Vector3.Dot(this.groundNormal, Vector3.down) > 0.25f)
+			{
+				this.boyComponent.properties.jump.allow = true;
+				if (this.ladder)
+				{
+					this.ladder.SetActive(true);
+				}
+			}
+			else
+			{
+				this.boyComponent.properties.jump.allow = false;
+				if (this.ladder)
+				{
+					this.ladder.SetActive(false);
+				}
+			}
+			this.boyComponent.properties.run.maxSpeedDown = this.maxSpeedDown * num4;
+			this.boyComponent.properties.run.maxSpeedFlat = this.maxSpeedFlat * num4;
+			this.boyComponent.properties.run.maxSpeedUp = this.maxSpeedUp * num4;
+			this.resetBoyProperties = true;
+		}
+		else if (this.resetBoyProperties)
+		{
+			this.boyComponent.properties.customGravity = new vector2fClass(0f, 0f);
+			this.boyComponent.properties.climbDown.allow = true;
+			this.boyComponent.properties.run.maxSpeedDown = this.maxSpeedDown;
+			this.boyComponent.properties.run.maxSpeedFlat = this.maxSpeedFlat;
+			this.boyComponent.properties.run.maxSpeedUp = this.maxSpeedUp;
+			this.resetBoyProperties = false;
+			if (this.ladder)
+			{
+				this.ladder.SetActive(false);
+			}
+			this.boyComponent.properties.jump.allow = true;
+		}
+	}
+
+	// Token: 0x04001FBF RID: 8127
+	public Vector2 startNormal = new Vector2(0f, 1f);
+
+	// Token: 0x04001FC0 RID: 8128
+	private Boy boyComponent;
+
+	// Token: 0x04001FC1 RID: 8129
+	private float maxSpeedDown;
+
+	// Token: 0x04001FC2 RID: 8130
+	private float maxSpeedFlat;
+
+	// Token: 0x04001FC3 RID: 8131
+	private float maxSpeedUp;
+
+	// Token: 0x04001FC4 RID: 8132
+	private GameObject ladder;
+
+	// Token: 0x04001FC5 RID: 8133
+	private float startDelay = 0.1f;
+
+	// Token: 0x04001FC6 RID: 8134
+	private Vector3 groundNormal;
+
+	// Token: 0x04001FC7 RID: 8135
+	private bool resetBoyProperties;
+}

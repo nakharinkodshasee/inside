@@ -1,0 +1,23 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003C5 RID: 965
+public class SubmarineAttractor : MonoBehaviour
+{
+	// Token: 0x06001A0F RID: 6671 RVA: 0x000E3F08 File Offset: 0x000E2108
+	public void ButtonDown(bool aButtonDown)
+	{
+		this.mIsActive = true;
+	}
+
+	// Token: 0x06001A10 RID: 6672 RVA: 0x000E3F14 File Offset: 0x000E2114
+	private void FixedUpdate()
+	{
+	}
+
+	// Token: 0x04002ED9 RID: 11993
+	private Rigidbody mGrabbedObject;
+
+	// Token: 0x04002EDA RID: 11994
+	private bool mIsActive;
+}

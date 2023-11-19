@@ -1,0 +1,57 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000588 RID: 1416
+[ExecuteInEditMode]
+public class SortedIndexPoolTest : MonoBehaviour
+{
+	// Token: 0x06002457 RID: 9303 RVA: 0x0012BDA4 File Offset: 0x00129FA4
+	private void DebugStatus(SortedIndexPool pool)
+	{
+		Debug.Log(string.Concat(new string[]
+		{
+			"FREE : [ ",
+			pool.freeString,
+			" ]\n",
+			"RESERVED : [ ",
+			pool.reservedString,
+			" ]\n"
+		}));
+	}
+
+	// Token: 0x06002458 RID: 9304 RVA: 0x0012BDF4 File Offset: 0x00129FF4
+	private void Update()
+	{
+		if (this.runTest)
+		{
+			this.runTest = false;
+			SortedIndexPool sortedIndexPool = new SortedIndexPool(this.numElements);
+			List<int> list = new List<int>(this.numElements);
+			Debug.Log("stage #0");
+			this.DebugStatus(sortedIndexPool);
+			for (int num = 0; num != sortedIndexPool.free.Length; num++)
+			{
+				list.Add(sortedIndexPool.Acquire());
+			}
+			Debug.Log("stage #1");
+			this.DebugStatus(sortedIndexPool);
+			Random random = new Random();
+			while (list.Count > 0)
+			{
+				int index = random.Next(list.Count - 1);
+				int index2 = list[index];
+				sortedIndexPool.Release(index2);
+				list.RemoveAt(index);
+			}
+			Debug.Log("stage #2");
+			this.DebugStatus(sortedIndexPool);
+		}
+	}
+
+	// Token: 0x040042A8 RID: 17064
+	public bool runTest;
+
+	// Token: 0x040042A9 RID: 17065
+	public int numElements = 5000;
+}

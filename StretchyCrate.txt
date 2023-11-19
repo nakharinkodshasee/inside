@@ -1,0 +1,98 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005A5 RID: 1445
+public class StretchyCrate : MonoBehaviour
+{
+	// Token: 0x060024EC RID: 9452 RVA: 0x0012F560 File Offset: 0x0012D760
+	private void Start()
+	{
+		this.sidesWidth = (this.leftBody.transform.localScale.x + this.rightBody.transform.localScale.x + 2f * this.border) / 2f;
+		this.boy = ScriptGlobals.boy;
+		this.boyTransform = this.boy.transform;
+		this.orignalDist = this.rightBody.transform.position.x - this.leftBody.transform.position.x;
+	}
+
+	// Token: 0x060024ED RID: 9453 RVA: 0x0012F60C File Offset: 0x0012D80C
+	private void FixedUpdate()
+	{
+		float x = this.boy.input.stick.x;
+		Vector3 vector = this.rightBody.transform.position - this.leftBody.transform.position;
+		if (x >= -0.2f)
+		{
+			if (this.stretchy)
+			{
+				this.lockedSize = vector;
+			}
+			if (this.boyTransform.position.x > this.middleCollider.transform.position.x)
+			{
+				this.leftBody.GetComponent<Rigidbody>().MovePosition(this.rightBody.GetComponent<Rigidbody>().position - this.lockedSize);
+			}
+			else
+			{
+				this.rightBody.GetComponent<Rigidbody>().MovePosition(this.leftBody.GetComponent<Rigidbody>().position + this.lockedSize);
+			}
+			this.stretchy = false;
+		}
+		else
+		{
+			this.stretchy = true;
+		}
+		Vector3 vector2 = this.boyTransform.position - this.middleCollider.GetComponent<Rigidbody>().position;
+		if (this.stretchy)
+		{
+			Vector3 localScale = this.middleCollider.transform.localScale;
+			localScale.x = vector.x - this.sidesWidth;
+			if (localScale.x < 0.1f)
+			{
+				localScale.x = 0.1f;
+			}
+			this.middleCollider.transform.localScale = localScale;
+		}
+		Vector3 localScale2 = this.visuals.transform.localScale;
+		localScale2.x = vector.x + this.sidesWidth - this.border;
+		this.visuals.transform.localScale = localScale2;
+		Vector3 vector3 = this.leftBody.GetComponent<Rigidbody>().position + this.rightBody.GetComponent<Rigidbody>().position;
+		vector3 /= 2f;
+		this.middleCollider.GetComponent<Rigidbody>().MovePosition(vector3);
+		this.visuals.transform.position = vector3;
+		this.arrow.transform.position = vector3;
+	}
+
+	// Token: 0x040043AA RID: 17322
+	public GameObject leftBody;
+
+	// Token: 0x040043AB RID: 17323
+	public GameObject rightBody;
+
+	// Token: 0x040043AC RID: 17324
+	public GameObject middleCollider;
+
+	// Token: 0x040043AD RID: 17325
+	public GameObject visuals;
+
+	// Token: 0x040043AE RID: 17326
+	public GameObject arrow;
+
+	// Token: 0x040043AF RID: 17327
+	private Boy boy;
+
+	// Token: 0x040043B0 RID: 17328
+	private Transform boyTransform;
+
+	// Token: 0x040043B1 RID: 17329
+	private float sidesWidth;
+
+	// Token: 0x040043B2 RID: 17330
+	private Vector3 lockedSize;
+
+	// Token: 0x040043B3 RID: 17331
+	private bool stretchy = true;
+
+	// Token: 0x040043B4 RID: 17332
+	private float orignalDist;
+
+	// Token: 0x040043B5 RID: 17333
+	private float border = 0.1f;
+}
+

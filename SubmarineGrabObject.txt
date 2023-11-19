@@ -1,0 +1,44 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005B7 RID: 1463
+public class SubmarineGrabObject : MonoBehaviour
+{
+	// Token: 0x06002541 RID: 9537 RVA: 0x00131E24 File Offset: 0x00130024
+	private void Start()
+	{
+		this.mMass = base.GetComponent<Rigidbody>().mass;
+		this.mDrag = base.GetComponent<Rigidbody>().drag;
+		this.mAngularDrag = base.GetComponent<Rigidbody>().angularDrag;
+		this.mParent = base.transform.parent;
+	}
+
+	// Token: 0x06002542 RID: 9538 RVA: 0x00131E78 File Offset: 0x00130078
+	public void Grab(Transform aNewParent)
+	{
+		Object.Destroy(base.GetComponent<Rigidbody>());
+		base.transform.parent = aNewParent;
+	}
+
+	// Token: 0x06002543 RID: 9539 RVA: 0x00131E94 File Offset: 0x00130094
+	public void Release()
+	{
+		Rigidbody rigidbody = base.gameObject.AddComponent<Rigidbody>();
+		rigidbody.mass = this.mMass;
+		rigidbody.drag = this.mDrag;
+		rigidbody.angularDrag = this.mAngularDrag;
+		base.transform.parent = this.mParent;
+	}
+
+	// Token: 0x04004443 RID: 17475
+	private float mMass;
+
+	// Token: 0x04004444 RID: 17476
+	private float mDrag;
+
+	// Token: 0x04004445 RID: 17477
+	private float mAngularDrag;
+
+	// Token: 0x04004446 RID: 17478
+	private Transform mParent;
+}

@@ -1,0 +1,38 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000477 RID: 1143
+public class SpringlerAimPivotMover : MonoBehaviour
+{
+	// Token: 0x06001E0D RID: 7693 RVA: 0x00102260 File Offset: 0x00100460
+	private void Start()
+	{
+		this.startPos = this.aimPivot.position;
+	}
+
+	// Token: 0x06001E0E RID: 7694 RVA: 0x00102274 File Offset: 0x00100474
+	private void FixedUpdate()
+	{
+		HuddleGrabState grabState = ScriptGlobals.huddle.grabState;
+		if (grabState != null && grabState.body != null)
+		{
+			if (Mathf.Abs(ScriptGlobals.huddle.velocity.x) < 2f)
+			{
+				this.aimPivot.position = this.standStillPivot.position;
+			}
+			else
+			{
+				this.aimPivot.position = this.startPos;
+			}
+		}
+	}
+
+	// Token: 0x04003744 RID: 14148
+	public Transform aimPivot;
+
+	// Token: 0x04003745 RID: 14149
+	public Transform standStillPivot;
+
+	// Token: 0x04003746 RID: 14150
+	private Vector3 startPos;
+}

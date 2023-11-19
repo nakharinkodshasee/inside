@@ -1,0 +1,128 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005A4 RID: 1444
+public class StecthyCrateNew : MonoBehaviour
+{
+	// Token: 0x060024E4 RID: 9444 RVA: 0x0012F22C File Offset: 0x0012D42C
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x060024E5 RID: 9445 RVA: 0x0012F23C File Offset: 0x0012D43C
+	private void Update()
+	{
+		this.arrow.transform.position = this.obj.transform.position;
+		this.arrow.transform.rotation = this.obj.transform.rotation;
+		this.direction = this.FindDirection(this.obj.GetComponent<Rigidbody>().rotation.z);
+	}
+
+	// Token: 0x060024E6 RID: 9446 RVA: 0x0012F2B0 File Offset: 0x0012D4B0
+	private int FindDirection(float r)
+	{
+		float num = 0.2f;
+		if (r < num && r > -num)
+		{
+			return 1;
+		}
+		if (r > 1f - num && r < 1f + num)
+		{
+			return -1;
+		}
+		return 0;
+	}
+
+	// Token: 0x060024E7 RID: 9447 RVA: 0x0012F2F4 File Offset: 0x0012D4F4
+	private void FixedUpdate()
+	{
+		BoyGrabState boyGrabState = this.boy.state as BoyGrabState;
+		if (boyGrabState != null && boyGrabState.body == this.obj.GetComponent<Rigidbody>())
+		{
+			float x = this.boy.input.stick.x;
+			if (Mathf.Abs(x) < 0.3f)
+			{
+				return;
+			}
+			this.direction = this.FindDirection(this.obj.GetComponent<Rigidbody>().rotation.z);
+			float a = x * Time.deltaTime * this.sizeSpeed;
+			if (this.direction == 1)
+			{
+				if (x > 0f)
+				{
+					this.obj.GetComponent<Rigidbody>().mass = this.ChangeMass();
+				}
+				else
+				{
+					this.ChangeSize(a, this.boy.facing);
+				}
+			}
+			else if (this.direction == -1)
+			{
+				if (x < 0f)
+				{
+					this.obj.GetComponent<Rigidbody>().mass = this.ChangeMass();
+				}
+				else
+				{
+					this.ChangeSize(a, this.boy.facing);
+				}
+			}
+		}
+		else
+		{
+			this.obj.GetComponent<Rigidbody>().mass = this.ChangeMass();
+		}
+	}
+
+	// Token: 0x060024E8 RID: 9448 RVA: 0x0012F43C File Offset: 0x0012D63C
+	private void Move(float a)
+	{
+		Vector3 position = this.obj.GetComponent<Rigidbody>().position;
+		position.x += a;
+		this.obj.GetComponent<Rigidbody>().MovePosition(position);
+	}
+
+	// Token: 0x060024E9 RID: 9449 RVA: 0x0012F47C File Offset: 0x0012D67C
+	private float ChangeMass()
+	{
+		float num = this.crateMass;
+		return num + (this.obj.transform.localScale.x - 1f) / 8f;
+	}
+
+	// Token: 0x060024EA RID: 9450 RVA: 0x0012F4B8 File Offset: 0x0012D6B8
+	private void ChangeSize(float a, float dir)
+	{
+		Vector3 localScale = this.obj.transform.localScale;
+		localScale.x -= a * dir;
+		if (localScale.x <= this.minScale)
+		{
+			this.obj.GetComponent<Rigidbody>().mass = this.ChangeMass();
+			return;
+		}
+		this.obj.GetComponent<Rigidbody>().mass = 10f;
+		this.obj.transform.localScale = localScale;
+		this.Move(a / 2f);
+	}
+
+	// Token: 0x040043A3 RID: 17315
+	public GameObject obj;
+
+	// Token: 0x040043A4 RID: 17316
+	public GameObject arrow;
+
+	// Token: 0x040043A5 RID: 17317
+	public int direction = -1;
+
+	// Token: 0x040043A6 RID: 17318
+	private Boy boy;
+
+	// Token: 0x040043A7 RID: 17319
+	private float sizeSpeed = 2.5f;
+
+	// Token: 0x040043A8 RID: 17320
+	private float crateMass = 0.6f;
+
+	// Token: 0x040043A9 RID: 17321
+	public float minScale = 1f;
+}

@@ -1,0 +1,536 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020001EE RID: 494
+public class SwitchButton : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06000EE3 RID: 3811 RVA: 0x0008D0E0 File Offset: 0x0008B2E0
+	public bool PreAwake(int callcount)
+	{
+		this.on = SignalOut.Create("on", base.gameObject);
+		this.off = SignalOut.Create("off", base.gameObject);
+		this.pressed = SignalOut.Create("pressed", base.gameObject);
+		this.released = SignalOut.Create("released", base.gameObject);
+		this.turnOn = SignalIn.Create("turnOn", base.gameObject, new Action(this.turnOnButton));
+		this.turnOff = SignalIn.Create("turnOff", base.gameObject, new Action(this.turnOffButton));
+		this.turnOnNoSignal = SignalIn.Create("turnOnNoSignal", base.gameObject, new Action(this.turnOnButtonNoSignal));
+		this.turnOffNoSignal = SignalIn.Create("turnOffNoSignal", base.gameObject, new Action(this.turnOffButtonNoSignal));
+		return true;
+	}
+
+	// Token: 0x06000EE4 RID: 3812 RVA: 0x0008D1D0 File Offset: 0x0008B3D0
+	private void Start()
+	{
+		if (this.triggerGrab)
+		{
+			this.triggerGrab.enterTrigger.Register(this, ref this.triggerEnterHandle);
+			this.triggerGrab.exitTrigger.Register(this, ref this.triggerExitHandle);
+		}
+		this.SetIdleState();
+		if (this.startOn)
+		{
+			this.startOnToggler = true;
+		}
+	}
+
+	// Token: 0x06000EE5 RID: 3813 RVA: 0x0008D234 File Offset: 0x0008B434
+	private void SetIdleState()
+	{
+		this.boyHandling = null;
+		this.previousRawAction = true;
+		this.state = SwitchButton.State.Idle;
+	}
+
+	// Token: 0x06000EE6 RID: 3814 RVA: 0x0008D24C File Offset: 0x0008B44C
+	private void IdleState()
+	{
+		if (this.delayTimerPush > 0f)
+		{
+			this.delayTimerPush -= Time.deltaTime;
+		}
+		if (this.delayTimerAutoClick > 0f)
+		{
+			this.delayTimerAutoClick -= Time.deltaTime;
+			if (this.delayTimerAutoClick <= 0f)
+			{
+				this.clicking = false;
+			}
+		}
+		if (this.boyHandling == null && this.delayTimerPush <= 0f)
+		{
+			int i = 0;
+			int count = this.boysInside.Count;
+			while (i < count)
+			{
+				Boy boy = this.boysInside[i];
+				if (boy.specialBoyMode != Boy.SpecialBoyMode.InsideSub)
+				{
+					if (boy.input.rawAction && !this.previousRawAction && !boy.isDead && !(ScriptGlobals.boy.state is BoyGrabState))
+					{
+						this.clicking = true;
+						this.delayTimerAutoClick = this.delayAutoClick;
+					}
+					if (this.BorderCheck(boy))
+					{
+						if (this.facingTimer <= 0f)
+						{
+							if (boy.facing == 1f)
+							{
+								this.animBlend = this.animBlendRight;
+							}
+							else
+							{
+								this.animBlend = this.animBlendLeft;
+							}
+							if (!boy.visualBoy.upperBodyAnim)
+							{
+							}
+							this.FindBlend(boy);
+						}
+						else
+						{
+							this.facingTimer -= Time.deltaTime;
+						}
+						if (this.clicking)
+						{
+							this.SetPushState(boy);
+							break;
+						}
+						if (this.previousFacing != 0f && boy.facing != this.previousFacing)
+						{
+							this.facingTimer = this.facingDelay;
+						}
+					}
+					this.previousFacing = boy.facing;
+				}
+				i++;
+			}
+		}
+		if (ScriptGlobals.boyActive)
+		{
+			this.previousRawAction = ScriptGlobals.boy.input.rawAction;
+		}
+	}
+
+	// Token: 0x06000EE7 RID: 3815 RVA: 0x0008D450 File Offset: 0x0008B650
+	private void SetPushState(Boy boy)
+	{
+		this.boyHandling = boy;
+		this.pushFacing = boy.facing;
+		if (this.pushFacing == 1f)
+		{
+			this.animBlend = this.animBlendRightPush;
+		}
+		else
+		{
+			this.animBlend = this.animBlendLeftPush;
+		}
+		this.clicking = false;
+		this.delayTimerRelease = this.delayRelease;
+		this.delayTimerPush = this.delayPush;
+		this.state = SwitchButton.State.Idle;
+		this.UpdateState();
+	}
+
+	// Token: 0x06000EE8 RID: 3816 RVA: 0x0008D4CC File Offset: 0x0008B6CC
+	private void PushState()
+	{
+		if (this.delayTimerRelease > 0f)
+		{
+			this.delayTimerRelease -= Time.deltaTime;
+		}
+		if (this.delayTimerPush > 0f)
+		{
+			this.delayTimerPush -= Time.deltaTime;
+			if (this.delayTimerPush <= 0f)
+			{
+				this.SendSignal(this.pressed);
+				this.ToggleButton();
+				return;
+			}
+		}
+		if ((this.delayTimerRelease <= 0f && (!this.boyHandling.input.rawAction || this.boyHandling.facing != this.pushFacing)) || this.boyHandling.isDead)
+		{
+			this.Release();
+			return;
+		}
+		if (this.BorderCheck(this.boyHandling))
+		{
+			this.FindBlend(this.boyHandling);
+		}
+		else if (this.delayTimerPush <= 0f)
+		{
+			this.Release();
+		}
+	}
+
+	// Token: 0x06000EE9 RID: 3817 RVA: 0x0008D5CC File Offset: 0x0008B7CC
+	private void FindBlend(Boy boy)
+	{
+		float num = 0f;
+		float num2 = boy.transform.position.x - this.distPoint.position.x;
+		if (num2 < 0f)
+		{
+			num = -num2 / this.GetStart(boy);
+		}
+		else if (num2 > 0f)
+		{
+			num = num2 / this.GetEnd(boy);
+		}
+		num = Mathf.Clamp(num, -1f, 1f);
+		this.animBlend.currentBlendValue = num;
+	}
+
+	// Token: 0x06000EEA RID: 3818 RVA: 0x0008D654 File Offset: 0x0008B854
+	private void FixedUpdate()
+	{
+		if (this.boyHandling != null && this.boyHandling.specialBoyMode == Boy.SpecialBoyMode.InsideSub)
+		{
+			return;
+		}
+		this.UpdateState();
+		if (this.startOnToggler)
+		{
+			this.startOnToggler = false;
+			this.ToggleButton();
+		}
+	}
+
+	// Token: 0x06000EEB RID: 3819 RVA: 0x0008D6A4 File Offset: 0x0008B8A4
+	private void UpdateState()
+	{
+		if (this.state == SwitchButton.State.Idle)
+		{
+			this.IdleState();
+		}
+		else if (this.state == SwitchButton.State.Push)
+		{
+			this.PushState();
+		}
+	}
+
+	// Token: 0x06000EEC RID: 3820 RVA: 0x0008D6D0 File Offset: 0x0008B8D0
+	private bool BorderCheck(Boy boy)
+	{
+		float num = boy.transform.position.x - this.distPoint.position.x;
+		return num > this.GetStart(boy) && num < this.GetEnd(boy);
+	}
+
+	// Token: 0x06000EED RID: 3821 RVA: 0x0008D724 File Offset: 0x0008B924
+	private float GetStart(Boy boy)
+	{
+		if (boy.facing == -1f)
+		{
+			return this.startPosLeft.position.x - this.distPoint.position.x;
+		}
+		return this.startPosRight.position.x - this.distPoint.position.x;
+	}
+
+	// Token: 0x06000EEE RID: 3822 RVA: 0x0008D790 File Offset: 0x0008B990
+	private float GetEnd(Boy boy)
+	{
+		if (boy.facing == -1f)
+		{
+			return this.endPosLeft.position.x - this.distPoint.position.x;
+		}
+		return this.endPosRight.position.x - this.distPoint.position.x;
+	}
+
+	// Token: 0x06000EEF RID: 3823 RVA: 0x0008D7FC File Offset: 0x0008B9FC
+	public bool GetIsOn()
+	{
+		return this.buttonOn;
+	}
+
+	// Token: 0x06000EF0 RID: 3824 RVA: 0x0008D804 File Offset: 0x0008BA04
+	public void InvokeTurnOn()
+	{
+		this.turnOnButton();
+	}
+
+	// Token: 0x06000EF1 RID: 3825 RVA: 0x0008D80C File Offset: 0x0008BA0C
+	public void InvokeTurnOff()
+	{
+		this.turnOffButton();
+	}
+
+	// Token: 0x06000EF2 RID: 3826 RVA: 0x0008D814 File Offset: 0x0008BA14
+	private void turnOnButton()
+	{
+		this.buttonOn = true;
+		this.on.Signal();
+		if (this.singleToggle)
+		{
+			this.state = SwitchButton.State.None;
+		}
+	}
+
+	// Token: 0x06000EF3 RID: 3827 RVA: 0x0008D848 File Offset: 0x0008BA48
+	private void turnOffButton()
+	{
+		this.buttonOn = false;
+		this.off.Signal();
+		if (this.singleToggle)
+		{
+			this.state = SwitchButton.State.None;
+		}
+	}
+
+	// Token: 0x06000EF4 RID: 3828 RVA: 0x0008D87C File Offset: 0x0008BA7C
+	private void turnOnButtonNoSignal()
+	{
+		this.buttonOn = true;
+		if (this.singleToggle)
+		{
+			this.state = SwitchButton.State.None;
+		}
+	}
+
+	// Token: 0x06000EF5 RID: 3829 RVA: 0x0008D898 File Offset: 0x0008BA98
+	private void turnOffButtonNoSignal()
+	{
+		this.buttonOn = false;
+		if (this.singleToggle)
+		{
+			this.state = SwitchButton.State.None;
+		}
+	}
+
+	// Token: 0x06000EF6 RID: 3830 RVA: 0x0008D8B4 File Offset: 0x0008BAB4
+	private void ToggleButton()
+	{
+		this.buttonOn = !this.buttonOn;
+		if (this.buttonOn)
+		{
+			this.on.Signal();
+		}
+		else
+		{
+			this.off.Signal();
+		}
+	}
+
+	// Token: 0x06000EF7 RID: 3831 RVA: 0x0008D8EC File Offset: 0x0008BAEC
+	private void SendSignal(SignalOut s)
+	{
+		if (this.lastSignal != s)
+		{
+			this.lastSignal = s;
+			s.Signal();
+		}
+	}
+
+	// Token: 0x06000EF8 RID: 3832 RVA: 0x0008D908 File Offset: 0x0008BB08
+	private void Release()
+	{
+		if (this.toggleOnRelease)
+		{
+			this.ToggleButton();
+		}
+		this.SendSignal(this.released);
+		if (this.BorderCheck(this.boyHandling))
+		{
+			if (this.boyHandling.facing == 1f)
+			{
+				this.animBlend = this.animBlendRight;
+			}
+			else
+			{
+				this.animBlend = this.animBlendLeft;
+			}
+		}
+		this.delayTimerPush = this.delayRepush;
+		if (this.singleToggle)
+		{
+			this.state = SwitchButton.State.None;
+		}
+		else
+		{
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x06000EF9 RID: 3833 RVA: 0x0008D9A4 File Offset: 0x0008BBA4
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.triggerGrab.enterTrigger)
+		{
+			this.TriggerEnter(collider);
+		}
+		else if (sender == this.triggerGrab.exitTrigger)
+		{
+			this.TriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06000EFA RID: 3834 RVA: 0x0008D9E0 File Offset: 0x0008BBE0
+	private void TriggerEnter(Collider c)
+	{
+		if (c.attachedRigidbody)
+		{
+			Boy component = c.attachedRigidbody.GetComponent<Boy>();
+			if (component)
+			{
+				this.boysInside.Add(component);
+			}
+		}
+	}
+
+	// Token: 0x06000EFB RID: 3835 RVA: 0x0008DA20 File Offset: 0x0008BC20
+	private void TriggerExit(Collider c)
+	{
+		if (c.attachedRigidbody)
+		{
+			Boy component = c.attachedRigidbody.GetComponent<Boy>();
+			if (component)
+			{
+				this.clicking = false;
+				this.boysInside.Remove(component);
+			}
+		}
+	}
+
+	// Token: 0x04001AE1 RID: 6881
+	public CollisionEvents triggerGrab;
+
+	// Token: 0x04001AE2 RID: 6882
+	public AnimBlendNode animBlendRightPush;
+
+	// Token: 0x04001AE3 RID: 6883
+	public AnimBlendNode animBlendRight;
+
+	// Token: 0x04001AE4 RID: 6884
+	public AnimBlendNode animBlendLeftPush;
+
+	// Token: 0x04001AE5 RID: 6885
+	public AnimBlendNode animBlendLeft;
+
+	// Token: 0x04001AE6 RID: 6886
+	public Transform distPoint;
+
+	// Token: 0x04001AE7 RID: 6887
+	public Transform startPosRight;
+
+	// Token: 0x04001AE8 RID: 6888
+	public Transform endPosRight;
+
+	// Token: 0x04001AE9 RID: 6889
+	public Transform startPosLeft;
+
+	// Token: 0x04001AEA RID: 6890
+	public Transform endPosLeft;
+
+	// Token: 0x04001AEB RID: 6891
+	public bool startOn;
+
+	// Token: 0x04001AEC RID: 6892
+	public bool toggleOnRelease;
+
+	// Token: 0x04001AED RID: 6893
+	public bool singleToggle;
+
+	// Token: 0x04001AEE RID: 6894
+	private bool startOnToggler;
+
+	// Token: 0x04001AEF RID: 6895
+	private bool buttonOn;
+
+	// Token: 0x04001AF0 RID: 6896
+	private bool previousRawAction;
+
+	// Token: 0x04001AF1 RID: 6897
+	private bool clicking;
+
+	// Token: 0x04001AF2 RID: 6898
+	private float currentBlend;
+
+	// Token: 0x04001AF3 RID: 6899
+	private AnimBlendNode animBlend;
+
+	// Token: 0x04001AF4 RID: 6900
+	private float delayTimerRelease;
+
+	// Token: 0x04001AF5 RID: 6901
+	private float delayRelease = 0.08f;
+
+	// Token: 0x04001AF6 RID: 6902
+	private float delayTimerPush;
+
+	// Token: 0x04001AF7 RID: 6903
+	private float delayPush = 0.02f;
+
+	// Token: 0x04001AF8 RID: 6904
+	private float delayRepush;
+
+	// Token: 0x04001AF9 RID: 6905
+	private float delayTimerAutoClick;
+
+	// Token: 0x04001AFA RID: 6906
+	private float delayAutoClick = 0.6f;
+
+	// Token: 0x04001AFB RID: 6907
+	private SignalOut on;
+
+	// Token: 0x04001AFC RID: 6908
+	private SignalOut off;
+
+	// Token: 0x04001AFD RID: 6909
+	private SignalOut pressed;
+
+	// Token: 0x04001AFE RID: 6910
+	private SignalOut released;
+
+	// Token: 0x04001AFF RID: 6911
+	private SignalOut lastSignal;
+
+	// Token: 0x04001B00 RID: 6912
+	private SignalIn turnOn;
+
+	// Token: 0x04001B01 RID: 6913
+	private SignalIn turnOff;
+
+	// Token: 0x04001B02 RID: 6914
+	private SignalIn turnOnNoSignal;
+
+	// Token: 0x04001B03 RID: 6915
+	private SignalIn turnOffNoSignal;
+
+	// Token: 0x04001B04 RID: 6916
+	private Boy boyHandling;
+
+	// Token: 0x04001B05 RID: 6917
+	private float pushFacing;
+
+	// Token: 0x04001B06 RID: 6918
+	private float previousFacing;
+
+	// Token: 0x04001B07 RID: 6919
+	private float facingTimer;
+
+	// Token: 0x04001B08 RID: 6920
+	private float facingDelay = 0.4f;
+
+	// Token: 0x04001B09 RID: 6921
+	private SwitchButton.State state;
+
+	// Token: 0x04001B0A RID: 6922
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04001B0B RID: 6923
+	private int triggerExitHandle = -1;
+
+	// Token: 0x04001B0C RID: 6924
+	private List<Boy> boysInside = new List<Boy>();
+
+	// Token: 0x020001EF RID: 495
+	private enum State
+	{
+		// Token: 0x04001B0E RID: 6926
+		None,
+		// Token: 0x04001B0F RID: 6927
+		Idle,
+		// Token: 0x04001B10 RID: 6928
+		Push
+	}
+}

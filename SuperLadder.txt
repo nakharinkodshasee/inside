@@ -1,0 +1,469 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000422 RID: 1058
+public class SuperLadder : Device, IPreAwake
+{
+	// Token: 0x06001BB3 RID: 7091 RVA: 0x000F2180 File Offset: 0x000F0380
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, null);
+	}
+
+	// Token: 0x06001BB4 RID: 7092 RVA: 0x000F21A8 File Offset: 0x000F03A8
+	public bool PreAwake(int callcount)
+	{
+		this.loadComplete = SignalIn.Create("loadComplete", base.gameObject, new Action(this.OnLoadComplete));
+		return true;
+	}
+
+	// Token: 0x06001BB5 RID: 7093 RVA: 0x000F21D0 File Offset: 0x000F03D0
+	protected override void Start()
+	{
+		this.OnPreProcess();
+		base.Start();
+		this.animDevicePullLeftState = this.animDevice[this.animDevicePullLeft.name];
+		this.animDevicePullLeftState.speed = 0f;
+		this.animDevice.Play(this.animDevicePullLeftState.name);
+		this.grabTriggerTransform = this.triggerGrab.transform;
+		this.SetIdleState();
+	}
+
+	// Token: 0x06001BB6 RID: 7094 RVA: 0x000F2244 File Offset: 0x000F0444
+	private void SetIdleState()
+	{
+		this.state = SuperLadder.State.Idle;
+	}
+
+	// Token: 0x06001BB7 RID: 7095 RVA: 0x000F2250 File Offset: 0x000F0450
+	private void IdleState()
+	{
+		if (this.regrabTimer > 0f)
+		{
+			this.regrabTimer -= Time.deltaTime;
+		}
+		if (this.releaseTimer > 0f)
+		{
+			this.releaseTimer -= Time.deltaTime;
+			return;
+		}
+		for (int i = 0; i < this.boysInside.Count; i++)
+		{
+			Boy boy = this.boysInside[i];
+			if (this.regrabTimer <= 0f || Mathf.Abs(boy.input.stick.x) <= 0.3f)
+			{
+				if (Device.GrabCheck(boy, true) && !(boy.state is BoyLadderState))
+				{
+					this.SetGrabState(boy);
+					break;
+				}
+			}
+		}
+	}
+
+	// Token: 0x06001BB8 RID: 7096 RVA: 0x000F232C File Offset: 0x000F052C
+	private void SetGrabState(Boy boy)
+	{
+		float num = this.grabTriggerTransform.position.x + ((this.currentPullBlend <= 0.7f) ? 0f : this.boyGrabOffsetRight) - boy.pos.x;
+		if (Mathf.Abs(num) > ((this.currentPullBlend <= 0.7f) ? 0.7f : 0.5f))
+		{
+			return;
+		}
+		this.boyGrabbing = boy;
+		if (Mathf.Abs(this.velocityX) == 0f && this.currentPullBlend == 0f)
+		{
+			if (num < 0f)
+			{
+				this.currentGrabAnim = this.animGrabFarRight;
+				this.grabDir = SuperLadder.Direction.Right;
+			}
+			else if (Mathf.Abs(num) < 0.45f)
+			{
+				this.currentGrabAnim = this.animGrab;
+				this.grabDir = SuperLadder.Direction.Right;
+			}
+			else
+			{
+				this.currentGrabAnim = this.animGrabB;
+				this.grabDir = SuperLadder.Direction.Left;
+			}
+			BoyUtils.StartCustomAnim(this.boyGrabbing, this.currentGrabAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		else
+		{
+			this.grabDir = ((num >= 0f) ? SuperLadder.Direction.Left : SuperLadder.Direction.Right);
+		}
+		Device.SetVoicePassive();
+		this.previouslyPushing = false;
+		this.grabStunTimer = this.grabStunDelay;
+		this.state = SuperLadder.State.Grab;
+	}
+
+	// Token: 0x06001BB9 RID: 7097 RVA: 0x000F2488 File Offset: 0x000F0688
+	private void GrabState()
+	{
+		if (this.grabStunTimer > 0f)
+		{
+			this.grabStunTimer -= Time.deltaTime;
+		}
+		if ((this.grabStunTimer <= 0f && !this.boyGrabbing.input.rawAction) || this.boyGrabbing.state is BoyLadderState)
+		{
+			this.Release();
+			return;
+		}
+		VisualBoyCustomAnim visualBoyCustomAnim = this.boyGrabbing.visualBoy.state as VisualBoyCustomAnim;
+		if (visualBoyCustomAnim != null && visualBoyCustomAnim.anim == this.currentGrabAnim && this.currentGrabAnim.frame < this.currentGrabAnim.defaultfps * this.currentGrabDelay)
+		{
+			return;
+		}
+		float x = this.boyGrabbing.input.stick.x;
+		bool flag = this.velocityX == 0f && (this.currentPullBlend == 0f || this.currentPullBlend == 1f);
+		if (flag && Mathf.Abs(x) < 0.4f)
+		{
+			if (visualBoyCustomAnim == null || visualBoyCustomAnim.anim != this.currentGrabAnim || this.currentGrabAnim.animFinished)
+			{
+				AnimClipNode animClipNode;
+				if (this.grabDir == SuperLadder.Direction.Right)
+				{
+					animClipNode = ((this.currentPullBlend != 0f) ? this.animIdleRight : this.animIdleLeft);
+				}
+				else
+				{
+					animClipNode = ((this.currentPullBlend != 0f) ? this.animIdleRightB : this.animIdleLeftB);
+				}
+				if (visualBoyCustomAnim == null || visualBoyCustomAnim.anim != animClipNode)
+				{
+					BoyUtils.StartCustomAnim(this.boyGrabbing, animClipNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				}
+			}
+		}
+		else if (this.currentPullAnim != null && (visualBoyCustomAnim == null || visualBoyCustomAnim.anim != this.currentPullAnim))
+		{
+			AnimClipNode.GotFocusArg gotFocusArg;
+			if (this.currentPullAnim == this.animPullLeft || this.currentPullAnim == this.animPullLeftB)
+			{
+				gotFocusArg = new AnimClipNode.GotFocusArg(AnimClipNode.LoopingMode.FrozenEnding, this.animPullLeft.numFrames * (1f - this.currentPullBlend));
+			}
+			else
+			{
+				gotFocusArg = new AnimClipNode.GotFocusArg(AnimClipNode.LoopingMode.FrozenEnding, this.animPullRight.numFrames * this.currentPullBlend);
+			}
+			BoyUtils.StartCustomAnim(this.boyGrabbing, this.currentPullAnim, gotFocusArg, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		bool flag2 = Mathf.Abs(x) > 0.4f;
+		if (flag2)
+		{
+			float num = (this.currentRotation <= 10f) ? 1f : 0.5f;
+			this.velocityX += x * Time.deltaTime * this.pushForce * num;
+			if (this.grabDir == SuperLadder.Direction.Right)
+			{
+				this.currentPullAnim = ((x <= 0f) ? this.animPullLeft : this.animPullRight);
+			}
+			else
+			{
+				this.currentPullAnim = ((x <= 0f) ? this.animPullLeftB : this.animPullRightB);
+			}
+		}
+		if (flag2 != this.previouslyPushing)
+		{
+			if (flag2)
+			{
+				Device.SetVoiceActive();
+			}
+			else
+			{
+				Device.SetVoicePassive();
+			}
+		}
+		this.previouslyPushing = flag2;
+	}
+
+	// Token: 0x06001BBA RID: 7098 RVA: 0x000F2804 File Offset: 0x000F0A04
+	private void FixedUpdate()
+	{
+		if (this.state != SuperLadder.State.None)
+		{
+			SuperLadder.State state = this.state;
+			if (state != SuperLadder.State.Idle)
+			{
+				if (state == SuperLadder.State.Grab)
+				{
+					this.GrabState();
+				}
+			}
+			else
+			{
+				this.IdleState();
+			}
+			this.animPullLeft.frame = this.animPullLeft.numFrames * (1f - this.currentPullBlend);
+			this.animPullRight.frame = this.animPullRight.numFrames * this.currentPullBlend;
+			this.animPullLeftB.frame = this.animPullLeftB.numFrames * (1f - this.currentPullBlend);
+			this.animPullRightB.frame = this.animPullRightB.numFrames * this.currentPullBlend;
+		}
+	}
+
+	// Token: 0x06001BBB RID: 7099 RVA: 0x000F28CC File Offset: 0x000F0ACC
+	private void Update()
+	{
+		if (this.state != SuperLadder.State.None)
+		{
+			this.UpdateLadderForces();
+		}
+	}
+
+	// Token: 0x06001BBC RID: 7100 RVA: 0x000F28E0 File Offset: 0x000F0AE0
+	private void OnLoadComplete()
+	{
+		this.currentPullBlend = 1f;
+		if (this.animDevicePullLeftState == null)
+		{
+			this.animDevicePullLeftState = this.animDevice[this.animDevicePullLeft.name];
+			this.animDevicePullLeftState.speed = 0f;
+		}
+		this.animDevice.Play(this.animDevicePullLeftState.name);
+		this.animDevicePullLeftState.normalizedTime = 1f;
+	}
+
+	// Token: 0x06001BBD RID: 7101 RVA: 0x000F295C File Offset: 0x000F0B5C
+	private void UpdateLadderForces()
+	{
+		this.currentRotation = this.ladderPos.eulerAngles.x;
+		if (this.currentRotation > 180f)
+		{
+			this.currentRotation -= 360f;
+		}
+		if (Mathf.Abs(this.currentRotation) > this.ladderDeadZone)
+		{
+			if (this.currentRotation > 0f)
+			{
+				this.ladderLeft.SetActive(true);
+				this.ladderRight.SetActive(false);
+			}
+			else
+			{
+				this.ladderLeft.SetActive(false);
+				this.ladderRight.SetActive(true);
+			}
+		}
+		else
+		{
+			this.ladderLeft.SetActive(false);
+			this.ladderRight.SetActive(false);
+		}
+		bool flag = this.velocityX == 0f && (this.currentPullBlend == 1f || this.currentPullBlend == 0f);
+		if (flag)
+		{
+			return;
+		}
+		float num = this.currentRotation * this.angleFactor / 50f * this.gravityForce;
+		if (Mathf.Abs(num) < this.minGravity)
+		{
+			num = Mathf.Sign(num) * this.minGravity;
+		}
+		this.velocityX += num * Time.deltaTime;
+		this.currentPullBlend += this.velocityX * Time.deltaTime;
+		if (this.currentPullBlend > 1f || this.currentPullBlend < 0f)
+		{
+			float num2 = Mathf.Abs(this.velocityX) * 6f;
+			if (num2 > 0.4f)
+			{
+				SoundEngine.RTPCs.phyImpact.SetFast(num2 * this.audioImpactSensitivity, this.akGameObj, 0f);
+				SoundEngine.Events.ladderImpact.PostFast(this.akGameObj);
+				if (num2 > 1.6f && this.state != SuperLadder.State.Idle)
+				{
+					float power = 0.4f * Mathf.Clamp01(num2 / 4f);
+					RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, power, 0.2f, 0, 0f);
+				}
+			}
+			this.velocityX *= -0.25f;
+			this.currentPullBlend = ((this.currentPullBlend <= 1f) ? 0f : 1f);
+		}
+		if ((this.currentPullBlend == 0f || this.currentPullBlend == 1f) && Mathf.Abs(this.velocityX) < 0.1f)
+		{
+			this.velocityX = 0f;
+		}
+		this.animDevicePullLeftState.normalizedTime = this.currentPullBlend;
+	}
+
+	// Token: 0x06001BBE RID: 7102 RVA: 0x000F2BF4 File Offset: 0x000F0DF4
+	public void Release()
+	{
+		if (this.boyGrabbing && !this.boyGrabbing.isDead)
+		{
+			BoyUtils.ClearState(this.boyGrabbing, 0.27f);
+		}
+		this.releaseTimer = this.releaseDelay;
+		this.regrabTimer = this.regrabDelay;
+		Device.SetVoiceNone();
+		this.boyGrabbing = null;
+		this.SetIdleState();
+	}
+
+	// Token: 0x04003278 RID: 12920
+	public AnimClipNode animGrab;
+
+	// Token: 0x04003279 RID: 12921
+	public AnimClipNode animGrabB;
+
+	// Token: 0x0400327A RID: 12922
+	public AnimClipNode animGrabFarLeft;
+
+	// Token: 0x0400327B RID: 12923
+	public AnimClipNode animGrabFarRight;
+
+	// Token: 0x0400327C RID: 12924
+	public AnimClipNode animIdleLeft;
+
+	// Token: 0x0400327D RID: 12925
+	public AnimClipNode animIdleRight;
+
+	// Token: 0x0400327E RID: 12926
+	public AnimClipNode animIdleLeftB;
+
+	// Token: 0x0400327F RID: 12927
+	public AnimClipNode animIdleRightB;
+
+	// Token: 0x04003280 RID: 12928
+	public AnimClipNode animPullLeft;
+
+	// Token: 0x04003281 RID: 12929
+	public AnimClipNode animPullRight;
+
+	// Token: 0x04003282 RID: 12930
+	public AnimClipNode animPullLeftB;
+
+	// Token: 0x04003283 RID: 12931
+	public AnimClipNode animPullRightB;
+
+	// Token: 0x04003284 RID: 12932
+	public Animation animDevice;
+
+	// Token: 0x04003285 RID: 12933
+	public AnimationClip animDevicePullLeft;
+
+	// Token: 0x04003286 RID: 12934
+	public AnimationClip animDevicePullRight;
+
+	// Token: 0x04003287 RID: 12935
+	public Transform ladderPos;
+
+	// Token: 0x04003288 RID: 12936
+	private Transform grabTriggerTransform;
+
+	// Token: 0x04003289 RID: 12937
+	public GameObject ladderLeft;
+
+	// Token: 0x0400328A RID: 12938
+	public GameObject ladderRight;
+
+	// Token: 0x0400328B RID: 12939
+	public float ladderDeadZone = 2f;
+
+	// Token: 0x0400328C RID: 12940
+	public float pushForce = 1f;
+
+	// Token: 0x0400328D RID: 12941
+	public float gravityForce;
+
+	// Token: 0x0400328E RID: 12942
+	public float minGravity = 0.1f;
+
+	// Token: 0x0400328F RID: 12943
+	public float angleFactor = 5f;
+
+	// Token: 0x04003290 RID: 12944
+	public float audioImpactSensitivity = 10f;
+
+	// Token: 0x04003291 RID: 12945
+	private SignalIn loadComplete;
+
+	// Token: 0x04003292 RID: 12946
+	private float releaseTimer;
+
+	// Token: 0x04003293 RID: 12947
+	private float releaseDelay = 0.12f;
+
+	// Token: 0x04003294 RID: 12948
+	private float grabStunTimer;
+
+	// Token: 0x04003295 RID: 12949
+	private float grabStunDelay = 0.15f;
+
+	// Token: 0x04003296 RID: 12950
+	private float regrabTimer;
+
+	// Token: 0x04003297 RID: 12951
+	private float regrabDelay = 0.5f;
+
+	// Token: 0x04003298 RID: 12952
+	private float currentRotation;
+
+	// Token: 0x04003299 RID: 12953
+	private float currentPullBlend;
+
+	// Token: 0x0400329A RID: 12954
+	private float velocityX;
+
+	// Token: 0x0400329B RID: 12955
+	private AnimationState animDevicePullLeftState;
+
+	// Token: 0x0400329C RID: 12956
+	private AnimationState animDevicePullRightState;
+
+	// Token: 0x0400329D RID: 12957
+	private AnimClipNode currentPullAnim;
+
+	// Token: 0x0400329E RID: 12958
+	private AnimClipNode currentGrabAnim;
+
+	// Token: 0x0400329F RID: 12959
+	private float boyGrabOffsetRight = 0.15f;
+
+	// Token: 0x040032A0 RID: 12960
+	private float currentGrabDelay = 0.3f;
+
+	// Token: 0x040032A1 RID: 12961
+	private bool previouslyPushing;
+
+	// Token: 0x040032A2 RID: 12962
+	private SuperLadder.Direction grabDir;
+
+	// Token: 0x040032A3 RID: 12963
+	private SuperLadder.State state;
+
+	// Token: 0x040032A4 RID: 12964
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObj;
+
+	// Token: 0x040032A5 RID: 12965
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x02000423 RID: 1059
+	private enum Direction
+	{
+		// Token: 0x040032A7 RID: 12967
+		Left,
+		// Token: 0x040032A8 RID: 12968
+		Right
+	}
+
+	// Token: 0x02000424 RID: 1060
+	private enum State
+	{
+		// Token: 0x040032AA RID: 12970
+		None,
+		// Token: 0x040032AB RID: 12971
+		Idle,
+		// Token: 0x040032AC RID: 12972
+		Grab
+	}
+}

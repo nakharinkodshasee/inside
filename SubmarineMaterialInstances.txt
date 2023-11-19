@@ -1,0 +1,40 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020003BE RID: 958
+public class SubmarineMaterialInstances : MonoBehaviour
+{
+	// Token: 0x060019E8 RID: 6632 RVA: 0x000E27F4 File Offset: 0x000E09F4
+	private void Awake()
+	{
+		this.subMaterialInstanceColorProperties = new List<MaterialInstance.ColorProperty>();
+		this.subAmbientColors = new List<Color>();
+		SubmarineMaterialInstances.subAmbientBlending = false;
+		int i = 0;
+		int count = this.subMaterialInstances.Count;
+		while (i < count)
+		{
+			MaterialInstance.ColorProperty orAddColorProperty = this.subMaterialInstances[i].GetOrAddColorProperty("_AmbientColor");
+			this.subMaterialInstanceColorProperties.Add(orAddColorProperty);
+			Color colorValue = this.subMaterialInstances[i].GetColorValue(orAddColorProperty);
+			this.subAmbientColors.Add(colorValue);
+			i++;
+		}
+	}
+
+	// Token: 0x04002E92 RID: 11922
+	public List<MaterialInstance> subMaterialInstances = new List<MaterialInstance>();
+
+	// Token: 0x04002E93 RID: 11923
+	[HideInInspector]
+	public List<MaterialInstance.ColorProperty> subMaterialInstanceColorProperties = new List<MaterialInstance.ColorProperty>();
+
+	// Token: 0x04002E94 RID: 11924
+	[HideInInspector]
+	public List<Color> subAmbientColors = new List<Color>();
+
+	// Token: 0x04002E95 RID: 11925
+	[HideInInspector]
+	public static bool subAmbientBlending;
+}

@@ -1,0 +1,925 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003B2 RID: 946
+public class SubmarineBoyInteraction : MonoBehaviour, IFastEventExListener<GameManager.Load>
+{
+	// Token: 0x06001961 RID: 6497 RVA: 0x000DBF2C File Offset: 0x000DA12C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioSubmarineEntered = new AudioEventSimpleLocal("submarine_entered", akGameObj);
+		this.audioSubmarineExited = new AudioEventSimpleLocal("submarine_exited", akGameObj);
+		this.audioHatchOpenOutside = new AudioEventSimpleLocal("submarine_hatch_openOutside", akGameObj);
+		this.audioHatchOpenInside = new AudioEventSimpleLocal("submarine_hatch_openInside", akGameObj);
+		this.audioHatchCloseSmooth = new AudioEventSimpleLocal("submarine_hatch_closeSmooth", akGameObj);
+		this.audioHatchCloseBounce = new AudioEventSimpleLocal("submarine_hatch_closeBounce", akGameObj);
+		this.audioHatchCloseNoBounce = new AudioEventSimpleLocal("submarine_hatch_closeNoBounce", akGameObj);
+	}
+
+	// Token: 0x06001962 RID: 6498 RVA: 0x000DBFD0 File Offset: 0x000DA1D0
+	private void Awake()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x06001963 RID: 6499 RVA: 0x000DBFD8 File Offset: 0x000DA1D8
+	private void Start()
+	{
+		this.buoyancy = base.GetComponent<BuoyancyForce>();
+		if (this.mState != SubmarineBoyInteraction.State.Driving)
+		{
+			this.mState = SubmarineBoyInteraction.State.Idle;
+		}
+		if (this.submarine == null)
+		{
+			this.submarine = base.GetComponent<Submarine>();
+		}
+		GameManager.prepareLoad.Register(this, ref this.prepareLoadHandle);
+		this.animHatchCloseState = this.submarine.hatchOpenAnimation["CloseAnim"];
+		if (this.aiToStartInsideSub)
+		{
+			this.mBoy = this.aiToStartInsideSub;
+			this.StartInside();
+		}
+	}
+
+	// Token: 0x06001964 RID: 6500 RVA: 0x000DC070 File Offset: 0x000DA270
+	private void OnDestroy()
+	{
+		GameManager.prepareLoad.Unregister(ref this.prepareLoadHandle);
+	}
+
+	// Token: 0x06001965 RID: 6501 RVA: 0x000DC084 File Offset: 0x000DA284
+	public void OnFastEventEx(FastEventEx<GameManager.Load> sender, ref GameManager.Load arg)
+	{
+		if (sender == GameManager.prepareLoad)
+		{
+			this.mState = SubmarineBoyInteraction.State.Idle;
+			this.submarine.Input = null;
+			if (this.buoyancy != null)
+			{
+				this.buoyancy.Reset();
+			}
+		}
+	}
+
+	// Token: 0x06001966 RID: 6502 RVA: 0x000DC0CC File Offset: 0x000DA2CC
+	public Boy GetControllingBoy()
+	{
+		if (this.mState != SubmarineBoyInteraction.State.Idle)
+		{
+			return this.mBoy;
+		}
+		return null;
+	}
+
+	// Token: 0x06001967 RID: 6503 RVA: 0x000DC0E4 File Offset: 0x000DA2E4
+	public void Reset()
+	{
+		this.mState = SubmarineBoyInteraction.State.Idle;
+		this.currentAnim = null;
+		this.previousHatchCloseTime = 1f;
+	}
+
+	// Token: 0x06001968 RID: 6504 RVA: 0x000DC100 File Offset: 0x000DA300
+	private void OnDisable()
+	{
+		if (base.gameObject.activeInHierarchy)
+		{
+			this.audioSubmarineExited.PostFast();
+		}
+	}
+
+	// Token: 0x06001969 RID: 6505 RVA: 0x000DC120 File Offset: 0x000DA320
+	public void SetAllowExit(bool value)
+	{
+		this.mAllowExit = value;
+	}
+
+	// Token: 0x0600196A RID: 6506 RVA: 0x000DC12C File Offset: 0x000DA32C
+	public void SubmarineDestroyed()
+	{
+		if (this.mState == SubmarineBoyInteraction.State.Enter || this.mState == SubmarineBoyInteraction.State.Exit || this.mState == SubmarineBoyInteraction.State.Driving)
+		{
+			this.mBoy.Kill();
+		}
+	}
+
+	// Token: 0x0600196B RID: 6507 RVA: 0x000DC160 File Offset: 0x000DA360
+	private void SetAnim(AnimClipNode animToSet)
+	{
+		if (animToSet != this.currentAnim)
+		{
+			BoyUtils.StartCustomAnim(this.mBoy, animToSet, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			if (GameManager.IsLoading())
+			{
+				this.mBoy.visualBoy.StartBlend(0f);
+			}
+			this.currentAnim = animToSet;
+		}
+	}
+
+	// Token: 0x0600196C RID: 6508 RVA: 0x000DC1C0 File Offset: 0x000DA3C0
+	private void IdleState()
+	{
+	}
+
+	// Token: 0x0600196D RID: 6509 RVA: 0x000DC1C4 File Offset: 0x000DA3C4
+	private AnimClipNode GetEnterAnimation()
+	{
+		this.usingLongEnterAnimation = this.submarine.useLongEnterAnim;
+		this.hatchOpened = false;
+		AnimClipNode result = this.enterAnimation;
+		float facing = this.mBoy.facing;
+		float wantedFacing = this.subGyro.GetWantedFacing();
+		float num = this.mBoy.pos.x - base.transform.position.x;
+		if (this.submarine.useLongEnterAnim)
+		{
+			result = this.longEnterAnimation;
+		}
+		if (wantedFacing * num > 0f)
+		{
+			if (wantedFacing * facing > 0f)
+			{
+				if (this.submarine.useLongEnterAnim)
+				{
+					result = this.longEnterBWAnimation;
+				}
+				else
+				{
+					result = this.enterBWAnimation;
+				}
+			}
+			else if (this.submarine.useLongEnterAnim)
+			{
+				result = this.longEnterFWAnimation;
+			}
+			else
+			{
+				result = this.enterFWAnimation;
+			}
+		}
+		this.submarine.useLongEnterAnim = false;
+		return result;
+	}
+
+	// Token: 0x0600196E RID: 6510 RVA: 0x000DC2BC File Offset: 0x000DA4BC
+	public bool GetBoyIsInsideSubmarine()
+	{
+		return this.boyIsInside;
+	}
+
+	// Token: 0x0600196F RID: 6511 RVA: 0x000DC2C4 File Offset: 0x000DA4C4
+	public bool AllowEnterSub()
+	{
+		return this.submarine.GetDistanceFromSurfaceToSubTop() < 0f;
+	}
+
+	// Token: 0x06001970 RID: 6512 RVA: 0x000DC2E0 File Offset: 0x000DA4E0
+	public bool EnterSub(Boy boy)
+	{
+		if (this.submarine.GetDistanceFromSurfaceToSubTop() >= 0f)
+		{
+			return false;
+		}
+		this.mBoy = boy;
+		AnimClipNode animClipNode = this.GetEnterAnimation();
+		animClipNode.transform.localPosition = new Vector3(0f, this.GetEnterAnimOffset(animClipNode, 0f), 0f);
+		if (animClipNode != null)
+		{
+			this.SetAnim(animClipNode);
+		}
+		this.closeTimer = this.closeDelay;
+		if (this.usingLongEnterAnimation)
+		{
+			this.closeTimer += 0.2f;
+		}
+		this.allowReExitButton = !this.mBoy.input.rawAction;
+		this.allowReExitStick = (this.mBoy.input.looseDir.y < 0.5f);
+		this.mState = SubmarineBoyInteraction.State.Enter;
+		this.mBoy.specialBoyMode = Boy.SpecialBoyMode.InsideSub;
+		if (!this.usingLongEnterAnimation)
+		{
+			this.submarine.OpenHatch();
+			this.audioHatchOpenOutside.PostFast();
+		}
+		return true;
+	}
+
+	// Token: 0x06001971 RID: 6513 RVA: 0x000DC3E8 File Offset: 0x000DA5E8
+	public void TeleportBoyInside(Boy boy)
+	{
+		this.mBoy = boy;
+		if (boy == ScriptGlobals.boy)
+		{
+			this.audioSubmarineEntered.PostFast();
+		}
+		this.StartInside();
+	}
+
+	// Token: 0x06001972 RID: 6514 RVA: 0x000DC414 File Offset: 0x000DA614
+	private void StartInside()
+	{
+		this.mBoy.Teleport(base.transform.position);
+		this.SetAnim(this.drivingIdleAnimation);
+		this.fadeControlsIn = 0f;
+		this.submarine.Input = this.mBoy.input;
+		this.mBoy.specialBoyMode = Boy.SpecialBoyMode.InsideSub;
+		this.mState = SubmarineBoyInteraction.State.Driving;
+		this.mAllowExit = true;
+		this.climbController.AddBoy(this.mBoy);
+		this.climbController.GiveInfiniteAir(this.mBoy);
+		this.submarine.Input = this.mBoy.input;
+		this.mBoy.transform.position = base.transform.position;
+		this.boyIsInside = true;
+	}
+
+	// Token: 0x06001973 RID: 6515 RVA: 0x000DC4D8 File Offset: 0x000DA6D8
+	private float GetExitAnimOffset(AnimClipNode anim, float frame)
+	{
+		if (this.mBoy == ScriptGlobals.boy)
+		{
+			return 0f;
+		}
+		float num = frame / anim.numFrames;
+		if (num < 0.4f)
+		{
+			return 0f;
+		}
+		num = Mathf.Min((num - 0.4f) * 2.5f, 1f);
+		return -0.6f * num;
+	}
+
+	// Token: 0x06001974 RID: 6516 RVA: 0x000DC53C File Offset: 0x000DA73C
+	private float GetEnterAnimOffset(AnimClipNode anim, float frame)
+	{
+		if (this.mBoy == ScriptGlobals.boy)
+		{
+			return 0f;
+		}
+		float num = frame / anim.numFrames;
+		if (num < 0.3f)
+		{
+			return -0.35f;
+		}
+		num = Mathf.Min((num - 0.3f) * 3.5f, 1f);
+		return -0.35f * (1f - num);
+	}
+
+	// Token: 0x06001975 RID: 6517 RVA: 0x000DC5A4 File Offset: 0x000DA7A4
+	private void EnterState()
+	{
+		this.mBoy.specialBoyMode = Boy.SpecialBoyMode.InsideSub;
+		bool flag = this.mBoy.input.looseDir.y < -0.4f;
+		if (GameInput.controllerType == GameController.Type.Digital)
+		{
+			this.allowReExitStick = ((this.allowReExitStick || this.mBoy.input.looseDir.y < 0.5f) && !this.mBoy.input.rawAction);
+		}
+		else
+		{
+			this.allowReExitStick = ((this.allowReExitStick || this.mBoy.input.looseDir.y < 0.5f) && !this.mBoy.input.rawJump);
+		}
+		this.allowReExitButton = (this.allowReExitButton || !this.mBoy.input.rawAction);
+		if (this.usingLongEnterAnimation)
+		{
+			if (this.currentAnim.frame < 18f)
+			{
+				return;
+			}
+			if (!this.hatchOpened)
+			{
+				this.submarine.OpenHatch();
+				this.audioHatchOpenOutside.PostFast();
+				this.hatchOpened = true;
+			}
+		}
+		bool flag2 = this.mBoy != ScriptGlobals.boy && !this.mBoy.isMindControlled;
+		if (this.mBoy.specialBoyMode != Boy.SpecialBoyMode.InsideSub)
+		{
+			this.mState = SubmarineBoyInteraction.State.Idle;
+			this.submarine.Input = null;
+			this.submarine.UpdateThrusters();
+			return;
+		}
+		if (flag2 || (this.submarine.SubOnSurface() && this.submarine.GetComponent<Rigidbody>().angularVelocity.magnitude < 1f && this.submarine.transform.TransformDirection(Vector3.up).y > 0.9f))
+		{
+			this.currentAnim.transform.localPosition = new Vector3(0f, this.GetEnterAnimOffset(this.currentAnim, this.currentAnim.frame), 0f);
+			if (flag2 || (this.mBoy.input.stick.y > 0.7f && this.allowReExitStick) || (this.mBoy.input.rawAction && this.allowReExitButton && !flag))
+			{
+				float num = this.currentAnim.frame;
+				if (this.usingLongEnterAnimation)
+				{
+					num -= 25f;
+				}
+				if (num > 10f && num < 20f)
+				{
+					this.currentAnim = this.exitAnimation;
+					float num2 = 24f - (num - 10f);
+					this.allowReEnterButton = !this.mBoy.input.rawAction;
+					this.allowReEnterStick = (this.mBoy.input.looseDir.y > -0.5f);
+					this.mState = SubmarineBoyInteraction.State.Exit;
+					this.submarine.Input = null;
+					this.submarine.UpdateThrusters();
+					this.currentAnim.transform.localPosition = new Vector3(0f, this.GetExitAnimOffset(this.currentAnim, num2), 0f);
+					BoyUtils.StartCustomAnim(this.mBoy, this.currentAnim, new AnimClipNode.GotFocusArg(AnimClipNode.LoopingMode.None, num2), 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+					return;
+				}
+				if (num > 30f && !flag2)
+				{
+					this.currentAnim = this.exitAnimation;
+					this.mState = SubmarineBoyInteraction.State.Exit;
+					this.submarine.Input = null;
+					this.submarine.UpdateThrusters();
+					this.allowReEnterButton = !this.mBoy.input.rawAction;
+					this.allowReEnterStick = (this.mBoy.input.looseDir.y > -0.5f);
+					this.currentAnim.transform.localPosition = new Vector3(0f, this.GetExitAnimOffset(this.currentAnim, 0f), 0f);
+					BoyUtils.StartCustomAnim(this.mBoy, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				}
+			}
+		}
+		if (this.closeTimer > 0f)
+		{
+			this.closeTimer -= Time.deltaTime;
+			if (this.closeTimer <= 0f)
+			{
+				this.submarine.CloseHatch();
+			}
+		}
+		if (!this.currentAnim.animFinished)
+		{
+			return;
+		}
+		if (this.mBoy == ScriptGlobals.boy)
+		{
+			this.audioSubmarineEntered.PostFast();
+		}
+		this.fadeControlsIn = 0f;
+		this.SetAnim(this.drivingAnimation);
+		this.submarine.Input = this.mBoy.input;
+		this.mBoy.specialBoyMode = Boy.SpecialBoyMode.InsideSub;
+		this.mState = SubmarineBoyInteraction.State.Driving;
+		this.mAllowExit = true;
+		this.boyIsInside = true;
+	}
+
+	// Token: 0x06001976 RID: 6518 RVA: 0x000DCAB4 File Offset: 0x000DACB4
+	private AnimClipNode GetDriveAnim()
+	{
+		vector2f stick = this.submarine.Input.stick;
+		AnimClipNode animClipNode;
+		if (stick.sqrMagnitude == 0f)
+		{
+			animClipNode = this.drivingIdleAnimation;
+		}
+		else if (Mathf.Abs(stick.y) > Mathf.Abs(stick.x))
+		{
+			float facing = this.mBoy.facing;
+			animClipNode = ((stick.y <= 0f) ? this.drivingDownAnimation : this.drivingUpAnimation);
+			if (animClipNode == this.drivingDownAnimation && facing == -1f)
+			{
+				animClipNode = this.drivingDownFlippedAnimation;
+			}
+		}
+		else
+		{
+			float facing2 = this.mBoy.facing;
+			animClipNode = ((stick.x * facing2 <= 0f) ? this.drivingBackAnimation : this.drivingAnimation);
+			if (animClipNode == this.drivingBackAnimation && facing2 == -1f)
+			{
+				animClipNode = this.drivingBackFlippedAnimation;
+			}
+		}
+		return animClipNode;
+	}
+
+	// Token: 0x06001977 RID: 6519 RVA: 0x000DCBBC File Offset: 0x000DADBC
+	private void UpdateDrivingAnim()
+	{
+		float num = this.mBoy.facing;
+		if (this.subGyro != null)
+		{
+			num = this.subGyro.GetWantedFacing();
+		}
+		float num2;
+		if (this.submarine.velocity3.x > 0.2f)
+		{
+			num2 = 1f;
+		}
+		else if (this.submarine.velocity3.x < -0.2f)
+		{
+			num2 = -1f;
+		}
+		else
+		{
+			num2 = this.lastSubVel;
+		}
+		this.lastSubVel = num2;
+		AnimClipNode driveAnim = this.GetDriveAnim();
+		this.boostTimer -= Time.deltaTime;
+		if (this.submarine.booster.IsBoosting || this.boostTimer > 0f)
+		{
+			driveAnim = this.boostingAnimation;
+			if (num != Mathf.Sign(this.submarine.velocity3.x))
+			{
+				driveAnim = this.boostingBackAnimation;
+			}
+			if (this.currentAnim != this.boostingAnimation && this.currentAnim != this.boostingBackAnimation)
+			{
+				this.boostTimer = driveAnim.fps / driveAnim.numFrames - 0.1f;
+			}
+		}
+		this.SetAnim(driveAnim);
+	}
+
+	// Token: 0x06001978 RID: 6520 RVA: 0x000DCD14 File Offset: 0x000DAF14
+	private void UpdateLever(Transform lever, int handIndex, float distOffset, float fadeIn)
+	{
+		if (lever)
+		{
+			SpecificBones specificBones = this.mBoy.visualBoy.actor.specificBones;
+			Transform transform = this.mBoy.visualBoy.actor.bones[specificBones.wrists[handIndex]].transform;
+			Vector3 vector = transform.TransformPoint(-0.04f, 0.04f, 0f);
+			Vector3 vector2 = vector - lever.position;
+			Quaternion rotation = lever.rotation;
+			Quaternion quaternion = Quaternion.LookRotation(vector2, lever.up);
+			if (fadeIn < 1f)
+			{
+				quaternion = Quaternion.Slerp(rotation, quaternion, fadeIn);
+			}
+			lever.rotation = quaternion;
+		}
+	}
+
+	// Token: 0x06001979 RID: 6521 RVA: 0x000DCDD0 File Offset: 0x000DAFD0
+	private void UpdateControlLevers(float fadeIn)
+	{
+		this.leftOffset = Mathf.Max(this.leftOffset - Time.deltaTime * 0.1f, 0f);
+		this.UpdateLever(this.leftLever, 0, this.leftOffset, fadeIn);
+		this.UpdateLever(this.rightLever, 1, 0.04f - this.leftOffset, fadeIn);
+	}
+
+	// Token: 0x0600197A RID: 6522 RVA: 0x000DCE30 File Offset: 0x000DB030
+	private void DrivingState()
+	{
+		this.fadeControlsIn = Mathf.Min(this.fadeControlsIn + Time.deltaTime, 1f);
+		this.UpdateDrivingAnim();
+		if (!this.submarine.IsStuck() && !this.mAllowExit)
+		{
+			return;
+		}
+		if (!GameManager.IsLoading())
+		{
+			this.HandleExit();
+		}
+	}
+
+	// Token: 0x0600197B RID: 6523 RVA: 0x000DCE8C File Offset: 0x000DB08C
+	private void HandleExit()
+	{
+		this.allowReExitButton = (this.allowReExitButton || !this.mBoy.input.rawAction);
+		bool flag = (this.submarine.GetComponent<Rigidbody>().velocity.y < -1f && this.submarine.GetDistanceFromSurfaceToSubTop() > -0.4f) || this.submarine.GetComponent<Rigidbody>().velocity.y < -2f;
+		if (flag && this.mBoy.input.stick.y > 0.85f)
+		{
+			this.timeSinceStickDown = 0.1f;
+		}
+		if (this.canExit)
+		{
+			bool flag2 = ((this.mBoy.input.rawAction && this.allowReExitButton) || (this.submarine.allowStickLeave && this.mBoy.input.stick.y > 0.85f && this.timeSinceStickDown < 0.1f)) && !flag && !this.mBoy.input.rawJump;
+			if (GameInput.controllerType == GameController.Type.Digital)
+			{
+				flag2 = (this.submarine.allowStickLeave && this.mBoy.input.stick.y > 0.85f && this.timeSinceStickDown < 0.1f && !flag && !this.mBoy.input.rawAction);
+			}
+			if (flag2 && this.submarine.velocity3.y < 3f && !this.submarine.booster.IsBoosting && this.submarine.SubOnSurface() && this.submarine.GetComponent<Rigidbody>().angularVelocity.magnitude < 1f && this.submarine.transform.TransformDirection(Vector3.up).y > 0.9f)
+			{
+				if (this.exitAnimation != null)
+				{
+					this.SetAnim(this.exitAnimation);
+				}
+				if (this.mBoy == ScriptGlobals.boy)
+				{
+					this.audioSubmarineExited.PostFast();
+				}
+				this.submarine.Input = null;
+				this.submarine.UpdateThrusters();
+				this.allowReEnterButton = !this.mBoy.input.rawAction;
+				this.allowReEnterStick = (this.mBoy.input.looseDir.y > -0.5f);
+				this.mState = SubmarineBoyInteraction.State.Exit;
+			}
+		}
+		if ((double)this.mBoy.input.looseDir.y < 0.5 || this.submarine.IsStuck())
+		{
+			this.timeSinceStickDown = 0f;
+		}
+		else
+		{
+			this.timeSinceStickDown += Time.deltaTime;
+		}
+	}
+
+	// Token: 0x0600197C RID: 6524 RVA: 0x000DD1D0 File Offset: 0x000DB3D0
+	private void ExitState()
+	{
+		bool flag = this.mBoy.input.stick.y > 0.4f;
+		this.allowReEnterStick = (this.allowReEnterStick || this.mBoy.input.looseDir.y > -0.5f);
+		if (GameInput.controllerType == GameController.Type.Digital)
+		{
+			this.allowReEnterButton = (this.allowReEnterButton || !this.mBoy.input.rawJump);
+		}
+		else
+		{
+			this.allowReEnterButton = (this.allowReEnterButton || !this.mBoy.input.rawAction);
+		}
+		if (this.currentAnim != this.exitAnimationRunBW)
+		{
+			float num = this.GetExitAnimOffset(this.currentAnim, this.currentAnim.frame);
+			float num2 = 0f;
+			if (num < -0.4f)
+			{
+				num2 = num + 0.4f;
+				num = -0.4f + num2 * 0.2f;
+			}
+			this.currentAnim.transform.localPosition = new Vector3(num2, num, 0f);
+		}
+		float frame = this.exitAnimation.frame;
+		bool flag2 = frame < 10f && this.mBoy.input.rawJump;
+		if (GameInput.controllerType == GameController.Type.Digital)
+		{
+			flag2 = (frame < 10f && this.mBoy.input.rawAction);
+		}
+		if (frame >= 7f && !this.submarine.GetHatchOpened())
+		{
+			if (!this.submarine.hatchOpenAnimation.IsPlaying("OpenAnim"))
+			{
+				this.audioHatchOpenInside.PostFast();
+			}
+			this.submarine.OpenHatch();
+		}
+		if (frame > 20f)
+		{
+			this.submarine.CloseHatch();
+		}
+		if (frame > 34f && this.mBoy.input.looseDir.x * this.mBoy.facing > 0f)
+		{
+			this.mBoy.visualBoy.SetTheme(null, VisualBoy.ThemePriority.High);
+			this.mBoy.specialBoyMode = Boy.SpecialBoyMode.None;
+			this.mState = SubmarineBoyInteraction.State.Idle;
+			BoyUtils.ClearState(this.mBoy, -1f);
+			this.climbController.BoyEarlyOutOfHatch(this.mBoy);
+			this.boyIsInside = false;
+			return;
+		}
+		if (!this.mBoy.isMindControlled && (flag2 || (this.mBoy.input.stick.y < -0.7f && this.allowReEnterStick) || (this.mBoy.input.rawAction && this.allowReEnterButton && !flag)))
+		{
+			this.closeTimer = 0.1f;
+			if (this.enterBWAnimation != null)
+			{
+				float num3 = 0f;
+				if (this.exitAnimation != null)
+				{
+					if (frame < 28f)
+					{
+						num3 = 12f + (1f - frame / 28f) * 18f;
+					}
+					else
+					{
+						this.closeTimer = this.closeDelay;
+						num3 = 0f;
+					}
+				}
+				this.currentAnim = this.enterBWAnimation;
+				this.currentAnim.transform.localPosition = new Vector3(0f, this.GetEnterAnimOffset(this.currentAnim, num3), 0f);
+				BoyUtils.StartCustomAnim(this.mBoy, this.currentAnim, new AnimClipNode.GotFocusArg(AnimClipNode.LoopingMode.None, num3), 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			}
+			this.mBoy.specialBoyMode = Boy.SpecialBoyMode.InsideSub;
+			this.allowReExitButton = !this.mBoy.input.rawAction;
+			this.allowReExitStick = (this.mBoy.input.looseDir.y < 0.5f);
+			this.submarine.OpenHatch();
+			this.mState = SubmarineBoyInteraction.State.Enter;
+			if (flag2)
+			{
+				this.submarine.Input = this.mBoy.input;
+			}
+			return;
+		}
+		if (this.currentAnim.frame > 20f && this.currentAnim.frame < 30f)
+		{
+			float num4 = this.mBoy.input.looseDir.x * this.subGyro.GetWantedFacing();
+			AnimClipNode animClipNode = this.currentAnim;
+			if (num4 < 0f)
+			{
+				if (this.currentAnim == this.exitAnimation)
+				{
+					animClipNode = this.exitAnimationRunBW;
+					if (this.mBoy == ScriptGlobals.boy)
+					{
+						this.exitAnimationRunBW.transform.localPosition = Vector3.zero;
+					}
+					else
+					{
+						this.exitAnimationRunBW.transform.localPosition = new Vector3(0f, -0.85f, 0f);
+					}
+				}
+			}
+			else if (this.currentAnim == this.exitAnimationRunBW)
+			{
+				animClipNode = this.exitAnimation;
+			}
+			if (animClipNode != this.exitAnimation)
+			{
+				float frame2 = this.currentAnim.frame;
+				this.currentAnim = animClipNode;
+				BoyUtils.StartCustomAnim(this.mBoy, this.currentAnim, new AnimClipNode.GotFocusArg(AnimClipNode.LoopingMode.None, frame2), 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			}
+		}
+		if (!this.currentAnim.animFinished)
+		{
+			return;
+		}
+		this.mBoy.specialBoyMode = Boy.SpecialBoyMode.None;
+		this.mState = SubmarineBoyInteraction.State.Idle;
+		this.boyIsInside = false;
+	}
+
+	// Token: 0x0600197D RID: 6525 RVA: 0x000DD764 File Offset: 0x000DB964
+	private void FixedUpdate()
+	{
+		this.firstUpdateTimer += Time.deltaTime;
+		if (!this.firstUpdate && this.firstUpdateTimer > 0.5f)
+		{
+			if (this.aiToStartInsideSub)
+			{
+				this.submarine.Input = this.aiToStartInsideSub.input;
+				this.submarine.GetComponent<BuoyancyForce>().WeightFactor = 0.9f;
+				this.submarine.SetStartInSubmergedState();
+			}
+			this.firstUpdate = true;
+		}
+		switch (this.mState)
+		{
+		case SubmarineBoyInteraction.State.Idle:
+			this.IdleState();
+			break;
+		case SubmarineBoyInteraction.State.Enter:
+			this.EnterState();
+			break;
+		case SubmarineBoyInteraction.State.Exit:
+			this.ExitState();
+			break;
+		case SubmarineBoyInteraction.State.Driving:
+			this.DrivingState();
+			break;
+		}
+	}
+
+	// Token: 0x0600197E RID: 6526 RVA: 0x000DD83C File Offset: 0x000DBA3C
+	private void LateUpdate()
+	{
+		if (this.mState == SubmarineBoyInteraction.State.Driving && !this.mBoy.isDead)
+		{
+			this.UpdateControlLevers(this.fadeControlsIn);
+		}
+		this.HatchAudioEvents();
+	}
+
+	// Token: 0x0600197F RID: 6527 RVA: 0x000DD878 File Offset: 0x000DBA78
+	private void HatchAudioEvents()
+	{
+		float normalizedTime = this.animHatchCloseState.normalizedTime;
+		if (this.mState == SubmarineBoyInteraction.State.Exit || this.mState == SubmarineBoyInteraction.State.Idle)
+		{
+			if (normalizedTime > 0.85f && this.previousHatchCloseTime < 0.85f)
+			{
+				this.audioHatchCloseSmooth.PostFast();
+			}
+		}
+		else if (normalizedTime > 0.8f && this.previousHatchCloseTime < 0.8f && !this.submarine.GetHatchOpened())
+		{
+			this.audioHatchCloseBounce.PostFast();
+		}
+		this.previousHatchCloseTime = normalizedTime;
+		float weight = this.animHatchCloseState.weight;
+		if (this.boyIsInside && weight >= 1f && this.previousHatchWeight < 1f && normalizedTime >= 1f && this.previousHatchCloseTime >= 1f)
+		{
+			this.audioHatchCloseNoBounce.PostFast();
+		}
+		this.previousHatchWeight = weight;
+	}
+
+	// Token: 0x06001980 RID: 6528 RVA: 0x000DD974 File Offset: 0x000DBB74
+	public void allowExit(bool doAllow)
+	{
+		this.canExit = doAllow;
+	}
+
+	// Token: 0x04002DAD RID: 11693
+	public Submarine submarine;
+
+	// Token: 0x04002DAE RID: 11694
+	public SubmarineCabinGyro subGyro;
+
+	// Token: 0x04002DAF RID: 11695
+	public Boy aiToStartInsideSub;
+
+	// Token: 0x04002DB0 RID: 11696
+	public AnimClipNode drivingAnimation;
+
+	// Token: 0x04002DB1 RID: 11697
+	public AnimClipNode drivingBackAnimation;
+
+	// Token: 0x04002DB2 RID: 11698
+	public AnimClipNode drivingBackFlippedAnimation;
+
+	// Token: 0x04002DB3 RID: 11699
+	public AnimClipNode drivingUpAnimation;
+
+	// Token: 0x04002DB4 RID: 11700
+	public AnimClipNode drivingDownAnimation;
+
+	// Token: 0x04002DB5 RID: 11701
+	public AnimClipNode drivingDownFlippedAnimation;
+
+	// Token: 0x04002DB6 RID: 11702
+	public AnimClipNode drivingIdleAnimation;
+
+	// Token: 0x04002DB7 RID: 11703
+	public AnimClipNode boostingAnimation;
+
+	// Token: 0x04002DB8 RID: 11704
+	public AnimClipNode boostingBackAnimation;
+
+	// Token: 0x04002DB9 RID: 11705
+	public AnimClipNode enterAnimation;
+
+	// Token: 0x04002DBA RID: 11706
+	public AnimClipNode enterFWAnimation;
+
+	// Token: 0x04002DBB RID: 11707
+	public AnimClipNode enterBWAnimation;
+
+	// Token: 0x04002DBC RID: 11708
+	public AnimClipNode longEnterAnimation;
+
+	// Token: 0x04002DBD RID: 11709
+	public AnimClipNode longEnterFWAnimation;
+
+	// Token: 0x04002DBE RID: 11710
+	public AnimClipNode longEnterBWAnimation;
+
+	// Token: 0x04002DBF RID: 11711
+	public AnimClipNode exitAnimation;
+
+	// Token: 0x04002DC0 RID: 11712
+	public AnimClipNode exitAnimationRunBW;
+
+	// Token: 0x04002DC1 RID: 11713
+	public Transform leftLever;
+
+	// Token: 0x04002DC2 RID: 11714
+	public Transform rightLever;
+
+	// Token: 0x04002DC3 RID: 11715
+	public SubmarineClimbController climbController;
+
+	// Token: 0x04002DC4 RID: 11716
+	private Boy mBoy;
+
+	// Token: 0x04002DC5 RID: 11717
+	private bool mBoyIsOutside;
+
+	// Token: 0x04002DC6 RID: 11718
+	private SubmarineBoyInteraction.State mState;
+
+	// Token: 0x04002DC7 RID: 11719
+	private AnimClipNode currentAnim;
+
+	// Token: 0x04002DC8 RID: 11720
+	private float lastSubVel = 1f;
+
+	// Token: 0x04002DC9 RID: 11721
+	private bool firstUpdate;
+
+	// Token: 0x04002DCA RID: 11722
+	private float fadeControlsIn;
+
+	// Token: 0x04002DCB RID: 11723
+	private float firstUpdateTimer;
+
+	// Token: 0x04002DCC RID: 11724
+	private float boostTimer;
+
+	// Token: 0x04002DCD RID: 11725
+	private float closeTimer;
+
+	// Token: 0x04002DCE RID: 11726
+	private float closeDelay = 0.35f;
+
+	// Token: 0x04002DCF RID: 11727
+	private bool canExit = true;
+
+	// Token: 0x04002DD0 RID: 11728
+	private bool boyIsInside;
+
+	// Token: 0x04002DD1 RID: 11729
+	private bool mAllowExit = true;
+
+	// Token: 0x04002DD2 RID: 11730
+	private BuoyancyForce buoyancy;
+
+	// Token: 0x04002DD3 RID: 11731
+	private int prepareLoadHandle = -1;
+
+	// Token: 0x04002DD4 RID: 11732
+	private AnimationState animHatchCloseState;
+
+	// Token: 0x04002DD5 RID: 11733
+	private float previousHatchCloseTime = 1f;
+
+	// Token: 0x04002DD6 RID: 11734
+	private float previousHatchWeight = 1f;
+
+	// Token: 0x04002DD7 RID: 11735
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioSubmarineExited;
+
+	// Token: 0x04002DD8 RID: 11736
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioSubmarineEntered;
+
+	// Token: 0x04002DD9 RID: 11737
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioHatchOpenOutside;
+
+	// Token: 0x04002DDA RID: 11738
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioHatchOpenInside;
+
+	// Token: 0x04002DDB RID: 11739
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioHatchCloseSmooth;
+
+	// Token: 0x04002DDC RID: 11740
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioHatchCloseBounce;
+
+	// Token: 0x04002DDD RID: 11741
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioHatchCloseNoBounce;
+
+	// Token: 0x04002DDE RID: 11742
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04002DDF RID: 11743
+	private bool usingLongEnterAnimation;
+
+	// Token: 0x04002DE0 RID: 11744
+	private bool allowReExitStick;
+
+	// Token: 0x04002DE1 RID: 11745
+	private bool allowReExitButton;
+
+	// Token: 0x04002DE2 RID: 11746
+	private float leftOffset;
+
+	// Token: 0x04002DE3 RID: 11747
+	private float timeSinceStickDown;
+
+	// Token: 0x04002DE4 RID: 11748
+	private bool hatchOpened;
+
+	// Token: 0x04002DE5 RID: 11749
+	private bool allowReEnterButton;
+
+	// Token: 0x04002DE6 RID: 11750
+	private bool allowReEnterStick;
+
+	// Token: 0x020003B3 RID: 947
+	private enum State
+	{
+		// Token: 0x04002DE8 RID: 11752
+		None,
+		// Token: 0x04002DE9 RID: 11753
+		Idle,
+		// Token: 0x04002DEA RID: 11754
+		Enter,
+		// Token: 0x04002DEB RID: 11755
+		Exit,
+		// Token: 0x04002DEC RID: 11756
+		Driving
+	}
+}

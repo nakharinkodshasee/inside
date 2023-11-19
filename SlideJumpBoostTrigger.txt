@@ -1,0 +1,60 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000420 RID: 1056
+public class SlideJumpBoostTrigger : MonoBehaviour
+{
+	// Token: 0x06001BAD RID: 7085 RVA: 0x000F1EE4 File Offset: 0x000F00E4
+	private void SetModified()
+	{
+		this.oldValueRun.x = ScriptGlobals.boy.properties.jump.takeoffVelocityRun.x;
+		this.oldValueRun.y = ScriptGlobals.boy.properties.jump.takeoffVelocityRun.y;
+		this.oldValueStand.x = ScriptGlobals.boy.properties.jump.takeoffVelocityStand.x;
+		this.oldValueStand.y = ScriptGlobals.boy.properties.jump.takeoffVelocityStand.y;
+		ScriptGlobals.boy.properties.jump.takeoffVelocityRun.x *= this.jumpScale;
+		ScriptGlobals.boy.properties.jump.takeoffVelocityRun.y *= this.jumpScale;
+		ScriptGlobals.boy.properties.jump.takeoffVelocityStand.x *= this.jumpScale;
+		ScriptGlobals.boy.properties.jump.takeoffVelocityStand.y *= this.jumpScale;
+		this.modActive = true;
+	}
+
+	// Token: 0x06001BAE RID: 7086 RVA: 0x000F2020 File Offset: 0x000F0220
+	private void SetNormal()
+	{
+		ScriptGlobals.boy.properties.jump.takeoffVelocityRun.x = this.oldValueRun.x;
+		ScriptGlobals.boy.properties.jump.takeoffVelocityRun.y = this.oldValueRun.y;
+		ScriptGlobals.boy.properties.jump.takeoffVelocityStand.x = this.oldValueStand.x;
+		ScriptGlobals.boy.properties.jump.takeoffVelocityStand.y = this.oldValueStand.y;
+		this.modActive = false;
+	}
+
+	// Token: 0x06001BAF RID: 7087 RVA: 0x000F20C4 File Offset: 0x000F02C4
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.SetModified();
+		}
+	}
+
+	// Token: 0x06001BB0 RID: 7088 RVA: 0x000F20DC File Offset: 0x000F02DC
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.SetNormal();
+		}
+	}
+
+	// Token: 0x0400326B RID: 12907
+	public float jumpScale = 1.1f;
+
+	// Token: 0x0400326C RID: 12908
+	private bool modActive;
+
+	// Token: 0x0400326D RID: 12909
+	private Vector2 oldValueRun;
+
+	// Token: 0x0400326E RID: 12910
+	private Vector2 oldValueStand;
+}

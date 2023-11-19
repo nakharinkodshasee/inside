@@ -1,0 +1,84 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200023E RID: 574
+public class Spikes : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060011B9 RID: 4537 RVA: 0x000A6824 File Offset: 0x000A4A24
+	public bool PreAwake(int callcount)
+	{
+		this.enableSpikeDetection = SignalIn.Create("enableSpikeDetection", base.gameObject, delegate
+		{
+			this.spikeDetectionEnabled = true;
+		});
+		this.disableSpikeDetection = SignalIn.Create("disableSpikeDetection", base.gameObject, delegate
+		{
+			this.spikeDetectionEnabled = false;
+		});
+		return true;
+	}
+
+	// Token: 0x060011BA RID: 4538 RVA: 0x000A6878 File Offset: 0x000A4A78
+	private Vector3 FindClosestSpike()
+	{
+		float num = float.MaxValue;
+		Transform transform = null;
+		Vector3 vector = ScriptGlobals.boy.transform.position + Vector3.right * ScriptGlobals.boy.velocity.x * 0.1f;
+		for (int i = 0; i < this.spikesParent.childCount; i++)
+		{
+			float sqrMagnitude = (this.spikesParent.GetChild(i).position - vector).sqrMagnitude;
+			if (sqrMagnitude < num)
+			{
+				num = sqrMagnitude;
+				transform = this.spikesParent.GetChild(i);
+			}
+		}
+		return transform.position;
+	}
+
+	// Token: 0x060011BB RID: 4539 RVA: 0x000A6928 File Offset: 0x000A4B28
+	private void KillOnSpikes()
+	{
+		if (this.boySpiked || ScriptGlobals.boy.isDead)
+		{
+			return;
+		}
+		this.boySpiked = true;
+		ScriptGlobals.boy.Kill();
+		VisualBoy visualBoy = ScriptGlobals.boy.visualBoy;
+		Vector3 vector = this.FindClosestSpike();
+		this.animClipNode.transform.position = vector + Vector3.down * 0.33f;
+		if (ScriptGlobals.boy.facing < 0f)
+		{
+			this.animClipNode.transform.Rotate(Vector3.up, 180f);
+		}
+		BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.animClipNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+	}
+
+	// Token: 0x060011BC RID: 4540 RVA: 0x000A69E0 File Offset: 0x000A4BE0
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.attachedRigidbody != null && coll.attachedRigidbody.GetComponent<Boy>() == ScriptGlobals.boy && ScriptGlobals.boy.velocity.y < -2.5f && this.spikeDetectionEnabled)
+		{
+			this.KillOnSpikes();
+		}
+	}
+
+	// Token: 0x0400206D RID: 8301
+	public Transform spikesParent;
+
+	// Token: 0x0400206E RID: 8302
+	public AnimClipNode animClipNode;
+
+	// Token: 0x0400206F RID: 8303
+	private SignalIn enableSpikeDetection;
+
+	// Token: 0x04002070 RID: 8304
+	private SignalIn disableSpikeDetection;
+
+	// Token: 0x04002071 RID: 8305
+	private bool spikeDetectionEnabled = true;
+
+	// Token: 0x04002072 RID: 8306
+	private bool boySpiked;
+}

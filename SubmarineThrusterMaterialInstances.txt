@@ -1,0 +1,28 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020003C4 RID: 964
+public class SubmarineThrusterMaterialInstances : MonoBehaviour
+{
+	// Token: 0x06001A0D RID: 6669 RVA: 0x000E3EA4 File Offset: 0x000E20A4
+	private void Awake()
+	{
+		this.subMaterialInstanceVectorProperties = new List<MaterialInstance.VectorProperty>();
+		int i = 0;
+		int count = this.subThrusterMaterialInstances.Count;
+		while (i < count)
+		{
+			MaterialInstance.VectorProperty orAddVectorProperty = this.subThrusterMaterialInstances[i].GetOrAddVectorProperty("_WaterBounds");
+			this.subMaterialInstanceVectorProperties.Add(orAddVectorProperty);
+			i++;
+		}
+	}
+
+	// Token: 0x04002ED7 RID: 11991
+	public List<MaterialInstance> subThrusterMaterialInstances = new List<MaterialInstance>();
+
+	// Token: 0x04002ED8 RID: 11992
+	[HideInInspector]
+	public List<MaterialInstance.VectorProperty> subMaterialInstanceVectorProperties = new List<MaterialInstance.VectorProperty>();
+}

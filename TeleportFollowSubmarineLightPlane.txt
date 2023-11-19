@@ -1,0 +1,43 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000149 RID: 329
+public class TeleportFollowSubmarineLightPlane : MonoBehaviour
+{
+	// Token: 0x060009ED RID: 2541 RVA: 0x000632D8 File Offset: 0x000614D8
+	private void Start()
+	{
+		this.rend = base.GetComponent<Renderer>();
+	}
+
+	// Token: 0x060009EE RID: 2542 RVA: 0x000632E8 File Offset: 0x000614E8
+	private void LateUpdate()
+	{
+		float surfaceForSpotLight = this.submarine.GetSurfaceForSpotLight();
+		if (surfaceForSpotLight != -3.4028235E+38f)
+		{
+			this.surf = surfaceForSpotLight;
+		}
+		float num = this.surf - this.spot.transform.position.y;
+		bool flag = (this.spot.transform.forward.y == 0f || this.spot.transform.forward.y <= 0f) ? (num < 0f) : (num > 0f);
+		this.rend.enabled = flag;
+		if (!flag)
+		{
+			return;
+		}
+		base.transform.position = this.spot.transform.position + this.spot.transform.forward * num / this.spot.transform.forward.y;
+		base.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+	}
+
+	// Token: 0x04001108 RID: 4360
+	public Submarine submarine;
+
+	// Token: 0x04001109 RID: 4361
+	public Light spot;
+
+	// Token: 0x0400110A RID: 4362
+	private float surf;
+
+	// Token: 0x0400110B RID: 4363
+	private Renderer rend;
+}

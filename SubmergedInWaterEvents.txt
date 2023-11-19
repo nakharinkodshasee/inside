@@ -1,0 +1,308 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000398 RID: 920
+public class SubmergedInWaterEvents : MonoBehaviour
+{
+	// Token: 0x060018C6 RID: 6342 RVA: 0x000D6808 File Offset: 0x000D4A08
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(this.audioObject, null);
+		this.audioSubStart = new AudioEventSimpleLocal(this.audioPrefix + "_submergedStart", this.akGameObj);
+		this.audioSubStop = new AudioEventSimpleLocal(this.audioPrefix + "_submergedStop", this.akGameObj);
+		this.audioEnter = new AudioEventSimpleLocal(this.audioPrefix + "_enterWater", this.akGameObj);
+		this.audioExit = new AudioEventSimpleLocal(this.audioPrefix + "_exitWater", this.akGameObj);
+		this.audioBelow = new AudioEventSimpleLocal(this.audioPrefix + "_aboveWater", this.akGameObj);
+		this.audioAbove = new AudioEventSimpleLocal(this.audioPrefix + "_belowWater", this.akGameObj);
+	}
+
+	// Token: 0x060018C7 RID: 6343 RVA: 0x000D6900 File Offset: 0x000D4B00
+	private void Start()
+	{
+		this.OnPreProcess();
+		if (this.audioObject == null)
+		{
+			this.audioObject = base.gameObject;
+		}
+		if (this.enterExitWaterEvents || this.submergedEvents || this.submergedRTPC)
+		{
+			this.objHeight = this.submergedObj.bounds.size.y;
+		}
+		this.SetCorrectState();
+	}
+
+	// Token: 0x060018C8 RID: 6344 RVA: 0x000D6978 File Offset: 0x000D4B78
+	private bool IsAboveSurface()
+	{
+		return this.submergedObj && this.submergedObj.bounds.min.y > this.waterSurfaceHeight;
+	}
+
+	// Token: 0x060018C9 RID: 6345 RVA: 0x000D69C0 File Offset: 0x000D4BC0
+	private bool IsAtSurface()
+	{
+		return this.submergedObj && (this.submergedObj.bounds.min.y < this.waterSurfaceHeight && this.submergedObj.bounds.max.y > this.waterSurfaceHeight);
+	}
+
+	// Token: 0x060018CA RID: 6346 RVA: 0x000D6A30 File Offset: 0x000D4C30
+	private bool IsBelowSurface()
+	{
+		return this.submergedObj && this.submergedObj.bounds.max.y < this.waterSurfaceHeight;
+	}
+
+	// Token: 0x060018CB RID: 6347 RVA: 0x000D6A78 File Offset: 0x000D4C78
+	private bool IsTransformAboveSurface()
+	{
+		return this.aboveBelowObj.position.y < this.waterSurfaceHeight;
+	}
+
+	// Token: 0x060018CC RID: 6348 RVA: 0x000D6AA8 File Offset: 0x000D4CA8
+	private void SetCorrectState()
+	{
+		this.waterSurfaceHeight = this.water.GetSurfaceHeight(Vector3.up);
+		if (this.aboveBelow && this.aboveBelowObj != null)
+		{
+			if (this.IsTransformAboveSurface())
+			{
+				this.audioAbove.PostFast();
+				this.transformAboveLastFrame = true;
+			}
+			else
+			{
+				this.audioBelow.PostFast();
+			}
+		}
+		if (this.IsAtSurface())
+		{
+			this.status = SubmergedInWaterEvents.SurfaceStatus.AtSurface;
+			if (this.enterExitWaterEvents)
+			{
+				this.audioEnter.PostFast();
+			}
+			if (this.submergedEvents)
+			{
+				this.audioSubStart.PostFast();
+			}
+			if (this.submergedRTPC)
+			{
+				this.UpdateSubmergedRTPC();
+			}
+		}
+		else if (this.IsAboveSurface())
+		{
+			this.status = SubmergedInWaterEvents.SurfaceStatus.AboveSurface;
+			if (this.enterExitWaterEvents)
+			{
+				this.audioExit.PostFast();
+			}
+			if (this.submergedRTPC)
+			{
+				SoundEngine.RTPCs.submersion.SetFast(0f, this.akGameObj, 0f);
+			}
+		}
+		else if (this.IsBelowSurface())
+		{
+			this.status = SubmergedInWaterEvents.SurfaceStatus.BelowSurface;
+			if (this.enterExitWaterEvents)
+			{
+				this.audioEnter.PostFast();
+			}
+			if (this.submergedRTPC)
+			{
+				SoundEngine.RTPCs.submersion.SetFast(100f, this.akGameObj, 0f);
+			}
+			if (this.submergedEvents)
+			{
+				this.audioSubStart.PostFast();
+			}
+		}
+	}
+
+	// Token: 0x060018CD RID: 6349 RVA: 0x000D6C24 File Offset: 0x000D4E24
+	private void UpdateState()
+	{
+		this.waterSurfaceHeight = this.water.GetSurfaceHeight(Vector3.up);
+		if (this.IsAtSurface())
+		{
+			this.status = SubmergedInWaterEvents.SurfaceStatus.AtSurface;
+		}
+		else if (this.IsAboveSurface())
+		{
+			this.status = SubmergedInWaterEvents.SurfaceStatus.AboveSurface;
+		}
+		else if (this.IsBelowSurface())
+		{
+			this.status = SubmergedInWaterEvents.SurfaceStatus.BelowSurface;
+		}
+	}
+
+	// Token: 0x060018CE RID: 6350 RVA: 0x000D6C88 File Offset: 0x000D4E88
+	private void UpdateAboveBelow()
+	{
+		bool flag = this.IsTransformAboveSurface();
+		if (this.aboveBelow && this.aboveBelowObj != null && flag != this.transformAboveLastFrame)
+		{
+			if (flag && !this.transformAboveLastFrame)
+			{
+				this.audioAbove.PostFast();
+			}
+			else if (!flag && this.transformAboveLastFrame)
+			{
+				this.audioBelow.PostFast();
+			}
+		}
+		this.transformAboveLastFrame = flag;
+	}
+
+	// Token: 0x060018CF RID: 6351 RVA: 0x000D6D0C File Offset: 0x000D4F0C
+	private void UpdateSubmergedRTPC()
+	{
+		float num = this.waterSurfaceHeight - this.submergedObj.bounds.min.y;
+		float value = Mathf.InverseLerp(0f, this.objHeight, num) * 100f;
+		SoundEngine.RTPCs.submersion.SetFast(value, this.akGameObj, 0f);
+	}
+
+	// Token: 0x060018D0 RID: 6352 RVA: 0x000D6D6C File Offset: 0x000D4F6C
+	private void FixedUpdate()
+	{
+		this.waterSurfaceHeight = this.water.GetSurfaceHeight(Vector3.up);
+		this.UpdateState();
+		this.UpdateAboveBelow();
+		if (this.status == SubmergedInWaterEvents.SurfaceStatus.AtSurface && this.submergedRTPC)
+		{
+			this.UpdateSubmergedRTPC();
+		}
+		if (this.status != this.statusLastFrame)
+		{
+			if (this.statusLastFrame == SubmergedInWaterEvents.SurfaceStatus.AboveSurface && this.status == SubmergedInWaterEvents.SurfaceStatus.AtSurface)
+			{
+				if (this.enterExitWaterEvents)
+				{
+					this.audioEnter.PostFast();
+				}
+				if (this.submergedEvents)
+				{
+					this.audioSubStart.PostFast();
+				}
+			}
+			if (this.statusLastFrame == SubmergedInWaterEvents.SurfaceStatus.AtSurface && this.status == SubmergedInWaterEvents.SurfaceStatus.BelowSurface && this.submergedRTPC)
+			{
+				SoundEngine.RTPCs.submersion.SetFast(100f, this.akGameObj, 0f);
+			}
+			if (this.statusLastFrame == SubmergedInWaterEvents.SurfaceStatus.AtSurface && this.status == SubmergedInWaterEvents.SurfaceStatus.AboveSurface)
+			{
+				if (this.enterExitWaterEvents)
+				{
+					this.audioExit.PostFast();
+				}
+				if (this.submergedEvents)
+				{
+					this.audioSubStop.PostFast();
+				}
+				if (this.submergedRTPC)
+				{
+					SoundEngine.RTPCs.submersion.SetFast(0f, this.akGameObj, 0f);
+				}
+			}
+		}
+		this.statusLastFrame = this.status;
+	}
+
+	// Token: 0x04002C87 RID: 11399
+	public BoyWater water;
+
+	// Token: 0x04002C88 RID: 11400
+	public Collider submergedObj;
+
+	// Token: 0x04002C89 RID: 11401
+	public Transform aboveBelowObj;
+
+	// Token: 0x04002C8A RID: 11402
+	public bool enterExitWaterEvents;
+
+	// Token: 0x04002C8B RID: 11403
+	public bool submergedEvents;
+
+	// Token: 0x04002C8C RID: 11404
+	public bool submergedRTPC;
+
+	// Token: 0x04002C8D RID: 11405
+	public bool aboveBelow;
+
+	// Token: 0x04002C8E RID: 11406
+	public string audioPrefix = string.Empty;
+
+	// Token: 0x04002C8F RID: 11407
+	public GameObject audioObject;
+
+	// Token: 0x04002C90 RID: 11408
+	private float waterSurfaceHeight;
+
+	// Token: 0x04002C91 RID: 11409
+	private float objHeight;
+
+	// Token: 0x04002C92 RID: 11410
+	private bool transformAboveLastFrame;
+
+	// Token: 0x04002C93 RID: 11411
+	private SubmergedInWaterEvents.SurfaceStatus status;
+
+	// Token: 0x04002C94 RID: 11412
+	private SubmergedInWaterEvents.SurfaceStatus statusLastFrame;
+
+	// Token: 0x04002C95 RID: 11413
+	[SerializeField]
+	[HideInInspector]
+	private AkGameObj akGameObj;
+
+	// Token: 0x04002C96 RID: 11414
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04002C97 RID: 11415
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioSubStart;
+
+	// Token: 0x04002C98 RID: 11416
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioSubStop;
+
+	// Token: 0x04002C99 RID: 11417
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioEnter;
+
+	// Token: 0x04002C9A RID: 11418
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioExit;
+
+	// Token: 0x04002C9B RID: 11419
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioBelow;
+
+	// Token: 0x04002C9C RID: 11420
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioAbove;
+
+	// Token: 0x02000399 RID: 921
+	private enum SurfaceStatus
+	{
+		// Token: 0x04002C9E RID: 11422
+		AboveSurface,
+		// Token: 0x04002C9F RID: 11423
+		AtSurface,
+		// Token: 0x04002CA0 RID: 11424
+		BelowSurface
+	}
+}

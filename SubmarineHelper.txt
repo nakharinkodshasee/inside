@@ -1,0 +1,387 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003BD RID: 957
+public class SubmarineHelper : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x060019DB RID: 6619 RVA: 0x000E1F88 File Offset: 0x000E0188
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.hatchOuter)
+		{
+			AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.hatchOuter.gameObject, this);
+			this.audioHatchRightOpen = new AudioEventSimpleLocal("env_sewer_submarineAndGirl_hatchRightOpen", akGameObj);
+			this.audioHatchRightImpact = new AudioEventSimpleLocal("env_sewer_submarineAndGirl_hatchRightImpact", akGameObj);
+			this.audioHatchRightClosed = new AudioEventSimpleLocal("env_sewer_submarineAndGirl_hatchRightClosed", akGameObj);
+		}
+		if (this.hatchInner)
+		{
+			AkGameObj akGameObj2 = AudioUtils.EnsureAkGameObj(this.hatchInner.gameObject, this);
+			this.audioHatchLeftOpen = new AudioEventSimpleLocal("env_sewer_submarineAndGirl_hatchLeftOpen", akGameObj2);
+			this.audioHatchLeftImpact = new AudioEventSimpleLocal("env_sewer_submarineAndGirl_hatchLeftImpact", akGameObj2);
+			this.audioHatchLeftClosed = new AudioEventSimpleLocal("env_sewer_submarineAndGirl_hatchLeftClosed", akGameObj2);
+		}
+	}
+
+	// Token: 0x060019DC RID: 6620 RVA: 0x000E2054 File Offset: 0x000E0254
+	public bool PreAwake(int callcount)
+	{
+		this.impact = SignalIn.Create("impact", base.gameObject, new Action(this.OnImpact));
+		this.hatchImpact = SignalIn.Create("hatchImpact", base.gameObject, new Action(this.OnHatchImpact));
+		this.scaleSubSpeed = SignalIn.Create("scaleSubSpeed", base.gameObject, new Action(this.OnScaleSubSpeed));
+		this.validBreak = SignalOut.Create("validBreak", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060019DD RID: 6621 RVA: 0x000E20E0 File Offset: 0x000E02E0
+	private void Start()
+	{
+		this.OnPreProcess();
+		if (this.triggerLock)
+		{
+			this.triggerLock.enterTrigger.Register(this, ref this.lockTriggerEnterHandle);
+			this.triggerLock.exitTrigger.Register(this, ref this.lockTriggerExitHandle);
+		}
+		if (this.specificSubmarine == null)
+		{
+			this.submarine = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine).gameObject.GetComponent<Submarine>();
+		}
+		else
+		{
+			this.submarine = this.specificSubmarine;
+		}
+		this.submarineBooster = (this.submarine.booster as SubmarineChargeBoost);
+		this.boySetInput = base.GetComponent<BoySetInput>();
+		if (this.hatchAnim)
+		{
+			this.hatchInnerHolder = this.hatchInner.transform.parent;
+			this.hatchOuterHolder = this.hatchOuter.transform.parent;
+			this.hatchAnimOpenState = this.hatchAnim[this.hatchAnimOpen.name];
+		}
+	}
+
+	// Token: 0x060019DE RID: 6622 RVA: 0x000E21E8 File Offset: 0x000E03E8
+	private void OnScaleSubSpeed()
+	{
+		this.submarine.GetComponent<Rigidbody>().velocity = this.submarine.GetComponent<Rigidbody>().velocity * this.scaleSubSpeedValue;
+	}
+
+	// Token: 0x060019DF RID: 6623 RVA: 0x000E2220 File Offset: 0x000E0420
+	private void OnHatchImpact()
+	{
+		float boostTimer = this.submarineBooster.GetBoostTimer();
+		if (this.maximumBoostTime != 0f && boostTimer > this.maximumBoostTime)
+		{
+			return;
+		}
+		if (Mathf.Abs(this.submarine.velocity3.x) < this.requiredVelocityX)
+		{
+			return;
+		}
+		Vector2 vector;
+		vector..ctor(this.submarine.velocity3.x, this.submarine.velocity3.y);
+		vector.Normalize();
+		float num = Vector2.Dot(vector, new Vector2(this.doorDirection.right.x, this.doorDirection.right.y));
+		if (num < this.requiredDot)
+		{
+			return;
+		}
+		if (this.submarineBooster.areLightsOut())
+		{
+			return;
+		}
+		this.submarine.ForceHardImpact(this.breakOnImpact);
+		if (this.overrideLightsOuttime > 0f)
+		{
+			this.submarineBooster.SetLightsOutTimer(this.overrideLightsOuttime);
+		}
+		this.LockStickInput();
+		this.audioHatchRightOpen.PostFast();
+		this.audioHatchLeftOpen.PostFast();
+		if (this.hatchAnim)
+		{
+			if (this.hatchCollider)
+			{
+				this.hatchCollider.isTrigger = true;
+			}
+			Collider component = this.hatchInner.GetComponent<Collider>();
+			if (component)
+			{
+				Collider collider = component;
+				bool isTrigger = true;
+				this.hatchOuter.GetComponent<Collider>().isTrigger = isTrigger;
+				collider.isTrigger = isTrigger;
+			}
+			this.hatchAnimOpenState.normalizedTime = 0f;
+			this.hatchAnim.CrossFade(this.hatchAnimOpen.name);
+			this.opening = true;
+		}
+		this.validBreak.Signal();
+	}
+
+	// Token: 0x060019E0 RID: 6624 RVA: 0x000E23EC File Offset: 0x000E05EC
+	private void OnImpact()
+	{
+		if (this.submarineBooster.areLightsOut())
+		{
+			return;
+		}
+		this.submarine.ForceHardImpact(this.breakOnImpact);
+		if (this.overrideLightsOuttime > 0f)
+		{
+			this.submarineBooster.SetLightsOutTimer(this.overrideLightsOuttime);
+		}
+		this.validBreak.Signal();
+	}
+
+	// Token: 0x060019E1 RID: 6625 RVA: 0x000E2448 File Offset: 0x000E0648
+	private void LockStickInput()
+	{
+		if (!this.boySetInput)
+		{
+			return;
+		}
+		Vector3 normalized = this.submarine.velocity3.normalized;
+		this.boySetInput.stickVal.x = normalized.x;
+		this.boySetInput.stickVal.y = normalized.y;
+		this.submarine.Input = this.boySetInput;
+		this.boySetInput.activateScript();
+		this.lockTimer = this.stickLockTime;
+	}
+
+	// Token: 0x060019E2 RID: 6626 RVA: 0x000E24D0 File Offset: 0x000E06D0
+	private void Update()
+	{
+		if (this.lockTimer > 0f)
+		{
+			this.lockTimer -= Time.deltaTime;
+			if (this.lockTimer <= 0f)
+			{
+				ScriptGlobals.boy.input = null;
+				this.submarine.Input = ScriptGlobals.boy.input;
+				this.boySetInput.deactivateScript();
+			}
+		}
+		else if (this.hatchTarget && this.submarine.booster.IsBoosting && this.insideLockTrigger && this.submarineBooster.GetBoostTimer() < this.maximumBoostTime)
+		{
+			Vector3 vector = this.hatchTarget.position - this.submarine.pos3;
+			float num = Vector3.Dot(this.submarine.velocity3.normalized, vector.normalized);
+			if (num > 0.6f)
+			{
+				this.LockStickInput();
+			}
+		}
+		if (this.opening)
+		{
+			this.hatchInnerHolder.rotation = this.hatchInnerTarget.rotation;
+			this.hatchOuterHolder.rotation = this.hatchOuterTarget.rotation;
+			Collider component = this.hatchInner.GetComponent<Collider>();
+			if (component && component.isTrigger && this.hatchAnimOpenState.normalizedTime > 0.8f)
+			{
+				Collider collider = component;
+				bool isTrigger = false;
+				this.hatchOuter.GetComponent<Collider>().isTrigger = isTrigger;
+				collider.isTrigger = isTrigger;
+			}
+			if (this.hatchCollider && this.hatchCollider.isTrigger && this.hatchAnimOpenState.normalizedTime > 0.5f)
+			{
+				this.hatchCollider.isTrigger = false;
+			}
+			if (!this.outerImpactSend && this.hatchAnimOpenState.normalizedTime >= 0.65f)
+			{
+				this.audioHatchRightImpact.PostFast();
+				this.outerImpactSend = true;
+			}
+			if (!this.innerImpactSend && this.hatchAnimOpenState.normalizedTime >= 0.75f)
+			{
+				this.audioHatchLeftImpact.PostFast();
+				this.innerImpactSend = true;
+			}
+			if (this.hatchAnimOpenState.normalizedTime >= 1f)
+			{
+				this.audioHatchLeftClosed.PostFast();
+				this.audioHatchRightClosed.PostFast();
+				this.opening = false;
+			}
+		}
+	}
+
+	// Token: 0x060019E3 RID: 6627 RVA: 0x000E2738 File Offset: 0x000E0938
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.triggerLock.enterTrigger)
+		{
+			this.OnLockEnter(collider);
+		}
+		else if (sender == this.triggerLock.exitTrigger)
+		{
+			this.OnLockExit(collider);
+		}
+	}
+
+	// Token: 0x060019E4 RID: 6628 RVA: 0x000E2774 File Offset: 0x000E0974
+	private void OnLockEnter(Collider col)
+	{
+		Submarine component = col.GetComponent<Submarine>();
+		if (component)
+		{
+			this.insideLockTrigger = true;
+		}
+	}
+
+	// Token: 0x060019E5 RID: 6629 RVA: 0x000E279C File Offset: 0x000E099C
+	private void OnLockExit(Collider col)
+	{
+		Submarine component = col.GetComponent<Submarine>();
+		if (component)
+		{
+			this.insideLockTrigger = false;
+		}
+	}
+
+	// Token: 0x04002E68 RID: 11880
+	public Submarine specificSubmarine;
+
+	// Token: 0x04002E69 RID: 11881
+	public float overrideLightsOuttime = -1f;
+
+	// Token: 0x04002E6A RID: 11882
+	public float stickLockTime = 1.25f;
+
+	// Token: 0x04002E6B RID: 11883
+	public Animation hatchAnim;
+
+	// Token: 0x04002E6C RID: 11884
+	public AnimationClip hatchAnimOpen;
+
+	// Token: 0x04002E6D RID: 11885
+	private AnimationState hatchAnimOpenState;
+
+	// Token: 0x04002E6E RID: 11886
+	public Rigidbody hatchInner;
+
+	// Token: 0x04002E6F RID: 11887
+	public Rigidbody hatchOuter;
+
+	// Token: 0x04002E70 RID: 11888
+	public Collider hatchCollider;
+
+	// Token: 0x04002E71 RID: 11889
+	public Transform hatchInnerTarget;
+
+	// Token: 0x04002E72 RID: 11890
+	public Transform hatchOuterTarget;
+
+	// Token: 0x04002E73 RID: 11891
+	public CollisionEvents triggerLock;
+
+	// Token: 0x04002E74 RID: 11892
+	public Transform hatchTarget;
+
+	// Token: 0x04002E75 RID: 11893
+	public float maximumBoostTime;
+
+	// Token: 0x04002E76 RID: 11894
+	public bool breakOnImpact = true;
+
+	// Token: 0x04002E77 RID: 11895
+	public float requiredVelocityX;
+
+	// Token: 0x04002E78 RID: 11896
+	public float scaleSubSpeedValue = 0.75f;
+
+	// Token: 0x04002E79 RID: 11897
+	public Transform doorDirection;
+
+	// Token: 0x04002E7A RID: 11898
+	public float requiredDot = 0.5f;
+
+	// Token: 0x04002E7B RID: 11899
+	private SignalIn impact;
+
+	// Token: 0x04002E7C RID: 11900
+	private SignalIn hatchImpact;
+
+	// Token: 0x04002E7D RID: 11901
+	private SignalIn scaleSubSpeed;
+
+	// Token: 0x04002E7E RID: 11902
+	private SignalOut validBreak;
+
+	// Token: 0x04002E7F RID: 11903
+	private Transform hatchInnerHolder;
+
+	// Token: 0x04002E80 RID: 11904
+	private Transform hatchOuterHolder;
+
+	// Token: 0x04002E81 RID: 11905
+	private float lockTimer;
+
+	// Token: 0x04002E82 RID: 11906
+	private Submarine submarine;
+
+	// Token: 0x04002E83 RID: 11907
+	private BoySetInput boySetInput;
+
+	// Token: 0x04002E84 RID: 11908
+	private bool opening;
+
+	// Token: 0x04002E85 RID: 11909
+	private bool insideLockTrigger;
+
+	// Token: 0x04002E86 RID: 11910
+	private SubmarineChargeBoost submarineBooster;
+
+	// Token: 0x04002E87 RID: 11911
+	private bool outerImpactSend;
+
+	// Token: 0x04002E88 RID: 11912
+	private bool innerImpactSend;
+
+	// Token: 0x04002E89 RID: 11913
+	private int lockTriggerEnterHandle = -1;
+
+	// Token: 0x04002E8A RID: 11914
+	private int lockTriggerExitHandle = -1;
+
+	// Token: 0x04002E8B RID: 11915
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioHatchRightOpen;
+
+	// Token: 0x04002E8C RID: 11916
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioHatchRightImpact;
+
+	// Token: 0x04002E8D RID: 11917
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioHatchRightClosed;
+
+	// Token: 0x04002E8E RID: 11918
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioHatchLeftOpen;
+
+	// Token: 0x04002E8F RID: 11919
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioHatchLeftImpact;
+
+	// Token: 0x04002E90 RID: 11920
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioHatchLeftClosed;
+
+	// Token: 0x04002E91 RID: 11921
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

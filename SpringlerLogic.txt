@@ -1,0 +1,47 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000478 RID: 1144
+public class SpringlerLogic : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001E10 RID: 7696 RVA: 0x00102300 File Offset: 0x00100500
+	public bool PreAwake(int callcount)
+	{
+		SignalIn.Create("TurnOn", base.gameObject, new Action(this.TurnOnSpringlers));
+		return true;
+	}
+
+	// Token: 0x06001E11 RID: 7697 RVA: 0x00102320 File Offset: 0x00100520
+	private void OnEnable()
+	{
+		if (this.isTurnedOn)
+		{
+			this.TurnOnSpringlers();
+		}
+	}
+
+	// Token: 0x06001E12 RID: 7698 RVA: 0x00102334 File Offset: 0x00100534
+	private void Start()
+	{
+		this.springlers = base.GetComponentsInChildren<ParticleSystem>();
+	}
+
+	// Token: 0x06001E13 RID: 7699 RVA: 0x00102344 File Offset: 0x00100544
+	private void TurnOnSpringlers()
+	{
+		for (int i = 0; i < this.springlers.Length; i++)
+		{
+			this.springlers[i].Play();
+		}
+		this.isTurnedOn = true;
+	}
+
+	// Token: 0x04003747 RID: 14151
+	private ParticleSystem[] springlers;
+
+	// Token: 0x04003748 RID: 14152
+	private SignalIn TurnOn;
+
+	// Token: 0x04003749 RID: 14153
+	private bool isTurnedOn;
+}

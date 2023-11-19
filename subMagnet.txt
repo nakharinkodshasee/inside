@@ -1,0 +1,64 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005EC RID: 1516
+public class subMagnet : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600263C RID: 9788 RVA: 0x00137190 File Offset: 0x00135390
+	public bool PreAwake(int callcount)
+	{
+		SignalIn.Create("attach", base.gameObject, new Action(this.doAttach));
+		SignalIn.Create("dettach", base.gameObject, new Action(this.doDettach));
+		return true;
+	}
+
+	// Token: 0x0600263D RID: 9789 RVA: 0x001371D8 File Offset: 0x001353D8
+	private void Start()
+	{
+		if (this.sub.transform.parent)
+		{
+			this.orgSubParent = this.sub.transform.parent.gameObject;
+		}
+	}
+
+	// Token: 0x0600263E RID: 9790 RVA: 0x0013721C File Offset: 0x0013541C
+	private void doAttach()
+	{
+		this.sub.transform.parent = this.magnet.transform;
+		this.sub.GetComponent<Rigidbody>().isKinematic = true;
+	}
+
+	// Token: 0x0600263F RID: 9791 RVA: 0x00137258 File Offset: 0x00135458
+	private void doDettach()
+	{
+		if (this.orgSubParent)
+		{
+			this.sub.transform.parent = this.orgSubParent.transform;
+		}
+		else
+		{
+			this.sub.transform.parent = null;
+		}
+		this.sub.GetComponent<Rigidbody>().isKinematic = false;
+	}
+
+	// Token: 0x06002640 RID: 9792 RVA: 0x001372B8 File Offset: 0x001354B8
+	private void Update()
+	{
+	}
+
+	// Token: 0x0400459A RID: 17818
+	public GameObject sub;
+
+	// Token: 0x0400459B RID: 17819
+	public GameObject magnet;
+
+	// Token: 0x0400459C RID: 17820
+	private SignalIn attach;
+
+	// Token: 0x0400459D RID: 17821
+	private SignalIn dettach;
+
+	// Token: 0x0400459E RID: 17822
+	private GameObject orgSubParent;
+}

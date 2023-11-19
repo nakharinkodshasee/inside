@@ -1,0 +1,2217 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020003AB RID: 939
+public class Submarine : MonoBehaviour
+{
+	// Token: 0x1700006F RID: 111
+	// (get) Token: 0x06001913 RID: 6419 RVA: 0x000D8018 File Offset: 0x000D6218
+	public bool allowStickLeave
+	{
+		get
+		{
+			return this.mAllowStickLeave;
+		}
+	}
+
+	// Token: 0x06001914 RID: 6420 RVA: 0x000D8020 File Offset: 0x000D6220
+	public int GetSurfaceSituation()
+	{
+		if (this.surfaceSituation == Submarine.SurfaceSituation.Above)
+		{
+			return 1;
+		}
+		if (this.surfaceSituation == Submarine.SurfaceSituation.At)
+		{
+			return 0;
+		}
+		return -1;
+	}
+
+	// Token: 0x06001915 RID: 6421 RVA: 0x000D8040 File Offset: 0x000D6240
+	public bool GetHatchOpened()
+	{
+		return this.hatchOpened;
+	}
+
+	// Token: 0x06001916 RID: 6422 RVA: 0x000D8048 File Offset: 0x000D6248
+	public void SetBeachStuckTrigger(SubmarineBeachStuckTrigger bsTrigger)
+	{
+		this.beachStuckTrigger = bsTrigger;
+	}
+
+	// Token: 0x17000070 RID: 112
+	// (get) Token: 0x06001917 RID: 6423 RVA: 0x000D8054 File Offset: 0x000D6254
+	// (set) Token: 0x06001918 RID: 6424 RVA: 0x000D805C File Offset: 0x000D625C
+	public BoyInput Input
+	{
+		get
+		{
+			return this.m_input;
+		}
+		set
+		{
+			if (value != null)
+			{
+				this.m_input = value;
+			}
+			else
+			{
+				this.m_input = base.GetComponent<BoyInput>();
+			}
+			this.m_input.up = vector2f.up;
+		}
+	}
+
+	// Token: 0x17000071 RID: 113
+	// (get) Token: 0x06001919 RID: 6425 RVA: 0x000D80A0 File Offset: 0x000D62A0
+	public Vector3 pos3
+	{
+		get
+		{
+			return this.rigBod.position;
+		}
+	}
+
+	// Token: 0x0600191A RID: 6426 RVA: 0x000D80B0 File Offset: 0x000D62B0
+	public void Teleport(Vector3 posArg, Vector3 velocityArg)
+	{
+		if (this.rigBod == null)
+		{
+			this.rigBod = base.GetComponent<Rigidbody>();
+			this.positionCanBeQueried = true;
+		}
+		this.rigBod.position = posArg;
+		this.rigBod.AddForce((velocityArg - this.rigBod.velocity) * this.rigBod.mass, 1);
+		this.CacheTransformData();
+	}
+
+	// Token: 0x17000072 RID: 114
+	// (get) Token: 0x0600191B RID: 6427 RVA: 0x000D8120 File Offset: 0x000D6320
+	public Vector3 velocity3
+	{
+		get
+		{
+			return this.rigBod.velocity;
+		}
+	}
+
+	// Token: 0x0600191C RID: 6428 RVA: 0x000D8130 File Offset: 0x000D6330
+	public void TurnOffThrusters()
+	{
+		foreach (Submarine.ThrusterData thrusterData in this.mThrusterList)
+		{
+			thrusterData.TurnOff();
+		}
+		if (this.thrustersRunning)
+		{
+			this.thrustersRunning = false;
+			this.audioThrustersStop.PostFast();
+		}
+	}
+
+	// Token: 0x0600191D RID: 6429 RVA: 0x000D81B4 File Offset: 0x000D63B4
+	public void Reset()
+	{
+		this.velocityWeight = 0f;
+		this.insideCols = 0;
+		this.updateCounter = 0;
+		this.destroyedByWaterGirl = false;
+		this.Input = null;
+		this.mState = Submarine.State.Submerged;
+		if (this.rigBod != null)
+		{
+			this.rigBod.velocity = Vector3.zero;
+			this.rigBod.isKinematic = false;
+		}
+		this.booster.allowBoost = true;
+		this.lightCabinGyro.gameObject.SetActive(true);
+		if (this.bounceLight != null)
+		{
+			this.bounceLight.SetActive(true);
+		}
+		if (this.activatedScreen != null)
+		{
+			this.activatedScreen.SetActive(true);
+		}
+		if (this.deactivatedScreen != null)
+		{
+			this.deactivatedScreen.SetActive(false);
+		}
+		this.booster.gameObject.SetActive(true);
+		this.useStoredCollision = false;
+		this.stuckAndDestroyed = false;
+		if (this.buoyancyForce != null)
+		{
+			this.buoyancyForce.WeightFactor = this.orgBuoyancyForce;
+		}
+		this.frontWindowMesh.mesh = this.orgWindow;
+		this.frontWindowMesh.GetComponent<Renderer>().enabled = true;
+		if (!base.enabled)
+		{
+			base.enabled = true;
+		}
+		this.deathParticles = this.FX_DeathBubbles.GetComponentsInChildren<ParticleSystem>(true);
+		for (int i = 0; i < this.deathParticles.Length; i++)
+		{
+			this.deathParticles[i].Stop(false);
+			this.deathParticles[i].Clear(false);
+		}
+		int j = 0;
+		int count = this.mThrusterList.Count;
+		while (j < count)
+		{
+			this.mThrusterList[j].TurnOff();
+			j++;
+		}
+		int k = 0;
+		int count2 = this.fxThrusterImpactParticles.Count;
+		while (k < count2)
+		{
+			this.fxThrusterImpactParticles[k].Clear();
+			k++;
+		}
+		int l = 0;
+		int count3 = this.fxThrusterImpactSubEmitters.Count;
+		while (l < count3)
+		{
+			this.fxThrusterImpactSubEmitters[l].Clear();
+			l++;
+		}
+		this.hatchOpenAnimation.Play("CloseAnim");
+		this.hatchOpenAnimation.GetComponent<Animation>()["CloseAnim"].normalizedTime = 1f;
+		this.hatchOpened = false;
+		float facing = 1f;
+		if (base.transform.forward.x < 0f)
+		{
+			facing = -1f;
+		}
+		this.cabinGyro.Reset(180f, facing);
+		this.lightCabinGyro.Reset(0f, facing);
+		this.lightsOutTimer = this.storedLightsOutTimer;
+		SubmarineChargeBoost submarineChargeBoost = this.booster as SubmarineChargeBoost;
+		if (submarineChargeBoost)
+		{
+			submarineChargeBoost.SubmarineBoostedIntoWall(0f, 1f);
+			submarineChargeBoost.Reset();
+		}
+		if (this.physicsAudioObject != null)
+		{
+			AudioTriggerBehaviour.ResetAllContinuousPlayerBehaviours(this.physicsAudioObject);
+		}
+	}
+
+	// Token: 0x0600191E RID: 6430 RVA: 0x000D84C4 File Offset: 0x000D66C4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, null);
+		this.audioThrustersStart = new AudioEventSimpleLocal("submarine_trusters_start", this.akGameObj);
+		this.audioThrustersStop = new AudioEventSimpleLocal("submarine_trusters_stop", this.akGameObj);
+		this.audioThrustersChangeTo2 = new AudioEventSimpleLocal("submarine_trusters_change_1_to_2", this.akGameObj);
+		this.audioThrustersChangeTo1 = new AudioEventSimpleLocal("submarine_trusters_change_2_to_1", this.akGameObj);
+		this.audioStuckInSand = new AudioEventSimpleLocal("env_mines_beachToMines_stuckInSand", this.akGameObj);
+		this.audioStartCooldown = new AudioEventSimpleLocal("submarine_boost_ended_cooldown_started", this.akGameObj);
+		this.audioSubmarineStartInWater = new AudioEventSimpleLocal("mechanisms_submarine_startInWater", this.akGameObj);
+		this.audioWaterEnter = new AudioEventSimpleLocal("mechanisms_submarine_waterEnter", this.akGameObj);
+		this.audioWaterExit = new AudioEventSimpleLocal("mechanisms_submarine_waterExit", this.akGameObj);
+		this.audioWaterDescend = new AudioEventSimpleLocal("mechanisms_submarine_descendWater", this.akGameObj);
+		this.audioWaterAscend = new AudioEventSimpleLocal("mechanisms_submarine_ascendWater", this.akGameObj);
+		this.audioWaterStopSurfaceSound = new AudioEventSimpleLocal("mechanisms_submarine_stopSurfaceSound", this.akGameObj);
+		ParticleSystem[] componentsInChildren = this.thrusters.GetComponentsInChildren<ParticleSystem>();
+		this.thrusterTransforms = new Transform[componentsInChildren.Length];
+		int i = 0;
+		int num = componentsInChildren.Length;
+		while (i < num)
+		{
+			this.thrusterTransforms[i] = componentsInChildren[i].transform;
+			i++;
+		}
+		this.thrusterMis = this.thrusters.GetComponentsInChildren<MaterialInstance>();
+		this.fxThrusterImpactParticles = new List<ParticleSystem>();
+		this.fxThrusterImpactSubEmitters = new List<ParticleSystem>();
+		int j = 0;
+		int count = this.bottomThrusters.Count;
+		while (j < count)
+		{
+			GameObject gameObject = Object.Instantiate(this.fxThrusterImpact, base.transform.position, Quaternion.identity) as GameObject;
+			gameObject.transform.parent = base.transform;
+			ParticleSystem component = gameObject.GetComponent<ParticleSystem>();
+			if (component != null)
+			{
+				this.fxThrusterImpactParticles.Add(component);
+				int k = 0;
+				int childCount = component.transform.childCount;
+				while (k < childCount)
+				{
+					ParticleSystem component2 = component.transform.GetChild(k).GetComponent<ParticleSystem>();
+					if (component2 != null)
+					{
+						this.fxThrusterImpactSubEmitters.Add(component2);
+					}
+					k++;
+				}
+			}
+			j++;
+		}
+	}
+
+	// Token: 0x0600191F RID: 6431 RVA: 0x000D8730 File Offset: 0x000D6930
+	public bool CanPositionBeQueried()
+	{
+		return this.positionCanBeQueried;
+	}
+
+	// Token: 0x06001920 RID: 6432 RVA: 0x000D8738 File Offset: 0x000D6938
+	private void Awake()
+	{
+		this.OnPreProcess();
+		this.rigBod = base.GetComponent<Rigidbody>();
+		this.submarineBoyInteraction = base.GetComponent<SubmarineBoyInteraction>();
+		this.positionCanBeQueried = true;
+		this.buoyancyForce = base.GetComponent<BuoyancyForce>();
+		this.colMask = (1 << CollisionUtils.Layers.ungrouped | 1 << CollisionUtils.Layers.environment | 1 << CollisionUtils.Layers.item | 1 << CollisionUtils.Layers.defaultLayer);
+		this.startDrag = this.buoyancyForce.DragScalar;
+		this.inWaterAngularDrag = this.rigBod.angularDrag;
+		this.mMaxSpotlightIntensity = this.spotlight.intensity;
+		if (this.spotLightCone != null)
+		{
+			this.illumProp = this.spotLightCone.GetFloatProperty("_Illum");
+			this.mMaxConeIllumination = this.spotLightCone.GetFloatValue(this.illumProp);
+		}
+		if (this.spotLightConeReflect != null)
+		{
+			this.illumPropReflect = this.spotLightConeReflect.GetFloatProperty("_Illum");
+			this.mMaxConeIlluminationReflect = this.spotLightConeReflect.GetFloatValue(this.illumPropReflect);
+		}
+		this.booster.SetSubmarine(this);
+		this.moveForceOriginal = this.moveForce;
+		if (this.frontWindowMesh)
+		{
+			this.orgWindow = this.frontWindowMesh.mesh;
+		}
+		this.orgBuoyancyForce = this.buoyancyForce.WeightFactor;
+		this.Input = null;
+		this.mState = Submarine.State.Submerged;
+		this.storedLightsOutTimer = this.lightsOutTimer;
+	}
+
+	// Token: 0x06001921 RID: 6433 RVA: 0x000D88BC File Offset: 0x000D6ABC
+	private void CacheTransformData()
+	{
+		Transform transform = base.transform;
+		this.cachedPosition = transform.position;
+	}
+
+	// Token: 0x06001922 RID: 6434 RVA: 0x000D88DC File Offset: 0x000D6ADC
+	private void Start()
+	{
+		this.deathParticles = this.FX_DeathBubbles.GetComponentsInChildren<ParticleSystem>(true);
+		this.subMaterial = base.GetComponent<SphereCollider>().material;
+		int i = 0;
+		int num = this.thrusterTransforms.Length;
+		while (i < num)
+		{
+			this.mThrusterList.Add(new Submarine.ThrusterData(this.thrusterTransforms[i]));
+			i++;
+		}
+		int j = 0;
+		int count = this.mThrusterList.Count;
+		while (j < count)
+		{
+			Submarine.ThrusterData thrusterData = this.mThrusterList[j];
+			thrusterData.TurnOff();
+			int k = 0;
+			int count2 = this.bottomThrusters.Count;
+			while (k < count2)
+			{
+				if (thrusterData.Position == this.bottomThrusters[k].transform.position)
+				{
+					thrusterData.isBottomThruster = true;
+					thrusterData.bottomThrusterIndex = k;
+				}
+				k++;
+			}
+			j++;
+		}
+		this.thrusterMiBoundProps = new MaterialInstance.VectorProperty[this.thrusterMis.Length];
+		for (int l = 0; l < this.thrusterMis.Length; l++)
+		{
+			this.thrusterMiBoundProps[l] = this.thrusterMis[l].GetOrAddVectorProperty("_WaterBounds");
+		}
+		this.boyGround = base.GetComponent<BoyGround>();
+	}
+
+	// Token: 0x06001923 RID: 6435 RVA: 0x000D8A28 File Offset: 0x000D6C28
+	public void FixedUpdate()
+	{
+		if (ScriptGlobals.boy.velocity.y > -15.75f)
+		{
+			this.boyGround.fallSpeedKillMode = BoyGround.FallSpeedKillMode.Invincible;
+		}
+		else
+		{
+			this.boyGround.fallSpeedKillMode = BoyGround.FallSpeedKillMode.Default;
+		}
+		float num = 0.2f;
+		if (this.buoyancyForce.FluidVolumes.Count > 0)
+		{
+			float num2 = this.GetDistanceFromSurfaceToSubBottom();
+			num2 = Mathf.Clamp(num2, 0f, 2f) * 0.5f;
+			num = this.underWaterFriction * num2 + this.aboveWaterFriction * (1f - num2);
+		}
+		this.subMaterial.dynamicFriction = num;
+		this.subMaterial.staticFriction = num;
+		this.timeSinceLastImpactForce += Time.deltaTime;
+		if (this.rigBod.isKinematic && this.mState != Submarine.State.DigIn)
+		{
+			return;
+		}
+		if (this.useStoredCollision)
+		{
+			this.GetStuckTest(this.storedCollisionInfo);
+		}
+		if (this.updateCounter > 1 && this.buoyancyForce.FluidVolumes.Count == 0 && this.mState != Submarine.State.DigIn)
+		{
+			this.mState = Submarine.State.AboveSurface;
+		}
+		this.counter += Time.deltaTime * 1.5f;
+		switch (this.mState)
+		{
+		case Submarine.State.Submerged:
+			this.SubmergedState();
+			break;
+		case Submarine.State.Surface:
+			this.SurfaceState();
+			break;
+		case Submarine.State.AboveSurface:
+			this.AboveSurfaceState();
+			break;
+		case Submarine.State.DigIn:
+			this.DigInState();
+			break;
+		}
+		if (this.lightCabinGyro.IsFlicking())
+		{
+			this.lightTilter.DoSnappyUpdate(0.1f, this.lightCabinGyro.GetWantedFacing());
+		}
+		this.lightTilter.SetCurrentCabinFacing(this.lightCabinGyro.GetWantedFacing());
+		if (!this.rigBod.isKinematic)
+		{
+			this.velLastFrame = this.rigBod.velocity;
+		}
+		this.HandleWaterImpactSoundEvents();
+		this.updateCounter++;
+	}
+
+	// Token: 0x06001924 RID: 6436 RVA: 0x000D8C30 File Offset: 0x000D6E30
+	public bool SubOnSurface()
+	{
+		return this.mState == Submarine.State.Surface || this.mState == Submarine.State.DigIn;
+	}
+
+	// Token: 0x06001925 RID: 6437 RVA: 0x000D8C4C File Offset: 0x000D6E4C
+	private void Update()
+	{
+		if (Time.deltaTime <= 0f)
+		{
+			return;
+		}
+		this.CacheTransformData();
+		if (this.visualSubObject != null)
+		{
+			if (this.booster.IsCharging)
+			{
+				float chargePercentage = this.booster.GetChargePercentage();
+				float num = chargePercentage * 0.015f;
+				this.visualOffsetPos = new Vector3(Random.Range(-num, num), Random.Range(-num, num), Random.Range(-num, num));
+				this.visualSubObject.transform.localPosition = this.visualOffsetPos;
+				this.visualWasOffsetTimer = 1f;
+			}
+			else if (this.visualWasOffsetTimer > 0f)
+			{
+				this.visualWasOffsetTimer = Mathf.Max(this.visualWasOffsetTimer - Time.deltaTime * 4f, 0f);
+				this.visualSubObject.transform.localPosition = this.visualWasOffsetTimer * this.visualOffsetPos;
+			}
+		}
+		if (this.m_input.gameObject != base.gameObject)
+		{
+			this.UpdateThrusters();
+		}
+		float lightIntensity = this.booster.GetLightIntensity((this.spotlight.intensity - this.spotRandomVal) / this.mMaxSpotlightIntensity);
+		this.spotRandomTimer -= Time.deltaTime;
+		if (this.spotRandomTimer <= 0f)
+		{
+			this.spotRandomTimer = 0.05f;
+			this.spotWantedRandomVal = Random.Range(-0.3f * lightIntensity, 0.3f * lightIntensity);
+		}
+		this.spotRandomVal += (this.spotWantedRandomVal - this.spotRandomVal) * Mathf.Min(Time.deltaTime * 20f, 1f);
+		if (this.lightTilter != null)
+		{
+			this.lightTilter.intensityFactor = lightIntensity + this.spotRandomVal * this.lightTilter.maxIntensity * 0.2f;
+		}
+		float surfaceForSpotLight = this.GetSurfaceForSpotLight();
+		if (surfaceForSpotLight != -3.4028235E+38f)
+		{
+			this.height = surfaceForSpotLight;
+		}
+		this.spotlight.intensity = lightIntensity * this.mMaxSpotlightIntensity + this.spotRandomVal;
+		if (this.spotLightCone)
+		{
+			this.spotLightCone.SetFloatProperty(this.illumProp, lightIntensity * this.mMaxConeIllumination + this.spotRandomVal * (this.mMaxConeIllumination / this.mMaxSpotlightIntensity));
+		}
+		if (this.spotLightConeReflect)
+		{
+			float num2 = 1f - Mathf.Clamp01((Camera.main.transform.position.y - this.height) * 2f);
+			this.spotLightConeReflect.SetFloatProperty(this.illumPropReflect, (lightIntensity * this.mMaxConeIlluminationReflect + this.spotRandomVal * (this.mMaxConeIlluminationReflect / this.mMaxSpotlightIntensity)) * num2);
+		}
+		for (int i = 0; i < this.thrusterMis.Length; i++)
+		{
+			this.thrusterMis[i].SetVectorProperty(this.thrusterMiBoundProps[i], new Vector2(this.height, 1f));
+		}
+	}
+
+	// Token: 0x06001926 RID: 6438 RVA: 0x000D8F60 File Offset: 0x000D7160
+	public Vector3 ReturnAutoAimedDir(Vector3 indir)
+	{
+		this.allowBoostAim = false;
+		if (this.chargeAimPoint != null)
+		{
+			Vector3 normalized = indir.normalized;
+			Vector3 vector = this.chargeAimPoint.transform.position - base.transform.position;
+			vector.z = 0f;
+			float magnitude = vector.magnitude;
+			Vector3 vector2 = vector / magnitude;
+			float num = Vector3.Dot(normalized, vector2);
+			if (magnitude < this.autoAimBoostDist)
+			{
+				num *= 1f + (this.autoAimBoostDist - magnitude) * this.autoAimBoostPerMeter;
+			}
+			bool flag = num > Mathf.Cos(this.autoAimAngle * 0.017453292f);
+			if (magnitude < 16f && flag)
+			{
+				this.allowBoostAim = true;
+				return vector2;
+			}
+		}
+		return indir;
+	}
+
+	// Token: 0x06001927 RID: 6439 RVA: 0x000D9030 File Offset: 0x000D7230
+	public void UpdateThrusters()
+	{
+		if (this.stuckAndDestroyed)
+		{
+			return;
+		}
+		this.thrusterSoundQuarentine -= Time.deltaTime;
+		bool flag = false;
+		vector2f a = this.Input.stick;
+		SubmarineChargeBoost submarineChargeBoost = this.booster as SubmarineChargeBoost;
+		if (submarineChargeBoost && submarineChargeBoost.areLightsOut())
+		{
+			a = vector2f.zero;
+		}
+		Vector3 vector;
+		vector.x = a.x;
+		vector.y = a.y;
+		vector.z = 0f;
+		if (this.booster.IsBoosting)
+		{
+			vector = this.booster.boostDirection;
+		}
+		else
+		{
+			vector = MathUtils.v3(a, 0f);
+		}
+		float sqrMagnitude = vector.sqrMagnitude;
+		if (sqrMagnitude >= 0.04f && this.booster.GetNonBoostThrustMultiplier() > 0.2f)
+		{
+			float value = Mathf.Clamp(this.rigBod.velocity.magnitude - 0.25f, 0f, 8f);
+			SoundEngine.RTPCs.vehicleSpeed.SetFast(value, this.akGameObj, 0f);
+			int i = 0;
+			int count = this.mThrusterList.Count;
+			while (i < count)
+			{
+				Submarine.ThrusterData thrusterData = this.mThrusterList[i];
+				Vector3 vector2 = thrusterData.Position - base.transform.position;
+				vector2.z = 0f;
+				vector2.Normalize();
+				float num = Vector3.Dot(vector2, vector);
+				if (num < -0.1f)
+				{
+					List<FluidVolume> fluidVolumes = this.buoyancyForce.FluidVolumes;
+					bool flag2 = false;
+					int j = 0;
+					int count2 = fluidVolumes.Count;
+					while (j < count2)
+					{
+						flag2 = fluidVolumes[j].GetComponent<Collider>().bounds.Contains(thrusterData.Position);
+						if (flag2)
+						{
+							break;
+						}
+						j++;
+					}
+					if (flag2)
+					{
+						flag = (thrusterData.TurnOn() || flag);
+						float num2 = 1f - Mathf.Abs(num);
+					}
+					else
+					{
+						flag = (thrusterData.TurnOff() || flag);
+					}
+					if (thrusterData.isBottomThruster && this.thrusterImpactFxActive)
+					{
+						Vector3 forward = this.bottomThrusters[thrusterData.bottomThrusterIndex].transform.forward;
+						float num3 = Mathf.Abs(num * this.thrusterRaycastMultiplier);
+						if (num3 < 1f)
+						{
+							num3 = 1f;
+						}
+						RaycastHit raycastHit = default(RaycastHit);
+						if (CollisionUtils.SimpleLineCheck(thrusterData.Position, forward, num3, ref raycastHit))
+						{
+							if (raycastHit.normal.y > this.thrusterImpactSurfaceThreshold)
+							{
+								float num4 = Mathf.Clamp(Vector3.Distance(thrusterData.Position, raycastHit.point), 1f, 5f);
+								float num5 = Mathf.Clamp01(1f / num4);
+								ParticleSystem particleSystem = this.fxThrusterImpactParticles[thrusterData.bottomThrusterIndex];
+								particleSystem.transform.position = raycastHit.point + this.thrusterImpactOffset;
+								particleSystem.transform.up = raycastHit.normal;
+								particleSystem.startSize = num4 * 5f;
+								Color startColor = this.fxThrusterImpactColor;
+								startColor.a *= num5;
+								particleSystem.startColor = startColor;
+								int k = 0;
+								int count3 = this.fxThrusterImpactSubEmitters.Count;
+								while (k < count3)
+								{
+									this.fxThrusterImpactSubEmitters[k].startColor = startColor;
+									k++;
+								}
+								particleSystem.Emit(1);
+							}
+						}
+					}
+				}
+				else
+				{
+					flag = (thrusterData.TurnOff() || flag);
+				}
+				i++;
+			}
+			if (flag && !this.thrustersRunning)
+			{
+				this.thrustersRunning = true;
+				this.audioThrustersStart.PostFast();
+				flag = false;
+			}
+		}
+		else
+		{
+			int l = 0;
+			int count4 = this.mThrusterList.Count;
+			while (l < count4)
+			{
+				Submarine.ThrusterData thrusterData2 = this.mThrusterList[l];
+				flag = (thrusterData2.TurnOff() || flag);
+				l++;
+			}
+			if (this.thrustersRunning)
+			{
+				this.thrustersRunning = false;
+				this.audioThrustersStop.PostFast();
+				flag = false;
+			}
+		}
+		if (flag && this.thrusterSoundQuarentine <= 0f)
+		{
+			this.thrusterSoundQuarentine = this.thrusterUpdateInterval;
+			if (this.updateID == 0)
+			{
+				this.audioThrustersChangeTo2.PostFast();
+			}
+			else
+			{
+				this.audioThrustersChangeTo1.PostFast();
+			}
+			this.updateID = (this.updateID + 1) % 2;
+		}
+		PersistentBehaviour<GlobalAudio>.instance.SetSubmarineThrusters(this.thrustersRunning);
+	}
+
+	// Token: 0x06001928 RID: 6440 RVA: 0x000D94F4 File Offset: 0x000D76F4
+	public void SetStartInSubmergedState()
+	{
+		this.StateTransition(Submarine.State.Submerged);
+	}
+
+	// Token: 0x06001929 RID: 6441 RVA: 0x000D9500 File Offset: 0x000D7700
+	private void StateTransition(Submarine.State aNewState)
+	{
+		this.isSuccessBoost = false;
+		this.allowSuccess = false;
+		this.startYVel = 0f;
+		this.mAllowStickLeave = false;
+		if (aNewState == Submarine.State.AboveSurface)
+		{
+			this.rigBod.angularDrag = 1.05f;
+		}
+		else
+		{
+			this.rigBod.angularDrag = this.inWaterAngularDrag;
+		}
+		if (aNewState == Submarine.State.Submerged)
+		{
+			this.submarineBoyInteraction.SetAllowExit(false);
+		}
+		else if (aNewState == Submarine.State.Surface)
+		{
+			this.submarineBoyInteraction.SetAllowExit(true);
+		}
+		else if (aNewState == Submarine.State.AboveSurface)
+		{
+		}
+		this.mState = aNewState;
+	}
+
+	// Token: 0x0600192A RID: 6442 RVA: 0x000D9598 File Offset: 0x000D7798
+	private Vector3 GetMoveFromInput(float distFromTop)
+	{
+		float num = this.Input.stick.GetLength();
+		num = Mathf.Max((num - 0.2f) / 0.8f, 0f);
+		if (num > 0f)
+		{
+			num = 0.2f + 0.8f * (num * num);
+		}
+		this.mForward = new Vector3(this.Input.stick.x, this.Input.stick.y);
+		SubmarineChargeBoost submarineChargeBoost = this.booster as SubmarineChargeBoost;
+		if (submarineChargeBoost)
+		{
+			if (submarineChargeBoost.areLightsOut())
+			{
+				num = 0f;
+				this.mForward = Vector3.zero;
+				this.lightCabinGyro.SetAllowTurning(false);
+			}
+			else
+			{
+				this.lightCabinGyro.SetAllowTurning(true);
+			}
+		}
+		Vector3 vector = this.rigBod.velocity;
+		float magnitude = vector.magnitude;
+		if (this.chargeAimPoint == null)
+		{
+			this.allowBoostAim = false;
+		}
+		if ((this.booster.IsBoosting || magnitude > 7f) && this.allowBoostAim)
+		{
+			vector /= magnitude;
+			Vector3 vector2 = this.chargeAimPoint.transform.position - base.transform.position;
+			if (this.Input.stick.x * vector2.x + this.Input.stick.y * vector2.y > 0f)
+			{
+				float magnitude2 = vector2.magnitude;
+				if (magnitude2 < 15f)
+				{
+					vector2 /= magnitude2;
+					float num2 = Vector3.Dot(vector2, vector);
+					if (magnitude2 < this.autoAimBoostDist)
+					{
+						num2 *= 1f + (this.autoAimBoostDist - magnitude2) * this.autoAimBoostPerMeter;
+					}
+					if (num2 > Mathf.Cos(this.autoAimAngle * 0.017453292f))
+					{
+						num = 1f;
+						this.mForward.x = vector2.x;
+						this.mForward.y = vector2.y;
+					}
+				}
+			}
+			else
+			{
+				this.allowBoostAim = false;
+			}
+		}
+		if (this.booster.IsCharging)
+		{
+			num = 0f;
+		}
+		if (distFromTop <= -1.1f && !this.booster.IsBoosting && magnitude <= 7f)
+		{
+			float num3 = -1.1f - distFromTop;
+			num *= 1f - Mathf.Min(num3 * 3f, 1f);
+		}
+		if (num > 0f)
+		{
+			float num4 = num * this.moveForce * this.rigBod.mass * Time.deltaTime * this.booster.GetNonBoostThrustMultiplier();
+			Vector3 result = this.mForward.normalized * num4;
+			result.y *= ((result.y < 0f) ? this.downForceMultiplier : this.upForceMultiplier);
+			return result;
+		}
+		float num5 = Mathf.Sin(this.counter) * (this.gravityForce + 12f) * this.rigBod.mass * Time.deltaTime;
+		if (this.booster.IsCharging && vector.y > 0f)
+		{
+			num5 += vector.y * this.rigBod.mass * (this.gravityForce + 12f) * 10f * Time.deltaTime;
+		}
+		return Vector3.down * num5;
+	}
+
+	// Token: 0x0600192B RID: 6443 RVA: 0x000D9934 File Offset: 0x000D7B34
+	private void SubmergedState()
+	{
+		float distanceFromSurfaceToSubTop = this.GetDistanceFromSurfaceToSubTop();
+		float num = 0.2f - distanceFromSurfaceToSubTop * 2f;
+		Vector3 moveFromInput = this.GetMoveFromInput(483f);
+		this.rigBod.AddForce(moveFromInput);
+		this.Stabilize(false);
+		float num2 = this.rigBod.mass * (this.gravityForce + 12f) * 10f * Time.deltaTime;
+		if (this.booster.IsCharging)
+		{
+			Vector3 vector = 2f * num2 * this.GetChargeAvoidCollisionMovement();
+			if (vector.y < 0f)
+			{
+				vector.y *= 0.5f;
+			}
+			this.rigBod.AddForce(vector);
+		}
+		if (this.booster.IsCharging && distanceFromSurfaceToSubTop < 1.2f)
+		{
+			float num3 = -1f;
+			if (distanceFromSurfaceToSubTop > 0.6f)
+			{
+				float num4 = (distanceFromSurfaceToSubTop - 0.6f) / 0.6f;
+				num3 *= 1f - num4;
+			}
+			Vector3 velocity = this.rigBod.velocity;
+			if (velocity.y > num3)
+			{
+				this.rigBod.AddForce(Vector3.up * (num3 - velocity.y) * Mathf.Min(Time.deltaTime * 4f, 1f), 2);
+			}
+		}
+		if (distanceFromSurfaceToSubTop < 0f && this.mForward.y >= 0f)
+		{
+			if (this.booster.IsCharging)
+			{
+				this.rigBod.AddForce(num2 * Vector3.down);
+			}
+			else
+			{
+				this.StateTransition(Submarine.State.Surface);
+				if (this.booster.IsBoosting && (this.Input.stick.y > 0.5f || (this.Input.stick.y > 0.3f && this.chargeAimPoint != null)) && this.booster.boostPercentage > 0.65f)
+				{
+					this.allowSuccess = true;
+				}
+			}
+		}
+		if (this.m_input.gameObject == base.gameObject)
+		{
+			this.buoyancyForce.WeightFactor = this.buoyancyAtSurface;
+		}
+	}
+
+	// Token: 0x0600192C RID: 6444 RVA: 0x000D9B84 File Offset: 0x000D7D84
+	private void SurfaceState()
+	{
+		if (this.Input.looseDir.y < 0.5f)
+		{
+			this.mAllowStickLeave = true;
+		}
+		float distanceFromSurfaceToSubTop = this.GetDistanceFromSurfaceToSubTop();
+		float num = 0.2f - distanceFromSurfaceToSubTop * 2f;
+		num = Mathf.Clamp(num, 0.1f, 1f);
+		float y = this.rigBod.velocity.y;
+		if (y > 7f)
+		{
+			this.isSuccessBoost = true;
+		}
+		Vector3 vector = this.GetMoveFromInput(distanceFromSurfaceToSubTop);
+		if (this.booster.IsCharging)
+		{
+			float num2 = (y + 2f) / 5f;
+			this.buoyancyForce.WeightFactor = this.buoyancyInWater;
+			if (num2 > 0f)
+			{
+				vector.y -= 250f + 600f * num2;
+			}
+		}
+		else if (this.Input.stick.y < -0.2f)
+		{
+			this.buoyancyForce.WeightFactor = this.buoyancyInWater;
+		}
+		else
+		{
+			this.buoyancyForce.WeightFactor = this.buoyancyAtSurface * num + this.buoyancyInWater * (1f - num);
+		}
+		if (Mathf.Abs(this.rigBod.velocity.x) > 4f)
+		{
+			float num3 = this.rigBod.velocity.y / Mathf.Abs(this.rigBod.velocity.x);
+			if ((!this.isSuccessBoost && !this.allowSuccess) || num3 < 0.6f)
+			{
+				vector -= this.rigBod.mass * (Mathf.Sign(this.rigBod.velocity.x) * (Mathf.Abs(this.rigBod.velocity.x) - 4f) * 10f * Time.deltaTime) * Vector3.right;
+				if (this.rigBod.velocity.y > 0f)
+				{
+					float distanceFromSurfaceToSubTop2 = this.GetDistanceFromSurfaceToSubTop();
+					if (distanceFromSurfaceToSubTop2 < -0.5f)
+					{
+						float num4 = (distanceFromSurfaceToSubTop2 + 0.5f) * this.rigBod.mass * this.rigBod.velocity.y * 40f * Time.deltaTime;
+						vector.y += num4;
+					}
+				}
+			}
+		}
+		if (!this.booster.IsBoosting && !this.isSuccessBoost)
+		{
+			float num5 = 4f * (1f - num) + 0.5f;
+			Vector3 velocity = this.rigBod.velocity;
+			if (velocity.y > num5)
+			{
+				this.rigBod.AddForce(Vector3.up * (num5 - velocity.y) * Time.deltaTime * 3f, 2);
+			}
+			if (vector.y > 0f)
+			{
+				vector.y *= Mathf.Max(1f - num, 0.1f);
+			}
+			vector.x *= 0.56f;
+		}
+		else
+		{
+			this.isSuccessBoost = (this.isSuccessBoost || this.allowSuccess);
+			if (this.isSuccessBoost)
+			{
+				if (this.startYVel == 0f)
+				{
+					this.startYVel = y;
+					this.currentJumpSuccessVelocity = this.jumpSuccessVelocity;
+					if (this.rigBod.velocity.y < Mathf.Abs(this.rigBod.velocity.x))
+					{
+						this.currentJumpSuccessVelocity = 0.8f * this.jumpSuccessVelocity * this.rigBod.velocity.y / Mathf.Abs(this.rigBod.velocity.x);
+					}
+				}
+				if (y > 0.1f)
+				{
+					float num6 = Mathf.Clamp(-distanceFromSurfaceToSubTop, 0f, 2f) * 0.5f;
+					float num7 = this.currentJumpSuccessVelocity * num6 + this.startYVel * (1f - num6);
+					Vector3 velocity2 = this.rigBod.velocity;
+					velocity2.y = num7;
+					if (this.startYVel < num7)
+					{
+						velocity2.x *= Mathf.Min(1.3f, num7 / y);
+					}
+					this.rigBod.velocity = velocity2;
+				}
+			}
+			else
+			{
+				Vector3 velocity3 = this.rigBod.velocity;
+				if (velocity3.y > 0f)
+				{
+					velocity3.y *= 1f - Time.deltaTime * 6f;
+				}
+				this.rigBod.velocity = velocity3;
+			}
+		}
+		this.rigBod.AddForce(vector);
+		this.Stabilize(true);
+		if (distanceFromSurfaceToSubTop < -2f && this.isSuccessBoost)
+		{
+			this.StateTransition(Submarine.State.AboveSurface);
+		}
+		else if (distanceFromSurfaceToSubTop > 0.1f)
+		{
+			this.buoyancyForce.WeightFactor = this.buoyancyInWater;
+			this.StateTransition(Submarine.State.Submerged);
+		}
+	}
+
+	// Token: 0x0600192D RID: 6445 RVA: 0x000DA0C4 File Offset: 0x000D82C4
+	private void AboveSurfaceState()
+	{
+		if (this.buoyancyForce.FluidVolumes.Count == 0)
+		{
+			return;
+		}
+		if (this.rigBod.velocity.y > 0f && !this.SafetyInsideVolume())
+		{
+			return;
+		}
+		if (!this.IsAboveSurface())
+		{
+			this.buoyancyForce.WeightFactor = this.buoyancyAtSurface;
+			this.isSuccessBoost = false;
+			this.StateTransition(Submarine.State.Surface);
+		}
+		this.zyFactor = 0f;
+	}
+
+	// Token: 0x0600192E RID: 6446 RVA: 0x000DA14C File Offset: 0x000D834C
+	public bool IsAboveSurface()
+	{
+		return this.buoyancyForce.FluidVolumes.Count == 0 || this.GetDistanceFromSurfaceToSubBottom() < 0f;
+	}
+
+	// Token: 0x0600192F RID: 6447 RVA: 0x000DA180 File Offset: 0x000D8380
+	public bool SafetyInsideVolume()
+	{
+		int i = 0;
+		int count = this.buoyancyForce.FluidVolumes.Count;
+		while (i < count)
+		{
+			if (this.buoyancyForce.FluidVolumes[i].transform.position.y > this.rigBod.position.y)
+			{
+				return true;
+			}
+			i++;
+		}
+		return false;
+	}
+
+	// Token: 0x06001930 RID: 6448 RVA: 0x000DA1F0 File Offset: 0x000D83F0
+	public bool IsAtSurface()
+	{
+		float distanceFromSurfaceToSubTop = this.GetDistanceFromSurfaceToSubTop();
+		return distanceFromSurfaceToSubTop < 0f;
+	}
+
+	// Token: 0x06001931 RID: 6449 RVA: 0x000DA20C File Offset: 0x000D840C
+	private bool HitCollision(Vector3 testDir)
+	{
+		RaycastHit[] array;
+		return CollisionUtils.RaycastAllVolatile(out array, base.transform.position + testDir * 1.1f, testDir, 0.8f, this.colMask, CollisionUtils.Type.Solid, false) > 0;
+	}
+
+	// Token: 0x06001932 RID: 6450 RVA: 0x000DA254 File Offset: 0x000D8454
+	public void GirlDestroy()
+	{
+		this.TurnOffThrusters();
+		this.Input = null;
+		this.frontWindowMesh.GetComponent<Renderer>().enabled = false;
+		this.destroyedByWaterGirl = true;
+		this.audioThrustersStop.PostFast();
+		SoundEngine.Events.waterGirlDestroySub.PostFast(this.akGameObj);
+		this.LightsOut(8f);
+		base.GetComponent<BuoyancyForce>().WeightFactor = 0.852f;
+		for (int i = 0; i < this.deathParticles.Length; i++)
+		{
+			this.deathParticles[i].ClearPosition();
+			this.deathParticles[i].Play(false);
+		}
+	}
+
+	// Token: 0x06001933 RID: 6451 RVA: 0x000DA2F4 File Offset: 0x000D84F4
+	private Vector3 GetDirectionalBoostCollision(Vector3 boostDir)
+	{
+		boostDir = boostDir.normalized;
+		if (this.HitCollision(boostDir))
+		{
+			return -boostDir;
+		}
+		float num = Vector3.Angle(Vector3.right, boostDir);
+		if (boostDir.y < 0f)
+		{
+			num = -num;
+		}
+		float num2 = num + 10f;
+		Vector3 testDir;
+		testDir..ctor(Mathf.Cos(0.017453292f * num2), Mathf.Sin(0.017453292f * num2), 0f);
+		if (this.HitCollision(testDir))
+		{
+			return -boostDir;
+		}
+		num2 = num - 10f;
+		testDir..ctor(Mathf.Cos(0.017453292f * num2), Mathf.Sin(0.017453292f * num2), 0f);
+		if (this.HitCollision(testDir))
+		{
+			return -boostDir;
+		}
+		return Vector3.zero;
+	}
+
+	// Token: 0x06001934 RID: 6452 RVA: 0x000DA3C0 File Offset: 0x000D85C0
+	private Vector3 GetChargeAvoidCollisionMovement()
+	{
+		Vector3 vector = Vector3.zero;
+		vector += this.GetDirectionalBoostCollision(Vector3.right);
+		vector += this.GetDirectionalBoostCollision(Vector3.left);
+		vector += this.GetDirectionalBoostCollision(Vector3.up);
+		if (this.GetDistanceFromSurfaceToSubTop() > 1.5f)
+		{
+			vector += this.GetDirectionalBoostCollision(Vector3.down);
+		}
+		return vector;
+	}
+
+	// Token: 0x06001935 RID: 6453 RVA: 0x000DA42C File Offset: 0x000D862C
+	private void Stabilize(bool atSurface = false)
+	{
+		if (this.destroyedByWaterGirl)
+		{
+			this.rigBod.AddTorque(new Vector3(6f, 0f, 12f) * Time.deltaTime * this.rigBod.mass);
+			this.rigBod.AddForce(5f * Vector3.down * Time.deltaTime * this.rigBod.mass, 1);
+			return;
+		}
+		Vector3 eulerAngles = base.transform.eulerAngles;
+		Vector3 normalized = this.mForward;
+		if (this.insideCols > 0)
+		{
+			this.velocityWeight = Mathf.Min(1f, this.velocityWeight + 5f * Time.deltaTime);
+		}
+		else
+		{
+			this.velocityWeight = Mathf.Max(0f, this.velocityWeight - 5f * Time.deltaTime);
+		}
+		if (this.velocityWeight > 0f)
+		{
+			normalized = (this.rigBod.velocity.normalized * this.velocityWeight + this.mForward * (1f - this.velocityWeight)).normalized;
+		}
+		float num = Vector3.Angle(normalized, Vector3.up) - 90f;
+		num = Mathf.Clamp(num, -this.maximumRotationAngle - 3.5f, this.maximumRotationAngle - 3.5f);
+		if (this.booster.IsCharging)
+		{
+			num = 0f;
+		}
+		else if (atSurface)
+		{
+			num = 0f;
+		}
+		if (this.lightCabinGyro != null)
+		{
+			num *= this.lightCabinGyro.GetWantedFacing();
+		}
+		float num2 = num - eulerAngles.x;
+		if (num2 > 180f)
+		{
+			num2 -= 360f;
+		}
+		if (num2 < -180f)
+		{
+			num2 += 360f;
+		}
+		bool flag = this.booster.IsCharging || (this.Input.stick.x == 0f && this.Input.stick.y == 0f);
+		if ((atSurface && this.Input.looseDir.y >= 0f) || base.transform.up.y < 0.4f)
+		{
+			float num3 = Mathf.Min((1.1f - base.transform.up.y) * 3f, 1f);
+			num2 *= 3f * num3;
+		}
+		else
+		{
+			num2 *= this.rotationSpeedFactor;
+			if (flag && num2 * this.rigBod.angularVelocity.z < 0f)
+			{
+				num2 *= 0.3f;
+			}
+			else
+			{
+				float z = this.rigBod.angularVelocity.z;
+				if (Mathf.Abs(z) > 0.4f && z * num2 < 0f)
+				{
+					num2 *= Mathf.Min(1f - (Mathf.Abs(z) - 0.8f) * 2f, 0f);
+				}
+				else if (Mathf.Abs(z) > 1f)
+				{
+					num2 *= 5f;
+				}
+			}
+		}
+		this.zyFactor = Mathf.Min(1f, this.zyFactor + Time.deltaTime);
+		float z2 = base.transform.up.z;
+		float num4 = -z2 * 90f;
+		num4 *= this.zyFactor;
+		this.directionOffset += (-this.lightCabinGyro.GetWantedFacing() * 0.05f - this.directionOffset) * Time.deltaTime * 0.5f;
+		float num5 = base.transform.forward.z + this.directionOffset;
+		float num6 = num5 * 90f * Mathf.Sign(base.transform.up.y);
+		if (num6 * this.rigBod.angularVelocity.y > 0f)
+		{
+			num6 *= 0.3f;
+		}
+		num6 *= this.zyFactor;
+		float num7 = eulerAngles.x;
+		if (num7 > 180f)
+		{
+			num7 -= 360f;
+		}
+		if ((num7 > this.maximumRotationAngle - 4.5f || num7 < -this.maximumRotationAngle + 4.5f) && this.rigBod.angularVelocity.z * num2 > 0f)
+		{
+			num2 *= 8f;
+		}
+		Vector3 vector = new Vector3(num4 * 3f, num6 * 10f, -num2 * 3f) * Time.deltaTime;
+		this.rigBod.AddTorque(vector * this.rigBod.mass);
+		this.rigBod.AddTorque(this.mStabilityNoiseVector * this.stabilityNoiseTorque * Time.deltaTime);
+		this.mStabilityNoiseVector = Vector3.RotateTowards(this.mStabilityNoiseVector, Random.onUnitSphere, 6f * Time.deltaTime, float.PositiveInfinity);
+	}
+
+	// Token: 0x06001936 RID: 6454 RVA: 0x000DA9B4 File Offset: 0x000D8BB4
+	public bool IsStuck()
+	{
+		return this.mState == Submarine.State.DigIn;
+	}
+
+	// Token: 0x06001937 RID: 6455 RVA: 0x000DA9C0 File Offset: 0x000D8BC0
+	private void SetDigInState(Submarine.CollisionInfo collInfo)
+	{
+		this.timeDugIn = 0f;
+		float magnitude = this.velLastFrame.magnitude;
+		bool flag = this.useStoredCollision && this.storedCollisionInfo.collider == collInfo.collider;
+		this.booster.allowBoost = false;
+		this.stuckAndDestroyed = (this.rigBod.position.x > 1956.5f);
+		this.lightCabinGyro.gameObject.SetActive(false);
+		if (this.stuckAndDestroyed)
+		{
+			if (this.bounceLight != null)
+			{
+				this.bounceLight.SetActive(false);
+			}
+			if (this.activatedScreen != null)
+			{
+				this.activatedScreen.SetActive(false);
+			}
+			if (this.deactivatedScreen != null)
+			{
+				this.deactivatedScreen.SetActive(true);
+			}
+			this.booster.gameObject.SetActive(false);
+			this.TurnOffThrusters();
+		}
+		if (this.velLastFrame.magnitude < 7f)
+		{
+			this.digInSpeedFactor = Mathf.Max(0.2f, magnitude / 7f - 0.1f);
+		}
+		if (flag)
+		{
+			this.digInSpeedFactor = Mathf.Min(this.digInSpeedFactor, 0.5f);
+			this.extraYDig = 2.5f;
+		}
+		else
+		{
+			this.extraYDig = 0f;
+		}
+		this.rigBod.isKinematic = true;
+		this.digIntoObject = collInfo.collider;
+		if (this.beachStuckTrigger != null)
+		{
+			this.sandDuneObject = this.beachStuckTrigger.subDune;
+			if (this.sandDuneObject != null)
+			{
+				Ray ray;
+				ray..ctor(base.transform.position + Vector3.up, Vector3.down);
+				RaycastHit raycastHit;
+				if (this.digIntoObject.Raycast(ray, ref raycastHit, 5f))
+				{
+					Vector3 vector = raycastHit.point + Vector3.up * 0.01f;
+					this.sandDuneObject.transform.position = vector;
+					Vector3 normal = raycastHit.normal;
+					ray..ctor(base.transform.position + Vector3.up * 1.2f + Vector3.right * 1.9f, Vector3.down);
+					if (this.digIntoObject.Raycast(ray, ref raycastHit, 5f))
+					{
+						Vector3 normalized = (raycastHit.point - vector).normalized;
+						this.sandDuneObject.transform.rotation = Quaternion.LookRotation(normalized, raycastHit.normal);
+					}
+					else
+					{
+						Vector3 vector2 = Vector3.Cross(normal, Vector3.forward);
+						this.sandDuneObject.transform.rotation = Quaternion.LookRotation(vector2, raycastHit.normal);
+					}
+					Vector3 localScale = this.sandDuneObject.transform.localScale;
+					localScale.y = 0.01f;
+					this.sandDuneObject.transform.localScale = localScale;
+					this.sandDuneObject.SetActive(true);
+				}
+			}
+		}
+		this.audioThrustersStop.PostFast();
+		this.mState = Submarine.State.DigIn;
+	}
+
+	// Token: 0x06001938 RID: 6456 RVA: 0x000DACF8 File Offset: 0x000D8EF8
+	private void DigInState()
+	{
+		this.mAllowStickLeave = true;
+		this.timeDugIn += Time.deltaTime * this.digInSpeedFactor;
+		float num = Mathf.Min(1f, Time.deltaTime * 15f * this.digInSpeedFactor);
+		this.velLastFrame.y = this.velLastFrame.y * (1f - num);
+		if (this.velLastFrame.y > 0f)
+		{
+			this.velLastFrame.y = this.velLastFrame.y * (1f - num);
+		}
+		float num2 = Mathf.Min(1f, Time.deltaTime * 9f * this.digInSpeedFactor);
+		this.velLastFrame.x = this.velLastFrame.x * (1f - num2);
+		this.velLastFrame.z = 0f;
+		float num3 = 4f;
+		float num4 = this.timeDugIn * num3;
+		float num5 = 0f;
+		if (num4 < 1f)
+		{
+			num5 = Mathf.Min(1f, num4) - 0.5f;
+			num5 = 1f - num5 * num5 * 4f;
+		}
+		num4 = Mathf.Min(num4, 1f);
+		Vector3 vector = (this.velLastFrame + this.digInSpeedFactor * this.extraYDig / num3 * num5 * Vector3.down) * Time.deltaTime;
+		if (this.sandDuneObject != null)
+		{
+			Vector3 vector2 = base.transform.position + vector;
+			Ray ray;
+			ray..ctor(vector2 + Vector3.up, Vector3.down);
+			RaycastHit raycastHit;
+			if (this.digIntoObject.Raycast(ray, ref raycastHit, 5f))
+			{
+				float num6 = vector2.y - raycastHit.point.y;
+				if (num6 < 0.9f)
+				{
+					this.velLastFrame *= 1f - Mathf.Min(Time.deltaTime * 5f, 1f);
+					vector = (this.velLastFrame + this.digInSpeedFactor * this.extraYDig / num3 * num5 * Vector3.down) * Time.deltaTime;
+				}
+				if (num6 < 0.5f)
+				{
+					vector2.y = raycastHit.point.y + 0.5f;
+					vector = vector2 - base.transform.position;
+				}
+			}
+		}
+		base.transform.position += vector;
+		Vector3 eulerAngles = base.transform.eulerAngles;
+		if (eulerAngles.x > 180f)
+		{
+			eulerAngles.x -= 360f;
+		}
+		if (Mathf.Abs(eulerAngles.x) > 10f)
+		{
+			float num7 = Mathf.Sign(eulerAngles.x) * (Mathf.Abs(eulerAngles.x) - 9.5f);
+			eulerAngles.x -= num7 * Time.deltaTime * 5f * num4;
+			if (eulerAngles.x < 0f)
+			{
+				eulerAngles.x += 360f;
+			}
+			base.transform.eulerAngles = eulerAngles;
+		}
+		if (this.sandDuneObject != null)
+		{
+			Ray ray2;
+			ray2..ctor(base.transform.position + Vector3.up, Vector3.down);
+			RaycastHit raycastHit2;
+			if (this.digIntoObject.Raycast(ray2, ref raycastHit2, 5f))
+			{
+				this.sandDuneObject.transform.position = raycastHit2.point + Vector3.up * 0.01f;
+				Vector3 normal = raycastHit2.normal;
+				Vector3 point = raycastHit2.point;
+				ray2..ctor(base.transform.position + Vector3.up * 1.2f + Vector3.right * 1.9f, Vector3.down);
+				if (this.digIntoObject.Raycast(ray2, ref raycastHit2, 5f))
+				{
+					Vector3 normalized = (raycastHit2.point - point).normalized;
+					this.sandDuneObject.transform.rotation = Quaternion.Slerp(this.sandDuneObject.transform.rotation, Quaternion.LookRotation(normalized, raycastHit2.normal), Mathf.Min(Time.deltaTime * 7f, 1f));
+				}
+				else
+				{
+					Vector3 vector3 = Vector3.Cross(normal, Vector3.forward);
+					this.sandDuneObject.transform.rotation = Quaternion.Slerp(this.sandDuneObject.transform.rotation, Quaternion.LookRotation(vector3, raycastHit2.normal), Mathf.Min(Time.deltaTime * 7f, 1f));
+				}
+			}
+			if (this.timeDugIn * 6f < 1.5f)
+			{
+				float f = Mathf.Min(1f, this.timeDugIn * 6f);
+				Vector3 localScale = this.sandDuneObject.transform.localScale;
+				localScale.y = MathUtils.SmoothFraction(f);
+				this.sandDuneObject.transform.localScale = localScale;
+			}
+		}
+	}
+
+	// Token: 0x06001939 RID: 6457 RVA: 0x000DB238 File Offset: 0x000D9438
+	private void GetStuckTest(Submarine.CollisionInfo collInfo)
+	{
+		if (this.beachStuckTrigger != null)
+		{
+			Vector3 normal = collInfo.normal;
+			float num = Vector3.Dot(this.velLastFrame, -normal);
+			float distanceFromSurfaceToSubTop = this.GetDistanceFromSurfaceToSubTop();
+			if (num < 3f && distanceFromSurfaceToSubTop > -1.3f)
+			{
+				this.storedCollisionInfo = collInfo;
+				this.useStoredCollision = true;
+				return;
+			}
+			if (num > -0.1f && (this.mState == Submarine.State.AboveSurface || ((this.mState == Submarine.State.Surface || this.mState == Submarine.State.Submerged) && this.GetDistanceFromSurfaceToSubTop() - Mathf.Min(0f, this.velLastFrame.y * 0.2f) < -0.1f)))
+			{
+				this.audioStuckInSand.PostFast();
+				this.SetDigInState(collInfo);
+			}
+			else
+			{
+				this.storedCollisionInfo = collInfo;
+				this.useStoredCollision = true;
+			}
+		}
+	}
+
+	// Token: 0x0600193A RID: 6458 RVA: 0x000DB320 File Offset: 0x000D9520
+	public Vector3 GetLastHardImpactPos()
+	{
+		return this.lastHardImpactPos;
+	}
+
+	// Token: 0x0600193B RID: 6459 RVA: 0x000DB328 File Offset: 0x000D9528
+	public void ForceHardImpact(bool breakOnImpact = true)
+	{
+		this.hardImpact.Dispatch();
+		this.CameraShake();
+		if (breakOnImpact)
+		{
+			SubmarineChargeBoost submarineChargeBoost = this.booster as SubmarineChargeBoost;
+			if (submarineChargeBoost)
+			{
+				submarineChargeBoost.SubmarineBoostedIntoWall(this.lightsOutTimer, 1f);
+			}
+		}
+		else
+		{
+			this.audioStartCooldown.PostFast();
+		}
+	}
+
+	// Token: 0x0600193C RID: 6460 RVA: 0x000DB388 File Offset: 0x000D9588
+	public void LightsOut(float time)
+	{
+		SubmarineChargeBoost submarineChargeBoost = this.booster as SubmarineChargeBoost;
+		if (submarineChargeBoost)
+		{
+			submarineChargeBoost.SubmarineBoostedIntoWall(time, 1f);
+		}
+	}
+
+	// Token: 0x0600193D RID: 6461 RVA: 0x000DB3B8 File Offset: 0x000D95B8
+	private void OnEnable()
+	{
+		this.enabledFrameCount = 0;
+		this.doHandleWaterImpact = true;
+		this.CacheTransformData();
+		this.audioSubmarineStartInWater.PostFast();
+	}
+
+	// Token: 0x0600193E RID: 6462 RVA: 0x000DB3E8 File Offset: 0x000D95E8
+	private void OnDisable()
+	{
+		this.enabledFrameCount = 0;
+		this.doHandleWaterImpact = false;
+		this.audioWaterStopSurfaceSound.PostFast();
+	}
+
+	// Token: 0x0600193F RID: 6463 RVA: 0x000DB404 File Offset: 0x000D9604
+	private void DoUpdateSurfaceSituation()
+	{
+		if (this.surfaceSituation == Submarine.SurfaceSituation.Above && !this.IsAboveSurface())
+		{
+			this.surfaceSituation = Submarine.SurfaceSituation.At;
+		}
+		else if (this.surfaceSituation == Submarine.SurfaceSituation.At && this.IsAboveSurface())
+		{
+			this.surfaceSituation = Submarine.SurfaceSituation.Above;
+		}
+		else if (this.surfaceSituation == Submarine.SurfaceSituation.At && !this.IsAtSurface())
+		{
+			this.surfaceSituation = Submarine.SurfaceSituation.Below;
+		}
+		else if (this.surfaceSituation == Submarine.SurfaceSituation.Below && this.IsAtSurface())
+		{
+			this.surfaceSituation = Submarine.SurfaceSituation.At;
+		}
+	}
+
+	// Token: 0x06001940 RID: 6464 RVA: 0x000DB498 File Offset: 0x000D9698
+	private void HandleWaterImpactSoundEvents()
+	{
+		if (this.doHandleWaterImpact && this.enabledFrameCount < 30)
+		{
+			this.DoUpdateSurfaceSituation();
+			this.enabledFrameCount++;
+		}
+		if (!this.doHandleWaterImpact || this.enabledFrameCount < 20)
+		{
+			this.enabledFrameCount++;
+			return;
+		}
+		float num = Math.Abs(this.rigBod.velocity.y);
+		float value = Mathf.InverseLerp(0f, 8f, num) * 100f;
+		float distanceFromSurfaceToSubBottom = this.GetDistanceFromSurfaceToSubBottom();
+		bool flag = this.buoyancyForce.FluidVolumes.Count == 0 || distanceFromSurfaceToSubBottom < 0f;
+		if (this.surfaceSituation == Submarine.SurfaceSituation.Above && !this.IsAboveSurface())
+		{
+			SoundEngine.RTPCs.submarineVerticalSpeed.SetFast(value, this.akGameObj, 0f);
+			this.audioWaterEnter.PostFast();
+			this.surfaceSituation = Submarine.SurfaceSituation.At;
+		}
+		else if (this.surfaceSituation == Submarine.SurfaceSituation.At && this.IsAboveSurface())
+		{
+			SoundEngine.RTPCs.submarineVerticalSpeed.SetFast(value, this.akGameObj, 0f);
+			this.audioWaterExit.PostFast();
+			this.surfaceSituation = Submarine.SurfaceSituation.Above;
+			SoundEngine.RTPCs.SubmarineSubmerged.SetFast(0f, this.akGameObj, 0f);
+		}
+		else if (this.surfaceSituation == Submarine.SurfaceSituation.At && !this.IsAtSurface())
+		{
+			SoundEngine.RTPCs.submarineVerticalSpeed.SetFast(value, this.akGameObj, 0f);
+			this.audioWaterDescend.PostFast();
+			this.surfaceSituation = Submarine.SurfaceSituation.Below;
+			SoundEngine.RTPCs.SubmarineSubmerged.SetFast(100f, this.akGameObj, 0f);
+		}
+		else if (this.surfaceSituation == Submarine.SurfaceSituation.Below && this.IsAtSurface())
+		{
+			SoundEngine.RTPCs.submarineVerticalSpeed.SetFast(value, this.akGameObj, 0f);
+			this.audioWaterAscend.PostFast();
+			this.surfaceSituation = Submarine.SurfaceSituation.At;
+		}
+		if (this.surfaceSituation == Submarine.SurfaceSituation.At)
+		{
+			SoundEngine.RTPCs.submarineVerticalSpeed.SetFast(value, this.akGameObj, 0f);
+			float value2 = Mathf.InverseLerp(0f, 2.4f, distanceFromSurfaceToSubBottom) * 100f;
+			SoundEngine.RTPCs.SubmarineSubmerged.SetFast(value2, this.akGameObj, 0f);
+		}
+	}
+
+	// Token: 0x06001941 RID: 6465 RVA: 0x000DB6EC File Offset: 0x000D98EC
+	private void CameraShake()
+	{
+		float num = Mathf.Abs((ScriptGlobals.camera.positionAim - ScriptGlobals.camera.positionCamera).z) / 12f;
+		float num2 = this.cameraShakeFalloff - num;
+		num2 = Mathf.Clamp(num2, this.cameraShakeMin, 1f);
+		if (ScriptGlobals.boy.specialBoyMode != Boy.SpecialBoyMode.InsideSub)
+		{
+			num2 *= 0.1f;
+		}
+		this.hardImpactShake.PlayEffect(num2, -1f, 1f);
+	}
+
+	// Token: 0x06001942 RID: 6466 RVA: 0x000DB770 File Offset: 0x000D9970
+	private void OnCollisionEnter(Collision aCollision)
+	{
+		if (!aCollision.collider.isTrigger)
+		{
+			this.insideCols++;
+		}
+		this.useStoredCollision = false;
+		this.GetStuckTest(new Submarine.CollisionInfo(aCollision.collider, aCollision.contacts[0].normal));
+		if (aCollision.collider.GetComponent<Killer>())
+		{
+			this.rigBod.AddForce((this.rigBod.position - aCollision.transform.position).normalized * 4000f, 1);
+			Object.Destroy(aCollision.gameObject);
+			this.submarineBoyInteraction.SubmarineDestroyed();
+		}
+		else if (aCollision.collider)
+		{
+			if ((this.allowSuccess || this.isSuccessBoost) && (double)aCollision.contacts[0].normal.y < -0.2)
+			{
+				this.allowSuccess = false;
+				this.isSuccessBoost = false;
+			}
+			float num = Vector3.Dot(aCollision.contacts[0].normal, aCollision.relativeVelocity) * ((!aCollision.collider.attachedRigidbody) ? 1f : (Math.Min(130f, aCollision.collider.attachedRigidbody.mass) / this.rigBod.mass));
+			if (num > this.shakeStateForce)
+			{
+				this.lastHardImpactPos = aCollision.contacts[0].point;
+				this.hardImpact.Dispatch();
+				this.CameraShake();
+				SubmarineChargeBoost submarineChargeBoost = this.booster as SubmarineChargeBoost;
+				if (submarineChargeBoost)
+				{
+					num = Mathf.Clamp((num - 6f) / 6f, 0f, 1f);
+					if (this.m_input == null || this.m_input.gameObject == base.gameObject)
+					{
+						num = 0f;
+					}
+					submarineChargeBoost.SubmarineBoostedIntoWall(this.lightsOutTimer, num);
+					bool flag = true;
+					if (flag)
+					{
+						Vector3 vector = Vector3.Reflect(-aCollision.relativeVelocity, aCollision.contacts[0].normal);
+						Vector3 vector2 = (Vector3.Dot(aCollision.relativeVelocity, aCollision.contacts[0].normal) * aCollision.contacts[0].normal).normalized * 12f;
+						if (this.timeSinceLastImpactForce > 0.25f)
+						{
+							this.rigBod.AddForce(vector2 * this.rigBod.mass * 0.1f, 1);
+							this.timeSinceLastImpactForce = 0f;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x06001943 RID: 6467 RVA: 0x000DBA4C File Offset: 0x000D9C4C
+	private void OnCollisionExit(Collision aCollision)
+	{
+		if (!aCollision.collider.isTrigger)
+		{
+			this.insideCols--;
+		}
+		if (this.useStoredCollision && this.storedCollisionInfo.collider == aCollision.collider)
+		{
+			this.useStoredCollision = false;
+		}
+	}
+
+	// Token: 0x06001944 RID: 6468 RVA: 0x000DBAA4 File Offset: 0x000D9CA4
+	private static float GetSurfaceLevel(List<FluidVolume> fluidVolumes, float noSurfaceHackDist = 2f)
+	{
+		float num = float.MinValue;
+		int i = 0;
+		int count = fluidVolumes.Count;
+		while (i < count)
+		{
+			FluidVolume fluidVolume = fluidVolumes[i];
+			if (fluidVolume != null)
+			{
+				float num2 = fluidVolume.transform.position.y + fluidVolume.transform.lossyScale.y * 0.5f;
+				if (fluidVolume.noSurface && count == 1)
+				{
+					num2 += noSurfaceHackDist;
+				}
+				if (num2 > num)
+				{
+					num = num2;
+				}
+			}
+			i++;
+		}
+		return num;
+	}
+
+	// Token: 0x06001945 RID: 6469 RVA: 0x000DBB3C File Offset: 0x000D9D3C
+	public float GetDistanceFromSurfaceToSubBottom()
+	{
+		float surfaceLevel = Submarine.GetSurfaceLevel(this.buoyancyForce.FluidVolumes, 2f);
+		float num = base.transform.position.y - this.buoyancyForce.BuoyancyCollider.bounds.extents.y;
+		return surfaceLevel - num;
+	}
+
+	// Token: 0x06001946 RID: 6470 RVA: 0x000DBB98 File Offset: 0x000D9D98
+	public float GetDistanceFromSurfaceToSubTop()
+	{
+		float surfaceLevel = Submarine.GetSurfaceLevel(this.buoyancyForce.FluidVolumes, 2f);
+		float num = base.transform.position.y + this.buoyancyForce.BuoyancyCollider.bounds.extents.y;
+		return surfaceLevel - num;
+	}
+
+	// Token: 0x06001947 RID: 6471 RVA: 0x000DBBF4 File Offset: 0x000D9DF4
+	public float GetSurfaceForSpotLight()
+	{
+		return Submarine.GetSurfaceLevel(this.buoyancyForce.FluidVolumes, 30f);
+	}
+
+	// Token: 0x06001948 RID: 6472 RVA: 0x000DBC0C File Offset: 0x000D9E0C
+	public void OpenHatch()
+	{
+		if (this.hatchOpenAnimation == null)
+		{
+			return;
+		}
+		this.hatchOpenAnimation.CrossFade("OpenAnim");
+		this.hatchOpened = true;
+	}
+
+	// Token: 0x06001949 RID: 6473 RVA: 0x000DBC38 File Offset: 0x000D9E38
+	public void CloseHatch()
+	{
+		if (this.hatchOpenAnimation == null)
+		{
+			return;
+		}
+		this.hatchOpenAnimation.CrossFade("CloseAnim");
+		this.hatchOpened = false;
+	}
+
+	// Token: 0x0600194A RID: 6474 RVA: 0x000DBC64 File Offset: 0x000D9E64
+	public void StickyWeedEnter()
+	{
+		this.noOfWeedsTouched++;
+	}
+
+	// Token: 0x0600194B RID: 6475 RVA: 0x000DBC74 File Offset: 0x000D9E74
+	public void StickyWeedLeave()
+	{
+		this.noOfWeedsTouched--;
+	}
+
+	// Token: 0x04002D11 RID: 11537
+	public float gravityForce = 100f;
+
+	// Token: 0x04002D12 RID: 11538
+	public float buoyancyAtSurface = 1.5f;
+
+	// Token: 0x04002D13 RID: 11539
+	public float buoyancyInWater = 1f;
+
+	// Token: 0x04002D14 RID: 11540
+	public float moveForce = 450f;
+
+	// Token: 0x04002D15 RID: 11541
+	public float upForceMultiplier = 1f;
+
+	// Token: 0x04002D16 RID: 11542
+	public float downForceMultiplier = 1f;
+
+	// Token: 0x04002D17 RID: 11543
+	public float rotationSpeedFactor = 1f;
+
+	// Token: 0x04002D18 RID: 11544
+	public float stabilityNoiseTorque = 1500f;
+
+	// Token: 0x04002D19 RID: 11545
+	public float maximumRotationAngle = 40f;
+
+	// Token: 0x04002D1A RID: 11546
+	public float shakeStateForce = 5f;
+
+	// Token: 0x04002D1B RID: 11547
+	public CameraEffect hardImpactShake;
+
+	// Token: 0x04002D1C RID: 11548
+	public float cameraShakeFalloff = 2.75f;
+
+	// Token: 0x04002D1D RID: 11549
+	public float cameraShakeMin = 0.2f;
+
+	// Token: 0x04002D1E RID: 11550
+	public float jumpSuccessVelocity = 4f;
+
+	// Token: 0x04002D1F RID: 11551
+	public float thrusterUpdateInterval = 0.2f;
+
+	// Token: 0x04002D20 RID: 11552
+	public Transform FX_DeathBubbles;
+
+	// Token: 0x04002D21 RID: 11553
+	private ParticleSystem[] deathParticles;
+
+	// Token: 0x04002D22 RID: 11554
+	public GameObject thrusters;
+
+	// Token: 0x04002D23 RID: 11555
+	public bool thrusterImpactFxActive = true;
+
+	// Token: 0x04002D24 RID: 11556
+	public List<GameObject> bottomThrusters = new List<GameObject>();
+
+	// Token: 0x04002D25 RID: 11557
+	public GameObject fxThrusterImpact;
+
+	// Token: 0x04002D26 RID: 11558
+	public float thrusterRaycastMultiplier = 2f;
+
+	// Token: 0x04002D27 RID: 11559
+	public Vector3 thrusterImpactOffset = Vector3.zero;
+
+	// Token: 0x04002D28 RID: 11560
+	public float thrusterImpactSurfaceThreshold = 0.5f;
+
+	// Token: 0x04002D29 RID: 11561
+	public Color fxThrusterImpactColor = Color.grey;
+
+	// Token: 0x04002D2A RID: 11562
+	public Light spotlight;
+
+	// Token: 0x04002D2B RID: 11563
+	public MaterialInstance spotLightCone;
+
+	// Token: 0x04002D2C RID: 11564
+	public MaterialInstance spotLightConeReflect;
+
+	// Token: 0x04002D2D RID: 11565
+	public SubmarineSpotLightTilter lightTilter;
+
+	// Token: 0x04002D2E RID: 11566
+	private float cabinLightInitialIntensity;
+
+	// Token: 0x04002D2F RID: 11567
+	public SubmarineBoost booster;
+
+	// Token: 0x04002D30 RID: 11568
+	public SubmarineCabinGyro cabinGyro;
+
+	// Token: 0x04002D31 RID: 11569
+	public SubmarineCabinGyro lightCabinGyro;
+
+	// Token: 0x04002D32 RID: 11570
+	public GameObject bounceLight;
+
+	// Token: 0x04002D33 RID: 11571
+	public GameObject activatedScreen;
+
+	// Token: 0x04002D34 RID: 11572
+	public GameObject deactivatedScreen;
+
+	// Token: 0x04002D35 RID: 11573
+	public GameObject visualSubObject;
+
+	// Token: 0x04002D36 RID: 11574
+	public Animation hatchOpenAnimation;
+
+	// Token: 0x04002D37 RID: 11575
+	public FastEvent hardImpact = new FastEvent(2);
+
+	// Token: 0x04002D38 RID: 11576
+	public bool useLongEnterAnim;
+
+	// Token: 0x04002D39 RID: 11577
+	public MeshFilter frontWindowMesh;
+
+	// Token: 0x04002D3A RID: 11578
+	private Mesh orgWindow;
+
+	// Token: 0x04002D3B RID: 11579
+	private float orgBuoyancyForce;
+
+	// Token: 0x04002D3C RID: 11580
+	public float autoAimAngle = 25f;
+
+	// Token: 0x04002D3D RID: 11581
+	public float autoAimBoostDist = 8f;
+
+	// Token: 0x04002D3E RID: 11582
+	public float autoAimBoostPerMeter = 0.2f;
+
+	// Token: 0x04002D3F RID: 11583
+	public GameObject chargeAimPoint;
+
+	// Token: 0x04002D40 RID: 11584
+	public float lightsOutTimer = 2f;
+
+	// Token: 0x04002D41 RID: 11585
+	private float storedLightsOutTimer = 2f;
+
+	// Token: 0x04002D42 RID: 11586
+	[SerializeField]
+	[HideInInspector]
+	private List<ParticleSystem> fxThrusterImpactParticles;
+
+	// Token: 0x04002D43 RID: 11587
+	[SerializeField]
+	[HideInInspector]
+	private List<ParticleSystem> fxThrusterImpactSubEmitters;
+
+	// Token: 0x04002D44 RID: 11588
+	[SerializeField]
+	[HideInInspector]
+	private MaterialInstance[] thrusterMis;
+
+	// Token: 0x04002D45 RID: 11589
+	[HideInInspector]
+	[SerializeField]
+	private Transform[] thrusterTransforms;
+
+	// Token: 0x04002D46 RID: 11590
+	private MaterialInstance.VectorProperty[] thrusterMiBoundProps;
+
+	// Token: 0x04002D47 RID: 11591
+	private Vector3 mForward;
+
+	// Token: 0x04002D48 RID: 11592
+	private readonly List<Submarine.ThrusterData> mThrusterList = new List<Submarine.ThrusterData>(12);
+
+	// Token: 0x04002D49 RID: 11593
+	private float mMaxSpotlightIntensity;
+
+	// Token: 0x04002D4A RID: 11594
+	private MaterialInstance.FloatProperty illumProp;
+
+	// Token: 0x04002D4B RID: 11595
+	private MaterialInstance.FloatProperty illumPropReflect;
+
+	// Token: 0x04002D4C RID: 11596
+	private float mMaxConeIllumination;
+
+	// Token: 0x04002D4D RID: 11597
+	private float mMaxConeIlluminationReflect;
+
+	// Token: 0x04002D4E RID: 11598
+	private Vector3 mStabilityNoiseVector = Vector3.up;
+
+	// Token: 0x04002D4F RID: 11599
+	private BuoyancyForce buoyancyForce;
+
+	// Token: 0x04002D50 RID: 11600
+	private Submarine.State mState;
+
+	// Token: 0x04002D51 RID: 11601
+	private float moveForceOriginal;
+
+	// Token: 0x04002D52 RID: 11602
+	public bool destroyedByWaterGirl;
+
+	// Token: 0x04002D53 RID: 11603
+	private float inWaterAngularDrag;
+
+	// Token: 0x04002D54 RID: 11604
+	private Vector3 velLastFrame;
+
+	// Token: 0x04002D55 RID: 11605
+	private bool hatchOpened;
+
+	// Token: 0x04002D56 RID: 11606
+	public float underWaterFriction = 0.05f;
+
+	// Token: 0x04002D57 RID: 11607
+	public float aboveWaterFriction = 0.2f;
+
+	// Token: 0x04002D58 RID: 11608
+	public GameObject physicsAudioObject;
+
+	// Token: 0x04002D59 RID: 11609
+	private Submarine.SurfaceSituation surfaceSituation;
+
+	// Token: 0x04002D5A RID: 11610
+	private bool doHandleWaterImpact;
+
+	// Token: 0x04002D5B RID: 11611
+	private int enabledFrameCount;
+
+	// Token: 0x04002D5C RID: 11612
+	private bool stuckAndDestroyed;
+
+	// Token: 0x04002D5D RID: 11613
+	public Rigidbody rigBod;
+
+	// Token: 0x04002D5E RID: 11614
+	private SubmarineBoyInteraction submarineBoyInteraction;
+
+	// Token: 0x04002D5F RID: 11615
+	private SubmarineBeachStuckTrigger beachStuckTrigger;
+
+	// Token: 0x04002D60 RID: 11616
+	private int colMask;
+
+	// Token: 0x04002D61 RID: 11617
+	private BoyInput m_input;
+
+	// Token: 0x04002D62 RID: 11618
+	private float startDrag;
+
+	// Token: 0x04002D63 RID: 11619
+	private int updateCounter;
+
+	// Token: 0x04002D64 RID: 11620
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioThrustersStart;
+
+	// Token: 0x04002D65 RID: 11621
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioThrustersStop;
+
+	// Token: 0x04002D66 RID: 11622
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioThrustersChangeTo2;
+
+	// Token: 0x04002D67 RID: 11623
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioThrustersChangeTo1;
+
+	// Token: 0x04002D68 RID: 11624
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStuckInSand;
+
+	// Token: 0x04002D69 RID: 11625
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStartCooldown;
+
+	// Token: 0x04002D6A RID: 11626
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioSubmarineStartInWater;
+
+	// Token: 0x04002D6B RID: 11627
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioWaterEnter;
+
+	// Token: 0x04002D6C RID: 11628
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioWaterExit;
+
+	// Token: 0x04002D6D RID: 11629
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioWaterDescend;
+
+	// Token: 0x04002D6E RID: 11630
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioWaterAscend;
+
+	// Token: 0x04002D6F RID: 11631
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioWaterStopSurfaceSound;
+
+	// Token: 0x04002D70 RID: 11632
+	[SerializeField]
+	[HideInInspector]
+	private AkGameObj akGameObj;
+
+	// Token: 0x04002D71 RID: 11633
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04002D72 RID: 11634
+	private bool positionCanBeQueried;
+
+	// Token: 0x04002D73 RID: 11635
+	[NonSerialized]
+	public Vector3 cachedPosition;
+
+	// Token: 0x04002D74 RID: 11636
+	private PhysicMaterial subMaterial;
+
+	// Token: 0x04002D75 RID: 11637
+	private BoyGround boyGround;
+
+	// Token: 0x04002D76 RID: 11638
+	private float spotRandomTimer;
+
+	// Token: 0x04002D77 RID: 11639
+	private float spotRandomVal;
+
+	// Token: 0x04002D78 RID: 11640
+	private float spotWantedRandomVal;
+
+	// Token: 0x04002D79 RID: 11641
+	private float visualWasOffsetTimer;
+
+	// Token: 0x04002D7A RID: 11642
+	private Vector3 visualOffsetPos = Vector3.zero;
+
+	// Token: 0x04002D7B RID: 11643
+	private float height;
+
+	// Token: 0x04002D7C RID: 11644
+	private float thrusterSoundQuarentine;
+
+	// Token: 0x04002D7D RID: 11645
+	private bool thrustersRunning;
+
+	// Token: 0x04002D7E RID: 11646
+	private int updateID;
+
+	// Token: 0x04002D7F RID: 11647
+	private bool allowBoostAim;
+
+	// Token: 0x04002D80 RID: 11648
+	private float counter;
+
+	// Token: 0x04002D81 RID: 11649
+	private bool isSuccessBoost;
+
+	// Token: 0x04002D82 RID: 11650
+	private float mExitTimer;
+
+	// Token: 0x04002D83 RID: 11651
+	private bool allowSuccess;
+
+	// Token: 0x04002D84 RID: 11652
+	private float startYVel;
+
+	// Token: 0x04002D85 RID: 11653
+	private float currentJumpSuccessVelocity;
+
+	// Token: 0x04002D86 RID: 11654
+	private bool mAllowStickLeave;
+
+	// Token: 0x04002D87 RID: 11655
+	private float directionOffset;
+
+	// Token: 0x04002D88 RID: 11656
+	private float zyFactor = 1f;
+
+	// Token: 0x04002D89 RID: 11657
+	private float velocityWeight;
+
+	// Token: 0x04002D8A RID: 11658
+	private Collider digIntoObject;
+
+	// Token: 0x04002D8B RID: 11659
+	private GameObject sandDuneObject;
+
+	// Token: 0x04002D8C RID: 11660
+	private float timeDugIn;
+
+	// Token: 0x04002D8D RID: 11661
+	private float digInSpeedFactor = 1f;
+
+	// Token: 0x04002D8E RID: 11662
+	private float extraYDig;
+
+	// Token: 0x04002D8F RID: 11663
+	private Submarine.CollisionInfo storedCollisionInfo;
+
+	// Token: 0x04002D90 RID: 11664
+	private bool useStoredCollision;
+
+	// Token: 0x04002D91 RID: 11665
+	private Vector3 lastHardImpactPos;
+
+	// Token: 0x04002D92 RID: 11666
+	private float timeSinceLastImpactForce;
+
+	// Token: 0x04002D93 RID: 11667
+	private int insideCols;
+
+	// Token: 0x04002D94 RID: 11668
+	private int noOfWeedsTouched;
+
+	// Token: 0x020003AC RID: 940
+	private enum State
+	{
+		// Token: 0x04002D96 RID: 11670
+		None,
+		// Token: 0x04002D97 RID: 11671
+		Submerged,
+		// Token: 0x04002D98 RID: 11672
+		Surface,
+		// Token: 0x04002D99 RID: 11673
+		AboveSurface,
+		// Token: 0x04002D9A RID: 11674
+		DigIn
+	}
+
+	// Token: 0x020003AD RID: 941
+	private enum SurfaceSituation
+	{
+		// Token: 0x04002D9C RID: 11676
+		Above,
+		// Token: 0x04002D9D RID: 11677
+		At,
+		// Token: 0x04002D9E RID: 11678
+		Below
+	}
+
+	// Token: 0x020003AE RID: 942
+	private struct CollisionInfo
+	{
+		// Token: 0x0600194C RID: 6476 RVA: 0x000DBC84 File Offset: 0x000D9E84
+		public CollisionInfo(Collider c, Vector3 n)
+		{
+			this.collider = c;
+			this.normal = n;
+		}
+
+		// Token: 0x04002D9F RID: 11679
+		public Collider collider;
+
+		// Token: 0x04002DA0 RID: 11680
+		public Vector3 normal;
+	}
+
+	// Token: 0x020003AF RID: 943
+	private class ThrusterData
+	{
+		// Token: 0x0600194D RID: 6477 RVA: 0x000DBC94 File Offset: 0x000D9E94
+		public ThrusterData(Transform aThrusterTransform)
+		{
+			this.mParticles = aThrusterTransform.GetComponent<ParticleSystem>();
+			this.mThrusterTransform = aThrusterTransform.transform;
+			this.mOrigEmissionRate = aThrusterTransform.GetComponent<ParticleSystem>().emissionRate;
+			int i = 0;
+			int childCount = aThrusterTransform.childCount;
+			while (i < childCount)
+			{
+				Transform child = aThrusterTransform.GetChild(i);
+				this.mChildren.Add(new Submarine.ThrusterData(child));
+				i++;
+			}
+		}
+
+		// Token: 0x17000073 RID: 115
+		// (get) Token: 0x0600194E RID: 6478 RVA: 0x000DBD1C File Offset: 0x000D9F1C
+		public Vector3 Position
+		{
+			get
+			{
+				return this.mThrusterTransform.position;
+			}
+		}
+
+		// Token: 0x0600194F RID: 6479 RVA: 0x000DBD2C File Offset: 0x000D9F2C
+		public bool TurnOff()
+		{
+			if (!this.mIsActive)
+			{
+				return false;
+			}
+			this.mIsActive = false;
+			this.mParticles.emissionRate = 0f;
+			this.mParticles.Stop();
+			int i = 0;
+			int count = this.mChildren.Count;
+			while (i < count)
+			{
+				Submarine.ThrusterData thrusterData = this.mChildren[i];
+				thrusterData.TurnOff();
+				i++;
+			}
+			return true;
+		}
+
+		// Token: 0x06001950 RID: 6480 RVA: 0x000DBD9C File Offset: 0x000D9F9C
+		public bool TurnOn()
+		{
+			if (this.mIsActive)
+			{
+				return false;
+			}
+			this.mIsActive = true;
+			this.mParticles.emissionRate = this.mOrigEmissionRate;
+			this.mParticles.Play();
+			int i = 0;
+			int count = this.mChildren.Count;
+			while (i < count)
+			{
+				Submarine.ThrusterData thrusterData = this.mChildren[i];
+				thrusterData.TurnOn();
+				i++;
+			}
+			return true;
+		}
+
+		// Token: 0x06001951 RID: 6481 RVA: 0x000DBE0C File Offset: 0x000DA00C
+		public void SetParticleSize(float per, float size)
+		{
+			this.mParticles.startSize = Mathf.Lerp(size, size / 4f, per);
+		}
+
+		// Token: 0x06001952 RID: 6482 RVA: 0x000DBE28 File Offset: 0x000DA028
+		public void SetParticleColor(float per, Color color)
+		{
+			this.mParticles.startColor = color * (1f - per);
+		}
+
+		// Token: 0x04002DA1 RID: 11681
+		public bool isBottomThruster;
+
+		// Token: 0x04002DA2 RID: 11682
+		public int bottomThrusterIndex = -1;
+
+		// Token: 0x04002DA3 RID: 11683
+		private readonly ParticleSystem mParticles;
+
+		// Token: 0x04002DA4 RID: 11684
+		private readonly float mOrigEmissionRate;
+
+		// Token: 0x04002DA5 RID: 11685
+		private readonly List<Submarine.ThrusterData> mChildren = new List<Submarine.ThrusterData>();
+
+		// Token: 0x04002DA6 RID: 11686
+		private readonly Transform mThrusterTransform;
+
+		// Token: 0x04002DA7 RID: 11687
+		private bool mIsActive = true;
+	}
+}

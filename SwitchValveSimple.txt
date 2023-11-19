@@ -1,0 +1,803 @@
+using System;
+using System.Collections.Generic;
+using HutongGames.PlayMaker;
+using UnityEngine;
+
+// Token: 0x020001FB RID: 507
+public class SwitchValveSimple : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06000F86 RID: 3974 RVA: 0x000937A8 File Offset: 0x000919A8
+	public bool PreAwake(int callcount)
+	{
+		this.block = SignalIn.Create("block", base.gameObject, new Action(this.SetFullBlock));
+		this.unblock = SignalIn.Create("unblock", base.gameObject, new Action(this.SetFullUnblock));
+		this.loadAtMax = SignalIn.Create("loadAtMax", base.gameObject, new Action(this.DoLoadAtMax));
+		return true;
+	}
+
+	// Token: 0x06000F87 RID: 3975 RVA: 0x0009381C File Offset: 0x00091A1C
+	private void Start()
+	{
+		this.animNodes = this.animBlend.GetComponentsInChildren<AnimClipNode>(true);
+		float num = this.startRotation % 1f;
+		Vector3 eulerAngles = this.physicsHandle.transform.rotation.eulerAngles;
+		eulerAngles.z = ((num != 0f) ? (-num * 360f) : 359f);
+		this.rotationsCompleted = (int)(this.startRotation - num);
+		this.physicsHandle.GetComponent<Rigidbody>().MoveRotation(Quaternion.Euler(eulerAngles));
+		this.previousRotation = ((num != 0f) ? (this.physicsHandle.transform.rotation.eulerAngles.z / 360f) : 359f);
+		this.previousStick = this.idleRotation;
+		this.currentStick = this.idleRotation;
+		this.animDeviceRotate = this.animDevice.GetComponent<Animation>()["Rotate"];
+		this.animDeviceRotate.speed = 0f;
+		this.animDevice.GetComponent<Animation>().Play("Rotate");
+		this.triggerGrab.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.triggerGrab.exitTrigger.Register(this, ref this.triggerExitHandle);
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000F88 RID: 3976 RVA: 0x0009397C File Offset: 0x00091B7C
+	public void DoLoadAtMax()
+	{
+		this.rotationsCompleted = (int)this.maxRotations - 1;
+		this.previousRotation = 0f;
+		this.currentRotation = this.maxRotations;
+		this.rotationPercentage = 1f;
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000F89 RID: 3977 RVA: 0x000939B8 File Offset: 0x00091BB8
+	private void SetIdleState()
+	{
+		this.physicsHandle.GetComponent<Rigidbody>().angularDrag = this.defaultDrag;
+		this.boyHandling = null;
+		this.state = SwitchValveSimple.State.Idle;
+	}
+
+	// Token: 0x06000F8A RID: 3978 RVA: 0x000939EC File Offset: 0x00091BEC
+	private void IdleState()
+	{
+		if (this.boyHandling == null)
+		{
+			int i = 0;
+			int count = this.boysInside.Count;
+			while (i < count)
+			{
+				Boy boy = this.boysInside[i];
+				if (boy.input.rawAction && !(ScriptGlobals.boy.state is BoyGrabState))
+				{
+					this.SetGrabState(boy);
+					break;
+				}
+				i++;
+			}
+		}
+		if (this.windupForce != 0f)
+		{
+			this.AddForce(new Vector3(0f, 0f, this.windupForce));
+		}
+		this.AddFriction(this.idleFriction, false);
+	}
+
+	// Token: 0x06000F8B RID: 3979 RVA: 0x00093AA0 File Offset: 0x00091CA0
+	private void SetGrabState(Boy boy)
+	{
+		this.boyHandling = boy;
+		float num = -0.3f;
+		if (this.boyHandling.transform.position.x + num < base.transform.position.x)
+		{
+			this.grabDirection = -1;
+			this.animBlend.gameObject.transform.rotation = this.animLeft.gameObject.transform.rotation;
+			this.animBlend.gameObject.transform.position = this.animLeft.gameObject.transform.position;
+			int i = 0;
+			int num2 = this.animNodes.Length;
+			while (i < num2)
+			{
+				AnimClipNode animClipNode = this.animNodes[i];
+				animClipNode.mirror = false;
+				i++;
+			}
+		}
+		else
+		{
+			this.grabDirection = 1;
+			this.animBlend.gameObject.transform.rotation = this.animRight.gameObject.transform.rotation;
+			this.animBlend.gameObject.transform.position = this.animRight.gameObject.transform.position;
+			int j = 0;
+			int num3 = this.animNodes.Length;
+			while (j < num3)
+			{
+				AnimClipNode animClipNode2 = this.animNodes[j];
+				animClipNode2.mirror = true;
+				j++;
+			}
+		}
+		this.delayTimer = this.delayGrab;
+		if (!boy.isDead)
+		{
+			BoyUtils.StartCustomAnim(boy, this.animBlend, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		this.state = SwitchValveSimple.State.Simple;
+	}
+
+	// Token: 0x06000F8C RID: 3980 RVA: 0x00093C3C File Offset: 0x00091E3C
+	private void GrabState()
+	{
+		if (!this.boyHandling.input.rawAction || this.boyHandling.isDead)
+		{
+			this.Release();
+			return;
+		}
+		if (this.delayTimer > 0f)
+		{
+			this.delayTimer -= Time.deltaTime;
+			return;
+		}
+		if (this.currentStick.magnitude > this.stickMinInput)
+		{
+			this.SetStickFollowState();
+			return;
+		}
+		this.AddFriction(this.grabFriction, false);
+	}
+
+	// Token: 0x06000F8D RID: 3981 RVA: 0x00093CC4 File Offset: 0x00091EC4
+	private void SetStickFollowState()
+	{
+		this.movement = 0f;
+		this.state = SwitchValveSimple.State.StickFollow;
+	}
+
+	// Token: 0x06000F8E RID: 3982 RVA: 0x00093CD8 File Offset: 0x00091ED8
+	private void StickFollowState()
+	{
+		this.force = Vector3.zero;
+		Vector3 vector = -this.physicsHandle.transform.up;
+		Vector3 vector2 = Vector3.Cross(this.currentStick, vector);
+		float num = Vector3.Dot(vector2, new Vector3(0f, 0f, 1f));
+		float num2 = Vector3.Angle(this.currentStick, vector);
+		float num3 = Vector3.Angle(this.currentStick, this.previousStick);
+		if (num2 > this.stickMinAngle)
+		{
+			this.force.z = this.stickForce * Mathf.Sign(-num);
+			this.AddForce(this.force);
+		}
+		float num4 = num2 / this.stickFrictionAngles;
+		num4 = 1f - Mathf.Clamp(num4, 0f, 1f);
+		Vector3 angularVelocity = this.physicsHandle.GetComponent<Rigidbody>().angularVelocity;
+		angularVelocity.z *= 1f - this.stickFriction * num4;
+		this.physicsHandle.GetComponent<Rigidbody>().angularVelocity = angularVelocity;
+		float num5 = num3 * this.stickMoveSense * Time.deltaTime * Mathf.Sign(num);
+		num5 = Mathf.Min(num5, this.gestureTransition / 3f);
+		this.movement += num5;
+		if (Mathf.Abs(this.movement) < 0.02f)
+		{
+			this.movement = 0f;
+		}
+		else
+		{
+			this.movement += Mathf.Sign(this.movement) * -3f * Time.deltaTime;
+		}
+		if (Mathf.Abs(this.movement) > this.gestureTransition)
+		{
+			this.SetGestureState();
+		}
+		else if (!this.boyHandling.input.rawAction || this.boyHandling.isDead)
+		{
+			this.Release();
+		}
+		else if (this.currentStick.magnitude < this.stickMinInput)
+		{
+			this.state = SwitchValveSimple.State.Grab;
+		}
+	}
+
+	// Token: 0x06000F8F RID: 3983 RVA: 0x00093ED8 File Offset: 0x000920D8
+	private void SimpleState()
+	{
+		this.force = Vector3.zero;
+		float num = Vector3.Angle(this.currentStick, this.previousStick);
+		Vector3 vector = Vector3.Cross(this.currentStick, this.previousStick);
+		float num2 = Vector3.Dot(vector, new Vector3(0f, 0f, 1f));
+		if (this.windupForce > 0f)
+		{
+			this.force.z = this.force.z + this.windupForce;
+		}
+		if (this.currentStick != Vector3.zero)
+		{
+			float num3 = num / this.rotationFalloff;
+			float num4 = Mathf.Min(this.speedAdjustMax, num3);
+			this.force.z = num4 * -Mathf.Sign(num2);
+			this.AddForce(this.force);
+		}
+		if (this.currentStick != Vector3.zero && Mathf.Abs(num) > this.gestureMinAngle)
+		{
+			this.gestureMovement = 1f;
+		}
+		else
+		{
+			this.gestureMovement -= this.gestureDropSpeed * Time.deltaTime;
+		}
+		this.gestureMovement = Mathf.Clamp(this.gestureMovement, 0f, 1f);
+		if (this.currentStick.magnitude < 0.3f || this.gestureMovement <= 0f)
+		{
+			this.AddFriction(this.grabFriction, false);
+		}
+		if (!this.boyHandling.input.rawAction || this.boyHandling.isDead)
+		{
+			this.Release();
+		}
+	}
+
+	// Token: 0x06000F90 RID: 3984 RVA: 0x00094070 File Offset: 0x00092270
+	private void SetGestureState()
+	{
+		this.gestureMovement = 1f;
+		this.state = SwitchValveSimple.State.Gesture;
+	}
+
+	// Token: 0x06000F91 RID: 3985 RVA: 0x00094084 File Offset: 0x00092284
+	private void GestureState()
+	{
+		this.force = Vector3.zero;
+		float num = Vector3.Angle(this.currentStick, this.previousStick);
+		Vector3 vector = Vector3.Cross(this.currentStick, this.previousStick);
+		float num2 = Vector3.Dot(vector, new Vector3(0f, 0f, 1f));
+		if (num2 == 0f)
+		{
+			num2 = this.lastDir;
+		}
+		else
+		{
+			this.lastDir = num2;
+		}
+		if (this.windupForce > 0f)
+		{
+			this.force.z = this.force.z + this.windupForce;
+		}
+		if (Mathf.Abs(num) > this.gestureMinAngle)
+		{
+			this.gestureMovement += this.gestureMoveSense * Time.deltaTime;
+			this.gestureMovement = Mathf.Min(this.gestureMovement, 1f);
+		}
+		else
+		{
+			this.gestureMovement -= this.gestureDropSpeed * Time.deltaTime;
+		}
+		float num3 = num / this.rotationFalloff;
+		this.force.z = this.gestureForce * -Mathf.Sign(num2);
+		this.AddForce(this.force);
+		if (this.gestureMovement < 0f)
+		{
+			this.SetPostGestureState();
+		}
+		else if (!this.boyHandling.input.rawAction || this.boyHandling.isDead)
+		{
+			this.Release();
+		}
+		else if (this.currentStick.magnitude < 0.1f)
+		{
+			this.state = SwitchValveSimple.State.Grab;
+		}
+	}
+
+	// Token: 0x06000F92 RID: 3986 RVA: 0x00094214 File Offset: 0x00092414
+	private void SetPostGestureState()
+	{
+		this.transferDir = Mathf.Sign(this.physicsHandle.GetComponent<Rigidbody>().angularVelocity.z);
+		this.state = SwitchValveSimple.State.PostGesture;
+	}
+
+	// Token: 0x06000F93 RID: 3987 RVA: 0x0009424C File Offset: 0x0009244C
+	private void PostGestureState()
+	{
+		this.force = Vector3.zero;
+		Vector3 vector = -this.physicsHandle.transform.up;
+		Vector3 vector2 = Vector3.Cross(this.currentStick, vector);
+		float num = Vector3.Dot(vector2, new Vector3(0f, 0f, 1f));
+		float num2 = Vector3.Angle(this.currentStick, vector);
+		float num3 = Vector3.Angle(this.currentStick, this.previousStick);
+		if (Mathf.Sign(num) == this.transferDir || num2 > 90f)
+		{
+			this.force.z = this.stickForce * this.transferDir;
+		}
+		else
+		{
+			this.force.z = this.stickForce * Mathf.Sign(-num);
+		}
+		this.AddForce(this.force);
+		if (num2 < 30f)
+		{
+			if (Mathf.Sign(num) != this.transferDir)
+			{
+			}
+			this.SetStickFollowState();
+		}
+		else if (!this.boyHandling.input.rawAction || this.boyHandling.isDead)
+		{
+			this.Release();
+		}
+		else if (this.currentStick.magnitude < this.stickMinInput)
+		{
+			this.state = SwitchValveSimple.State.Grab;
+		}
+	}
+
+	// Token: 0x06000F94 RID: 3988 RVA: 0x00094394 File Offset: 0x00092594
+	private void FixedUpdate()
+	{
+		if (this.state != SwitchValveSimple.State.None)
+		{
+			float p = this.physicsHandle.transform.rotation.eulerAngles.z / 360f;
+			this.RotationCounter(p);
+			this.BlockedCheck();
+			this.SetRotationPercentage();
+			this.AnimDevice(p, this.animDeviceRotate);
+			this.AnimBoy(p);
+			if (this.boyHandling != null)
+			{
+				this.currentStick = new Vector3(this.boyHandling.input.stick.x, this.boyHandling.input.stick.y, 0f);
+			}
+			switch (this.state)
+			{
+			case SwitchValveSimple.State.Idle:
+				this.IdleState();
+				break;
+			case SwitchValveSimple.State.Simple:
+				this.SimpleState();
+				break;
+			case SwitchValveSimple.State.StickFollow:
+				this.StickFollowState();
+				break;
+			case SwitchValveSimple.State.Grab:
+				this.GrabState();
+				break;
+			case SwitchValveSimple.State.Gesture:
+				this.GestureState();
+				break;
+			case SwitchValveSimple.State.PostGesture:
+				this.PostGestureState();
+				break;
+			}
+			if (this.startBlocked && this.checkStartBlocked)
+			{
+				this.SetFullBlock();
+				this.checkStartBlocked = false;
+			}
+			if (this.boyHandling != null)
+			{
+				this.previousStick = this.currentStick;
+			}
+		}
+	}
+
+	// Token: 0x06000F95 RID: 3989 RVA: 0x000944FC File Offset: 0x000926FC
+	private void OnDrawGizmos()
+	{
+		if (this.gestureMovement > 0f)
+		{
+			Gizmos.color = Color.green;
+		}
+		else
+		{
+			Gizmos.color = Color.red;
+		}
+	}
+
+	// Token: 0x06000F96 RID: 3990 RVA: 0x00094528 File Offset: 0x00092728
+	private void SetFullBlock()
+	{
+		ConfigurableJoint configurableJoint = this.physicsHandle.GetComponent<ConfigurableJoint>();
+		if (configurableJoint == null)
+		{
+			configurableJoint = this.physicsHandle.AddComponent<ConfigurableJoint>();
+		}
+		configurableJoint.axis = new Vector3(0f, 0f, 1f);
+		configurableJoint.secondaryAxis = new Vector3(1f, 0f, 0f);
+		configurableJoint.angularXMotion = 0;
+		if (this.blockLimit != 0f)
+		{
+			configurableJoint.angularXMotion = 1;
+			SoftJointLimit softJointLimit = default(SoftJointLimit);
+			softJointLimit.limit = -1f * (Mathf.Abs(this.blockLimit) / 2f);
+			configurableJoint.lowAngularXLimit = softJointLimit;
+			softJointLimit.limit = Mathf.Abs(this.blockLimit) / 2f;
+			configurableJoint.highAngularXLimit = softJointLimit;
+		}
+	}
+
+	// Token: 0x06000F97 RID: 3991 RVA: 0x000945F8 File Offset: 0x000927F8
+	private void SetFullUnblock()
+	{
+		this.startBlocked = false;
+		if (this.physicsHandle.GetComponent<ConfigurableJoint>())
+		{
+			Object.Destroy(this.physicsHandle.GetComponent<ConfigurableJoint>());
+		}
+	}
+
+	// Token: 0x06000F98 RID: 3992 RVA: 0x00094634 File Offset: 0x00092834
+	private void AddForce(Vector3 force)
+	{
+		Vector3 angularVelocity = this.physicsHandle.GetComponent<Rigidbody>().angularVelocity;
+		if (Mathf.Abs(angularVelocity.z) > this.maxSpeed || Mathf.Abs(angularVelocity.z + force.z) > this.maxSpeed)
+		{
+			angularVelocity.z = this.maxSpeed * Mathf.Sign(angularVelocity.z);
+			this.physicsHandle.GetComponent<Rigidbody>().angularVelocity = angularVelocity;
+		}
+		else
+		{
+			this.physicsHandle.GetComponent<Rigidbody>().AddTorque(force);
+		}
+	}
+
+	// Token: 0x06000F99 RID: 3993 RVA: 0x000946CC File Offset: 0x000928CC
+	private void AddFriction(float f, bool onVelocity = false)
+	{
+		if (onVelocity)
+		{
+			Vector3 vector = -this.physicsHandle.GetComponent<Rigidbody>().angularVelocity * f;
+			this.physicsHandle.GetComponent<Rigidbody>().AddTorque(vector);
+		}
+		else
+		{
+			Vector3 angularVelocity = this.physicsHandle.GetComponent<Rigidbody>().angularVelocity;
+			if (Mathf.Abs(angularVelocity.z) > 0.01f)
+			{
+				Vector3 normalized = angularVelocity.normalized;
+				normalized.z *= -f;
+				this.physicsHandle.GetComponent<Rigidbody>().AddTorque(normalized);
+			}
+		}
+	}
+
+	// Token: 0x06000F9A RID: 3994 RVA: 0x00094764 File Offset: 0x00092964
+	private void RotationCounter(float p)
+	{
+		if (p < 0.25f && this.previousRotation > 0.75f)
+		{
+			this.rotationsCompleted--;
+		}
+		else if (p > 0.75f && this.previousRotation < 0.25f)
+		{
+			this.rotationsCompleted++;
+		}
+		float num = (float)this.rotationsCompleted;
+		if (p != 0f)
+		{
+			num += 1f - p;
+		}
+		this.currentRotation = num;
+		this.previousRotation = p;
+	}
+
+	// Token: 0x06000F9B RID: 3995 RVA: 0x000947F4 File Offset: 0x000929F4
+	private void SetRotationPercentage()
+	{
+		this.rotationPercentage = this.currentRotation / this.maxRotations;
+		if (this.fsmTarget != null)
+		{
+			this.fsmVar = this.fsmTarget.FsmVariables.GetFsmFloat("rotationPercentage");
+			this.fsmVar.Value = this.rotationPercentage;
+		}
+	}
+
+	// Token: 0x06000F9C RID: 3996 RVA: 0x00094854 File Offset: 0x00092A54
+	public float GetRotationPercentage()
+	{
+		return this.rotationPercentage;
+	}
+
+	// Token: 0x06000F9D RID: 3997 RVA: 0x0009485C File Offset: 0x00092A5C
+	private void BlockedCheck()
+	{
+		if (this.currentRotation > this.maxRotations)
+		{
+			this.Block(this.maxRotations);
+		}
+		else if (this.currentRotation < 0f)
+		{
+			this.Block(0f);
+		}
+	}
+
+	// Token: 0x06000F9E RID: 3998 RVA: 0x0009489C File Offset: 0x00092A9C
+	private void Block(float limit)
+	{
+		Vector3 angularVelocity = this.physicsHandle.GetComponent<Rigidbody>().angularVelocity;
+		this.physicsHandle.GetComponent<Rigidbody>().angularVelocity = Vector3.zero;
+		float num = 360f - limit % 1f * 360f;
+		Quaternion quaternion = Quaternion.Euler(new Vector3(0f, 0f, num));
+		this.physicsHandle.GetComponent<Rigidbody>().MoveRotation(quaternion);
+		this.currentRotation = limit;
+		if (this.impactForce != 0f)
+		{
+			this.physicsHandle.GetComponent<Rigidbody>().AddTorque(angularVelocity * -(this.impactForce / 100f), 1);
+		}
+	}
+
+	// Token: 0x06000F9F RID: 3999 RVA: 0x00094948 File Offset: 0x00092B48
+	private void AnimDevice(float p, AnimationState anim)
+	{
+		anim.normalizedTime = p;
+	}
+
+	// Token: 0x06000FA0 RID: 4000 RVA: 0x00094954 File Offset: 0x00092B54
+	private void AnimBoy(float p)
+	{
+		if (this.state != SwitchValveSimple.State.Idle)
+		{
+			if (this.grabDirection == 1)
+			{
+				p = 1f - p;
+			}
+			this.animBlend.currentBlendValue = p;
+		}
+	}
+
+	// Token: 0x06000FA1 RID: 4001 RVA: 0x00094984 File Offset: 0x00092B84
+	private void Release()
+	{
+		if (!ScriptGlobals.boy.isDead)
+		{
+			BoyUtils.ClearState(this.boyHandling, -1f);
+		}
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000FA2 RID: 4002 RVA: 0x000949AC File Offset: 0x00092BAC
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.triggerGrab.enterTrigger)
+		{
+			this.TriggerEnter(collider);
+		}
+		else if (sender == this.triggerGrab.exitTrigger)
+		{
+			this.TriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06000FA3 RID: 4003 RVA: 0x000949E8 File Offset: 0x00092BE8
+	private void TriggerEnter(Collider c)
+	{
+		if (c.attachedRigidbody && c.attachedRigidbody.GetComponent<Boy>())
+		{
+			this.boysInside.Add(c.attachedRigidbody.GetComponent<Boy>());
+		}
+	}
+
+	// Token: 0x06000FA4 RID: 4004 RVA: 0x00094A30 File Offset: 0x00092C30
+	private void TriggerExit(Collider c)
+	{
+		if (c.attachedRigidbody && c.attachedRigidbody.GetComponent<Boy>())
+		{
+			this.boysInside.Remove(c.attachedRigidbody.GetComponent<Boy>());
+		}
+	}
+
+	// Token: 0x04001C35 RID: 7221
+	[HideInInspector]
+	public float rotationPercentage;
+
+	// Token: 0x04001C36 RID: 7222
+	public float maxRotations = 5.5f;
+
+	// Token: 0x04001C37 RID: 7223
+	public float startRotation;
+
+	// Token: 0x04001C38 RID: 7224
+	public bool startBlocked;
+
+	// Token: 0x04001C39 RID: 7225
+	public float blockLimit;
+
+	// Token: 0x04001C3A RID: 7226
+	public float maxSpeed = 14f;
+
+	// Token: 0x04001C3B RID: 7227
+	[HideInInspector]
+	public float windupForce;
+
+	// Token: 0x04001C3C RID: 7228
+	[HideInInspector]
+	public float windupDrag;
+
+	// Token: 0x04001C3D RID: 7229
+	[HideInInspector]
+	public float windupHoldDrag;
+
+	// Token: 0x04001C3E RID: 7230
+	public float impactForce = 3.5f;
+
+	// Token: 0x04001C3F RID: 7231
+	public AnimationCurve dragIncreaseCurve;
+
+	// Token: 0x04001C40 RID: 7232
+	public PlayMakerFSM fsmTarget;
+
+	// Token: 0x04001C41 RID: 7233
+	private FsmFloat fsmVar;
+
+	// Token: 0x04001C42 RID: 7234
+	public CollisionEvents triggerGrab;
+
+	// Token: 0x04001C43 RID: 7235
+	public AnimBlendNode animBlend;
+
+	// Token: 0x04001C44 RID: 7236
+	public GameObject animDevice;
+
+	// Token: 0x04001C45 RID: 7237
+	public GameObject center;
+
+	// Token: 0x04001C46 RID: 7238
+	public GameObject physicsHandle;
+
+	// Token: 0x04001C47 RID: 7239
+	public GameObject animLeft;
+
+	// Token: 0x04001C48 RID: 7240
+	public GameObject animRight;
+
+	// Token: 0x04001C49 RID: 7241
+	private AnimClipNode[] animNodes;
+
+	// Token: 0x04001C4A RID: 7242
+	[HideInInspector]
+	public float defaultDrag = 1.75f;
+
+	// Token: 0x04001C4B RID: 7243
+	[HideInInspector]
+	public float grabDrag = 2.75f;
+
+	// Token: 0x04001C4C RID: 7244
+	private float currentRotation;
+
+	// Token: 0x04001C4D RID: 7245
+	private int rotationsCompleted;
+
+	// Token: 0x04001C4E RID: 7246
+	private float previousRotation;
+
+	// Token: 0x04001C4F RID: 7247
+	private float delayTimer;
+
+	// Token: 0x04001C50 RID: 7248
+	private float delayGrab = 0.1f;
+
+	// Token: 0x04001C51 RID: 7249
+	private bool checkStartBlocked = true;
+
+	// Token: 0x04001C52 RID: 7250
+	private int grabDirection;
+
+	// Token: 0x04001C53 RID: 7251
+	private SwitchValveSimple.State state;
+
+	// Token: 0x04001C54 RID: 7252
+	private Boy boyHandling;
+
+	// Token: 0x04001C55 RID: 7253
+	private AnimationState animDeviceRotate;
+
+	// Token: 0x04001C56 RID: 7254
+	private Vector3 idleRotation = new Vector3(0f, -1f, 0f);
+
+	// Token: 0x04001C57 RID: 7255
+	private Vector3 previousStick;
+
+	// Token: 0x04001C58 RID: 7256
+	private Vector3 currentStick;
+
+	// Token: 0x04001C59 RID: 7257
+	private Vector3 force;
+
+	// Token: 0x04001C5A RID: 7258
+	private SignalIn block;
+
+	// Token: 0x04001C5B RID: 7259
+	private SignalIn unblock;
+
+	// Token: 0x04001C5C RID: 7260
+	private SignalIn loadAtMax;
+
+	// Token: 0x04001C5D RID: 7261
+	public bool directRotation;
+
+	// Token: 0x04001C5E RID: 7262
+	public float minAngle = 3f;
+
+	// Token: 0x04001C5F RID: 7263
+	public float rotationFalloff = 5f;
+
+	// Token: 0x04001C60 RID: 7264
+	public float gestureForce = 1.5f;
+
+	// Token: 0x04001C61 RID: 7265
+	public float speedAdjustMax = 1.5f;
+
+	// Token: 0x04001C62 RID: 7266
+	public float idleFriction = 0.25f;
+
+	// Token: 0x04001C63 RID: 7267
+	public float grabFriction = 0.5f;
+
+	// Token: 0x04001C64 RID: 7268
+	public float stickFriction = 0.5f;
+
+	// Token: 0x04001C65 RID: 7269
+	public float stickFrictionAngles = 20f;
+
+	// Token: 0x04001C66 RID: 7270
+	public float stickMinAngle = 5f;
+
+	// Token: 0x04001C67 RID: 7271
+	public float stickForce = 2.5f;
+
+	// Token: 0x04001C68 RID: 7272
+	public float stickForceMin = 0.03f;
+
+	// Token: 0x04001C69 RID: 7273
+	public float stickMinInput = 0.3f;
+
+	// Token: 0x04001C6A RID: 7274
+	public float gestureFriction = 0.1f;
+
+	// Token: 0x04001C6B RID: 7275
+	public float movement;
+
+	// Token: 0x04001C6C RID: 7276
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04001C6D RID: 7277
+	private int triggerExitHandle = -1;
+
+	// Token: 0x04001C6E RID: 7278
+	public float stickMoveSense = 0.25f;
+
+	// Token: 0x04001C6F RID: 7279
+	public float gestureTransition = 0.6f;
+
+	// Token: 0x04001C70 RID: 7280
+	private float gestureMovement;
+
+	// Token: 0x04001C71 RID: 7281
+	private float lastDir;
+
+	// Token: 0x04001C72 RID: 7282
+	private float lastStick;
+
+	// Token: 0x04001C73 RID: 7283
+	public float gestureMinAngle = 8f;
+
+	// Token: 0x04001C74 RID: 7284
+	public float gestureMoveSense = 2f;
+
+	// Token: 0x04001C75 RID: 7285
+	public float gestureDropSpeed = 2f;
+
+	// Token: 0x04001C76 RID: 7286
+	private float transferDir;
+
+	// Token: 0x04001C77 RID: 7287
+	private List<Boy> boysInside = new List<Boy>();
+
+	// Token: 0x020001FC RID: 508
+	private enum State
+	{
+		// Token: 0x04001C79 RID: 7289
+		None,
+		// Token: 0x04001C7A RID: 7290
+		Idle,
+		// Token: 0x04001C7B RID: 7291
+		Simple,
+		// Token: 0x04001C7C RID: 7292
+		StickFollow,
+		// Token: 0x04001C7D RID: 7293
+		Grab,
+		// Token: 0x04001C7E RID: 7294
+		Gesture,
+		// Token: 0x04001C7F RID: 7295
+		PostGesture
+	}
+}

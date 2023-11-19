@@ -1,0 +1,36 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000148 RID: 328
+public class TeleportFollowClipToSubmarineWater : MonoBehaviour
+{
+	// Token: 0x060009EA RID: 2538 RVA: 0x00063200 File Offset: 0x00061400
+	private void Awake()
+	{
+		this._transform = base.transform;
+	}
+
+	// Token: 0x060009EB RID: 2539 RVA: 0x00063210 File Offset: 0x00061410
+	private void LateUpdate()
+	{
+		float surfaceForSpotLight = this.submarine.GetSurfaceForSpotLight();
+		if (surfaceForSpotLight != -3.4028235E+38f)
+		{
+			this.surf = surfaceForSpotLight;
+		}
+		this._transform.localPosition = new Vector3(0f, 0f, this._transform.localScale.z * 0.5f);
+		Vector3 position = this._transform.position;
+		float y = FastMath.Min(this.surf - this._transform.localScale.y * 0.5f, position.y);
+		position.y = y;
+		this._transform.SetPositionRotation(position, Quaternion.Euler(0f, 90f, 0f));
+	}
+
+	// Token: 0x04001105 RID: 4357
+	public Submarine submarine;
+
+	// Token: 0x04001106 RID: 4358
+	private float surf;
+
+	// Token: 0x04001107 RID: 4359
+	private Transform _transform;
+}

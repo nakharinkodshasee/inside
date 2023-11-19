@@ -1,0 +1,26 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003C6 RID: 966
+public class SubmarineDoNotExit : MonoBehaviour
+{
+	// Token: 0x06001A12 RID: 6674 RVA: 0x000E3F20 File Offset: 0x000E2120
+	private void OnTriggerEnter(Collider coll)
+	{
+		SubmarineBoyInteraction component = coll.GetComponent<SubmarineBoyInteraction>();
+		if (component)
+		{
+			component.allowExit(false);
+		}
+	}
+
+	// Token: 0x06001A13 RID: 6675 RVA: 0x000E3F48 File Offset: 0x000E2148
+	private void OnTriggerExit(Collider coll)
+	{
+		SubmarineBoyInteraction component = coll.GetComponent<SubmarineBoyInteraction>();
+		if (component)
+		{
+			component.allowExit(true);
+		}
+	}
+}

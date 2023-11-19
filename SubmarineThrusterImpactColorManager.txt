@@ -1,0 +1,147 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020003C2 RID: 962
+public class SubmarineThrusterImpactColorManager : MonoBehaviour
+{
+	// Token: 0x06001A01 RID: 6657 RVA: 0x000E3AB8 File Offset: 0x000E1CB8
+	public void AddTrigger(SubmarineThrusterImpactColorTrigger trigger)
+	{
+		if (!this.triggers.Contains(trigger))
+		{
+			this.triggers.Add(trigger);
+			if (trigger.useGradient)
+			{
+				this.updatePerFrame = true;
+			}
+			this.RefreshProperties();
+		}
+	}
+
+	// Token: 0x06001A02 RID: 6658 RVA: 0x000E3AF0 File Offset: 0x000E1CF0
+	public void RemoveTrigger(SubmarineThrusterImpactColorTrigger trigger)
+	{
+		this.triggers.Remove(trigger);
+		this.RefreshProperties();
+	}
+
+	// Token: 0x06001A03 RID: 6659 RVA: 0x000E3B08 File Offset: 0x000E1D08
+	public void InitializeSubmarineProperties(Submarine subProbe)
+	{
+		this.sub = subProbe;
+		this.fxColorBackup = this.sub.fxThrusterImpactColor;
+		this.fxOffsetBackup = this.sub.thrusterImpactOffset;
+		this.fxActiveBackup = this.sub.thrusterImpactFxActive;
+	}
+
+	// Token: 0x06001A04 RID: 6660 RVA: 0x000E3B50 File Offset: 0x000E1D50
+	private void RefreshProperties()
+	{
+		int count = this.triggers.Count;
+		int num = 0;
+		int num2 = 0;
+		int num3 = 0;
+		if (count > 0)
+		{
+			Color color = Color.black;
+			color.a = 0f;
+			Vector3 vector = Vector3.zero;
+			for (int i = 0; i < count; i++)
+			{
+				if (this.triggers[i].disableThrusterOverride)
+				{
+					num3++;
+				}
+				if (this.triggers[i].colorOverride)
+				{
+					num++;
+					if (this.triggers[i].useGradient)
+					{
+						float num4 = Mathf.Clamp01(this.triggers[i].transform.InverseTransformPoint(this.sub.transform.position).x + 0.5f);
+						color += this.triggers[i].subThrusterImpactGradient.Evaluate(num4);
+					}
+					else
+					{
+						color += this.triggers[i].subThrusterImpactColor;
+					}
+				}
+				if (this.triggers[i].offsetOverride)
+				{
+					num2++;
+					vector += this.triggers[i].subThrusterImpactOffset;
+				}
+			}
+			if (num3 > 0)
+			{
+				this.sub.thrusterImpactFxActive = false;
+			}
+			else
+			{
+				this.sub.thrusterImpactFxActive = this.fxActiveBackup;
+			}
+			if (num > 0)
+			{
+				color /= (float)num;
+				this.sub.fxThrusterImpactColor = color;
+			}
+			else
+			{
+				this.sub.fxThrusterImpactColor = this.fxColorBackup;
+			}
+			if (num2 > 0)
+			{
+				vector /= (float)num2;
+				this.sub.thrusterImpactOffset = vector;
+			}
+			else
+			{
+				this.sub.thrusterImpactOffset = this.fxOffsetBackup;
+			}
+			this.subInside = true;
+		}
+		else
+		{
+			this.sub.fxThrusterImpactColor = this.fxColorBackup;
+			this.sub.thrusterImpactOffset = this.fxOffsetBackup;
+			this.sub.thrusterImpactFxActive = this.fxActiveBackup;
+			this.subInside = false;
+		}
+	}
+
+	// Token: 0x06001A05 RID: 6661 RVA: 0x000E3D84 File Offset: 0x000E1F84
+	private void Start()
+	{
+	}
+
+	// Token: 0x06001A06 RID: 6662 RVA: 0x000E3D88 File Offset: 0x000E1F88
+	private void Update()
+	{
+		if (this.subInside && this.updatePerFrame)
+		{
+			this.RefreshProperties();
+		}
+	}
+
+	// Token: 0x04002EC8 RID: 11976
+	public bool updatePerFrame;
+
+	// Token: 0x04002EC9 RID: 11977
+	private bool subInside;
+
+	// Token: 0x04002ECA RID: 11978
+	private bool fxActiveBackup;
+
+	// Token: 0x04002ECB RID: 11979
+	private Color fxColorBackup;
+
+	// Token: 0x04002ECC RID: 11980
+	private Vector3 fxOffsetBackup;
+
+	// Token: 0x04002ECD RID: 11981
+	[HideInInspector]
+	public Submarine sub;
+
+	// Token: 0x04002ECE RID: 11982
+	private List<SubmarineThrusterImpactColorTrigger> triggers = new List<SubmarineThrusterImpactColorTrigger>();
+}

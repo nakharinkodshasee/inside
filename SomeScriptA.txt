@@ -1,0 +1,16 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000573 RID: 1395
+public class SomeScriptA : MonoBehaviour
+{
+	// Token: 0x04004275 RID: 17013
+	public MaterialInstance mat;
+
+	// Token: 0x04004276 RID: 17014
+	public MaterialInstance[] matArray;
+
+	// Token: 0x04004277 RID: 17015
+	public List<MaterialInstance> matList;
+}

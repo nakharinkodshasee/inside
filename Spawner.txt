@@ -1,0 +1,19 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000561 RID: 1377
+public class Spawner : MonoBehaviour
+{
+	// Token: 0x060023C9 RID: 9161 RVA: 0x001296F8 File Offset: 0x001278F8
+	private void Spawn()
+	{
+		Vector3 position = base.transform.position;
+		Quaternion rotation = base.transform.rotation;
+		GameObject gameObject = Object.Instantiate<GameObject>(this.template);
+		gameObject.transform.position = position;
+		gameObject.transform.rotation = rotation;
+	}
+
+	// Token: 0x04004236 RID: 16950
+	public GameObject template;
+}

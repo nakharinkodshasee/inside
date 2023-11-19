@@ -1,0 +1,72 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005A2 RID: 1442
+public class TestAnimName : MonoBehaviour
+{
+	// Token: 0x060024DC RID: 9436 RVA: 0x0012EFB4 File Offset: 0x0012D1B4
+	private void Start()
+	{
+		if (this.anim)
+		{
+			this.clipState = this.anim[this.clip.name];
+			this.clipName = this.clip.name;
+		}
+	}
+
+	// Token: 0x060024DD RID: 9437 RVA: 0x0012F000 File Offset: 0x0012D200
+	private void DrawStick(vector2f stick, Color c)
+	{
+		Vector3 zero = Vector3Fast.zero;
+		zero.x = stick.x;
+		zero.y = stick.y;
+		Debug.DrawLine(ScriptGlobals.boy.pos3, ScriptGlobals.boy.pos3 + zero * 3f, c);
+	}
+
+	// Token: 0x060024DE RID: 9438 RVA: 0x0012F05C File Offset: 0x0012D25C
+	private void Update()
+	{
+		this.DrawStick(ScriptGlobals.boy.input.stick, Color.red);
+		this.DrawStick(ScriptGlobals.boy.input.looseDir, Color.blue);
+		if (this.anim)
+		{
+			string name = base.gameObject.name;
+			if (this.timer > 0f)
+			{
+				this.timer -= Time.deltaTime;
+			}
+			else
+			{
+				this.timer = 100f;
+				this.anim.CrossFade(this.clipAlternative.name);
+			}
+		}
+	}
+
+	// Token: 0x04004393 RID: 17299
+	public Animation anim;
+
+	// Token: 0x04004394 RID: 17300
+	public AnimationClip clip;
+
+	// Token: 0x04004395 RID: 17301
+	public AnimationClip clipAlternative;
+
+	// Token: 0x04004396 RID: 17302
+	public bool useCatchedString;
+
+	// Token: 0x04004397 RID: 17303
+	public bool useStateName;
+
+	// Token: 0x04004398 RID: 17304
+	public bool useStateClipName;
+
+	// Token: 0x04004399 RID: 17305
+	private AnimationState clipState;
+
+	// Token: 0x0400439A RID: 17306
+	private string clipName;
+
+	// Token: 0x0400439B RID: 17307
+	private float timer = 3f;
+}

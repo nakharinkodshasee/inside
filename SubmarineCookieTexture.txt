@@ -1,0 +1,293 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000364 RID: 868
+[ExecuteInEditMode]
+public class SubmarineCookieTexture : MonoBehaviour
+{
+	// Token: 0x060017DA RID: 6106 RVA: 0x000D0448 File Offset: 0x000CE648
+	private void Awake()
+	{
+		if (!Application.isPlaying)
+		{
+			return;
+		}
+		this.d11SubmarineCookieTexture = base.gameObject.AddComponent<D11SubmarineCookieTexture>();
+	}
+
+	// Token: 0x060017DB RID: 6107 RVA: 0x000D0468 File Offset: 0x000CE668
+	private int MainTexID()
+	{
+		if (this.m_maintex_id < 0)
+		{
+			this.m_maintex_id = Shader.PropertyToID("_MainTex");
+		}
+		return this.m_maintex_id;
+	}
+
+	// Token: 0x060017DC RID: 6108 RVA: 0x000D0498 File Offset: 0x000CE698
+	private int OverlayTexID()
+	{
+		if (this.m_overlaytex_id < 0)
+		{
+			this.m_overlaytex_id = Shader.PropertyToID("_OverlayTex");
+		}
+		return this.m_overlaytex_id;
+	}
+
+	// Token: 0x060017DD RID: 6109 RVA: 0x000D04C8 File Offset: 0x000CE6C8
+	private int ParmsID()
+	{
+		if (this.m_parms_id < 0)
+		{
+			this.m_parms_id = Shader.PropertyToID("_Parms");
+		}
+		return this.m_parms_id;
+	}
+
+	// Token: 0x060017DE RID: 6110 RVA: 0x000D04F8 File Offset: 0x000CE6F8
+	private void SetMaterialProperties()
+	{
+		this.renderMaterial.SetTexture(this.MainTexID(), this.cookieBase);
+		this.renderMaterial.SetTexture(this.OverlayTexID(), this.cookieOverlay);
+		this.renderMaterial.SetVector(this.ParmsID(), new Vector4(this.scaleOffset, this.scaleMultiplier, this.overlayMultiplier, 0f));
+	}
+
+	// Token: 0x060017DF RID: 6111 RVA: 0x000D0560 File Offset: 0x000CE760
+	private void OnAwake()
+	{
+	}
+
+	// Token: 0x060017E0 RID: 6112 RVA: 0x000D0564 File Offset: 0x000CE764
+	private void OnEnable()
+	{
+		this.foundMI = false;
+		this.foundShader = false;
+		this.validGCube = false;
+		if (this.renderCookieShader == null && this.initShader)
+		{
+			this.renderCookieShader = Shader.Find("Playdead/Post/Anim Cookie Submarine");
+			this.initShader = false;
+		}
+		this.renderCookieTex = new RenderTexture(this.renderTexSize, this.renderTexSize, 0, 0);
+		this.renderCookieTex.Create();
+		if (this.renderCookieShader != null)
+		{
+			this.renderMaterial = new Material(this.renderCookieShader);
+			this.SetMaterialProperties();
+			this.foundShader = true;
+			this.BlitCookie();
+		}
+		this.cookieGCube = base.GetComponent<LightVolumeFog>();
+		if (this.cookieGCube != null)
+		{
+			if (this.initGCubeCookie && this.cookieGCube.CookieOverride != null && this.cookieGCube.CookieOverride is Texture2D)
+			{
+				this.gCubeCookieBackup = this.cookieGCube.CookieOverride;
+				this.cookieBase = (Texture2D)this.cookieGCube.CookieOverride;
+			}
+			this.initGCubeCookie = false;
+			this.cookieGCube.CookieOverride = this.renderCookieTex;
+			if (this.cookieGCube.AssociatedLight != null)
+			{
+				this.validGCube = true;
+			}
+		}
+		int i = 0;
+		int count = this.materialInstances.Count;
+		while (i < count)
+		{
+			if (this.materialInstances[i] != null)
+			{
+				MaterialInstance.TextureProperty orAddTextureProperty = this.materialInstances[i].GetOrAddTextureProperty(this.texturePropertyName);
+				this.materialInstances[i].SetTextureProperty(orAddTextureProperty, this.renderCookieTex);
+				this.foundMI = true;
+			}
+			i++;
+		}
+		this.shaderOffset = Vector4.zero;
+		if (this.offsetTransform != null)
+		{
+			this.lastOffsetPosition = this.offsetTransform.position;
+		}
+		if (this.lightTransform != null)
+		{
+			this.lastPosition = this.lightTransform.position;
+		}
+	}
+
+	// Token: 0x060017E1 RID: 6113 RVA: 0x000D0780 File Offset: 0x000CE980
+	private void Update()
+	{
+		if (this.lightTransform != null)
+		{
+			Vector3 position = this.lightTransform.position;
+			Vector3 vector = position - this.lastPosition;
+			Vector3 vector2 = this.lightTransform.InverseTransformDirection(vector);
+			this.shaderOffset.x = this.shaderOffset.x + vector2.x * this.shaderPositionMultiplier.x;
+			this.shaderOffset.y = this.shaderOffset.y + vector2.y * this.shaderPositionMultiplier.y;
+			this.shaderOffset.z = this.shaderOffset.z + vector2.z * this.shaderPositionMultiplier.z;
+			this.lastPosition = position;
+		}
+		if (this.offsetTransform != null)
+		{
+			Vector3 position2 = this.offsetTransform.position;
+			Vector3 vector3 = position2 - this.lastOffsetPosition;
+			this.shaderOffset.x = this.shaderOffset.x + vector3.x * this.shaderOffsetMultiplier.x;
+			this.shaderOffset.y = this.shaderOffset.y + vector3.y * this.shaderOffsetMultiplier.y;
+			this.lastOffsetPosition = position2;
+		}
+		this.shaderTime = Time.time * this.timeMultiplier;
+	}
+
+	// Token: 0x060017E2 RID: 6114 RVA: 0x000D08C8 File Offset: 0x000CEAC8
+	private void OnDisable()
+	{
+		if (this.cookieBase != null && this.cookieGCube != null)
+		{
+			this.cookieGCube.CookieOverride = this.cookieBase;
+		}
+		else if (this.cookieGCube != null)
+		{
+			this.cookieGCube.CookieOverride = null;
+		}
+		this.foundMI = false;
+		this.foundShader = false;
+		this.foundGCube = false;
+		this.validGCube = false;
+		if (this.renderMaterial != null)
+		{
+			PDUtilities.Destroy(this.renderMaterial);
+		}
+		PDUtilities.Destroy(this.renderCookieTex);
+	}
+
+	// Token: 0x060017E3 RID: 6115 RVA: 0x000D0970 File Offset: 0x000CEB70
+	private void BlitCookie()
+	{
+		if (!this.foundShader)
+		{
+			return;
+		}
+		RenderTexture active = RenderTexture.active;
+		this.renderMaterial.SetVector("_Offset", new Vector4(this.shaderOffset.x, this.shaderOffset.y, this.shaderOffset.z + this.shaderTime, 0f));
+		Graphics.Blit(this.cookieBase, this.renderCookieTex, this.renderMaterial);
+		RenderTexture.active = active;
+	}
+
+	// Token: 0x060017E4 RID: 6116 RVA: 0x000D09F0 File Offset: 0x000CEBF0
+	private void OnDestroy()
+	{
+		if (this.gCubeCookieBackup != null && this.cookieGCube != null)
+		{
+			this.cookieGCube.CookieOverride = this.gCubeCookieBackup;
+		}
+	}
+
+	// Token: 0x060017E5 RID: 6117 RVA: 0x000D0A28 File Offset: 0x000CEC28
+	private void LateUpdate()
+	{
+		if (this.validGCube && SubsceneCullingManager.instance.InsideViewfrustum(this.cookieGCube.AssociatedLight.Bounds()))
+		{
+			this.BlitCookie();
+		}
+	}
+
+	// Token: 0x04002ABA RID: 10938
+	public Shader renderCookieShader;
+
+	// Token: 0x04002ABB RID: 10939
+	private Material renderMaterial;
+
+	// Token: 0x04002ABC RID: 10940
+	public Texture2D cookieBase;
+
+	// Token: 0x04002ABD RID: 10941
+	public Texture2D cookieOverlay;
+
+	// Token: 0x04002ABE RID: 10942
+	public List<MaterialInstance> materialInstances = new List<MaterialInstance>();
+
+	// Token: 0x04002ABF RID: 10943
+	public string texturePropertyName = "_MainTex";
+
+	// Token: 0x04002AC0 RID: 10944
+	private RenderTexture renderCookieTex;
+
+	// Token: 0x04002AC1 RID: 10945
+	public int renderTexSize = 256;
+
+	// Token: 0x04002AC2 RID: 10946
+	public Transform lightTransform;
+
+	// Token: 0x04002AC3 RID: 10947
+	public Transform offsetTransform;
+
+	// Token: 0x04002AC4 RID: 10948
+	private LightVolumeFog cookieGCube;
+
+	// Token: 0x04002AC5 RID: 10949
+	private bool initGCubeCookie = true;
+
+	// Token: 0x04002AC6 RID: 10950
+	private bool initShader = true;
+
+	// Token: 0x04002AC7 RID: 10951
+	private bool validGCube;
+
+	// Token: 0x04002AC8 RID: 10952
+	private Texture gCubeCookieBackup;
+
+	// Token: 0x04002AC9 RID: 10953
+	private bool foundShader;
+
+	// Token: 0x04002ACA RID: 10954
+	private bool foundMI;
+
+	// Token: 0x04002ACB RID: 10955
+	private bool foundGCube;
+
+	// Token: 0x04002ACC RID: 10956
+	public float scaleOffset;
+
+	// Token: 0x04002ACD RID: 10957
+	public float scaleMultiplier = 1f;
+
+	// Token: 0x04002ACE RID: 10958
+	public float overlayMultiplier = 1f;
+
+	// Token: 0x04002ACF RID: 10959
+	public Vector4 shaderOffset = Vector4.zero;
+
+	// Token: 0x04002AD0 RID: 10960
+	public Vector2 shaderOffsetMultiplier = Vector2.one;
+
+	// Token: 0x04002AD1 RID: 10961
+	public Vector3 shaderPositionMultiplier = Vector3.one;
+
+	// Token: 0x04002AD2 RID: 10962
+	public float timeMultiplier = 1f;
+
+	// Token: 0x04002AD3 RID: 10963
+	private float shaderTime;
+
+	// Token: 0x04002AD4 RID: 10964
+	private Vector3 lastPosition;
+
+	// Token: 0x04002AD5 RID: 10965
+	private Vector3 lastOffsetPosition;
+
+	// Token: 0x04002AD6 RID: 10966
+	private D11SubmarineCookieTexture d11SubmarineCookieTexture;
+
+	// Token: 0x04002AD7 RID: 10967
+	private int m_maintex_id = -1;
+
+	// Token: 0x04002AD8 RID: 10968
+	private int m_overlaytex_id = -1;
+
+	// Token: 0x04002AD9 RID: 10969
+	private int m_parms_id = -1;
+}
+

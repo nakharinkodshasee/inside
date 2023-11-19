@@ -1,0 +1,369 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020003F1 RID: 1009
+public class SplineLineRenderer : MonoBehaviour
+{
+	// Token: 0x06001AC2 RID: 6850 RVA: 0x000EB210 File Offset: 0x000E9410
+	[LateProcessBuild(0)]
+	[ContextMenu("PreProcessTest")]
+	public void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		GameObject gameObject = this.ropeEnd;
+		if (gameObject != null)
+		{
+			this.linePoints.Clear();
+		}
+		while (gameObject != null)
+		{
+			this.linePoints.Insert(0, gameObject);
+			Joint component = gameObject.GetComponent<Joint>();
+			gameObject = ((!(component != null) || !(component.connectedBody != null)) ? null : component.connectedBody.gameObject);
+		}
+		this.pointsUsed = this.lineDivisions;
+		this.globalLineRenderer = base.gameObject.AddComponent<LineRenderer>();
+		this.globalLineRenderer.SetWidth(this.width, this.width);
+		this.globalLineRenderer.shadowCastingMode = 0;
+		this.globalLineRenderer.receiveShadows = false;
+		this.globalLineRenderer.SetVertexCount(2);
+		if (this.preProcessNonDynamic)
+		{
+			if (this.linePoints.Count > 0)
+			{
+				this.globalLineRenderer.SetVertexCount((this.lineDivisions - 1) * (this.linePoints.Count - 1) + 1);
+			}
+			this.DoTheUpdate();
+			this.scriptActive = false;
+		}
+	}
+
+	// Token: 0x06001AC3 RID: 6851 RVA: 0x000EB348 File Offset: 0x000E9548
+	private void Start()
+	{
+		if (!Application.isPlaying)
+		{
+			return;
+		}
+		this.OnPreProcess();
+		int count = this.linePoints.Count;
+		this.globalLineRenderer.SetVertexCount((this.lineDivisions - 1) * (count - 1) + 1);
+		for (int i = 0; i < count; i++)
+		{
+			this.fastLinePoints.Add(this.linePoints[i].transform);
+		}
+		this.globalLineRenderer.material = this.lineMaterial;
+		this.globalLineRenderer.material.color = this.color;
+		this.globalLineRenderer.material.mainTextureScale = new Vector2(this.textureRepeat, 1f);
+		this.childCount = this.linePoints.Count;
+	}
+
+	// Token: 0x06001AC4 RID: 6852 RVA: 0x000EB414 File Offset: 0x000E9614
+	public void ActivateScript()
+	{
+		this.scriptActive = true;
+	}
+
+	// Token: 0x06001AC5 RID: 6853 RVA: 0x000EB420 File Offset: 0x000E9620
+	public void DeactivateScript()
+	{
+		this.scriptActive = false;
+	}
+
+	// Token: 0x06001AC6 RID: 6854 RVA: 0x000EB42C File Offset: 0x000E962C
+	private void Update()
+	{
+		if (this.updateTime == SplineLineRenderer.UpdateTime.Update)
+		{
+			this.DoTheUpdate();
+		}
+	}
+
+	// Token: 0x06001AC7 RID: 6855 RVA: 0x000EB440 File Offset: 0x000E9640
+	private void FixedUpdate()
+	{
+		if (this.updateTime == SplineLineRenderer.UpdateTime.FixedUpdate)
+		{
+			this.DoTheUpdate();
+		}
+	}
+
+	// Token: 0x06001AC8 RID: 6856 RVA: 0x000EB454 File Offset: 0x000E9654
+	private void LateUpdate()
+	{
+		if (this.updateTime == SplineLineRenderer.UpdateTime.LateUpdate)
+		{
+			this.DoTheUpdate();
+		}
+	}
+
+	// Token: 0x06001AC9 RID: 6857 RVA: 0x000EB468 File Offset: 0x000E9668
+	private void DoTheUpdate()
+	{
+		if (!this.scriptActive)
+		{
+			return;
+		}
+		float deltaTime = Time.deltaTime;
+		Vector3 vector = Vector3Fast.zero;
+		Vector3 vector2 = Vector3Fast.zero;
+		Vector3 vector3 = Vector3Fast.zero;
+		if (this.childCount > 1)
+		{
+			vector2 = this.fastLinePoints.raw[1].position;
+		}
+		if (this.childCount > 0)
+		{
+			vector3 = this.fastLinePoints.raw[0].position;
+		}
+		bool flag = this.cutOffPosition != null;
+		Vector3 vector4 = Vector3Fast.zero;
+		if (flag)
+		{
+			vector4 = this.cutOffPosition.position;
+		}
+		bool flag2 = this.globalLineRenderer != null;
+		for (int i = 0; i < this.childCount - 1; i++)
+		{
+			Vector3 vector5;
+			Vector3 vector6;
+			if (flag && i < this.cutOffIndex)
+			{
+				vector5 = vector4;
+				if (i + 1 < this.cutOffIndex)
+				{
+					vector6 = vector4;
+				}
+				else
+				{
+					vector6 = vector2;
+				}
+			}
+			else
+			{
+				vector5 = vector3;
+				vector6 = vector2;
+			}
+			vector3 = vector2;
+			Vector3 vector7 = vector;
+			Vector3 vector8 = vector7;
+			if (this.useXNormalFromPoint)
+			{
+				vector7 = this.fastLinePoints.raw[i].right * this.normalPower;
+				if (i < this.linePoints.Count - 1)
+				{
+					vector8 = this.fastLinePoints.raw[i + 1].right * this.normalPower;
+				}
+				else
+				{
+					vector8 = vector7;
+				}
+				if (i < this.linePoints.Count - 2)
+				{
+					vector2 = this.fastLinePoints.raw[i + 2].position;
+				}
+				else
+				{
+					vector2 = this.fastLinePoints.raw[i + 1].position;
+				}
+			}
+			else
+			{
+				if (i == 0)
+				{
+					Vector3 vector9 = vector6;
+					vector9.x -= vector5.x;
+					vector9.y -= vector5.y;
+					vector9.z -= vector5.z;
+					vector7 = vector9.normalized;
+					vector7.x *= this.normalPower;
+					vector7.y *= this.normalPower;
+					vector7.z *= this.normalPower;
+				}
+				vector8 = vector7;
+				if (i < this.fastLinePoints.size - 2)
+				{
+					Vector3 vector10 = vector2;
+					vector10.x -= vector5.x;
+					vector10.y -= vector5.y;
+					vector10.z -= vector5.z;
+					vector10.Normalize();
+					Vector3 position = this.fastLinePoints.raw[i + 2].position;
+					vector2 = position;
+					position.x -= vector6.x;
+					position.y -= vector6.y;
+					position.z -= vector6.z;
+					position.Normalize();
+					vector8 = vector10;
+					vector8.x += position.x;
+					vector8.y += position.y;
+					vector8.z += position.z;
+					vector8.Normalize();
+					vector8.x *= this.normalPower;
+					vector8.y *= this.normalPower;
+					vector8.z *= this.normalPower;
+				}
+			}
+			vector = vector8;
+			if (this.lengthScaleNormalPower)
+			{
+				Vector3 vector11 = vector6;
+				vector11.x -= vector5.x;
+				vector11.y -= vector5.y;
+				vector11.z -= vector5.z;
+				float magnitude = vector11.magnitude;
+				vector7.x *= magnitude;
+				vector7.y *= magnitude;
+				vector7.z *= magnitude;
+				vector8.x *= magnitude;
+				vector8.y *= magnitude;
+				vector8.z *= magnitude;
+			}
+			if (flag2)
+			{
+				Vector3 vector12 = vector7;
+				vector12.x *= 0.4f;
+				vector12.y *= 0.4f;
+				vector12.z *= 0.4f;
+				Vector3 vector13 = vector8;
+				vector13.x *= 0.4f;
+				vector13.y *= 0.4f;
+				vector13.z *= 0.4f;
+				int num = i * (this.lineDivisions - 1);
+				int num2 = this.lineDivisions;
+				if (this.lineDivisions != this.pointsUsed)
+				{
+					if (this.lineDivisions < 2)
+					{
+						this.lineDivisions = 2;
+					}
+					this.globalLineRenderer.SetVertexCount((this.lineDivisions - 1) * this.childCount + 1);
+				}
+				if (num == 0)
+				{
+					this.globalLineRenderer.SetPosition(0, vector5);
+				}
+				if (num2 > 2)
+				{
+					Vector3 zero = Vector3Fast.zero;
+					float num3 = 1f / (float)(num2 - 1);
+					for (int j = 1; j < num2 - 1; j++)
+					{
+						float num4 = (float)j * num3;
+						float num5 = num4 * num4;
+						float num6 = num5 * num4;
+						float num7 = 2f * num6 - 3f * num5 + 1f;
+						float num8 = num6 - 2f * num5 + num4;
+						float num9 = -2f * num6 + 3f * num5;
+						float num10 = num6 - num5;
+						zero.x = num7 * vector5.x + num8 * vector12.x + num9 * vector6.x + num10 * vector13.x;
+						zero.y = num7 * vector5.y + num8 * vector12.y + num9 * vector6.y + num10 * vector13.y;
+						zero.z = num7 * vector5.z + num8 * vector12.z + num9 * vector6.z + num10 * vector13.z;
+						this.globalLineRenderer.SetPosition(num + j, zero);
+					}
+				}
+				this.globalLineRenderer.SetPosition(num + FastMath.Max(num2 - 1, 1), vector6);
+			}
+		}
+		this.pointsUsed = this.lineDivisions;
+	}
+
+	// Token: 0x06001ACA RID: 6858 RVA: 0x000EBB08 File Offset: 0x000E9D08
+	public void SetCutOffIndex(int value)
+	{
+		this.cutOffIndex = this.linePoints.Count - value;
+	}
+
+	// Token: 0x06001ACB RID: 6859 RVA: 0x000EBB20 File Offset: 0x000E9D20
+	private void OnDrawGizmos()
+	{
+	}
+
+	// Token: 0x04003084 RID: 12420
+	public GameObject ropeEnd;
+
+	// Token: 0x04003085 RID: 12421
+	public List<GameObject> linePoints = new List<GameObject>();
+
+	// Token: 0x04003086 RID: 12422
+	public FastList<Transform> fastLinePoints = new FastList<Transform>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04003087 RID: 12423
+	public Material lineMaterial;
+
+	// Token: 0x04003088 RID: 12424
+	public float width;
+
+	// Token: 0x04003089 RID: 12425
+	public float textureRepeat = 1f;
+
+	// Token: 0x0400308A RID: 12426
+	public int lineDivisions = 5;
+
+	// Token: 0x0400308B RID: 12427
+	public Color color = Color.black;
+
+	// Token: 0x0400308C RID: 12428
+	public bool useColor;
+
+	// Token: 0x0400308D RID: 12429
+	public Transform cutOffPosition;
+
+	// Token: 0x0400308E RID: 12430
+	public float normalPower = 2.7f;
+
+	// Token: 0x0400308F RID: 12431
+	public bool useXNormalFromPoint;
+
+	// Token: 0x04003090 RID: 12432
+	public bool lengthScaleNormalPower;
+
+	// Token: 0x04003091 RID: 12433
+	[Header("If lineRenderer's points only should be calculated at preProcess")]
+	public bool preProcessNonDynamic;
+
+	// Token: 0x04003092 RID: 12434
+	public SplineLineRenderer.UpdateTime updateTime;
+
+	// Token: 0x04003093 RID: 12435
+	private int cutOffIndex;
+
+	// Token: 0x04003094 RID: 12436
+	private int childCount;
+
+	// Token: 0x04003095 RID: 12437
+	[SerializeField]
+	[HideInInspector]
+	private int pointsUsed;
+
+	// Token: 0x04003096 RID: 12438
+	[HideInInspector]
+	[SerializeField]
+	private LineRenderer globalLineRenderer;
+
+	// Token: 0x04003097 RID: 12439
+	[HideInInspector]
+	[SerializeField]
+	private bool scriptActive = true;
+
+	// Token: 0x04003098 RID: 12440
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x020003F2 RID: 1010
+	public enum UpdateTime
+	{
+		// Token: 0x0400309A RID: 12442
+		Update,
+		// Token: 0x0400309B RID: 12443
+		FixedUpdate,
+		// Token: 0x0400309C RID: 12444
+		LateUpdate
+	}
+}

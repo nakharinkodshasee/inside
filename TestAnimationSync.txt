@@ -1,0 +1,52 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005A3 RID: 1443
+public class TestAnimationSync : MonoBehaviour
+{
+	// Token: 0x060024E0 RID: 9440 RVA: 0x0012F10C File Offset: 0x0012D30C
+	private void Start()
+	{
+		this.animDescentState = this.anim[this.animDescent.name];
+		this.animDescentState.speed = 0f;
+		this.anim.Play(this.animDescentState.name);
+		this.animColliderDescentState = this.animCollider[this.animDescent.name];
+		this.animColliderDescentState.speed = 0f;
+		this.animCollider.Play(this.animDescentState.name);
+	}
+
+	// Token: 0x060024E1 RID: 9441 RVA: 0x0012F1A0 File Offset: 0x0012D3A0
+	private void FixedUpdate()
+	{
+		this.animColliderTimer += Time.deltaTime;
+		this.animColliderDescentState.time = this.animColliderTimer;
+	}
+
+	// Token: 0x060024E2 RID: 9442 RVA: 0x0012F1C8 File Offset: 0x0012D3C8
+	private void Update()
+	{
+		this.animTimer += Time.deltaTime;
+		this.animDescentState.time = this.animTimer;
+	}
+
+	// Token: 0x0400439C RID: 17308
+	public Animation anim;
+
+	// Token: 0x0400439D RID: 17309
+	public Animation animCollider;
+
+	// Token: 0x0400439E RID: 17310
+	public AnimationClip animDescent;
+
+	// Token: 0x0400439F RID: 17311
+	private AnimationState animDescentState;
+
+	// Token: 0x040043A0 RID: 17312
+	private float animTimer;
+
+	// Token: 0x040043A1 RID: 17313
+	private AnimationState animColliderDescentState;
+
+	// Token: 0x040043A2 RID: 17314
+	private float animColliderTimer;
+}

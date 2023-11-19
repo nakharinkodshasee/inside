@@ -1,0 +1,61 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200058D RID: 1421
+public class StairwellGuide : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600246C RID: 9324 RVA: 0x0012C610 File Offset: 0x0012A810
+	public bool PreAwake(int callcount)
+	{
+		this.startFollow = SignalIn.Create("startFollow", base.gameObject, new Action(this.StartFollow));
+		return true;
+	}
+
+	// Token: 0x0600246D RID: 9325 RVA: 0x0012C638 File Offset: 0x0012A838
+	private void Start()
+	{
+		this.offset = this.offsetStart;
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x0600246E RID: 9326 RVA: 0x0012C654 File Offset: 0x0012A854
+	private void StartFollow()
+	{
+		this.offset = this.offsetLeft;
+	}
+
+	// Token: 0x0600246F RID: 9327 RVA: 0x0012C664 File Offset: 0x0012A864
+	private void FixedUpdate()
+	{
+		this.target = this.boy.transform.position;
+		this.target += this.offset;
+		this.force = this.target - base.GetComponent<Rigidbody>().position;
+		this.force.Normalize();
+		this.force *= this.moveSpeed;
+		base.GetComponent<Rigidbody>().AddForce(this.force);
+	}
+
+	// Token: 0x040042D2 RID: 17106
+	private Boy boy;
+
+	// Token: 0x040042D3 RID: 17107
+	private Vector3 target;
+
+	// Token: 0x040042D4 RID: 17108
+	private Vector3 force;
+
+	// Token: 0x040042D5 RID: 17109
+	private Vector3 offsetStart = new Vector3(-4f, 10f, 0f);
+
+	// Token: 0x040042D6 RID: 17110
+	private Vector3 offsetLeft = new Vector3(-2.5f, 2f, 0f);
+
+	// Token: 0x040042D7 RID: 17111
+	private Vector3 offset;
+
+	// Token: 0x040042D8 RID: 17112
+	private float moveSpeed = 4.2f;
+
+	// Token: 0x040042D9 RID: 17113
+	private SignalIn startFollow;
+}

@@ -1,0 +1,49 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020003C0 RID: 960
+public class SubmarineSpotLightMaterialHelper : MonoBehaviour
+{
+	// Token: 0x060019F5 RID: 6645 RVA: 0x000E2B5C File Offset: 0x000E0D5C
+	private void Start()
+	{
+		SubmarineThrusterMaterialInstances component = this.submarine.GetComponent<SubmarineThrusterMaterialInstances>();
+		if (component != null)
+		{
+			this.submis = component.subThrusterMaterialInstances;
+			this.submis_vp = component.subMaterialInstanceVectorProperties;
+		}
+	}
+
+	// Token: 0x060019F6 RID: 6646 RVA: 0x000E2BA0 File Offset: 0x000E0DA0
+	private void Update()
+	{
+		float surfaceForSpotLight = this.submarine.GetSurfaceForSpotLight();
+		if (surfaceForSpotLight > -3.4028235E+38f && this.height != surfaceForSpotLight)
+		{
+			Vector2 vector;
+			vector..ctor(surfaceForSpotLight, 1f);
+			int i = 0;
+			int count = this.submis.Count;
+			while (i < count)
+			{
+				this.submis[i].SetVectorProperty(this.submis_vp[i], vector);
+				i++;
+			}
+		}
+		this.height = surfaceForSpotLight;
+	}
+
+	// Token: 0x04002EA2 RID: 11938
+	public Submarine submarine;
+
+	// Token: 0x04002EA3 RID: 11939
+	private List<MaterialInstance> submis = new List<MaterialInstance>();
+
+	// Token: 0x04002EA4 RID: 11940
+	private List<MaterialInstance.VectorProperty> submis_vp = new List<MaterialInstance.VectorProperty>();
+
+	// Token: 0x04002EA5 RID: 11941
+	private float height;
+}

@@ -1,0 +1,516 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003B7 RID: 951
+public class SubmarineChargeBoost : SubmarineBoost
+{
+	// Token: 0x1700007C RID: 124
+	// (get) Token: 0x060019A1 RID: 6561 RVA: 0x000DE764 File Offset: 0x000DC964
+	public override bool IsCharging
+	{
+		get
+		{
+			return this.mChargeTimer > 0f;
+		}
+	}
+
+	// Token: 0x1700007D RID: 125
+	// (get) Token: 0x060019A2 RID: 6562 RVA: 0x000DE774 File Offset: 0x000DC974
+	public override bool IsBoosting
+	{
+		get
+		{
+			return this.mBoostTimer < this.boostTime;
+		}
+	}
+
+	// Token: 0x1700007E RID: 126
+	// (get) Token: 0x060019A3 RID: 6563 RVA: 0x000DE784 File Offset: 0x000DC984
+	public override float boostPercentage
+	{
+		get
+		{
+			return this.mBoostDirection.magnitude;
+		}
+	}
+
+	// Token: 0x1700007F RID: 127
+	// (get) Token: 0x060019A4 RID: 6564 RVA: 0x000DE794 File Offset: 0x000DC994
+	public override Vector3 boostDirection
+	{
+		get
+		{
+			return this.mBoostDirection.normalized;
+		}
+	}
+
+	// Token: 0x060019A5 RID: 6565 RVA: 0x000DE7A4 File Offset: 0x000DC9A4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		Submarine componentInParents = base.transform.GetComponentInParents<Submarine>();
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(componentInParents.gameObject, null);
+		this.audioCooldownEnded = new AudioEventSimpleLocal("submarine_cooldown_ended", akGameObj);
+		this.audioCooldownStarted = new AudioEventSimpleLocal("submarine_boost_ended_cooldown_started", akGameObj);
+		this.audioLightOn = new AudioEventSimpleLocal("submarine_flashing_light_on", akGameObj);
+		this.audioLightOff = new AudioEventSimpleLocal("submarine_flashing_light_off", akGameObj);
+		this.audioBoostFired = new AudioEventSimpleLocal("submarine_boost_fired", akGameObj);
+		this.audioChargingCancelled = new AudioEventSimpleLocal("submarine_charging_cancelled", akGameObj);
+		this.audioChargingStarted = new AudioEventSimpleLocal("submarine_charging_started", akGameObj);
+		this.audioStunStart = new AudioEventSimpleLocal("submarine_stun_start", akGameObj);
+		this.audioStunEnded = new AudioEventSimpleLocal("submarine_stun_ended", akGameObj);
+		this.rtpcBoostCooldown = new RTPCLocal("rtpc_vehicle_boostCooldown", akGameObj, false, float.Epsilon);
+		this.rtpcEngineLoad = new RTPCLocal("rtpc_vehicle_engine_load", akGameObj, false, float.Epsilon);
+	}
+
+	// Token: 0x060019A6 RID: 6566 RVA: 0x000DE8A4 File Offset: 0x000DCAA4
+	private void Start()
+	{
+		this.OnPreProcess();
+		SoundEngine.RegisterGameObject(base.gameObject);
+		this.Init();
+	}
+
+	// Token: 0x060019A7 RID: 6567 RVA: 0x000DE8C0 File Offset: 0x000DCAC0
+	public override void Init()
+	{
+		base.Init();
+		this.mBoostTimer = this.boostTime + this.cooldown;
+		if (this.cabinLight != null)
+		{
+			this.cabinLightMaxIntensity = this.cabinLight.intensity;
+		}
+	}
+
+	// Token: 0x060019A8 RID: 6568 RVA: 0x000DE900 File Offset: 0x000DCB00
+	private void OnDisable()
+	{
+		this.boostIndicator.intensity = 0f;
+	}
+
+	// Token: 0x060019A9 RID: 6569 RVA: 0x000DE914 File Offset: 0x000DCB14
+	public void Reset()
+	{
+		this.sendAudioStunEndedDelayed = false;
+	}
+
+	// Token: 0x060019AA RID: 6570 RVA: 0x000DE920 File Offset: 0x000DCB20
+	public void SetLightsOutTimer(float t)
+	{
+		this.lightsOutTimer = t;
+	}
+
+	// Token: 0x060019AB RID: 6571 RVA: 0x000DE92C File Offset: 0x000DCB2C
+	public void SubmarineBoostedIntoWall(float wantedLightsOut, float force = 1f)
+	{
+		this.cabinLight.intensity = 0f;
+		this.boostIndicator.intensity = 0f;
+		this.lightsOutTimer = Mathf.Max(wantedLightsOut, this.lightsOutTimer);
+		if (wantedLightsOut == 0f)
+		{
+			this.lightsOutTimer = 0f;
+			this.mBoostTimer = this.boostTime + this.cooldown;
+		}
+		else
+		{
+			if (force > 0f)
+			{
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 1f * force, 0.15f, 0, 0f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.4f * force, 0.3f * Mathf.Max(force, 0.6f), 0, 0.1f);
+			}
+			if (this.mBoostTimer < this.boostTime)
+			{
+				this.mBoostTimer = this.boostTime;
+				this.audioCooldownStarted.PostFast();
+			}
+			if (this.mBoostTimer + this.lightsOutTimer + 0.5f > this.boostTime + this.cooldown)
+			{
+				if (this.mBoostTimer < this.boostTime + this.cooldown)
+				{
+					this.audioCooldownEnded.PostFast();
+				}
+				this.sendAudioStunEndedDelayed = true;
+				this.mBoostTimer = this.boostTime + this.cooldown;
+			}
+			this.audioStunStart.PostFast();
+			this.sentAudioStunEnded = true;
+		}
+	}
+
+	// Token: 0x060019AC RID: 6572 RVA: 0x000DEA8C File Offset: 0x000DCC8C
+	public bool areLightsOut()
+	{
+		return this.lightsOutTimer > 0f;
+	}
+
+	// Token: 0x060019AD RID: 6573 RVA: 0x000DEA9C File Offset: 0x000DCC9C
+	public override float GetLightIntensity(float aCurrentIntensity)
+	{
+		if (this.lightsOutTimer > 0f)
+		{
+			return (this.cabinLight.intensity <= 0.1f) ? 0f : 0.4f;
+		}
+		return 1f;
+	}
+
+	// Token: 0x060019AE RID: 6574 RVA: 0x000DEAE4 File Offset: 0x000DCCE4
+	public override float GetChargePercentage()
+	{
+		return this.CalcBoostEngineLoadValue();
+	}
+
+	// Token: 0x060019AF RID: 6575 RVA: 0x000DEAEC File Offset: 0x000DCCEC
+	public float GetBoostTimer()
+	{
+		return this.mBoostTimer;
+	}
+
+	// Token: 0x060019B0 RID: 6576 RVA: 0x000DEAF4 File Offset: 0x000DCCF4
+	public override float GetNonBoostThrustMultiplier()
+	{
+		if (this.mChargeTimer > 0f)
+		{
+			return this.speedMultiplierDuringCharge;
+		}
+		return 1f;
+	}
+
+	// Token: 0x060019B1 RID: 6577 RVA: 0x000DEB14 File Offset: 0x000DCD14
+	private float CalcBoostEngineLoadValue()
+	{
+		return Mathf.Clamp((this.mChargeTimer - this.minimumChargeTime) / (this.chargeTime - this.minimumChargeTime), 0f, 1f);
+	}
+
+	// Token: 0x060019B2 RID: 6578 RVA: 0x000DEB4C File Offset: 0x000DCD4C
+	private void FixedUpdate()
+	{
+		if (!this.mSubmarine)
+		{
+			return;
+		}
+		Vector3 indir;
+		indir..ctor(this.mSubmarine.Input.stick.x, this.mSubmarine.Input.stick.y);
+		if (this.mBoostTimer < this.boostTime)
+		{
+			this.mBoostTimer += Time.deltaTime * this.boostTimeFactor;
+			if (this.mSubmarine.IsAboveSurface())
+			{
+				return;
+			}
+			float num = this.boostForce * this.mSubmarine.GetComponent<Rigidbody>().mass * Time.deltaTime;
+			float num2 = num * 0.5f * Mathf.Max(0f, Vector3.Dot(indir.normalized, -this.mBoostDirection)) * indir.magnitude;
+			float num3 = this.mBoostTimer / this.boostTime;
+			float num4 = (num - num2) * this.forceMultiplierOverTime.Evaluate(num3);
+			Vector3 vector = this.mBoostDirection;
+			float distanceFromSurfaceToSubBottom = this.mSubmarine.GetDistanceFromSurfaceToSubBottom();
+			if (distanceFromSurfaceToSubBottom < this.surfaceForceReductionDistance && vector.y > 0f)
+			{
+				float num5 = distanceFromSurfaceToSubBottom / this.surfaceForceReductionDistance;
+				float num6;
+				if (num5 > 0.8f)
+				{
+					num6 = 0.6f + 0.4f * (num5 - 0.8f) / 0.2f;
+				}
+				else if (num5 > 0.4f)
+				{
+					num6 = 0.6f;
+				}
+				else
+				{
+					num6 = 0.1f + 0.5f * num5 / 0.4f;
+				}
+				float y = vector.y;
+				if (num6 < vector.y)
+				{
+					vector.x *= num6 / vector.y;
+					vector.y = num6;
+				}
+			}
+			this.mSubmarine.GetComponent<Rigidbody>().AddForce(vector * num4);
+			if (this.mBoostTimer >= this.boostTime)
+			{
+				this.audioCooldownStarted.PostFast();
+			}
+		}
+		else if (this.mBoostTimer < this.boostTime + this.cooldown)
+		{
+			this.rtpcEngineLoad.SetFast(0f, 0f);
+			this.mBoostTimer += Time.deltaTime;
+			if (this.mBoostTimer >= this.boostTime + this.cooldown)
+			{
+				this.audioCooldownEnded.PostFast();
+			}
+		}
+		else
+		{
+			bool flag = this.allowBoost && this.lightsOutTimer < 0f;
+			if (GameInput.controllerType == GameController.Type.Digital)
+			{
+				flag = (flag && this.mSubmarine.Input.rawAction);
+			}
+			else
+			{
+				flag = (flag && this.mSubmarine.Input.rawJump);
+			}
+			if (!flag && this.mChargeTimer > 0f)
+			{
+				if (indir.sqrMagnitude > 0.1f && this.mChargeTimer > this.minimumChargeTime)
+				{
+					if (this.mSubmarine.SubOnSurface())
+					{
+						this.mBoostDirection = indir;
+						this.boostTimeFactor = 3f;
+					}
+					else
+					{
+						this.mBoostDirection = this.mSubmarine.ReturnAutoAimedDir(indir);
+						this.boostTimeFactor = 1f;
+					}
+					float num7 = this.CalcBoostEngineLoadValue();
+					if (this.mChargeTimer >= this.chargeTime)
+					{
+						this.mChargeTimer = this.chargeTime;
+					}
+					else
+					{
+						this.mChargeTimer = this.chargeTime;
+					}
+					this.mBoostTimer = 0f;
+					this.rtpcEngineLoad.SetFast(num7 * 100f, 0f);
+					this.audioBoostFired.PostFast();
+					RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.2f + num7 * 0.5f, 0.4f, 0, 0f);
+				}
+				else
+				{
+					this.rtpcEngineLoad.SetFast(0f, 0f);
+					this.audioChargingCancelled.PostFast();
+					this.doBoostCancelFlash = (this.mChargeTimer < 0.25f && this.boostIndicator.intensity < 3.5f);
+					this.cancelBoostFlashTimer = 0f;
+				}
+				this.mChargeTimer = 0f;
+			}
+			else if (flag)
+			{
+				if (this.mChargeTimer == 0f)
+				{
+					this.audioChargingStarted.PostFast();
+				}
+				this.mChargeTimer += Time.deltaTime;
+				float num8 = this.CalcBoostEngineLoadValue();
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.01f + num8 * 0.19f, Time.deltaTime, 0, 0f);
+				this.rtpcEngineLoad.SetFast(num8 * 100f, 0f);
+			}
+		}
+	}
+
+	// Token: 0x060019B3 RID: 6579 RVA: 0x000DF01C File Offset: 0x000DD21C
+	private void Update()
+	{
+		if (this.lightsOutTimer > 0f)
+		{
+			this.lightsOutTimer -= Time.deltaTime;
+			if (this.sentAudioStunEnded && this.lightsOutTimer < this.timeAudioStunEnded)
+			{
+				this.audioStunEnded.PostFast();
+				if (this.sendAudioStunEndedDelayed)
+				{
+					this.audioCooldownEnded.PostFast();
+					this.sendAudioStunEndedDelayed = false;
+				}
+				this.sentAudioStunEnded = false;
+			}
+			if (this.lightsOutTimer < 0f)
+			{
+				this.cabinLight.intensity = this.cabinLightMaxIntensity;
+			}
+			else
+			{
+				int length = this.lightOnFlashes.length;
+				if (length > 0)
+				{
+					float time = this.lightOnFlashes[length - 1].time;
+					float num = time - this.lightsOutTimer;
+					if (num >= 0f)
+					{
+						this.cabinLight.intensity = this.lightOnFlashes.Evaluate(num);
+					}
+				}
+			}
+		}
+		else
+		{
+			this.lightsOutTimer = Mathf.Max(this.lightsOutTimer - Time.deltaTime, -2f);
+			if (this.mChargeTimer > 0f)
+			{
+				this.flashingLightState = -1;
+				this.boostIndicator.intensity = Mathf.Lerp(this.boostIndicator.intensity, 8f, Time.deltaTime);
+				this.cabinLight.intensity = Mathf.Lerp(this.cabinLight.intensity, 0f, Time.deltaTime);
+			}
+			else if (this.mBoostTimer >= this.boostTime && this.mBoostTimer < this.boostTime + this.cooldown)
+			{
+				this.cabinLight.intensity = Mathf.Lerp(this.cabinLight.intensity, 0f, Time.deltaTime);
+				int num2 = (int)(this.mBoostTimer * 8f) % 2;
+				this.boostIndicator.intensity = ((num2 != 0) ? 8f : 0f);
+				if (this.flashingLightState != num2 && this.flashingLightState != -1)
+				{
+					if (num2 == 1)
+					{
+						this.audioLightOn.PostFast();
+					}
+					else
+					{
+						this.audioLightOff.PostFast();
+					}
+				}
+				this.flashingLightState = num2;
+			}
+			else if (this.mBoostTimer >= this.boostTime)
+			{
+				if (this.doBoostCancelFlash)
+				{
+					this.cancelBoostFlashTimer += Time.deltaTime;
+					this.boostIndicator.intensity = Mathf.Lerp(this.boostIndicator.intensity, 5f, Time.deltaTime * 10f);
+					if (this.cancelBoostFlashTimer > 0.1f)
+					{
+						this.doBoostCancelFlash = false;
+					}
+				}
+				else
+				{
+					this.boostIndicator.intensity = Mathf.Lerp(this.boostIndicator.intensity, 0f, Time.deltaTime * 7f);
+				}
+				this.cabinLight.intensity = Mathf.Lerp(this.cabinLight.intensity, this.cabinLightMaxIntensity, Time.deltaTime * 7f);
+			}
+		}
+		float value = (1f - this.mBoostTimer / (this.boostTime + this.cooldown)) * 100f;
+		this.rtpcBoostCooldown.SetFast(value, 0f);
+	}
+
+	// Token: 0x04002E0C RID: 11788
+	public float boostForce = 2500f;
+
+	// Token: 0x04002E0D RID: 11789
+	public float boostTime = 1f;
+
+	// Token: 0x04002E0E RID: 11790
+	public float chargeTime = 1f;
+
+	// Token: 0x04002E0F RID: 11791
+	public float minimumChargeTime = 0.5f;
+
+	// Token: 0x04002E10 RID: 11792
+	public float cooldown = 4f;
+
+	// Token: 0x04002E11 RID: 11793
+	public float speedMultiplierDuringCharge = 0.25f;
+
+	// Token: 0x04002E12 RID: 11794
+	public float surfaceForceReductionDistance = 7.5f;
+
+	// Token: 0x04002E13 RID: 11795
+	public AnimationCurve forceMultiplierOverTime;
+
+	// Token: 0x04002E14 RID: 11796
+	public AnimationCurve lightOnFlashes;
+
+	// Token: 0x04002E15 RID: 11797
+	private float cabinLightMaxIntensity;
+
+	// Token: 0x04002E16 RID: 11798
+	private float mChargeTimer;
+
+	// Token: 0x04002E17 RID: 11799
+	private float mBoostTimer;
+
+	// Token: 0x04002E18 RID: 11800
+	private Vector3 mBoostDirection;
+
+	// Token: 0x04002E19 RID: 11801
+	private bool sentAudioStunEnded;
+
+	// Token: 0x04002E1A RID: 11802
+	private bool sendAudioStunEndedDelayed;
+
+	// Token: 0x04002E1B RID: 11803
+	private float timeAudioStunEnded = 0.7f;
+
+	// Token: 0x04002E1C RID: 11804
+	[HideInInspector]
+	[SerializeField]
+	private RTPCLocal rtpcBoostCooldown;
+
+	// Token: 0x04002E1D RID: 11805
+	[SerializeField]
+	[HideInInspector]
+	private RTPCLocal rtpcEngineLoad;
+
+	// Token: 0x04002E1E RID: 11806
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioCooldownEnded;
+
+	// Token: 0x04002E1F RID: 11807
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioCooldownStarted;
+
+	// Token: 0x04002E20 RID: 11808
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioBoostFired;
+
+	// Token: 0x04002E21 RID: 11809
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioChargingCancelled;
+
+	// Token: 0x04002E22 RID: 11810
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioChargingStarted;
+
+	// Token: 0x04002E23 RID: 11811
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStunStart;
+
+	// Token: 0x04002E24 RID: 11812
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStunEnded;
+
+	// Token: 0x04002E25 RID: 11813
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioLightOn;
+
+	// Token: 0x04002E26 RID: 11814
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioLightOff;
+
+	// Token: 0x04002E27 RID: 11815
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04002E28 RID: 11816
+	private float lightsOutTimer = -2f;
+
+	// Token: 0x04002E29 RID: 11817
+	private float boostTimeFactor = 1f;
+
+	// Token: 0x04002E2A RID: 11818
+	private bool doBoostCancelFlash;
+
+	// Token: 0x04002E2B RID: 11819
+	private float cancelBoostFlashTimer;
+
+	// Token: 0x04002E2C RID: 11820
+	private int flashingLightState = -1;
+}

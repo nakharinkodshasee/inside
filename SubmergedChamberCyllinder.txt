@@ -1,0 +1,235 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200053A RID: 1338
+public class SubmergedChamberCyllinder : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060022D8 RID: 8920 RVA: 0x00123E38 File Offset: 0x00122038
+	public bool PreAwake(int callcount)
+	{
+		this.doActivate = SignalIn.Create("doActivate", base.gameObject, new Action(this.OnActivate));
+		this.doDeactivate = SignalIn.Create("doDeactivate", base.gameObject, new Action(this.OnDeactiave));
+		this.crushButton = SignalOut.Create("crushButton", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060022D9 RID: 8921 RVA: 0x00123EA0 File Offset: 0x001220A0
+	private void Start()
+	{
+		this.animRollDownState = this.anim[this.animRollDown.name];
+		this.animRollDownState.speed = this.initialSpeed;
+	}
+
+	// Token: 0x060022DA RID: 8922 RVA: 0x00123ED0 File Offset: 0x001220D0
+	private void SetActiveState()
+	{
+		this.cyllinderRumble = new ModifiableRumbleSource("SewersCyllinderRumble", false, 0f, null, default(Vector3));
+		RumbleManager.instance.AddSource(this.cyllinderRumble);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.FadeIn, 0.1f, 2f, 0, 0f);
+		this.state = SubmergedChamberCyllinder.State.Acitve;
+	}
+
+	// Token: 0x060022DB RID: 8923 RVA: 0x00123F30 File Offset: 0x00122130
+	private void ActiveState()
+	{
+		this.waitTimer += Time.deltaTime;
+		bool flag = ScriptGlobals.boy.facing == -1f && ScriptGlobals.boy.velocity3.x < -2f;
+		if (this.debug)
+		{
+		}
+		if (flag)
+		{
+			this.SetSpeedUpState(0f);
+		}
+		else if (this.waitTimer > this.maxWaitTime)
+		{
+			this.SetSpeedUpState(this.pastMaxSpeed);
+		}
+	}
+
+	// Token: 0x060022DC RID: 8924 RVA: 0x00123FC0 File Offset: 0x001221C0
+	private void SetSpeedUpState(float setSpeed = 0f)
+	{
+		if (setSpeed == 0f)
+		{
+			float num = this.waitTimer * this.waitInfluence;
+			num = Mathf.Clamp(num, 0f, this.fadeInSpeed * 0.85f);
+			this.currentFadeInSpeed = this.fadeInSpeed - num;
+		}
+		else
+		{
+			this.currentFadeInSpeed = setSpeed;
+		}
+		this.state = SubmergedChamberCyllinder.State.SpeedUp;
+	}
+
+	// Token: 0x060022DD RID: 8925 RVA: 0x00124020 File Offset: 0x00122220
+	private void SpeedUpState()
+	{
+		float num = this.animRollDownState.speed;
+		num += Time.deltaTime * this.currentFadeInSpeed;
+		num = Mathf.Min(num, 1f);
+		this.animRollDownState.speed = num;
+		this.currentRumble += Time.deltaTime / 55f;
+		if (this.currentRumble > this.rumbleMax)
+		{
+			this.currentRumble = this.rumbleMax;
+		}
+		this.cyllinderRumble.SetRumble(this.currentRumble, this.currentRumble);
+		if (this.debug)
+		{
+		}
+		if (this.previousRollTime < this.rumbleButtonImpact && this.animRollDownState.time >= this.rumbleButtonImpact)
+		{
+			this.crushButton.Signal();
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 1f, 0.2f, 0, 0f);
+		}
+		if (this.previousRollTime < this.rumbleWallImpact1 && this.animRollDownState.time >= this.rumbleWallImpact1)
+		{
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 1f, 0.2f, 0, 0f);
+		}
+		if (this.animRollDownState.time >= 7.25f)
+		{
+			this.SetCompleteState();
+		}
+		this.previousRollTime = this.animRollDownState.time;
+	}
+
+	// Token: 0x060022DE RID: 8926 RVA: 0x00124174 File Offset: 0x00122374
+	private void SetCompleteState()
+	{
+		this.state = SubmergedChamberCyllinder.State.Complete;
+	}
+
+	// Token: 0x060022DF RID: 8927 RVA: 0x00124180 File Offset: 0x00122380
+	private void CompleteState()
+	{
+		if (this.previousRollTime < this.rumbleWallImpact2 && this.animRollDownState.time >= this.rumbleWallImpact2)
+		{
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 1f, 0.2f, 0, 0f);
+		}
+		if (this.animRollDownState.time >= 8f)
+		{
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 1f, 0.2f, 0, 0f);
+			RumbleManager.instance.RemoveSource(this.cyllinderRumble.Name);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.FadeOut, this.rumbleMax, 0.5f, 0, 0f);
+			this.state = SubmergedChamberCyllinder.State.None;
+		}
+		this.previousRollTime = this.animRollDownState.time;
+	}
+
+	// Token: 0x060022E0 RID: 8928 RVA: 0x00124248 File Offset: 0x00122448
+	private void Update()
+	{
+		switch (this.state)
+		{
+		case SubmergedChamberCyllinder.State.Acitve:
+			this.ActiveState();
+			break;
+		case SubmergedChamberCyllinder.State.SpeedUp:
+			this.SpeedUpState();
+			break;
+		case SubmergedChamberCyllinder.State.Complete:
+			this.CompleteState();
+			break;
+		}
+	}
+
+	// Token: 0x060022E1 RID: 8929 RVA: 0x00124298 File Offset: 0x00122498
+	private void OnActivate()
+	{
+		this.SetActiveState();
+	}
+
+	// Token: 0x060022E2 RID: 8930 RVA: 0x001242A0 File Offset: 0x001224A0
+	private void OnDeactiave()
+	{
+		RumbleManager.instance.RemoveSource(this.cyllinderRumble.Name);
+		this.state = SubmergedChamberCyllinder.State.None;
+	}
+
+	// Token: 0x04004105 RID: 16645
+	public Animation anim;
+
+	// Token: 0x04004106 RID: 16646
+	public AnimationClip animRollDown;
+
+	// Token: 0x04004107 RID: 16647
+	public float initialSpeed = 0.65f;
+
+	// Token: 0x04004108 RID: 16648
+	public float fadeInSpeed = 0.2f;
+
+	// Token: 0x04004109 RID: 16649
+	public float waitInfluence = 0.12f;
+
+	// Token: 0x0400410A RID: 16650
+	public float maxWaitTime = 1.25f;
+
+	// Token: 0x0400410B RID: 16651
+	public float pastMaxSpeed = 1f;
+
+	// Token: 0x0400410C RID: 16652
+	public bool debug;
+
+	// Token: 0x0400410D RID: 16653
+	public CameraEffect cameraShake;
+
+	// Token: 0x0400410E RID: 16654
+	private SignalIn doActivate;
+
+	// Token: 0x0400410F RID: 16655
+	private SignalIn doDeactivate;
+
+	// Token: 0x04004110 RID: 16656
+	private SignalOut crushButton;
+
+	// Token: 0x04004111 RID: 16657
+	private SubmergedChamberCyllinder.State state;
+
+	// Token: 0x04004112 RID: 16658
+	private AnimationState animRollDownState;
+
+	// Token: 0x04004113 RID: 16659
+	private float waitTimer;
+
+	// Token: 0x04004114 RID: 16660
+	private float currentFadeInSpeed;
+
+	// Token: 0x04004115 RID: 16661
+	private float currentRumble;
+
+	// Token: 0x04004116 RID: 16662
+	private float previousRollTime;
+
+	// Token: 0x04004117 RID: 16663
+	private float rumbleMax = 0.3f;
+
+	// Token: 0x04004118 RID: 16664
+	private float rumbleButtonImpact = 1f;
+
+	// Token: 0x04004119 RID: 16665
+	private float rumbleWallImpact1 = 6.65f;
+
+	// Token: 0x0400411A RID: 16666
+	private float rumbleWallImpact2 = 7.75f;
+
+	// Token: 0x0400411B RID: 16667
+	private CameraEffectInfo cameraShakeInfo;
+
+	// Token: 0x0400411C RID: 16668
+	private ModifiableRumbleSource cyllinderRumble;
+
+	// Token: 0x0200053B RID: 1339
+	private enum State
+	{
+		// Token: 0x0400411E RID: 16670
+		None,
+		// Token: 0x0400411F RID: 16671
+		Acitve,
+		// Token: 0x04004120 RID: 16672
+		SpeedUp,
+		// Token: 0x04004121 RID: 16673
+		Complete
+	}
+}

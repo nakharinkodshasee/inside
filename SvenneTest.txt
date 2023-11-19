@@ -1,0 +1,20 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000644 RID: 1604
+[ExecuteInEditMode]
+public class SvenneTest : MonoBehaviour
+{
+	// Token: 0x060027A5 RID: 10149 RVA: 0x0013E8D8 File Offset: 0x0013CAD8
+	private void OnPreRender()
+	{
+		this.projReal = base.GetComponent<Camera>().projectionMatrix;
+		this.projCustom = Matrix4x4.Perspective(base.GetComponent<Camera>().fieldOfView, base.GetComponent<Camera>().aspect, base.GetComponent<Camera>().nearClipPlane, base.GetComponent<Camera>().farClipPlane);
+	}
+
+	// Token: 0x04004727 RID: 18215
+	public Matrix4x4 projReal;
+
+	// Token: 0x04004728 RID: 18216
+	public Matrix4x4 projCustom;
+}

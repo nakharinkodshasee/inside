@@ -1,0 +1,1143 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020001F0 RID: 496
+public class SwitchButtonNew : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06000EFD RID: 3837 RVA: 0x0008DB64 File Offset: 0x0008BD64
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioGreen = new AudioEventSimpleLocal(this.audioPrefix + "_button_green", akGameObj);
+		this.audioRed = new AudioEventSimpleLocal(this.audioPrefix + "_button_red", akGameObj);
+		this.audioEventOffset = Mathf.Abs(this.audioEventOffset);
+	}
+
+	// Token: 0x06000EFE RID: 3838 RVA: 0x0008DBDC File Offset: 0x0008BDDC
+	public bool PreAwake(int callcount)
+	{
+		this.on = SignalOut.Create("on", base.gameObject);
+		this.off = SignalOut.Create("off", base.gameObject);
+		this.pressed = SignalOut.Create("pressed", base.gameObject);
+		this.loadOn = SignalIn.Create("loadOn", base.gameObject, new Action(this.OnLoadOn));
+		this.loadOff = SignalIn.Create("loadOff", base.gameObject, new Action(this.OnLoadOff));
+		this.deactivate = SignalIn.Create("deactivate", base.gameObject, new Action(this.OnDeactivate));
+		this.activate = SignalIn.Create("activate", base.gameObject, new Action(this.OnActivate));
+		return true;
+	}
+
+	// Token: 0x06000EFF RID: 3839 RVA: 0x0008DCB4 File Offset: 0x0008BEB4
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.animBlend = this.animPushRight;
+		if (this.materialInstance)
+		{
+			this.colorProperty = this.materialInstance.GetColorProperty("_Color");
+		}
+		this.triggerGrab.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.triggerGrab.exitTrigger.Register(this, ref this.triggerExitHandle);
+		if (this.state == SwitchButtonNew.State.None)
+		{
+			this.SetIdleState(false);
+		}
+		if (this.buttonOn)
+		{
+			this.SetState(true);
+		}
+	}
+
+	// Token: 0x06000F00 RID: 3840 RVA: 0x0008DD4C File Offset: 0x0008BF4C
+	private void SetIdleState(bool fadeColor = true)
+	{
+		if (this.boyGrabbing != null)
+		{
+			this.lastFacing = this.boyGrabbing.facing;
+		}
+		if (this.boyGrabbing != null && this.boyGrabbing.visualBoy != null && this.boyGrabbing.visualBoy.upperBodyAnim == this.animBlend)
+		{
+			this.boyGrabbing.visualBoy.upperBodyAnim = null;
+		}
+		if (fadeColor)
+		{
+			this.colorReturnTimer = this.colorReturnDelay;
+		}
+		this.refreshTimer = this.refreshDelay;
+		this.state = SwitchButtonNew.State.Idle;
+	}
+
+	// Token: 0x06000F01 RID: 3841 RVA: 0x0008DDF8 File Offset: 0x0008BFF8
+	private void IdleState()
+	{
+		if (this.boyGrabbing != null && this.boyGrabbing.facing != this.lastFacing)
+		{
+			this.quarantine = 0.2f;
+			this.lastFacing = this.boyGrabbing.facing;
+		}
+		if (this.colorReturnTimer > 0f)
+		{
+			this.colorReturnTimer -= Time.deltaTime;
+			if (this.colorReturnTimer <= 0f && this.materialInstance)
+			{
+				this.colorFadeTimer = this.colorFadeDuration;
+			}
+		}
+		if (this.refreshTimer > 0f)
+		{
+			this.refreshTimer -= Time.deltaTime;
+		}
+		else if (this.actionList > 0)
+		{
+			this.SelectPushState();
+		}
+	}
+
+	// Token: 0x06000F02 RID: 3842 RVA: 0x0008DED0 File Offset: 0x0008C0D0
+	private void SelectPushState()
+	{
+		this.pushTimer = this.pushDelay;
+		this.releaseTimer = this.releaseDelay;
+		this.pushFacing = this.boyGrabbing.facing;
+		VisualBoyLand visualBoyLand = this.boyGrabbing.visualBoy.state as VisualBoyLand;
+		float num = this.boyGrabbing.pos.y - base.transform.position.y;
+		if (visualBoyLand && visualBoyLand.isStunned)
+		{
+			this.SetToggleState();
+		}
+		else if (this.boyGrabbing.state is BoyJumpState)
+		{
+			this.SetJumpState();
+		}
+		else if (this.boyGrabbing.state is BoyRopeState)
+		{
+			this.SetRopeState();
+		}
+		else if (num > 1f)
+		{
+			this.SetToggleState();
+		}
+		else
+		{
+			VisualBoyRun visualBoyRun = this.boyGrabbing.visualBoy.state as VisualBoyRun;
+			bool flag = visualBoyRun != null && visualBoyRun.isTurning;
+			if (Mathf.Abs(this.boyGrabbing.velocity3.x) > 2f || flag)
+			{
+				this.pushTimer = this.pushDelayRunning;
+				this.SetRunningPushState();
+			}
+			else
+			{
+				this.SetPushState();
+			}
+		}
+	}
+
+	// Token: 0x06000F03 RID: 3843 RVA: 0x0008E030 File Offset: 0x0008C230
+	private void SetToggleState()
+	{
+		this.state = SwitchButtonNew.State.Toggle;
+	}
+
+	// Token: 0x06000F04 RID: 3844 RVA: 0x0008E03C File Offset: 0x0008C23C
+	private void ToggleState()
+	{
+		if (this.pushTimer > 0f)
+		{
+			this.ToggleCheck();
+		}
+		else
+		{
+			this.SetIdleState(true);
+		}
+	}
+
+	// Token: 0x06000F05 RID: 3845 RVA: 0x0008E06C File Offset: 0x0008C26C
+	private void SetJumpState()
+	{
+		if (Mathf.Abs(this.boyGrabbing.velocity3.x) < 0.2f && !this.CheckSwimming())
+		{
+			this.animSwing.mirror = (this.boyGrabbing.facing != 1f);
+			this.boyGrabbing.visualBoy.additiveAnim = this.animSwing;
+		}
+		this.state = SwitchButtonNew.State.Jump;
+	}
+
+	// Token: 0x06000F06 RID: 3846 RVA: 0x0008E0E4 File Offset: 0x0008C2E4
+	private void JumpState()
+	{
+		if (this.pushTimer > 0f)
+		{
+			this.ToggleCheck();
+			this.releaseTimer = this.releaseDelay;
+			if (this.state == SwitchButtonNew.State.Disable)
+			{
+				return;
+			}
+		}
+		if (this.pushTimer <= 0f && this.actionList > 0)
+		{
+			this.pushTimer = this.pushInterval;
+		}
+		this.releaseTimer -= Time.deltaTime;
+		bool flag = this.pushTimer <= 0f && !(this.boyGrabbing.state is BoyJumpState);
+		if (this.releaseTimer <= 0f || (this.boyGrabbing.facing != this.pushFacing && this.pushTimer <= 0f) || flag)
+		{
+			this.SetIdleState(true);
+		}
+	}
+
+	// Token: 0x06000F07 RID: 3847 RVA: 0x0008E1C8 File Offset: 0x0008C3C8
+	private void SetRopeState()
+	{
+		this.state = SwitchButtonNew.State.Rope;
+	}
+
+	// Token: 0x06000F08 RID: 3848 RVA: 0x0008E1D4 File Offset: 0x0008C3D4
+	private void RopeState()
+	{
+		if (this.pushTimer > 0f)
+		{
+			this.ToggleCheck();
+			this.releaseTimer = this.releaseDelay;
+			if (this.state == SwitchButtonNew.State.Disable)
+			{
+				return;
+			}
+		}
+		if (this.pushTimer <= 0f && this.actionList > 0)
+		{
+			this.pushTimer = this.pushInterval;
+		}
+		this.releaseTimer -= Time.deltaTime;
+		if (this.releaseTimer <= 0f)
+		{
+			this.SetIdleState(true);
+		}
+	}
+
+	// Token: 0x06000F09 RID: 3849 RVA: 0x0008E264 File Offset: 0x0008C464
+	private void SetRunningPushState()
+	{
+		this.state = SwitchButtonNew.State.RunningPush;
+		this.layerSet = false;
+		if (this.CheckSwimming())
+		{
+			return;
+		}
+		if (this.quarantine <= 0f)
+		{
+			this.SetRunningPushLayer(false);
+		}
+	}
+
+	// Token: 0x06000F0A RID: 3850 RVA: 0x0008E298 File Offset: 0x0008C498
+	private void SetRunningPushLayer(bool always = false)
+	{
+		VisualBoyRun visualBoyRun = this.boyGrabbing.visualBoy.state as VisualBoyRun;
+		if ((always || visualBoyRun == null || !visualBoyRun.isTurning) && (this.boyGrabbing.input.looseDir.x * this.boyGrabbing.facing > -1f || this.boyGrabbing.input.stick.x * this.boyGrabbing.facing > -0.2f) && (always || this.boyGrabbing.facing == this.lastFacing))
+		{
+			this.layerSet = true;
+			if (this.boyGrabbing.facing == 1f)
+			{
+				this.animBlend = this.animPushRunRight;
+			}
+			else
+			{
+				this.animBlend = this.animPushRunLeft;
+			}
+			this.boyGrabbing.visualBoy.upperBodyAnim = this.animBlend;
+		}
+	}
+
+	// Token: 0x06000F0B RID: 3851 RVA: 0x0008E3A0 File Offset: 0x0008C5A0
+	private void RunningPushState()
+	{
+		if (this.pushTimer > 0f)
+		{
+			this.ToggleCheck();
+			this.releaseTimer = this.releaseDelayRunning;
+			if (this.state == SwitchButtonNew.State.Disable)
+			{
+				return;
+			}
+		}
+		if (this.pushTimer <= 0f && this.actionList > 0)
+		{
+			this.pushTimer = this.pushInterval;
+			if (Mathf.Abs(this.boyGrabbing.velocity.x) < 1f)
+			{
+				this.SetIdleState(true);
+			}
+		}
+		this.releaseTimer -= Time.deltaTime;
+		if (this.boyGrabbing.state is BoyJumpState || this.boyGrabbing.state is BoyRopeState)
+		{
+			this.boyGrabbing.visualBoy.upperBodyAnim = null;
+		}
+		else if (this.boyGrabbing.state is BoySwimState)
+		{
+			if (this.boyGrabbing.visualBoy.upperBodyAnim == this.animBlend)
+			{
+				this.boyGrabbing.visualBoy.upperBodyAnim = null;
+			}
+			if (this.pushTimer <= 0f)
+			{
+				this.SetIdleState(true);
+				return;
+			}
+		}
+		VisualBoyRun visualBoyRun = this.boyGrabbing.visualBoy.state as VisualBoyRun;
+		bool flag = false;
+		if (visualBoyRun != null && visualBoyRun.isTurning)
+		{
+			float num = this.boyGrabbing.history.ElapsedSince(BoyHistory.Event.Turn);
+			if (num < 0.07f)
+			{
+				flag = true;
+			}
+			else if (num > 0.19f)
+			{
+			}
+		}
+		if (!flag && this.boyGrabbing.input.rawAction && this.quarantine <= 0f && !this.layerSet)
+		{
+			this.SetRunningPushLayer(true);
+		}
+		if ((this.boyGrabbing.facing != this.pushFacing && this.boyGrabbing.visualBoy.upperBodyAnim == this.animBlend) || (this.layerSet && flag))
+		{
+			this.boyGrabbing.visualBoy.upperBodyAnim = null;
+			this.layerSet = false;
+		}
+		if (this.releaseTimer <= 0f || (this.pushTimer <= 0f && this.boyGrabbing.facing != this.pushFacing))
+		{
+			if (this.quarantine > 0f)
+			{
+				this.boyGrabbing.visualBoy.upperBodyAnim = null;
+				this.layerSet = false;
+			}
+			else
+			{
+				this.SetIdleState(true);
+			}
+		}
+		else if (this.boyGrabbing.visualBoy.upperBodyAnim && Mathf.Abs(this.boyGrabbing.velocity.x) < 1f)
+		{
+			AnimClipNode animClipNode = this.animBlend.children[0].anim as AnimClipNode;
+			if (animClipNode != null && animClipNode.frame / animClipNode.numFrames < 0.3f)
+			{
+				this.pushFacing = this.boyGrabbing.facing;
+				this.SetPushState();
+			}
+		}
+	}
+
+	// Token: 0x06000F0C RID: 3852 RVA: 0x0008E6E8 File Offset: 0x0008C8E8
+	private void SetPushState()
+	{
+		this.pushFacing = this.boyGrabbing.facing;
+		this.state = SwitchButtonNew.State.Push;
+		this.layerSet = false;
+		if (this.CheckSwimming())
+		{
+			return;
+		}
+		if (this.quarantine <= 0f)
+		{
+			this.SetPushLayer();
+		}
+	}
+
+	// Token: 0x06000F0D RID: 3853 RVA: 0x0008E738 File Offset: 0x0008C938
+	private void SetPushLayer()
+	{
+		VisualBoyRun visualBoyRun = this.boyGrabbing.visualBoy.state as VisualBoyRun;
+		if ((visualBoyRun == null || !visualBoyRun.isTurning) && this.boyGrabbing.input.stick.x * this.boyGrabbing.facing > -0.2f && this.boyGrabbing.facing == this.lastFacing)
+		{
+			this.animBlend = ((this.pushFacing != 1f) ? (this.animBlend = this.animPushLeft) : this.animPushRight);
+			this.boyGrabbing.visualBoy.upperBodyAnim = this.animBlend;
+			this.boyGrabbing.visualBoy.StartBlend(this.pressBlendTime);
+			this.layerSet = true;
+		}
+	}
+
+	// Token: 0x06000F0E RID: 3854 RVA: 0x0008E820 File Offset: 0x0008CA20
+	private void PushState()
+	{
+		if (this.pushTimer > 0f)
+		{
+			this.ToggleCheck();
+			this.releaseTimer = this.releaseDelay;
+			if (this.state == SwitchButtonNew.State.Disable)
+			{
+				return;
+			}
+		}
+		if (this.pushTimer <= 0f && this.actionList > 0)
+		{
+			if (!(this.boyGrabbing.state is BoyJumpState) && !(this.boyGrabbing.state is BoyRopeState))
+			{
+				if (!this.CheckSwimming() && this.quarantine <= 0f && this.layerSet)
+				{
+					VisualBoyRun visualBoyRun = this.boyGrabbing.visualBoy.state as VisualBoyRun;
+					if (visualBoyRun == null || !visualBoyRun.isTurning)
+					{
+						this.boyGrabbing.visualBoy.additiveAnim = this.animPushAdd;
+					}
+				}
+				this.SetPushState();
+			}
+			this.pushTimer = this.pushInterval;
+		}
+		if (!this.boyGrabbing.input.rawAction || this.autoRelease)
+		{
+			this.releaseTimer -= Time.deltaTime;
+		}
+		else if (this.quarantine <= 0f && !this.layerSet)
+		{
+			VisualBoyRun visualBoyRun2 = this.boyGrabbing.visualBoy.state as VisualBoyRun;
+			if (visualBoyRun2 == null || !visualBoyRun2.isTurning)
+			{
+				this.SetPushLayer();
+			}
+		}
+		if (this.boyGrabbing.state is BoyJumpState || this.boyGrabbing.state is BoyRopeState)
+		{
+			this.boyGrabbing.visualBoy.upperBodyAnim = null;
+			if (this.pushTimer <= 0f)
+			{
+				this.SetIdleState(true);
+				return;
+			}
+		}
+		else if (this.boyGrabbing.state is BoySwimState)
+		{
+			if (this.boyGrabbing.visualBoy.upperBodyAnim == this.animBlend)
+			{
+				this.boyGrabbing.visualBoy.upperBodyAnim = null;
+			}
+			if (this.pushTimer <= 0f)
+			{
+				this.SetIdleState(true);
+				return;
+			}
+		}
+		bool flag = false;
+		if (this.boyGrabbing.velocity3.x != 0f)
+		{
+			flag = (!this.CheckReach() && this.pushTimer <= 0f && Mathf.Sign(this.boyGrabbing.velocity3.x) != Mathf.Sign(base.transform.position.x - this.boyGrabbing.transform.position.x));
+		}
+		if (!flag && this.boyGrabbing.state is BoyCustomAnimState)
+		{
+			flag = true;
+		}
+		VisualBoyRun visualBoyRun3 = this.boyGrabbing.visualBoy.state as VisualBoyRun;
+		if (!(visualBoyRun3 != null) || visualBoyRun3.isTurning)
+		{
+		}
+		if (this.boyGrabbing.facing != this.pushFacing && this.boyGrabbing.visualBoy.upperBodyAnim == this.animBlend)
+		{
+			this.quarantine = 0.2f;
+			this.boyGrabbing.visualBoy.upperBodyAnim = null;
+		}
+		if (Mathf.Abs(this.boyGrabbing.velocity.x) > 2f)
+		{
+			if (this.pushTimer > 0f)
+			{
+				this.pushTimer = this.pushDelayRunning;
+			}
+			this.releaseTimer = this.releaseDelayRunning;
+			this.SetRunningPushState();
+		}
+		else if (flag || this.releaseTimer <= 0f || (this.boyGrabbing.facing != this.pushFacing && this.pushTimer <= 0f))
+		{
+			if (this.boyGrabbing.facing != this.pushFacing && this.pushTimer <= 0f)
+			{
+				this.quarantine = 0.2f;
+			}
+			this.SetIdleState(true);
+		}
+		else if (this.boyGrabbing.facing != this.pushFacing && this.boyGrabbing.visualBoy.upperBodyAnim == this.animBlend)
+		{
+			this.quarantine = 0.2f;
+			this.boyGrabbing.visualBoy.upperBodyAnim = null;
+		}
+	}
+
+	// Token: 0x06000F0F RID: 3855 RVA: 0x0008ECB4 File Offset: 0x0008CEB4
+	private void SetDisableState()
+	{
+		if (this.materialInstance)
+		{
+			if (this.colorProperty != null)
+			{
+				this.materialInstance.SetColorProperty(this.colorProperty, this.colorOff);
+			}
+			this.colorFadeTimer = 0f;
+		}
+		if (this.visualsLight)
+		{
+			this.visualsLight.enabled = false;
+		}
+		this.ToggleRenderers(false);
+		if (!this.boyGrabbing)
+		{
+			this.DisableButton();
+			return;
+		}
+		if (this.state == SwitchButtonNew.State.RunningPush)
+		{
+			this.releaseTimer = this.releaseDelayRunning;
+		}
+		else
+		{
+			this.releaseTimer = this.releaseDelay;
+		}
+		this.state = SwitchButtonNew.State.Disable;
+	}
+
+	// Token: 0x06000F10 RID: 3856 RVA: 0x0008ED68 File Offset: 0x0008CF68
+	private void DisableState()
+	{
+		bool flag = this.animBlend == this.animPushRunRight || this.animBlend == this.animPushRunLeft;
+		this.releaseTimer -= Time.deltaTime;
+		if (this.releaseTimer <= 0f || this.boyGrabbing.facing != this.pushFacing || this.boyGrabbing.state is BoyJumpState || this.boyGrabbing.state is BoyRopeState)
+		{
+			this.DisableButton();
+		}
+		else if (flag && Mathf.Abs(this.boyGrabbing.velocity.x) < 1f)
+		{
+			AnimClipNode animClipNode = this.animBlend.children[0].anim as AnimClipNode;
+			if (animClipNode != null && animClipNode.frame / animClipNode.numFrames < 0.3f)
+			{
+				this.DisableButton();
+			}
+		}
+	}
+
+	// Token: 0x06000F11 RID: 3857 RVA: 0x0008EE7C File Offset: 0x0008D07C
+	private void FixedUpdate()
+	{
+		if (this.quarantine > 0f)
+		{
+			this.quarantine -= Time.deltaTime;
+		}
+		if (this.state != SwitchButtonNew.State.None)
+		{
+			this.SetBoyBlend();
+			this.CheckInput();
+			switch (this.state)
+			{
+			case SwitchButtonNew.State.Idle:
+				this.IdleState();
+				break;
+			case SwitchButtonNew.State.Push:
+				this.PushState();
+				break;
+			case SwitchButtonNew.State.Jump:
+				this.JumpState();
+				break;
+			case SwitchButtonNew.State.Rope:
+				this.RopeState();
+				break;
+			case SwitchButtonNew.State.RunningPush:
+				this.RunningPushState();
+				break;
+			case SwitchButtonNew.State.Toggle:
+				this.ToggleState();
+				break;
+			case SwitchButtonNew.State.Disable:
+				this.DisableState();
+				break;
+			}
+			this.FadeButtonColor();
+		}
+	}
+
+	// Token: 0x06000F12 RID: 3858 RVA: 0x0008EF48 File Offset: 0x0008D148
+	private void FadeButtonColor()
+	{
+		if (this.materialInstance && this.colorFadeTimer > 0f)
+		{
+			this.colorFadeTimer -= Time.deltaTime;
+			this.colorFadeTimer = Mathf.Max(0f, this.colorFadeTimer);
+			float num = this.colorFadeCurve.Evaluate(1f - this.colorFadeTimer / this.colorFadeDuration);
+			Color color = Color.Lerp(this.colorPushed, this.colorOn, num);
+			if (this.colorProperty != null)
+			{
+				this.materialInstance.SetColorProperty(this.colorProperty, color);
+			}
+			if (this.visualsLight)
+			{
+				this.visualsLight.color = color;
+			}
+			if (num > 0.75f)
+			{
+				this.ToggleRenderers(true);
+			}
+		}
+	}
+
+	// Token: 0x06000F13 RID: 3859 RVA: 0x0008F01C File Offset: 0x0008D21C
+	private void ToggleRenderers(bool value)
+	{
+		if (this.toggleRenderers != null)
+		{
+			int i = 0;
+			int num = this.toggleRenderers.Length;
+			while (i < num)
+			{
+				this.toggleRenderers[i].enabled = value;
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x06000F14 RID: 3860 RVA: 0x0008F060 File Offset: 0x0008D260
+	private void DisableButton()
+	{
+		if (this.boyGrabbing && this.boyGrabbing.visualBoy)
+		{
+			this.boyGrabbing.visualBoy.upperBodyAnim = null;
+		}
+		this.state = SwitchButtonNew.State.None;
+	}
+
+	// Token: 0x06000F15 RID: 3861 RVA: 0x0008F0AC File Offset: 0x0008D2AC
+	private void CheckInput()
+	{
+		this.currentAction = false;
+		if (this.intervalTimer > 0f)
+		{
+			this.intervalTimer -= Time.deltaTime;
+		}
+		int i = 0;
+		int count = this.boysInside.Count;
+		while (i < count)
+		{
+			Boy boy = this.boysInside[i];
+			if (this.isActive && !boy.isDead && boy.input != null && boy.input.rawAction && boy.specialBoyMode != Boy.SpecialBoyMode.InsideSub)
+			{
+				this.currentAction = true;
+				if (this.boyGrabbing != boy)
+				{
+					this.lastFacing = boy.facing;
+				}
+				this.boyGrabbing = boy;
+			}
+			i++;
+		}
+		this.TempDebugDraw(ScriptGlobals.boy);
+		if (this.currentAction && !this.previousAction && this.CheckReach() && this.intervalTimer <= 0f && ((this.boyGrabbing.input.grab && !BoyGrabState.FindGrabCollider(this.boyGrabbing)) || this.boyGrabbing.state is BoyJumpState || this.boyGrabbing.state is BoyRopeState))
+		{
+			this.actionList++;
+			if (this.boyGrabbing.state is BoySwimState || this.forceUseUnderWaterIntervalTimer)
+			{
+				this.intervalTimer = this.underWaterIntervalTimer;
+			}
+			if (this.debug)
+			{
+				this.debugClickTime = Time.timeDbl;
+			}
+		}
+		this.previousAction = this.currentAction;
+	}
+
+	// Token: 0x06000F16 RID: 3862 RVA: 0x0008F268 File Offset: 0x0008D468
+	private bool CheckSwimming()
+	{
+		return this.boyGrabbing && this.boyGrabbing.state is BoySwimState;
+	}
+
+	// Token: 0x06000F17 RID: 3863 RVA: 0x0008F290 File Offset: 0x0008D490
+	private bool CheckReach()
+	{
+		if (this.boyGrabbing == null || this.boyGrabbing.input == null)
+		{
+			return false;
+		}
+		if (this.boyGrabbing.state is BoySwimState)
+		{
+			Vector3 vector = this.boyGrabbing.pos3 - (base.transform.position + this.swimReachOffset);
+			vector.z = 0f;
+			return vector.magnitude < this.swimReachDist;
+		}
+		Vector3 position = base.transform.position;
+		Vector3 pos = this.boyGrabbing.pos3;
+		float num = pos.x + this.boyGrabbing.input.stick.x / 1.7f;
+		float num2 = pos.x + this.boyGrabbing.velocity.x / 3.5f;
+		float num3 = position.x + this.animForwardDist;
+		float num4 = position.x + this.animBackwardDist;
+		return (num >= num3 && num < num4) || (num2 >= num3 && num2 < num4) || (pos.x >= position.x - this.animNearDist && pos.x < position.x + this.animNearDist);
+	}
+
+	// Token: 0x06000F18 RID: 3864 RVA: 0x0008F400 File Offset: 0x0008D600
+	private void TempDebugDraw(Boy boy)
+	{
+		if (this.debug && EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			Vector3 pos = boy.pos3;
+			pos.x += boy.velocity.x / 3.5f;
+			Vector3 pos2 = boy.pos3;
+			pos2.x += boy.input.stick.x / 1.7f;
+			Vector3 pos3 = boy.pos3;
+			float num = base.transform.position.x + this.animForwardDist;
+			float num2 = base.transform.position.x + this.animBackwardDist;
+			Debug.DrawRay(pos, Vector3.up, new Color(0f, 0.5f, 1f));
+			Debug.DrawRay(pos2, Vector3.up, new Color(1f, 0.5f, 0f));
+			Debug.DrawRay(pos3, Vector3.up, Color.black);
+			Debug.DrawRay(base.transform.position - Vector3.left * this.animForwardDist, Vector3.up, Color.green);
+			Debug.DrawRay(base.transform.position - Vector3.left * this.animBackwardDist, Vector3.up, Color.green);
+			Debug.DrawRay(base.transform.position - Vector3.left * this.animNearDist, Vector3.up, Color.red);
+			Debug.DrawRay(base.transform.position + Vector3.left * this.animNearDist, Vector3.up, Color.red);
+		}
+	}
+
+	// Token: 0x06000F19 RID: 3865 RVA: 0x0008F5C8 File Offset: 0x0008D7C8
+	private void SetBoyBlend()
+	{
+		if (this.boyGrabbing == null || this.boyGrabbing.input == null)
+		{
+			return;
+		}
+		float num = 0f;
+		float num2 = this.boyGrabbing.pos3.x - base.transform.position.x;
+		if (num2 < 0f)
+		{
+			num = -num2 / this.animForwardDist;
+		}
+		else if (num2 > 0f)
+		{
+			num = num2 / this.animBackwardDist;
+		}
+		num = Mathf.Clamp(num, -1f, 1f);
+		this.animBlend.currentBlendValue = num;
+	}
+
+	// Token: 0x06000F1A RID: 3866 RVA: 0x0008F678 File Offset: 0x0008D878
+	private void ToggleCheck()
+	{
+		this.pushTimer -= Time.deltaTime;
+		if (this.audioEventReady && this.pushTimer < this.audioEventOffset)
+		{
+			if (this.buttonOn)
+			{
+				this.audioRed.PostFast();
+			}
+			else
+			{
+				this.audioGreen.PostFast();
+			}
+			this.audioEventReady = false;
+		}
+		if (this.pushTimer <= 0f)
+		{
+			this.audioEventReady = true;
+			this.Toggle();
+		}
+	}
+
+	// Token: 0x06000F1B RID: 3867 RVA: 0x0008F700 File Offset: 0x0008D900
+	private void Toggle()
+	{
+		this.actionList--;
+		this.buttonOn = !this.buttonOn;
+		this.pressed.Signal();
+		if (this.buttonOn)
+		{
+			this.on.Signal();
+		}
+		else
+		{
+			this.off.Signal();
+		}
+		if (this.syncButton != null)
+		{
+			this.syncButton.SetState(this.buttonOn);
+		}
+		this.PlayButtonAnimation();
+		if (this.singleToggle)
+		{
+			this.SetDisableState();
+		}
+		else if (this.materialInstance)
+		{
+			if (this.colorProperty != null)
+			{
+				this.materialInstance.SetColorProperty(this.colorProperty, this.colorPushed);
+			}
+			this.ToggleRenderers(false);
+			this.colorFadeTimer = 0f;
+			if (this.visualsLight)
+			{
+				this.visualsLight.color = this.colorPushed;
+			}
+		}
+	}
+
+	// Token: 0x06000F1C RID: 3868 RVA: 0x0008F800 File Offset: 0x0008DA00
+	private void PlayButtonAnimation()
+	{
+		if (this.visualsAnim)
+		{
+			if (this.visualsAnimPush)
+			{
+				this.visualsAnim.PlayQueued(this.visualsAnimPush.name, 2);
+			}
+			else
+			{
+				this.visualsAnim.PlayQueued("Push", 2);
+			}
+		}
+	}
+
+	// Token: 0x06000F1D RID: 3869 RVA: 0x0008F85C File Offset: 0x0008DA5C
+	public void SetState(bool value)
+	{
+		this.buttonOn = value;
+		if (this.singleToggle)
+		{
+			this.SetDisableState();
+		}
+	}
+
+	// Token: 0x06000F1E RID: 3870 RVA: 0x0008F878 File Offset: 0x0008DA78
+	private void OnActivate()
+	{
+		this.isActive = true;
+	}
+
+	// Token: 0x06000F1F RID: 3871 RVA: 0x0008F884 File Offset: 0x0008DA84
+	private void OnDeactivate()
+	{
+		this.isActive = false;
+	}
+
+	// Token: 0x06000F20 RID: 3872 RVA: 0x0008F890 File Offset: 0x0008DA90
+	private void OnLoadOn()
+	{
+		this.SetState(true);
+		if (this.syncButton != null)
+		{
+			this.syncButton.SetState(true);
+		}
+	}
+
+	// Token: 0x06000F21 RID: 3873 RVA: 0x0008F8C4 File Offset: 0x0008DAC4
+	private void OnLoadOff()
+	{
+		this.SetState(false);
+		if (this.syncButton != null)
+		{
+			this.syncButton.SetState(false);
+		}
+	}
+
+	// Token: 0x06000F22 RID: 3874 RVA: 0x0008F8F8 File Offset: 0x0008DAF8
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.triggerGrab.enterTrigger)
+		{
+			this.TriggerEnter(collider);
+		}
+		else if (sender == this.triggerGrab.exitTrigger)
+		{
+			this.TriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06000F23 RID: 3875 RVA: 0x0008F934 File Offset: 0x0008DB34
+	private void TriggerEnter(Collider c)
+	{
+		BoyProbe component = c.GetComponent<BoyProbe>();
+		if (component)
+		{
+			Boy boy = component.boy;
+			if (!this.boysInside.Contains(boy))
+			{
+				this.previousAction = boy.input.rawAction;
+				this.boysInside.Add(boy);
+			}
+		}
+	}
+
+	// Token: 0x06000F24 RID: 3876 RVA: 0x0008F988 File Offset: 0x0008DB88
+	private void TriggerExit(Collider c)
+	{
+		BoyProbe component = c.GetComponent<BoyProbe>();
+		if (component)
+		{
+			this.boysInside.Remove(component.boy);
+		}
+	}
+
+	// Token: 0x06000F25 RID: 3877 RVA: 0x0008F9BC File Offset: 0x0008DBBC
+	private void OnDrawGizmos()
+	{
+		if (this.debug && EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			Gizmos.color = Color.green.Alpha(0.2f);
+			Vector3 vector = base.transform.position + this.swimReachOffset;
+			Gizmos.DrawSphere(vector, this.swimReachDist);
+		}
+	}
+
+	// Token: 0x04001B11 RID: 6929
+	[Header("--- Animation ---")]
+	public AnimBlendNode animPushRight;
+
+	// Token: 0x04001B12 RID: 6930
+	public AnimBlendNode animPushLeft;
+
+	// Token: 0x04001B13 RID: 6931
+	public AnimBlendNode animPushRunRight;
+
+	// Token: 0x04001B14 RID: 6932
+	public AnimBlendNode animPushRunLeft;
+
+	// Token: 0x04001B15 RID: 6933
+	public AnimClipNode animSwing;
+
+	// Token: 0x04001B16 RID: 6934
+	public AnimClipNode animPushAdd;
+
+	// Token: 0x04001B17 RID: 6935
+	[Header("--- Logic ---")]
+	public CollisionEvents triggerGrab;
+
+	// Token: 0x04001B18 RID: 6936
+	public float pushDelay = 0.06f;
+
+	// Token: 0x04001B19 RID: 6937
+	public float pushDelayRunning = 0.12f;
+
+	// Token: 0x04001B1A RID: 6938
+	public float releaseDelay = 0.15f;
+
+	// Token: 0x04001B1B RID: 6939
+	public float releaseDelayRunning = 0.28f;
+
+	// Token: 0x04001B1C RID: 6940
+	public float refreshDelay = 0.1f;
+
+	// Token: 0x04001B1D RID: 6941
+	public float swimReachDist = 1.2f;
+
+	// Token: 0x04001B1E RID: 6942
+	public Vector3 swimReachOffset = new Vector3(0f, 1f, 0f);
+
+	// Token: 0x04001B1F RID: 6943
+	public float animForwardDist;
+
+	// Token: 0x04001B20 RID: 6944
+	public float animBackwardDist;
+
+	// Token: 0x04001B21 RID: 6945
+	public float animNearDist = 0.5f;
+
+	// Token: 0x04001B22 RID: 6946
+	public bool buttonOn;
+
+	// Token: 0x04001B23 RID: 6947
+	public bool autoRelease;
+
+	// Token: 0x04001B24 RID: 6948
+	public bool singleToggle;
+
+	// Token: 0x04001B25 RID: 6949
+	public SwitchButtonNew syncButton;
+
+	// Token: 0x04001B26 RID: 6950
+	[Header("--- Visuals ---")]
+	public Light visualsLight;
+
+	// Token: 0x04001B27 RID: 6951
+	public Animation visualsAnim;
+
+	// Token: 0x04001B28 RID: 6952
+	public AnimationClip visualsAnimPush;
+
+	// Token: 0x04001B29 RID: 6953
+	public MaterialInstance materialInstance;
+
+	// Token: 0x04001B2A RID: 6954
+	public Renderer[] toggleRenderers;
+
+	// Token: 0x04001B2B RID: 6955
+	public Color colorOn;
+
+	// Token: 0x04001B2C RID: 6956
+	public Color colorPushed;
+
+	// Token: 0x04001B2D RID: 6957
+	public Color colorOff;
+
+	// Token: 0x04001B2E RID: 6958
+	public AnimationCurve colorFadeCurve;
+
+	// Token: 0x04001B2F RID: 6959
+	public float colorReturnDelay = 0.15f;
+
+	// Token: 0x04001B30 RID: 6960
+	public float colorFadeDuration = 1f;
+
+	// Token: 0x04001B31 RID: 6961
+	public float underWaterIntervalTimer = 0.3f;
+
+	// Token: 0x04001B32 RID: 6962
+	public bool forceUseUnderWaterIntervalTimer;
+
+	// Token: 0x04001B33 RID: 6963
+	[Header("--- Audio ---")]
+	public string audioPrefix = "env";
+
+	// Token: 0x04001B34 RID: 6964
+	public float audioEventOffset = 0.05f;
+
+	// Token: 0x04001B35 RID: 6965
+	public bool debug;
+
+	// Token: 0x04001B36 RID: 6966
+	private SignalOut on;
+
+	// Token: 0x04001B37 RID: 6967
+	private SignalOut off;
+
+	// Token: 0x04001B38 RID: 6968
+	private SignalOut pressed;
+
+	// Token: 0x04001B39 RID: 6969
+	private SignalIn loadOn;
+
+	// Token: 0x04001B3A RID: 6970
+	private SignalIn loadOff;
+
+	// Token: 0x04001B3B RID: 6971
+	private SignalIn deactivate;
+
+	// Token: 0x04001B3C RID: 6972
+	private SignalIn activate;
+
+	// Token: 0x04001B3D RID: 6973
+	private SwitchButtonNew.State state;
+
+	// Token: 0x04001B3E RID: 6974
+	private AnimBlendNode animBlend;
+
+	// Token: 0x04001B3F RID: 6975
+	private float pushTimer;
+
+	// Token: 0x04001B40 RID: 6976
+	private float pushInterval = 0.02f;
+
+	// Token: 0x04001B41 RID: 6977
+	private float releaseTimer;
+
+	// Token: 0x04001B42 RID: 6978
+	private float refreshTimer;
+
+	// Token: 0x04001B43 RID: 6979
+	private float intervalTimer;
+
+	// Token: 0x04001B44 RID: 6980
+	private float pressBlendTime = 0.12f;
+
+	// Token: 0x04001B45 RID: 6981
+	private float defaultBlendTime = 0.2f;
+
+	// Token: 0x04001B46 RID: 6982
+	private float colorReturnTimer;
+
+	// Token: 0x04001B47 RID: 6983
+	private int actionList;
+
+	// Token: 0x04001B48 RID: 6984
+	private bool currentAction;
+
+	// Token: 0x04001B49 RID: 6985
+	private bool previousAction;
+
+	// Token: 0x04001B4A RID: 6986
+	private bool audioEventReady = true;
+
+	// Token: 0x04001B4B RID: 6987
+	private float boyDist;
+
+	// Token: 0x04001B4C RID: 6988
+	private float pushFacing;
+
+	// Token: 0x04001B4D RID: 6989
+	private bool isActive = true;
+
+	// Token: 0x04001B4E RID: 6990
+	private double debugClickTime;
+
+	// Token: 0x04001B4F RID: 6991
+	private List<Boy> boysInside = new List<Boy>();
+
+	// Token: 0x04001B50 RID: 6992
+	private Boy boyGrabbing;
+
+	// Token: 0x04001B51 RID: 6993
+	private MaterialInstance.ColorProperty colorProperty;
+
+	// Token: 0x04001B52 RID: 6994
+	private float colorFadeTimer;
+
+	// Token: 0x04001B53 RID: 6995
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04001B54 RID: 6996
+	private int triggerExitHandle = -1;
+
+	// Token: 0x04001B55 RID: 6997
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioGreen;
+
+	// Token: 0x04001B56 RID: 6998
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioRed;
+
+	// Token: 0x04001B57 RID: 6999
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04001B58 RID: 7000
+	private float quarantine;
+
+	// Token: 0x04001B59 RID: 7001
+	private float lastFacing;
+
+	// Token: 0x04001B5A RID: 7002
+	private bool layerSet;
+
+	// Token: 0x020001F1 RID: 497
+	private enum State
+	{
+		// Token: 0x04001B5C RID: 7004
+		None,
+		// Token: 0x04001B5D RID: 7005
+		Idle,
+		// Token: 0x04001B5E RID: 7006
+		Push,
+		// Token: 0x04001B5F RID: 7007
+		Jump,
+		// Token: 0x04001B60 RID: 7008
+		Rope,
+		// Token: 0x04001B61 RID: 7009
+		RunningPush,
+		// Token: 0x04001B62 RID: 7010
+		Toggle,
+		// Token: 0x04001B63 RID: 7011
+		Disable
+	}
+}

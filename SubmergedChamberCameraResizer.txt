@@ -1,0 +1,30 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004A4 RID: 1188
+public class SubmergedChamberCameraResizer : MonoBehaviour
+{
+	// Token: 0x06001F1E RID: 7966 RVA: 0x0010A770 File Offset: 0x00108970
+	private void Start()
+	{
+	}
+
+	// Token: 0x06001F1F RID: 7967 RVA: 0x0010A774 File Offset: 0x00108974
+	private void Update()
+	{
+		if (ScriptGlobals.boy.specialBoyMode == Boy.SpecialBoyMode.InsideSub)
+		{
+			this.teleportFollow.offset.y = 0f;
+		}
+		else
+		{
+			this.teleportFollow.offset.y = this.outOfSubYOffset;
+		}
+	}
+
+	// Token: 0x040039B0 RID: 14768
+	public TeleportFollow teleportFollow;
+
+	// Token: 0x040039B1 RID: 14769
+	public float outOfSubYOffset = 0.75f;
+}

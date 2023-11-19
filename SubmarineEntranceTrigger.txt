@@ -1,0 +1,14 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003BB RID: 955
+public class SubmarineEntranceTrigger : MonoBehaviour
+{
+	// Token: 0x060019D7 RID: 6615 RVA: 0x000E1E84 File Offset: 0x000E0084
+	private void Start()
+	{
+	}
+
+	// Token: 0x04002E62 RID: 11874
+	public SubmarineBoyInteraction submarineBoyInteraction;
+}

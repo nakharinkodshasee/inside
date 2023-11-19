@@ -1,0 +1,365 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020000D0 RID: 208
+public class Squirrel : MonoBehaviour
+{
+	// Token: 0x0600067C RID: 1660 RVA: 0x0004A1C8 File Offset: 0x000483C8
+	private void Start()
+	{
+		this.idleAnimations = new List<string>
+		{
+			"IdleA_eating",
+			"CheckEnvA"
+		};
+		this.moveTarget = base.transform.position;
+		this.SetIdleState();
+		this.tailAnim = this.squirrelAnim["TailAdd"];
+		this.tailAnim.layer = 10;
+		this.tailAnim.blendMode = 1;
+		this.tailAnim.wrapMode = 8;
+		this.tailAnim.weight = 1f;
+		this.tailAnim.enabled = true;
+		this.MoveSquirrelTail(0f);
+	}
+
+	// Token: 0x0600067D RID: 1661 RVA: 0x0004A274 File Offset: 0x00048474
+	private void SetIdleState()
+	{
+		this.moveTargetReached = true;
+		this.squirrelAnim["RunA"].speed = 1f;
+		this.state = Squirrel.State.Idle;
+	}
+
+	// Token: 0x0600067E RID: 1662 RVA: 0x0004A2AC File Offset: 0x000484AC
+	private void IdleState()
+	{
+		float num = Vector3.Distance(base.transform.position, ScriptGlobals.mainCharacter.pos3);
+		if (num < 4f)
+		{
+			this.target = this.fleeTarget;
+			this.SetFleeState();
+			return;
+		}
+		if (this.squirrelAnim.IsPlaying(this.currentIdleAnim))
+		{
+			return;
+		}
+		if (this.idleTimer > 0f)
+		{
+			this.idleTimer -= Time.deltaTime;
+			if (this.idleTimer <= 0f)
+			{
+				this.currentIdleAnim = this.idleAnimations[Random.Range(0, this.idleAnimations.Count)];
+				this.squirrelAnim.CrossFade(this.currentIdleAnim, 0.2f);
+				this.moveTargetReached = true;
+				return;
+			}
+		}
+		else
+		{
+			this.idleTimer = Random.Range(2f, 4f);
+		}
+		if (this.moveTargetReached)
+		{
+			this.moveTarget = this.GetIdlePos(5f, 80f, 0.7f, 1.5f);
+			this.currentSpeed = 0f;
+			this.moveTargetReached = false;
+		}
+		else
+		{
+			this.squirrelAnim.CrossFade("RunA", 0.2f);
+			this.moveTargetReached = this.MoveTowardsTarget(this.idleSpeed);
+			this.RotateTowardsTarget(this.idleRotateSpeed);
+		}
+	}
+
+	// Token: 0x0600067F RID: 1663 RVA: 0x0004A40C File Offset: 0x0004860C
+	private void SetFleeState()
+	{
+		Vector3 vector = base.transform.position + (this.target.transform.position - base.transform.position).normalized * 4f;
+		this.moveTarget = vector;
+		this.moveTargetReached = false;
+		this.squirrelAnim["RunA"].speed = 1.4f;
+		this.state = Squirrel.State.Flee;
+	}
+
+	// Token: 0x06000680 RID: 1664 RVA: 0x0004A48C File Offset: 0x0004868C
+	private void FleeState()
+	{
+		this.squirrelAnim.CrossFade("RunA", 0.2f);
+		float num = Vector3.Distance(this.moveTarget, this.target.transform.position);
+		if (num < 3f)
+		{
+			this.moveTarget = this.target.transform.position;
+		}
+		if (this.moveTargetReached)
+		{
+			if (this.moveTarget == this.target.transform.position)
+			{
+				this.SetTreeState();
+			}
+			else
+			{
+				this.moveTarget = this.GetTowardsTargetPos(4f, 15f, 1.5f, 3f);
+				this.moveTargetReached = false;
+			}
+		}
+		else
+		{
+			this.RotateTowardsTarget(this.rotateSpeed);
+			this.moveTargetReached = this.MoveTowardsTarget(this.moveSpeed);
+		}
+	}
+
+	// Token: 0x06000681 RID: 1665 RVA: 0x0004A56C File Offset: 0x0004876C
+	private void SetTreeState()
+	{
+		this.moveTarget = this.treeTarget.transform.position;
+		this.currentSpeed = 0f;
+		this.moveTargetReached = false;
+		this.state = Squirrel.State.Tree;
+	}
+
+	// Token: 0x06000682 RID: 1666 RVA: 0x0004A5A0 File Offset: 0x000487A0
+	private void TreeState()
+	{
+		if (!this.moveTargetReached)
+		{
+			this.squirrelAnim.CrossFade("RunA", 0.2f);
+			this.RotateTowardsTarget(this.rotateSpeed);
+			this.moveTargetReached = this.MoveTowardsTarget(this.moveSpeed);
+		}
+		else
+		{
+			this.squirrelAnim.Stop();
+		}
+	}
+
+	// Token: 0x06000683 RID: 1667 RVA: 0x0004A5FC File Offset: 0x000487FC
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case Squirrel.State.Idle:
+			this.IdleState();
+			break;
+		case Squirrel.State.Flee:
+			this.FleeState();
+			break;
+		case Squirrel.State.Tree:
+			this.TreeState();
+			break;
+		}
+		if (this.state == Squirrel.State.Flee || this.state == Squirrel.State.Tree)
+		{
+			this.MoveSquirrelTail(0f);
+		}
+		else
+		{
+			this.MoveSquirrelTail(this.tailPos);
+		}
+	}
+
+	// Token: 0x06000684 RID: 1668 RVA: 0x0004A680 File Offset: 0x00048880
+	private bool MoveTowardsTarget(float speed)
+	{
+		float num = this.currentSpeed / this.breakTime;
+		float num2 = this.currentSpeed * this.breakTime / 2f;
+		float num3 = Vector3.Distance(base.transform.position, this.moveTarget);
+		bool result = num3 < 0.1f;
+		if (this.state == Squirrel.State.Flee)
+		{
+			num3 = Vector3.Distance(base.transform.position, this.fleeTarget.transform.position);
+		}
+		if (num3 <= num2)
+		{
+			this.currentSpeed -= num * Time.deltaTime;
+		}
+		else
+		{
+			this.currentSpeed += this.acceleration;
+		}
+		this.currentSpeed = Mathf.Clamp(this.currentSpeed, 0.3f, speed);
+		base.transform.Translate(Vector3.forward * Time.deltaTime * this.currentSpeed);
+		return result;
+	}
+
+	// Token: 0x06000685 RID: 1669 RVA: 0x0004A76C File Offset: 0x0004896C
+	private float RotateTowardsTarget(float speed)
+	{
+		Vector3 vector = this.moveTarget - base.transform.position;
+		Quaternion quaternion = Quaternion.LookRotation(vector, Vector3.up);
+		Quaternion quaternion2 = Quaternion.Slerp(base.transform.rotation, quaternion, speed * Time.deltaTime);
+		float num = this.AngleDir(base.transform.forward, vector, base.transform.up);
+		float num2 = Quaternion.Angle(base.transform.rotation, quaternion2);
+		this.AddTailForce(num2 * num);
+		base.transform.rotation = quaternion2;
+		return num2;
+	}
+
+	// Token: 0x06000686 RID: 1670 RVA: 0x0004A800 File Offset: 0x00048A00
+	private Vector3 GetIdlePos(float minAngle, float maxAngle, float minLength, float maxLength)
+	{
+		Vector3 randomPos = this.GetRandomPos(minAngle, maxAngle, minLength, maxLength);
+		if (!this.idleArea.bounds.Contains(randomPos))
+		{
+			return this.GetIdlePos(minAngle + 10f, maxAngle + 10f, minLength, maxLength);
+		}
+		return randomPos;
+	}
+
+	// Token: 0x06000687 RID: 1671 RVA: 0x0004A84C File Offset: 0x00048A4C
+	private Vector3 GetTowardsTargetPos(float minAngle, float maxAngle, float minLength, float maxLength)
+	{
+		Vector3 randomPos = this.GetRandomPos(minAngle, maxAngle, minLength, maxLength);
+		Vector3 vector = this.fleeTarget.transform.position - base.transform.position;
+		Vector3 vector2 = randomPos - base.transform.position;
+		float num = Vector3.Angle(vector, vector2);
+		if (num > maxAngle)
+		{
+			return base.transform.position + (this.fleeTarget.transform.position - base.transform.position).normalized * Random.Range(2f, 4f);
+		}
+		return randomPos;
+	}
+
+	// Token: 0x06000688 RID: 1672 RVA: 0x0004A8F8 File Offset: 0x00048AF8
+	private Vector3 GetRandomPos(float minAngle, float maxAngle, float minLength, float maxLength)
+	{
+		Vector3 vector = base.transform.forward;
+		float num = Random.Range(minAngle, maxAngle);
+		num *= (float)((Random.value <= 0.5f) ? 1 : -1);
+		Quaternion quaternion = Quaternion.AngleAxis(num, Vector3.up);
+		vector = quaternion * vector;
+		return base.transform.position + vector * Random.Range(minLength, maxLength);
+	}
+
+	// Token: 0x06000689 RID: 1673 RVA: 0x0004A968 File Offset: 0x00048B68
+	private void MoveSquirrelTail(float dir)
+	{
+		dir = Mathf.Clamp(dir, -1f, 1f);
+		float num = this.tailAnim.length / 11f;
+		float num2 = (dir + 1f) / 2f;
+		float time = num + num2 * (this.tailAnim.length - num);
+		this.tailAnim.time = time;
+		if (Mathf.Abs(this.tailPos) > 0.1f)
+		{
+			this.tailPos += Mathf.Sign(this.tailPos) * -1f * this.tailFriction;
+		}
+	}
+
+	// Token: 0x0600068A RID: 1674 RVA: 0x0004AA00 File Offset: 0x00048C00
+	private void AddTailForce(float force)
+	{
+		this.tailPos += force / 100f * this.tailForce;
+	}
+
+	// Token: 0x0600068B RID: 1675 RVA: 0x0004AA20 File Offset: 0x00048C20
+	private void OnDrawGizmos()
+	{
+		if (this.debug)
+		{
+			Gizmos.color = Color.yellow;
+			Gizmos.DrawSphere(this.moveTarget, 0.1f);
+		}
+	}
+
+	// Token: 0x0600068C RID: 1676 RVA: 0x0004AA48 File Offset: 0x00048C48
+	public float AngleDir(Vector3 fwd, Vector3 targetDir, Vector3 up)
+	{
+		Vector3 vector = Vector3.Cross(fwd, targetDir);
+		float num = Vector3.Dot(vector, up);
+		if (num > 0f)
+		{
+			return 1f;
+		}
+		if (num < 0f)
+		{
+			return -1f;
+		}
+		return 0f;
+	}
+
+	// Token: 0x04000B28 RID: 2856
+	public GameObject target;
+
+	// Token: 0x04000B29 RID: 2857
+	public GameObject fleeTarget;
+
+	// Token: 0x04000B2A RID: 2858
+	public GameObject treeTarget;
+
+	// Token: 0x04000B2B RID: 2859
+	public Collider idleArea;
+
+	// Token: 0x04000B2C RID: 2860
+	public Animation squirrelAnim;
+
+	// Token: 0x04000B2D RID: 2861
+	public float tailForce = 150f;
+
+	// Token: 0x04000B2E RID: 2862
+	public float tailFriction = 25f;
+
+	// Token: 0x04000B2F RID: 2863
+	public float moveSpeed = 7f;
+
+	// Token: 0x04000B30 RID: 2864
+	public float rotateSpeed = 20f;
+
+	// Token: 0x04000B31 RID: 2865
+	public float idleSpeed = 4f;
+
+	// Token: 0x04000B32 RID: 2866
+	public float idleRotateSpeed = 8.5f;
+
+	// Token: 0x04000B33 RID: 2867
+	public bool debug;
+
+	// Token: 0x04000B34 RID: 2868
+	private bool moveTargetReached;
+
+	// Token: 0x04000B35 RID: 2869
+	private Vector3 moveTarget;
+
+	// Token: 0x04000B36 RID: 2870
+	private Squirrel.State state;
+
+	// Token: 0x04000B37 RID: 2871
+	private List<string> idleAnimations;
+
+	// Token: 0x04000B38 RID: 2872
+	private string currentIdleAnim;
+
+	// Token: 0x04000B39 RID: 2873
+	private float idleTimer;
+
+	// Token: 0x04000B3A RID: 2874
+	private AnimationState tailAnim;
+
+	// Token: 0x04000B3B RID: 2875
+	private float tailPos;
+
+	// Token: 0x04000B3C RID: 2876
+	public float currentSpeed;
+
+	// Token: 0x04000B3D RID: 2877
+	public float acceleration = 0.001f;
+
+	// Token: 0x04000B3E RID: 2878
+	public float breakTime = 0.2f;
+
+	// Token: 0x020000D1 RID: 209
+	private enum State
+	{
+		// Token: 0x04000B40 RID: 2880
+		None,
+		// Token: 0x04000B41 RID: 2881
+		Idle,
+		// Token: 0x04000B42 RID: 2882
+		Flee,
+		// Token: 0x04000B43 RID: 2883
+		Tree
+	}
+}

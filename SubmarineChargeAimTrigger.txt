@@ -1,0 +1,171 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003B6 RID: 950
+public class SubmarineChargeAimTrigger : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001999 RID: 6553 RVA: 0x000DE1A4 File Offset: 0x000DC3A4
+	public bool PreAwake(int callcount)
+	{
+		this.enableTrigger = SignalIn.Create("enableTrigger", base.gameObject, new Action(this.DoEnable));
+		this.disableTrigger = SignalIn.Create("disableTrigger", base.gameObject, new Action(this.DoDisable));
+		return true;
+	}
+
+	// Token: 0x0600199A RID: 6554 RVA: 0x000DE1F8 File Offset: 0x000DC3F8
+	public void DoEnable()
+	{
+		this.isEnabled = true;
+		if (this.subInside)
+		{
+			this.submarine.chargeAimPoint = this.aimPoint;
+		}
+	}
+
+	// Token: 0x0600199B RID: 6555 RVA: 0x000DE220 File Offset: 0x000DC420
+	public void DoDisable()
+	{
+		this.isEnabled = false;
+		if (this.subInside)
+		{
+			this.submarine.chargeAimPoint = null;
+		}
+	}
+
+	// Token: 0x0600199C RID: 6556 RVA: 0x000DE240 File Offset: 0x000DC440
+	private void Update()
+	{
+		if (this.isEnabled && this.submarine && this.subInside && this.min && this.max)
+		{
+			vector2f stick = ScriptGlobals.boy.input.stick;
+			Vector3 vector;
+			vector.x = stick.x;
+			vector.y = stick.y;
+			vector.z = 0f;
+			float magnitude = vector.magnitude;
+			if (magnitude > 0f)
+			{
+				vector /= magnitude;
+				Vector3 vector2 = this.submarine.pos3 - this.min.position;
+				vector2.z = 0f;
+				Vector3 vector3 = this.max.position - this.min.position;
+				float magnitude2 = vector3.magnitude;
+				Vector3 vector4 = vector3 / magnitude2;
+				float num = Vector3.Dot(vector2, vector4);
+				if (((this.strictAimInsideTest && num < 0.2f) || num > magnitude2 - 0.2f) && this.subInside)
+				{
+					float num2 = Vector3.Dot(vector, this.max.position - this.min.position);
+					if ((num2 < 0f && num < magnitude2 * 0.5f) || (num2 > 0f && num > magnitude2 * 0.5f))
+					{
+						this.submarine.chargeAimPoint = null;
+					}
+					else
+					{
+						this.submarine.chargeAimPoint = this.aimPoint;
+					}
+				}
+				Vector3 vector5 = this.min.position + vector4 * num;
+				float num3 = Vector3.Dot(vector4, vector);
+				Vector3 vector6 = this.submarine.pos3 - vector5;
+				vector6.z = 0f;
+				float magnitude3 = vector6.magnitude;
+				if (magnitude3 > 0.01f)
+				{
+					vector6 /= magnitude3;
+					float num4 = Vector3.Dot(-vector6, vector);
+					if (num4 > 0.01f)
+					{
+						float num5 = num3 * (magnitude3 / num4);
+						num = (num - magnitude2 * 0.5f) * this.aimTrackingScale + magnitude2 * 0.5f;
+						num += num5 * this.aimTrackingScale;
+						num = Mathf.Clamp(num, 0f, magnitude2);
+						this.aimPoint.transform.position = this.min.position + vector4 * num;
+					}
+				}
+			}
+			if (EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay) && this.debug)
+			{
+				Vector3 pos = this.submarine.pos3;
+				Debug.DrawLine(pos, pos + (this.max.position - this.submarine.pos3).normalized * 10f, Color.red);
+				Debug.DrawLine(pos, pos + (this.min.position - this.submarine.pos3).normalized * 10f, Color.yellow);
+				Debug.DrawLine(pos, this.aimPoint.transform.position, Color.blue);
+				Debug.DrawLine(pos, pos + vector * 10f, Color.white);
+			}
+		}
+	}
+
+	// Token: 0x0600199D RID: 6557 RVA: 0x000DE5C4 File Offset: 0x000DC7C4
+	private void OnDrawGizmos()
+	{
+		if (EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay) && this.debug && this.max && this.min)
+		{
+			Gizmos.color = Color.red;
+			Gizmos.DrawSphere(this.max.position, 0.2f);
+			Gizmos.color = Color.yellow;
+			Gizmos.DrawSphere(this.min.position, 0.2f);
+		}
+	}
+
+	// Token: 0x0600199E RID: 6558 RVA: 0x000DE648 File Offset: 0x000DC848
+	private void OnTriggerEnter(Collider coll)
+	{
+		Submarine component = coll.GetComponent<Submarine>();
+		if (component != null)
+		{
+			this.submarine = component;
+			if (this.isEnabled)
+			{
+				component.chargeAimPoint = this.aimPoint;
+			}
+			this.subInside = true;
+		}
+	}
+
+	// Token: 0x0600199F RID: 6559 RVA: 0x000DE690 File Offset: 0x000DC890
+	private void OnTriggerExit(Collider coll)
+	{
+		Submarine component = coll.GetComponent<Submarine>();
+		if (component != null)
+		{
+			if (component.chargeAimPoint == this.aimPoint)
+			{
+				component.chargeAimPoint = null;
+			}
+			this.submarine = null;
+			this.subInside = false;
+		}
+	}
+
+	// Token: 0x04002E01 RID: 11777
+	public GameObject aimPoint;
+
+	// Token: 0x04002E02 RID: 11778
+	public Transform min;
+
+	// Token: 0x04002E03 RID: 11779
+	public Transform max;
+
+	// Token: 0x04002E04 RID: 11780
+	public bool debug;
+
+	// Token: 0x04002E05 RID: 11781
+	private SignalIn enableTrigger;
+
+	// Token: 0x04002E06 RID: 11782
+	private SignalIn disableTrigger;
+
+	// Token: 0x04002E07 RID: 11783
+	private bool isEnabled = true;
+
+	// Token: 0x04002E08 RID: 11784
+	private bool subInside;
+
+	// Token: 0x04002E09 RID: 11785
+	private Submarine submarine;
+
+	// Token: 0x04002E0A RID: 11786
+	public float aimTrackingScale = 1f;
+
+	// Token: 0x04002E0B RID: 11787
+	public bool strictAimInsideTest;
+}

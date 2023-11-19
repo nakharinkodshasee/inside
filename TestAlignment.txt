@@ -1,0 +1,47 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000620 RID: 1568
+public class TestAlignment : MonoBehaviour
+{
+	// Token: 0x06002703 RID: 9987 RVA: 0x0013B124 File Offset: 0x00139324
+	private void Update()
+	{
+		Quaternion rotation = this.footOrientationObject.transform.rotation;
+		Vector3 vector = this.groundOrientationObject.rotation * Vector3.up;
+		this.RenderDebugStuff(vector);
+		Quaternion orientationAlignedWithNormal = AxisSelection.GetOrientationAlignedWithNormal(rotation, vector, this.align);
+		Quaternion axisRotation = AxisSelection.GetAxisRotation(this.upAxis, this.rotationY);
+		this.target.rotation = orientationAlignedWithNormal * axisRotation;
+	}
+
+	// Token: 0x06002704 RID: 9988 RVA: 0x0013B194 File Offset: 0x00139394
+	private Vector3 RenderDebugStuff(Vector3 groundNormal)
+	{
+		Vector3 vector = this.footOrientationObject.rotation * Vector3.up;
+		Vector3 vector2 = Vector3.Lerp(this.footOrientationObject.transform.position, this.groundOrientationObject.transform.position, 0.5f) + Vector3.up * 2f;
+		Vector3 vector3 = -Vector3.Cross(groundNormal, vector).normalized;
+		Debug.DrawLine(vector2, vector2 + vector, Color.red);
+		Debug.DrawLine(vector2, vector2 + groundNormal, Color.green);
+		Debug.DrawLine(vector2, vector2 + vector3, Color.yellow);
+		return groundNormal;
+	}
+
+	// Token: 0x04004689 RID: 18057
+	public Transform footOrientationObject;
+
+	// Token: 0x0400468A RID: 18058
+	public Transform groundOrientationObject;
+
+	// Token: 0x0400468B RID: 18059
+	public Transform target;
+
+	// Token: 0x0400468C RID: 18060
+	public AxisSelection.Axis upAxis = AxisSelection.Axis.y;
+
+	// Token: 0x0400468D RID: 18061
+	public AxisSelection.Rotation rotationY;
+
+	// Token: 0x0400468E RID: 18062
+	public float align = 1f;
+}
