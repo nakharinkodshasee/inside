@@ -1,0 +1,35 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000203 RID: 515
+public class MindHatDudeInWater : MonoBehaviour
+{
+	// Token: 0x06000FF4 RID: 4084 RVA: 0x00097BBC File Offset: 0x00095DBC
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000FF5 RID: 4085 RVA: 0x00097BC0 File Offset: 0x00095DC0
+	private void Update()
+	{
+		if (!this.outOfWater && this.spawner.transform.position.y < this.waterBox.transform.position.y - this.waterBox.transform.localScale.y * 0.5f)
+		{
+			this.spawner.transform.Translate(new Vector3(Random.Range(-1f, 1f), 0f, Random.Range(-1f, 1f)));
+			this.spawner.OnSpawnAlbino();
+			this.outOfWater = true;
+			this.hangingDudeModel.SetActive(false);
+		}
+	}
+
+	// Token: 0x04001CF6 RID: 7414
+	public BoxCollider waterBox;
+
+	// Token: 0x04001CF7 RID: 7415
+	public AlbinoSpawner spawner;
+
+	// Token: 0x04001CF8 RID: 7416
+	public GameObject hangingDudeModel;
+
+	// Token: 0x04001CF9 RID: 7417
+	private bool outOfWater;
+}

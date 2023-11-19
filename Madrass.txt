@@ -1,0 +1,103 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004CD RID: 1229
+public class Madrass : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600202B RID: 8235 RVA: 0x00110A9C File Offset: 0x0010EC9C
+	public bool PreAwake(int callcount)
+	{
+		this.madrassRolledOut = SignalOut.Create("madrassRolledOut", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x0600202C RID: 8236 RVA: 0x00110AB8 File Offset: 0x0010ECB8
+	private void Start()
+	{
+		this.madrassAnimation[this.madrassAnimation.clip.name].speed = 0f;
+		this.startYScale = base.transform.localScale.y;
+		this.targetYScale = Mathf.Abs(base.transform.position.y - this.startYScale * 0.5f - this.lowHeightPos.position.y);
+		this.yToXScale = base.transform.localScale.x / this.startYScale;
+	}
+
+	// Token: 0x0600202D RID: 8237 RVA: 0x00110B64 File Offset: 0x0010ED64
+	private void SetGroundColl(float frac)
+	{
+		Vector3 position = this.madrassGroundColl.transform.position;
+		position.x = this.rightPos.position.x - Mathf.Sign(this.rightPos.position.x - this.leftPos.position.x) * this.endGroundLength * 0.5f * frac - 1f;
+		this.madrassGroundColl.transform.position = position;
+		Vector3 localScale = this.madrassGroundColl.transform.localScale;
+		localScale.x = Mathf.Lerp(this.startYScale * this.yToXScale, this.endGroundLength, frac);
+		this.madrassGroundColl.transform.localScale = localScale;
+	}
+
+	// Token: 0x0600202E RID: 8238 RVA: 0x00110C34 File Offset: 0x0010EE34
+	private void FixedUpdate()
+	{
+		if (!this.rolledOut)
+		{
+			float num = Mathf.InverseLerp(this.rightPos.transform.position.x, this.leftPos.transform.position.x, base.transform.position.x);
+			this.madrassAnimation[this.madrassAnimation.clip.name].time = num * this.madrassAnimation[this.madrassAnimation.clip.name].length;
+			Vector3 localScale = base.transform.localScale;
+			localScale.y = Mathf.Lerp(this.startYScale, this.targetYScale, num);
+			localScale.x = localScale.y * this.yToXScale;
+			base.transform.localScale = localScale;
+			this.SetGroundColl(num);
+			if (num > this.autoRollOutFraction)
+			{
+				this.madrassAnimation.Play();
+				this.madrassAnimation[this.madrassAnimation.clip.name].speed = 1f;
+				this.rolledOut = true;
+				base.GetComponent<Collider>().isTrigger = true;
+				this.SetGroundColl(1f);
+			}
+		}
+		else if (!this.rolledOutSignalSend && !this.madrassAnimation.isPlaying)
+		{
+			this.madrassRolledOut.Signal();
+			this.rolledOutSignalSend = true;
+		}
+	}
+
+	// Token: 0x04003BA1 RID: 15265
+	public Animation madrassAnimation;
+
+	// Token: 0x04003BA2 RID: 15266
+	public Transform leftPos;
+
+	// Token: 0x04003BA3 RID: 15267
+	public Transform rightPos;
+
+	// Token: 0x04003BA4 RID: 15268
+	public Transform groundObject;
+
+	// Token: 0x04003BA5 RID: 15269
+	public Transform lowHeightPos;
+
+	// Token: 0x04003BA6 RID: 15270
+	public Transform madrassGroundColl;
+
+	// Token: 0x04003BA7 RID: 15271
+	public float autoRollOutFraction = 0.45f;
+
+	// Token: 0x04003BA8 RID: 15272
+	public float endGroundLength = 20f;
+
+	// Token: 0x04003BA9 RID: 15273
+	private bool rolledOut;
+
+	// Token: 0x04003BAA RID: 15274
+	private float startYScale;
+
+	// Token: 0x04003BAB RID: 15275
+	private float yToXScale;
+
+	// Token: 0x04003BAC RID: 15276
+	private float targetYScale;
+
+	// Token: 0x04003BAD RID: 15277
+	private SignalOut madrassRolledOut;
+
+	// Token: 0x04003BAE RID: 15278
+	private bool rolledOutSignalSend;
+}

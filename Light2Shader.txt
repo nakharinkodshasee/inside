@@ -1,0 +1,188 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200011C RID: 284
+public class Light2Shader : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600089D RID: 2205 RVA: 0x0005B590 File Offset: 0x00059790
+	public bool PreAwake(int callcount)
+	{
+		this.start_l2s = SignalIn.Create("start_l2s", base.gameObject, new Action(this.OnStart));
+		this.stop_l2s = SignalIn.Create("stop_l2s", base.gameObject, new Action(this.OnStop));
+		return true;
+	}
+
+	// Token: 0x0600089E RID: 2206 RVA: 0x0005B5E4 File Offset: 0x000597E4
+	private void Start()
+	{
+		if (this.floatPropertyName == string.Empty)
+		{
+			this.setIntensity = false;
+		}
+		if (this.colorPropertyName == string.Empty)
+		{
+			this.setColor = false;
+		}
+		int i = 0;
+		int count = this.materialInstances.Count;
+		while (i < count)
+		{
+			if (this.materialInstances[i] != null)
+			{
+				if (this.setIntensity)
+				{
+					MaterialInstance.FloatProperty orAddFloatProperty = this.materialInstances[i].GetOrAddFloatProperty(this.floatPropertyName);
+					float floatValue = this.materialInstances[i].GetFloatValue(orAddFloatProperty);
+					this.miFPs.Add(orAddFloatProperty);
+					this.orgFloats.Add(floatValue);
+					this.isInitialized = true;
+				}
+				if (this.setColor)
+				{
+					MaterialInstance.ColorProperty orAddColorProperty = this.materialInstances[i].GetOrAddColorProperty(this.colorPropertyName);
+					Color colorValue = this.materialInstances[i].GetColorValue(orAddColorProperty);
+					this.miCPs.Add(orAddColorProperty);
+					this.orgColors.Add(colorValue);
+					this.isInitialized = true;
+				}
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x0600089F RID: 2207 RVA: 0x0005B710 File Offset: 0x00059910
+	private void Update()
+	{
+		if (this.sourceLight != null && this.isEnabled)
+		{
+			float num = this.sourceLight.intensity * this.intensityMultiplier;
+			Color color = this.sourceLight.color * this.colorTint;
+			if (this.multiplyIntensity)
+			{
+				color *= num;
+			}
+			int i = 0;
+			int count = this.materialInstances.Count;
+			while (i < count)
+			{
+				if (!(this.materialInstances[i] == null))
+				{
+					if (this.setIntensity)
+					{
+						this.materialInstances[i].SetFloatProperty(this.miFPs[i], num);
+					}
+					if (this.setColor)
+					{
+						this.materialInstances[i].SetColorProperty(this.miCPs[i], color);
+					}
+				}
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x060008A0 RID: 2208 RVA: 0x0005B804 File Offset: 0x00059A04
+	private void OnDisable()
+	{
+		if (this.resetOnDisable)
+		{
+			this.ResetProperties();
+		}
+	}
+
+	// Token: 0x060008A1 RID: 2209 RVA: 0x0005B818 File Offset: 0x00059A18
+	private void ResetProperties()
+	{
+		if (this.isInitialized)
+		{
+			int i = 0;
+			int count = this.materialInstances.Count;
+			while (i < count)
+			{
+				if (!(this.materialInstances[i] == null))
+				{
+					if (this.setIntensity)
+					{
+						this.materialInstances[i].SetFloatProperty(this.miFPs[i], this.orgFloats[i]);
+					}
+					if (this.setColor)
+					{
+						this.materialInstances[i].SetColorProperty(this.miCPs[i], this.orgColors[i]);
+					}
+				}
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x060008A2 RID: 2210 RVA: 0x0005B8D4 File Offset: 0x00059AD4
+	private void OnStart()
+	{
+		this.isEnabled = true;
+	}
+
+	// Token: 0x060008A3 RID: 2211 RVA: 0x0005B8E0 File Offset: 0x00059AE0
+	private void OnStop()
+	{
+		if (this.resetOnDisable)
+		{
+			this.ResetProperties();
+		}
+		this.isEnabled = false;
+	}
+
+	// Token: 0x04000E8E RID: 3726
+	public Light sourceLight;
+
+	// Token: 0x04000E8F RID: 3727
+	public bool setIntensity;
+
+	// Token: 0x04000E90 RID: 3728
+	public bool setColor = true;
+
+	// Token: 0x04000E91 RID: 3729
+	public bool multiplyIntensity = true;
+
+	// Token: 0x04000E92 RID: 3730
+	public float intensityMultiplier = 1f;
+
+	// Token: 0x04000E93 RID: 3731
+	public Color colorTint = Color.white;
+
+	// Token: 0x04000E94 RID: 3732
+	public List<MaterialInstance> materialInstances = new List<MaterialInstance>();
+
+	// Token: 0x04000E95 RID: 3733
+	private List<MaterialInstance.FloatProperty> miFPs = new List<MaterialInstance.FloatProperty>();
+
+	// Token: 0x04000E96 RID: 3734
+	private List<MaterialInstance.ColorProperty> miCPs = new List<MaterialInstance.ColorProperty>();
+
+	// Token: 0x04000E97 RID: 3735
+	private List<float> orgFloats = new List<float>();
+
+	// Token: 0x04000E98 RID: 3736
+	private List<Color> orgColors = new List<Color>();
+
+	// Token: 0x04000E99 RID: 3737
+	public string floatPropertyName = string.Empty;
+
+	// Token: 0x04000E9A RID: 3738
+	public string colorPropertyName = string.Empty;
+
+	// Token: 0x04000E9B RID: 3739
+	public bool isEnabled = true;
+
+	// Token: 0x04000E9C RID: 3740
+	public bool resetOnDisable = true;
+
+	// Token: 0x04000E9D RID: 3741
+	private bool isInitialized;
+
+	// Token: 0x04000E9E RID: 3742
+	public SignalIn start_l2s;
+
+	// Token: 0x04000E9F RID: 3743
+	public SignalIn stop_l2s;
+}

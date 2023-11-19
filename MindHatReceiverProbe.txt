@@ -1,0 +1,16 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000BD RID: 189
+public class MindHatReceiverProbe : MonoBehaviour
+{
+	// Token: 0x06000629 RID: 1577 RVA: 0x00047948 File Offset: 0x00045B48
+	private void Start()
+	{
+		this.boy = base.transform.parent.GetComponent<Boy>();
+	}
+
+	// Token: 0x04000AA0 RID: 2720
+	[HideInInspector]
+	public Boy boy;
+}

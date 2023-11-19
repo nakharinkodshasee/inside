@@ -1,0 +1,13 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000494 RID: 1172
+public class LabClubCar : MonoBehaviour
+{
+	// Token: 0x06001EC6 RID: 7878 RVA: 0x00107810 File Offset: 0x00105A10
+	private void Awake()
+	{
+		LevelGlobals.labClubCar = this;
+	}
+}
+

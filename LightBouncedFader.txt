@@ -1,0 +1,277 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000335 RID: 821
+public class LightBouncedFader : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060016F9 RID: 5881 RVA: 0x000C9954 File Offset: 0x000C7B54
+	public bool PreAwake(int callcount)
+	{
+		this.fadeIn = SignalIn.Create("fadeIn", base.gameObject, new Action(this.OnFadeIn));
+		this.fadeOut = SignalIn.Create("fadeOut", base.gameObject, new Action(this.OnFadeOut));
+		this.loadIn = SignalIn.Create("loadIn", base.gameObject, new Action(this.OnLoadIn));
+		this.loadOut = SignalIn.Create("loadOut", base.gameObject, new Action(this.OnLoadOut));
+		this.materialInstance = base.GetComponent<MaterialInstance>();
+		if (this.materialInstance != null)
+		{
+			this.intensityProperty = this.materialInstance.GetOrAddFloatProperty(this.propertyName);
+		}
+		return true;
+	}
+
+	// Token: 0x060016FA RID: 5882 RVA: 0x000C9A24 File Offset: 0x000C7C24
+	private void Start()
+	{
+		if (this.distanceTarget)
+		{
+			this.SetDistanceState();
+		}
+	}
+
+	// Token: 0x060016FB RID: 5883 RVA: 0x000C9A3C File Offset: 0x000C7C3C
+	private void SetDistanceState()
+	{
+		this.state = LightBouncedFader.State.Distance;
+	}
+
+	// Token: 0x060016FC RID: 5884 RVA: 0x000C9A48 File Offset: 0x000C7C48
+	private void DistanceState()
+	{
+		float num = Mathf.Abs(this.distanceTarget.position.x - base.transform.position.x);
+		float num2 = 1f - Mathf.InverseLerp(this.distanceMin, this.distanceMax, num);
+		float intensity = this.intensityMin + (this.intensityMax - this.intensityMin) * num2;
+		this.SetIntensity(intensity);
+	}
+
+	// Token: 0x060016FD RID: 5885 RVA: 0x000C9ABC File Offset: 0x000C7CBC
+	private void StartFade(LightBouncedFader.FadeSettings newSettings)
+	{
+		this.fadeTimer = 0f;
+		this.settings = newSettings;
+		if (this.settings.curve.length > 1)
+		{
+			this.SetCurveFadeState();
+		}
+		else
+		{
+			this.SetEasedFadeState();
+		}
+	}
+
+	// Token: 0x060016FE RID: 5886 RVA: 0x000C9AF8 File Offset: 0x000C7CF8
+	private void SetEasedFadeState()
+	{
+		this.currentIntensity = this.materialInstance.GetFloatValue(this.intensityProperty);
+		this.actualMaxSpeed = (this.speed = 0f);
+		this.state = LightBouncedFader.State.EasedFade;
+	}
+
+	// Token: 0x060016FF RID: 5887 RVA: 0x000C9B38 File Offset: 0x000C7D38
+	private void EasedFadeState()
+	{
+		float num = this.settings.intensity - this.currentIntensity;
+		float num2 = Mathf.Abs(num);
+		if (num2 - this.easeOutOvershoot * this.actualMaxSpeed * this.settings.easeOutTime <= this.finishDist)
+		{
+			if (this.settings.easeOutTime == 0f)
+			{
+				this.speed = 0f;
+			}
+			else
+			{
+				this.speed = Mathf.Max(0f, this.speed - Time.deltaTime * this.actualMaxSpeed / this.settings.easeOutTime);
+			}
+		}
+		else if (this.settings.easeInTime == 0f)
+		{
+			this.actualMaxSpeed = (this.speed = this.settings.maxSpeed);
+		}
+		else
+		{
+			this.actualMaxSpeed = (this.speed = Mathf.Min(this.settings.maxSpeed, this.speed + Time.deltaTime * this.settings.maxSpeed / this.settings.easeInTime));
+		}
+		this.currentIntensity += Time.deltaTime * this.speed * Mathf.Sign(num);
+		this.SetIntensity(this.currentIntensity);
+		if (this.speed == 0f)
+		{
+			this.state = LightBouncedFader.State.None;
+		}
+	}
+
+	// Token: 0x06001700 RID: 5888 RVA: 0x000C9C98 File Offset: 0x000C7E98
+	private void SetCurveFadeState()
+	{
+		this.startIntensity = this.materialInstance.GetFloatValue(this.intensityProperty);
+		this.state = LightBouncedFader.State.CurveFade;
+	}
+
+	// Token: 0x06001701 RID: 5889 RVA: 0x000C9CB8 File Offset: 0x000C7EB8
+	private void CurveFadeState()
+	{
+		this.fadeTimer += Time.deltaTime;
+		float num = Mathf.Clamp(this.fadeTimer / this.settings.curveTime, 0f, 1f);
+		float intensity = this.startIntensity + (this.settings.intensity - this.startIntensity) * this.settings.curve.Evaluate(num);
+		this.SetIntensity(intensity);
+		if (num >= 1f)
+		{
+			this.state = LightBouncedFader.State.None;
+		}
+	}
+
+	// Token: 0x06001702 RID: 5890 RVA: 0x000C9D40 File Offset: 0x000C7F40
+	private void Update()
+	{
+		switch (this.state)
+		{
+		case LightBouncedFader.State.CurveFade:
+			this.CurveFadeState();
+			break;
+		case LightBouncedFader.State.Distance:
+			this.DistanceState();
+			break;
+		case LightBouncedFader.State.EasedFade:
+			this.EasedFadeState();
+			break;
+		}
+	}
+
+	// Token: 0x06001703 RID: 5891 RVA: 0x000C9D90 File Offset: 0x000C7F90
+	private void SetIntensity(float value)
+	{
+		this.materialInstance.SetFloatProperty(this.intensityProperty, value);
+	}
+
+	// Token: 0x06001704 RID: 5892 RVA: 0x000C9DA4 File Offset: 0x000C7FA4
+	private void OnFadeIn()
+	{
+		this.StartFade(this.fadeInSettings);
+	}
+
+	// Token: 0x06001705 RID: 5893 RVA: 0x000C9DB4 File Offset: 0x000C7FB4
+	private void OnFadeOut()
+	{
+		this.StartFade(this.fadeOutSettings);
+	}
+
+	// Token: 0x06001706 RID: 5894 RVA: 0x000C9DC4 File Offset: 0x000C7FC4
+	private void OnLoadIn()
+	{
+		this.SetIntensity(this.fadeInSettings.intensity);
+	}
+
+	// Token: 0x06001707 RID: 5895 RVA: 0x000C9DD8 File Offset: 0x000C7FD8
+	private void OnLoadOut()
+	{
+		this.SetIntensity(this.fadeOutSettings.intensity);
+	}
+
+	// Token: 0x04002913 RID: 10515
+	public string propertyName = "_Intensity";
+
+	// Token: 0x04002914 RID: 10516
+	[Header("--- Signal Fade ---")]
+	public LightBouncedFader.FadeSettings fadeInSettings;
+
+	// Token: 0x04002915 RID: 10517
+	public LightBouncedFader.FadeSettings fadeOutSettings;
+
+	// Token: 0x04002916 RID: 10518
+	[Header("--- Distance Fade ---")]
+	public Transform distanceTarget;
+
+	// Token: 0x04002917 RID: 10519
+	public float intensityMax = 0.5f;
+
+	// Token: 0x04002918 RID: 10520
+	public float intensityMin;
+
+	// Token: 0x04002919 RID: 10521
+	public float distanceMin;
+
+	// Token: 0x0400291A RID: 10522
+	public float distanceMax = 3f;
+
+	// Token: 0x0400291B RID: 10523
+	private LightBouncedFader.FadeSettings settings;
+
+	// Token: 0x0400291C RID: 10524
+	private float currentIntensity;
+
+	// Token: 0x0400291D RID: 10525
+	private float startIntensity;
+
+	// Token: 0x0400291E RID: 10526
+	private float fadeTimer;
+
+	// Token: 0x0400291F RID: 10527
+	private bool fading;
+
+	// Token: 0x04002920 RID: 10528
+	private float speed;
+
+	// Token: 0x04002921 RID: 10529
+	private float easeOutOvershoot = 0.5f;
+
+	// Token: 0x04002922 RID: 10530
+	private float finishDist = 0.0001f;
+
+	// Token: 0x04002923 RID: 10531
+	private float actualMaxSpeed;
+
+	// Token: 0x04002924 RID: 10532
+	private MaterialInstance materialInstance;
+
+	// Token: 0x04002925 RID: 10533
+	private MaterialInstance.FloatProperty intensityProperty;
+
+	// Token: 0x04002926 RID: 10534
+	private SignalIn fadeIn;
+
+	// Token: 0x04002927 RID: 10535
+	private SignalIn fadeOut;
+
+	// Token: 0x04002928 RID: 10536
+	private SignalIn loadIn;
+
+	// Token: 0x04002929 RID: 10537
+	private SignalIn loadOut;
+
+	// Token: 0x0400292A RID: 10538
+	private LightBouncedFader.State state;
+
+	// Token: 0x02000336 RID: 822
+	private enum State
+	{
+		// Token: 0x0400292C RID: 10540
+		None,
+		// Token: 0x0400292D RID: 10541
+		CurveFade,
+		// Token: 0x0400292E RID: 10542
+		Distance,
+		// Token: 0x0400292F RID: 10543
+		EasedFade
+	}
+
+	// Token: 0x02000337 RID: 823
+	[Serializable]
+	public class FadeSettings
+	{
+		// Token: 0x04002930 RID: 10544
+		public float intensity = 2f;
+
+		// Token: 0x04002931 RID: 10545
+		public float curveTime = 2f;
+
+		// Token: 0x04002932 RID: 10546
+		public AnimationCurve curve;
+
+		// Token: 0x04002933 RID: 10547
+		public float maxSpeed = 10f;
+
+		// Token: 0x04002934 RID: 10548
+		public float easeInTime = 1f;
+
+		// Token: 0x04002935 RID: 10549
+		public float easeOutTime = 1f;
+	}
+}

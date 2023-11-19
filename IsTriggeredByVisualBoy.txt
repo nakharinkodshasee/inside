@@ -1,0 +1,97 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000393 RID: 915
+public class IsTriggeredByVisualBoy : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060018AE RID: 6318 RVA: 0x000D62D4 File Offset: 0x000D44D4
+	public bool PreAwake(int callcount)
+	{
+		this.enterSignal = SignalOut.Create("enterSignal", base.gameObject);
+		this.exitSignal = SignalOut.Create("exitSignal", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060018AF RID: 6319 RVA: 0x000D6310 File Offset: 0x000D4510
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy;
+		this.vb = ScriptGlobals.boy.visualBoy;
+		if (this.vb != null)
+		{
+			foreach (Rigidbody rigidbody in this.vb.ragdoll.gameObject.GetComponentsInChildren<Rigidbody>(true))
+			{
+				if (rigidbody.GetComponent<Collider>())
+				{
+					this.ragdollColliders.Add(rigidbody.GetComponent<Collider>());
+				}
+			}
+		}
+	}
+
+	// Token: 0x060018B0 RID: 6320 RVA: 0x000D639C File Offset: 0x000D459C
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (this.checkIfCorrectCollider(coll))
+		{
+			this.probeEnter.OnEvent(this);
+			this.enterSignal.Signal();
+		}
+	}
+
+	// Token: 0x060018B1 RID: 6321 RVA: 0x000D63C4 File Offset: 0x000D45C4
+	private void OnTriggerExit(Collider coll)
+	{
+		if (this.checkIfCorrectCollider(coll))
+		{
+			this.probeExit.OnEvent(this);
+			this.exitSignal.Signal();
+		}
+	}
+
+	// Token: 0x060018B2 RID: 6322 RVA: 0x000D63EC File Offset: 0x000D45EC
+	private bool checkIfCorrectCollider(Collider coll)
+	{
+		if (this.specificBodyParts.Count == 0 && this.ragdollColliders.Contains(coll))
+		{
+			return true;
+		}
+		if (this.specificBodyParts.Count > 0)
+		{
+			foreach (Collider collider in this.ragdollColliders)
+			{
+				if (this.specificBodyParts.Contains(coll.name))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		return false;
+	}
+
+	// Token: 0x04002C71 RID: 11377
+	public List<string> specificBodyParts;
+
+	// Token: 0x04002C72 RID: 11378
+	private List<Collider> ragdollColliders = new List<Collider>();
+
+	// Token: 0x04002C73 RID: 11379
+	private Boy boy;
+
+	// Token: 0x04002C74 RID: 11380
+	private VisualBoy vb;
+
+	// Token: 0x04002C75 RID: 11381
+	private SimpleEvent<IsTriggeredByVisualBoy> probeEnter = new SimpleEvent<IsTriggeredByVisualBoy>("probeEnter");
+
+	// Token: 0x04002C76 RID: 11382
+	private SimpleEvent<IsTriggeredByVisualBoy> probeExit = new SimpleEvent<IsTriggeredByVisualBoy>("probeExit");
+
+	// Token: 0x04002C77 RID: 11383
+	private SignalOut enterSignal;
+
+	// Token: 0x04002C78 RID: 11384
+	private SignalOut exitSignal;
+}

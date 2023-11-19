@@ -1,0 +1,1794 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020001BD RID: 445
+public class JetCrate : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06000D17 RID: 3351 RVA: 0x0007CF84 File Offset: 0x0007B184
+	public Rigidbody GetRigidBody()
+	{
+		return this.jetCrateRigidbody;
+	}
+
+	// Token: 0x06000D18 RID: 3352 RVA: 0x0007CF8C File Offset: 0x0007B18C
+	[EarlyProcessBuild(0)]
+	public void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, null);
+		this.audioGrab = new AudioEventSimpleLocal("mechanisms_jetCrate_grab", this.akGameObj);
+		this.audioRelease = new AudioEventSimpleLocal("mechanisms_jetCrate_release", this.akGameObj);
+		this.audioPullHandle = new AudioEventSimpleLocal("mechanisms_jetCrate_pullHandle", this.akGameObj);
+		this.audioWarmUpStart = new AudioEventSimpleLocal("mechanisms_jetCrate_warmUp_start", this.akGameObj);
+		this.audioBlastStop = new AudioEventSimpleLocal("mechanisms_jetCrate_blast_stop", this.akGameObj);
+		this.audioBlastStart = new AudioEventSimpleLocal("mechanisms_jetCrate_blast_start", this.akGameObj);
+		GameObject gameObject = Object.Instantiate<GameObject>(this.startParticleSystemPrefab);
+		gameObject.transform.parent = this.startParticlePivot.transform;
+		gameObject.transform.position = this.startParticlePivot.transform.position;
+		this.startCrateParticleSystem = gameObject.GetComponent<ParticleSystem>();
+		GameObject gameObject2 = Object.Instantiate<GameObject>(this.thrustParticleSystemPrefab);
+		gameObject2.transform.parent = this.thrustParticlePivot.transform;
+		gameObject2.transform.position = this.thrustParticlePivot.transform.position;
+		gameObject2.transform.localRotation = Quaternion.identity;
+		this.thrustParticleSystem = gameObject2.GetComponent<ParticleSystem>();
+		GameObject gameObject3 = Object.Instantiate<GameObject>(this.thrustMidAirParticleSystemPrefab);
+		gameObject3.transform.parent = this.thrustParticlePivot.transform;
+		gameObject3.transform.position = this.thrustParticlePivot.transform.position;
+		gameObject3.transform.localRotation = Quaternion.identity;
+		this.thrustMidAirParticleSystem = gameObject3.GetComponent<ParticleSystem>();
+		MaterialInstance[] componentsInChildren = this.startCrateParticleSystem.GetComponentsInChildren<MaterialInstance>();
+		for (int i = 0; i < componentsInChildren.Length; i++)
+		{
+			MaterialInstance.ColorProperty colorProperty = componentsInChildren[i].GetColorProperty("_MainCol");
+			componentsInChildren[i].SetColorProperty(colorProperty, this.particleColor.Alpha(componentsInChildren[i].GetColorValue(colorProperty).a));
+		}
+		MaterialInstance[] componentsInChildren2 = this.thrustParticleSystem.GetComponentsInChildren<MaterialInstance>();
+		for (int j = 0; j < componentsInChildren2.Length; j++)
+		{
+			MaterialInstance.ColorProperty colorProperty2 = componentsInChildren2[j].GetColorProperty("_MainCol");
+			componentsInChildren2[j].SetColorProperty(colorProperty2, this.particleColor.Alpha(componentsInChildren2[j].GetColorValue(colorProperty2).a));
+		}
+		MaterialInstance[] componentsInChildren3 = this.thrustMidAirParticleSystem.GetComponentsInChildren<MaterialInstance>();
+		for (int k = 0; k < componentsInChildren3.Length; k++)
+		{
+			MaterialInstance.ColorProperty colorProperty3 = componentsInChildren3[k].GetColorProperty("_MainCol");
+			componentsInChildren3[k].SetColorProperty(colorProperty3, this.particleColor.Alpha(componentsInChildren3[k].GetColorValue(colorProperty3).a));
+		}
+		this.jetCrateRigidbody = base.GetComponent<Rigidbody>();
+		this.boyGround = base.GetComponent<BoyGround>();
+		this.idleAnim = this.grabIdleAnimation.GetComponent<AnimClipNode>();
+		if (!this.trigger.GetComponent<CollisionEvents>())
+		{
+			this.trigger.AddComponent<CollisionEvents>();
+		}
+		this.triggerEvents = this.trigger.GetComponent<CollisionEvents>();
+	}
+
+	// Token: 0x06000D19 RID: 3353 RVA: 0x0007D2BC File Offset: 0x0007B4BC
+	public bool PreAwake(int callcount)
+	{
+		this.jetActive = SignalOut.Create("jetActive", base.gameObject);
+		this.jetIsDone = SignalOut.Create("jetIsDone", base.gameObject);
+		this.jetPulled = SignalOut.Create("jetPulled", base.gameObject);
+		this.forceJetActive = SignalIn.Create("forceJetActive", base.gameObject, new Action(this.ForceJetActive));
+		return true;
+	}
+
+	// Token: 0x06000D1A RID: 3354 RVA: 0x0007D330 File Offset: 0x0007B530
+	private void Start()
+	{
+		SoundEngine.RTPCs.jetCrateWarmUpTimer.SetFast(0f, this.akGameObj, 0f);
+		SoundEngine.RTPCs.jetCrateDistToSurface.SetFast(0f, this.akGameObj);
+		this.triggerEvents.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.triggerEvents.exitTrigger.Register(this, ref this.triggerExitHandle);
+		this.animJetHandle = this.jetHandle.GetComponent<Animation>();
+		this.animJetHandleDownState = this.animJetHandle["AnimDown"];
+		this.animJetHandleUpState = this.animJetHandle["AnimUp"];
+		this.grabHeight = base.transform.lossyScale.y / 2f;
+		this.depthObstruction = base.gameObject.GetComponent<BoyDepthObstruction>();
+		this.startAngularDrag = this.jetCrateRigidbody.angularDrag;
+		this.PrepareHandleUpVector();
+		this.SetPhysicsSlide();
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000D1B RID: 3355 RVA: 0x0007D42C File Offset: 0x0007B62C
+	private void OnDisable()
+	{
+		this.boysInsideTrigger.Clear();
+		this.stuffInsideTrigger.Clear();
+		this.lastDir = Vector3.zero;
+		this.previousLocDir = Vector3.zero;
+		this.boyHasStoodOnJetCrate = false;
+		if (this.state != JetCrate.State.None)
+		{
+			SoundEngine.RTPCs.jetCrateDistToSurface.SetFast(0f, this.akGameObj);
+			this.audioBlastStop.PostFast();
+		}
+		if (this.thrustParticleSystem)
+		{
+			this.thrustParticleSystem.Stop();
+			this.thrustParticleSystem.Clear();
+		}
+		if (this.thrustMidAirParticleSystem)
+		{
+			this.thrustMidAirParticleSystem.Stop();
+			this.thrustMidAirParticleSystem.Clear();
+		}
+		this.jetCrateRigidbody.angularDrag = this.startAngularDrag;
+		if (!this.jetCrateRigidbody.isKinematic)
+		{
+			Rigidbody rigidbody = this.jetCrateRigidbody;
+			Vector3 zero = Vector3.zero;
+			this.jetCrateRigidbody.velocity = zero;
+			rigidbody.angularVelocity = zero;
+		}
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000D1C RID: 3356 RVA: 0x0007D52C File Offset: 0x0007B72C
+	private void SetIdleState()
+	{
+		this.boyGrabbingJetCrate = null;
+		HuddleGrab component = base.gameObject.GetComponent<HuddleGrab>();
+		if (component != null)
+		{
+			component.disallowGrab = false;
+		}
+		this.boyNoGrab.SetIsEnabled(false);
+		this.grabableState = true;
+		this.state = JetCrate.State.Idle;
+		if (this.boyGround)
+		{
+			this.boyGround.fallSpeedKillMode = BoyGround.FallSpeedKillMode.Default;
+			if (this.disallowDropDownKill)
+			{
+				this.boyGround.dropOnHeadImmortal = true;
+			}
+		}
+	}
+
+	// Token: 0x06000D1D RID: 3357 RVA: 0x0007D5AC File Offset: 0x0007B7AC
+	private void IdleState()
+	{
+		if (this.depthObstruction)
+		{
+			this.depthObstruction.depthClimbdown = (this.depthObstruction.depthClimbup = (this.depthObstruction.depthGrab = (this.jetCrateRigidbody.velocity.y > -1f)));
+		}
+		if (this.regrabTimer > 0f)
+		{
+			this.regrabTimer -= Time.deltaTime;
+		}
+		if (this.releaseTimer > 0f)
+		{
+			this.releaseTimer -= Time.deltaTime;
+			return;
+		}
+		if (!this.CanBeJetted())
+		{
+			bool flag = ScriptGlobals.boy.state is BoyReachPlateauState;
+			if (ScriptGlobals.boy.state is BoyLadderState || flag)
+			{
+				Vector3 velocity = this.jetCrateRigidbody.velocity;
+				Vector3 vector = ScriptGlobals.boy.pos3 - this.jetCrateRigidbody.position;
+				float num = Vector3.Dot(velocity, vector);
+				if (num > 0f && (velocity.y < -1f || (flag && velocity.y < 2f)))
+				{
+					float num2 = vector.y / velocity.y;
+					num2 *= 0.6f;
+					float num3 = this.jetCrateRigidbody.position.x + velocity.x * num2;
+					float num4 = Mathf.Abs(num3 - ScriptGlobals.boy.pos.x);
+					if (flag)
+					{
+						if (num4 < 1.2f && num2 < 0.6f)
+						{
+							ScriptGlobals.boy.SpawnExternalState(new BoyJumpState(ScriptGlobals.boy, BoyJumpState.State.JumpDown, null), Boy.AffectMode.Default);
+						}
+					}
+					else if (num4 < 0.8f && num2 < 0.24f)
+					{
+						ScriptGlobals.boy.SpawnExternalState(new BoyJumpState(ScriptGlobals.boy, BoyJumpState.State.JumpDown, (ScriptGlobals.boy.state as BoyLadderState).ladder.GetComponent<Collider>()), Boy.AffectMode.Default);
+					}
+				}
+			}
+		}
+		if (this.boysInsideTrigger.Count > 0 && this.CanBeJetted() && this.insideTriggerCounter > 0.13f && !AlbinoGroupManager.mInstance.IsBoyBeingLifted())
+		{
+			int i = 0;
+			int count = this.boysInsideTrigger.Count;
+			while (i < count)
+			{
+				Boy boy = this.boysInsideTrigger[i];
+				if (this.regrabTimer <= 0f || Mathf.Abs(boy.input.stick.x) <= 0.4f)
+				{
+					this.grabLocked = (this.grabLocked && boy.input.rawAction);
+					VisualBoyLand visualBoyLand = boy.visualBoy.state as VisualBoyLand;
+					bool flag2 = visualBoyLand && visualBoyLand.isStunned;
+					if (!boy.isDead && !(boy.state is BoyGrabState) && boy.input.rawAction && !this.grabLocked && !flag2 && boy.status.groundPlateau != null && this.RoomForGrab())
+					{
+						this.boyGrabbingJetCrate = boy;
+						this.SetGrabState();
+						break;
+					}
+				}
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x06000D1E RID: 3358 RVA: 0x0007D930 File Offset: 0x0007BB30
+	private void SetGrabState()
+	{
+		this.grabableState = true;
+		bool flag = this.SetTriggerAndAnimationPositions(false);
+		this.currentGrabAnim = ((!flag) ? this.grabBackwardsAnimation : this.grabAnimation);
+		BoyUtils.StartCustomAnim(this.boyGrabbingJetCrate, this.currentGrabAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.noGroundCounter = 0;
+		this.grabStunTimer = this.grabStunDelay;
+		this.grabTimer = this.grabDelay;
+		Device.SetVoicePassive();
+		this.state = JetCrate.State.Grab;
+	}
+
+	// Token: 0x06000D1F RID: 3359 RVA: 0x0007D9B0 File Offset: 0x0007BBB0
+	private void GrabState()
+	{
+		bool flag = false;
+		BoyCustomAnimState boyCustomAnimState = this.boyGrabbingJetCrate.state as BoyCustomAnimState;
+		if (this.boyGrabbingJetCrate.isDead || boyCustomAnimState == null || (boyCustomAnimState.anim.gameObject != this.grabIdleAnimation && boyCustomAnimState.anim != this.currentGrabAnim))
+		{
+			flag = true;
+		}
+		if (flag)
+		{
+			this.grabLocked = true;
+			Device.SetVoiceNone();
+			this.SetIdleState();
+		}
+		else
+		{
+			if (boyCustomAnimState.anim == this.currentGrabAnim && this.currentGrabAnim.frame >= this.currentGrabAnim.numFrames)
+			{
+				BoyUtils.StartCustomAnim(this.boyGrabbingJetCrate, this.idleAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			}
+			if (this.grabStunTimer > 0f)
+			{
+				this.grabStunTimer -= Time.deltaTime;
+			}
+			if (this.grabStunTimer <= 0f && (!this.boyGrabbingJetCrate.input.rawAction || this.noGroundCounter > 5 || this.jetCrateRigidbody.angularVelocity.sqrMagnitude > 0.2f))
+			{
+				if (boyCustomAnimState.anim == this.idleAnim || this.currentGrabAnim.frame >= 16f)
+				{
+					BoyUtils.StartCustomAnim(this.boyGrabbingJetCrate, this.releaseAnimation, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				}
+				else
+				{
+					BoyUtils.ClearState(this.boyGrabbingJetCrate, -1f);
+				}
+				this.releaseTimer = this.releaseDelay;
+				this.regrabTimer = this.regrabDelay;
+				if (this.grabTimer <= 0f)
+				{
+					this.audioRelease.PostFast();
+				}
+				Device.SetVoiceNone();
+				this.SetIdleState();
+				return;
+			}
+			if (this.grabTimer > 0f)
+			{
+				this.grabTimer -= Time.deltaTime;
+				if (this.grabTimer <= 0f)
+				{
+					this.audioGrab.PostFast();
+				}
+			}
+			else
+			{
+				vector2f stick = this.boyGrabbingJetCrate.input.stick;
+				if (Vector3.Dot(new Vector3(stick.x, stick.y, 0f), this.GetCurrentUpVector()) > 0.5f)
+				{
+					this.SetPullState();
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000D20 RID: 3360 RVA: 0x0007DC10 File Offset: 0x0007BE10
+	public void ForceJetActive()
+	{
+		this.grabableState = false;
+		this.audioPullHandle.PostFast();
+		this.startCrateParticleSystem.loop = false;
+		this.startCrateParticleSystem.Play();
+		this.timer = 0.33f;
+		this.state = JetCrate.State.Pull;
+	}
+
+	// Token: 0x06000D21 RID: 3361 RVA: 0x0007DC5C File Offset: 0x0007BE5C
+	public void FakeAPull()
+	{
+		this.grabableState = false;
+		AnimClipNode component = this.pullAnimation.GetComponent<AnimClipNode>();
+		this.currentHandleState = JetCrate.HandleState.HandlePull;
+		this.animJetHandle.CrossFade("Pull", 0.1f);
+		this.audioPullHandle.PostFast();
+		this.startCrateParticleSystem.loop = false;
+		this.startCrateParticleSystem.Play();
+		this.timer = 0.33f;
+		this.state = JetCrate.State.Pull;
+	}
+
+	// Token: 0x06000D22 RID: 3362 RVA: 0x0007DCD0 File Offset: 0x0007BED0
+	private void SetPullState()
+	{
+		if (this.boyGrabbingJetCrate)
+		{
+			AnimClipNode component = this.pullAnimation.GetComponent<AnimClipNode>();
+			BoyUtils.StartCustomAnim(this.boyGrabbingJetCrate, component, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.currentHandleState = JetCrate.HandleState.HandlePull;
+			this.animJetHandle.CrossFade("Pull", 0.1f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.35f, 0.25f, 0, 0.2f);
+		}
+		this.audioPullHandle.PostFast();
+		this.startCrateParticleSystem.loop = false;
+		this.startCrateParticleSystem.Play();
+		this.timer = 0.33f;
+		this.grabableState = false;
+		Device.SetVoiceNone();
+		this.state = JetCrate.State.Pull;
+	}
+
+	// Token: 0x06000D23 RID: 3363 RVA: 0x0007DD88 File Offset: 0x0007BF88
+	private void PullState()
+	{
+		this.timer -= Time.deltaTime;
+		if (this.timer < 0f)
+		{
+			this.SetJetActiveState();
+		}
+	}
+
+	// Token: 0x06000D24 RID: 3364 RVA: 0x0007DDC0 File Offset: 0x0007BFC0
+	private void SetJetActiveState()
+	{
+		this.state = JetCrate.State.JetActive;
+		this.grabableState = false;
+		if (this.jetPulled != null)
+		{
+			this.jetPulled.Signal();
+		}
+		this.audioWarmUpStart.PostFast();
+		this.timer = 0f;
+	}
+
+	// Token: 0x06000D25 RID: 3365 RVA: 0x0007DE00 File Offset: 0x0007C000
+	private void JetActiveState()
+	{
+		this.timer += Time.deltaTime;
+		float num = this.timer / this.jetwarmUpTime;
+		if (num >= 1f)
+		{
+			this.SetForceActiveState();
+		}
+		float value = num * 100f;
+		SoundEngine.RTPCs.jetCrateWarmUpTimer.SetFast(value, this.akGameObj, 0f);
+	}
+
+	// Token: 0x06000D26 RID: 3366 RVA: 0x0007DE5C File Offset: 0x0007C05C
+	private void SetForceActiveState()
+	{
+		if (this.boyGround)
+		{
+			this.boyGround.fallSpeedKillMode = BoyGround.FallSpeedKillMode.Invincible;
+		}
+		this.afterImpactPhysics = false;
+		Vector3 vector = base.transform.InverseTransformDirection(Vector3.up);
+		if (Mathf.Abs(vector.x) < Mathf.Abs(vector.y))
+		{
+			vector = Vector3.up * Mathf.Sign(vector.y);
+		}
+		else
+		{
+			vector = Vector3.right * Mathf.Sign(vector.x);
+		}
+		this.boostTimeUpVector = base.transform.TransformDirection(vector);
+		this.boostTimeUpVector = this.boostTimeUpVector * this.slopeContributionFactor + Vector3.up * (1f - this.slopeContributionFactor);
+		this.boostTimeUpVector.Normalize();
+		this.boostTimeRotation = Quaternion.LookRotation(base.transform.forward, this.boostTimeUpVector);
+		this.initialHuddleThrowSpeed = Vector3.zero;
+		this.audioBlastStart.PostFast();
+		this.jetCrateRigidbody.angularDrag = this.angularDragWhenAddingForce;
+		if (this.jetActive != null)
+		{
+			this.jetActive.Signal();
+		}
+		this.TestForBlockAway(ScriptGlobals.boy);
+		if (this.aIBoyInScene)
+		{
+			this.TestForBlockAway(this.aIBoyInScene);
+		}
+		this.UpdateParticleRotation();
+		if (this.midAirParticles)
+		{
+			this.thrustMidAirParticleSystem.Play();
+		}
+		else
+		{
+			this.thrustParticleSystem.Play();
+		}
+		this.addForceActivated = false;
+		this.timer = 0f;
+		this.lastFactor = this.boyOnCrateFactor;
+		this.startYVel = this.jetCrateRigidbody.velocity.y;
+		this.jetCrateForceActive.Dispatch();
+		if (this.visualThrusterSphere != null)
+		{
+			this.visualThrusterSphere.AddVelocity(Vector3.up * 0.8f);
+		}
+		if (ScriptGlobals.mainCharacter is Huddle)
+		{
+			HuddleGrab component = base.gameObject.GetComponent<HuddleGrab>();
+			if (component != null)
+			{
+				component.disallowGrab = true;
+			}
+		}
+		AlbinoGroupManager.mInstance.JetCrateJustStarted(base.gameObject);
+		this.boyNoGrab.SetIsEnabled(true);
+		this.grabableState = false;
+		this.state = JetCrate.State.ForceActive;
+	}
+
+	// Token: 0x06000D27 RID: 3367 RVA: 0x0007E0B0 File Offset: 0x0007C2B0
+	private void ForceActiveState()
+	{
+		float deltaTime = Time.deltaTime;
+		RaycastHit raycastHit;
+		if (PDPhysics.Raycast(base.transform.position, Vector3.down, out raycastHit, base.gameObject.layer))
+		{
+			if (!raycastHit.collider.isTrigger)
+			{
+				float num = raycastHit.distance;
+				num -= base.GetComponent<Collider>().bounds.size.y / 2f;
+				float num2 = Mathf.InverseLerp(0f, 8f, num);
+				float value = Mathf.Lerp(0f, 1f, num2) * 100f;
+				SoundEngine.RTPCs.jetCrateDistToSurface.SetFast(value, this.akGameObj);
+			}
+			this.timer += deltaTime;
+			float value2 = Mathf.InverseLerp(0f, this.forceCurve.keys[this.forceCurve.keys.Length - 1].value, this.timer) * 100f;
+			SoundEngine.RTPCs.jetCrateBlastForce.SetFast(value2, this.akGameObj, 0f);
+		}
+		bool boyOnCrateNow = false;
+		if (ScriptGlobals.boy != null && !this.testFlyRight)
+		{
+			BoyGrabPlateauState boyGrabPlateauState = ScriptGlobals.boy.state as BoyGrabPlateauState;
+			BoyReachPlateauState boyReachPlateauState = ScriptGlobals.boy.state as BoyReachPlateauState;
+			if ((this.boyGrabbingJetCrate && this.boyGrabbingJetCrate.status.groundCollider == base.GetComponent<Collider>()) || (boyGrabPlateauState != null && boyGrabPlateauState.plateau.rigidbody == this.jetCrateRigidbody) || (boyReachPlateauState != null && boyReachPlateauState.plateau.rigidbody == this.jetCrateRigidbody))
+			{
+				if (!this.boyHasStoodOnJetCrate)
+				{
+					float y = ScriptGlobals.boy.velocity.y;
+					float num3 = this.jetCrateRigidbody.velocity.y - y;
+					if (num3 > 0.8f)
+					{
+						this.startYVel -= num3 * 0.1f;
+					}
+					else
+					{
+						this.startYVel -= 0.08f;
+					}
+					if (this.lastFactor > this.boyOnCrateFactor * 0.75f)
+					{
+						this.lastFactor = this.boyOnCrateFactor * 0.75f;
+					}
+				}
+				this.boyHasStoodOnJetCrate = true;
+				boyOnCrateNow = true;
+			}
+		}
+		if (this.testOldFashioned)
+		{
+			if (this.boyHasStoodOnJetCrate)
+			{
+				this.jetCrateRigidbody.AddForce(-this.GetCurrentUpVector() * this.boyExtraPushDownForce * 0.135f, 0);
+			}
+			if (this.timer <= this.forceCurve.keys[this.forceCurve.keys.Length - 1].time)
+			{
+				float num4 = this.forceCurve.Evaluate(this.timer) * this.forceScale * this.jetCrateRigidbody.mass;
+				if (this.unifiedForceMode)
+				{
+					if (this.jetCrateRigidbody.velocity.y > 0f)
+					{
+						float num5 = 1f - Mathf.InverseLerp(5f, 10f, this.jetCrateRigidbody.velocity.y * 1f - this.timer);
+						num4 *= num5;
+					}
+					else
+					{
+						float num6 = 1f + 3f * Mathf.InverseLerp(0f, -5f, this.jetCrateRigidbody.velocity.y * Mathf.Max(0f, 1f - this.timer));
+						num4 *= num6;
+					}
+				}
+				if (!this.testFlyRight)
+				{
+					this.jetCrateRigidbody.AddForce(this.GetCurrentUpVector() * num4, 0);
+				}
+				else
+				{
+					this.jetCrateRigidbody.AddForce(Vector3.right * num4, 0);
+				}
+				int i = 0;
+				int count = this.currentLiftObjects.Count;
+				while (i < count)
+				{
+					Rigidbody rigidbody = this.currentLiftObjects[i];
+					float num7 = this.forceCurve.Evaluate(this.timer) * this.forceScale * rigidbody.mass;
+					rigidbody.AddForce(this.GetCurrentUpVector() * num7 * this.liftObjectForceScale, 0);
+					i++;
+				}
+			}
+			else
+			{
+				this.JetIsDone();
+			}
+		}
+		else
+		{
+			this.LimitFloorTilt(deltaTime);
+			if (this.startYVel < 0f)
+			{
+				this.startYVel *= 1f - deltaTime;
+			}
+			if (this.timer <= this.velocityCurve.keys[this.velocityCurve.keys.Length - 1].time)
+			{
+				float num8 = this.velocityCurve.Evaluate(this.timer) * this.velocityScale;
+				float wantedForceScale = this.GetWantedForceScale(deltaTime, boyOnCrateNow);
+				if (this.usedByHuddle)
+				{
+					if (this.wasHeldByHuddle && (!(ScriptGlobals.huddle.grabState.body == this.jetCrateRigidbody) || !ScriptGlobals.huddle.input.rawAction))
+					{
+						HuddleGrabState.Throw throwing = ScriptGlobals.huddle.grabState.throwing;
+						if (throwing != null)
+						{
+							this.initialHuddleThrowSpeed = throwing.deltaVelocity * 0.6f;
+							this.initialHuddleThrowSpeed.z = 0f;
+						}
+					}
+					this.initialHuddleThrowSpeed.y = Mathf.Max(this.initialHuddleThrowSpeed.y - 2f * Time.deltaTime, 0f);
+				}
+				this.lastFactor = wantedForceScale;
+				num8 *= wantedForceScale;
+				num8 += this.startYVel;
+				num8 += this.initialHuddleThrowSpeed.y;
+				Vector3 vector = this.jetCrateRigidbody.velocity;
+				if (vector.y < this.lastYVel - 0.5f && this.currentLiftObjects.Count == 0 && !this.crateBlockedThisFrame && !this.boyHasStoodOnJetCrate)
+				{
+					this.lastFactor = 0.1f;
+					num8 = 0.1f * num8 / wantedForceScale;
+					num8 = Mathf.Min(new float[]
+					{
+						num8 * 0.5f
+					});
+					this.lastYVel = num8;
+					this.startYVel = 0f;
+				}
+				if (this.afterImpactPhysics)
+				{
+					vector.y = num8;
+				}
+				else
+				{
+					vector = this.SetLocalUpForce(vector, num8);
+				}
+				if (this.crateBlockedThisFrame)
+				{
+					this.blockFactor = Random.Range(0.07f, 0.21f);
+				}
+				else
+				{
+					this.blockFactor = Mathf.Min(1f, this.blockFactor + Time.deltaTime * 3f);
+				}
+				vector.y *= this.blockFactor;
+				this.lastAccell = (vector.y - this.lastYVel) / deltaTime;
+				this.lastYVel = vector.y;
+				Vector3 vector2 = vector - this.jetCrateRigidbody.velocity;
+				if (this.usedByHuddle && ScriptGlobals.huddle.grabState.body == this.jetCrateRigidbody && ScriptGlobals.huddle.input.rawAction)
+				{
+					this.wasHeldByHuddle = true;
+				}
+				else
+				{
+					this.wasHeldByHuddle = false;
+					this.jetCrateRigidbody.AddForce(vector2, 2);
+				}
+				if (this.visualThrusterSphere != null)
+				{
+					this.thrustOffset = Mathf.Min(this.timer, 1f) * Vector3.up * 0.7f + Vector3.right * Random.Range(-1f, 1f) * 0.025f;
+					this.visualThrusterSphere.AddVelocity(this.thrustOffset * 50f * deltaTime);
+					this.visualThrusterSphere.SetWorldOffset(this.thrustOffset);
+				}
+			}
+			else
+			{
+				this.thrustOffset *= 1f - deltaTime * 2f;
+				if (this.visualThrusterSphere != null)
+				{
+					this.visualThrusterSphere.AddVelocity(this.thrustOffset * 50f * deltaTime);
+					this.visualThrusterSphere.SetWorldOffset(this.thrustOffset);
+				}
+				if (this.lastAccell > Physics.gravity.y)
+				{
+					this.lastAccell = Mathf.Max(this.lastAccell - 10f * this.forceCoolDownFactor * Mathf.Max(this.lastFactor, 0.6f) * deltaTime, Physics.gravity.y);
+					Vector3 velocity = this.jetCrateRigidbody.velocity;
+					if (this.lastYVel < velocity.y)
+					{
+						this.JetIsDone();
+					}
+					else
+					{
+						velocity.y = this.lastYVel + this.lastAccell * deltaTime;
+						Vector3 vector3 = velocity - this.jetCrateRigidbody.velocity;
+						this.jetCrateRigidbody.AddForce(vector3, 2);
+						this.lastYVel = velocity.y;
+					}
+				}
+				else
+				{
+					this.JetIsDone();
+				}
+			}
+		}
+		this.crateBlockedThisFrame = false;
+	}
+
+	// Token: 0x06000D28 RID: 3368 RVA: 0x0007EA10 File Offset: 0x0007CC10
+	public void LeaveFloatMode()
+	{
+		this.jetCrateRigidbody.isKinematic = false;
+		this.state = JetCrate.State.Idle;
+	}
+
+	// Token: 0x06000D29 RID: 3369 RVA: 0x0007EA28 File Offset: 0x0007CC28
+	public void SetFloatIntoZ()
+	{
+		this.floatIntoStartVelocity = this.jetCrateRigidbody.velocity;
+		this.floatIntoStartVelocity.z = this.floatIntoStartVelocity.z + 0.6f;
+		this.floatIntoStartAngularVelocity = this.jetCrateRigidbody.angularVelocity;
+		this.floatIntoStartAngularVelocity.x = this.floatIntoStartAngularVelocity.x + 36f;
+		this.floatIntoStartAngularVelocity.y = this.floatIntoStartAngularVelocity.y + 20f;
+		this.jetCrateRigidbody.isKinematic = true;
+		this.jetCrateRigidbody.constraints = 0;
+		this.JetIsDone();
+		this.state = JetCrate.State.FloatIntoZ;
+	}
+
+	// Token: 0x06000D2A RID: 3370 RVA: 0x0007EAC4 File Offset: 0x0007CCC4
+	private void FloatIntoZState()
+	{
+		float deltaTime = Time.deltaTime;
+		this.jetCrateRigidbody.MovePosition(this.jetCrateRigidbody.position + this.floatIntoStartVelocity * deltaTime);
+		float num = 1f - deltaTime * 1.5f;
+		float num2 = 1f - deltaTime * 0.3f;
+		this.floatIntoStartVelocity.y = this.floatIntoStartVelocity.y - deltaTime * 0.55f;
+		this.floatIntoStartVelocity.y = this.floatIntoStartVelocity.y * num;
+		this.floatIntoStartVelocity.x = this.floatIntoStartVelocity.x * num2;
+		this.floatIntoStartVelocity.z = this.floatIntoStartVelocity.z * num2;
+		this.floatIntoStartAngularVelocity *= num2;
+		Quaternion quaternion = this.jetCrateRigidbody.rotation;
+		quaternion = Quaternion.Euler(this.floatIntoStartAngularVelocity * deltaTime) * quaternion;
+		this.jetCrateRigidbody.MoveRotation(quaternion);
+	}
+
+	// Token: 0x06000D2B RID: 3371 RVA: 0x0007EBB0 File Offset: 0x0007CDB0
+	private void FixedUpdate()
+	{
+		this.noGrabPlateauTimer += Time.deltaTime;
+		if (this.pushNoGrabActive && this.noGrabPlateauTimer > 2f)
+		{
+			this.boyNoGrab.noGrabPlateau = false;
+			this.depthObstruction.depthClimbup = true;
+			this.pushNoGrabActive = false;
+		}
+		this.SetHandlePosition();
+		if (this.jetCrateTop)
+		{
+			this.jetCrateTop.rotation = QuaternionFast.identity;
+		}
+		if (this.boysInsideTrigger.Count > 0)
+		{
+			this.insideTriggerCounter += Time.deltaTime;
+		}
+		switch (this.state)
+		{
+		case JetCrate.State.Idle:
+			this.IdleState();
+			break;
+		case JetCrate.State.Grab:
+			this.GrabState();
+			break;
+		case JetCrate.State.Pull:
+			this.PullState();
+			break;
+		case JetCrate.State.JetActive:
+			this.JetActiveState();
+			break;
+		case JetCrate.State.ForceActive:
+			this.ForceActiveState();
+			break;
+		case JetCrate.State.FloatIntoZ:
+			this.FloatIntoZState();
+			break;
+		}
+		this.UpdateBoyAnimationTheme();
+		this.UpdateHandleAnim();
+		if (this.noOfGroundColliders == 0 && !this.jetCrateRigidbody.IsSleeping())
+		{
+			this.noGroundCounter++;
+			if (this.noGroundCounter > 5)
+			{
+				this.groundTime = 0f;
+			}
+		}
+		else
+		{
+			this.groundTime += Time.deltaTime;
+			this.noGroundCounter = 0;
+		}
+		this.noOfGroundColliders = 0;
+		this.currentLiftObjects.Clear();
+	}
+
+	// Token: 0x06000D2C RID: 3372 RVA: 0x0007ED3C File Offset: 0x0007CF3C
+	public void SetPhysicsSlide()
+	{
+		if (this.sliderAudio == null && !this.forceSlideSound)
+		{
+			return;
+		}
+		bool flag = (this.jetCrateRigidbody.constraints & 2) != 0;
+		if (!this.forceSlideSound && !flag)
+		{
+			this.sliderAudio.SetActive(false);
+		}
+		else
+		{
+			this.sliderAudio.SetActive(true);
+		}
+	}
+
+	// Token: 0x06000D2D RID: 3373 RVA: 0x0007EDA8 File Offset: 0x0007CFA8
+	public void PrepareHandleUpVector()
+	{
+		float num = 0f;
+		Vector3 zero = Vector3.zero;
+		if (this.GetLocDir(ref zero, ref num))
+		{
+			this.previousLocDir = zero;
+			this.lastDir = zero;
+			this.jetHandle.transform.localPosition = zero * 0.12f;
+			this.lastDir = zero;
+			this.jetHandle.transform.localEulerAngles = Vector3.forward * num;
+		}
+	}
+
+	// Token: 0x06000D2E RID: 3374 RVA: 0x0007EE1C File Offset: 0x0007D01C
+	public Vector3 GetJetUpVector()
+	{
+		Vector3 vector = base.transform.InverseTransformDirection(Vector3.up);
+		if (Mathf.Abs(vector.x) < Mathf.Abs(vector.y))
+		{
+			vector = Vector3.up * Mathf.Sign(vector.y);
+			Vector3 vector2 = Vector3.right * Mathf.Sign(vector.y);
+		}
+		else
+		{
+			vector = Vector3.right * Mathf.Sign(vector.x);
+			Vector3 vector2 = Vector3.down * Mathf.Sign(vector.x);
+		}
+		return base.transform.TransformDirection(vector);
+	}
+
+	// Token: 0x06000D2F RID: 3375 RVA: 0x0007EEC8 File Offset: 0x0007D0C8
+	private bool RoomForGrab()
+	{
+		float x = base.transform.position.x;
+		this.grabDirAllowed = 0f;
+		int i = 0;
+		int count = this.stuffInsideTrigger.Count;
+		while (i < count)
+		{
+			Collider collider = this.stuffInsideTrigger[i];
+			float num = collider.bounds.size.x / 2f + 0.1f;
+			float num2 = collider.transform.position.x;
+			float num3 = Mathf.Sign(x - num2);
+			num2 += num3 * num;
+			if (num3 * num2 > num3 * x)
+			{
+				return false;
+			}
+			this.grabDirAllowed = -num3;
+			i++;
+		}
+		return true;
+	}
+
+	// Token: 0x06000D30 RID: 3376 RVA: 0x0007EF8C File Offset: 0x0007D18C
+	private bool CanBeGrabbed()
+	{
+		return !(ScriptGlobals.mainCharacter is Huddle) || !this.IsJetting();
+	}
+
+	// Token: 0x06000D31 RID: 3377 RVA: 0x0007EFAC File Offset: 0x0007D1AC
+	private bool CanBeJetted()
+	{
+		if (this.jetCrateRigidbody.angularVelocity.sqrMagnitude > 0.2f)
+		{
+			this.noGroundCounter += 2;
+		}
+		return (this.noGroundCounter < 17 || this.jetCrateRigidbody.IsSleeping()) && this.grabableState;
+	}
+
+	// Token: 0x06000D32 RID: 3378 RVA: 0x0007F00C File Offset: 0x0007D20C
+	public bool IsJetting()
+	{
+		return this.state == JetCrate.State.ForceActive;
+	}
+
+	// Token: 0x06000D33 RID: 3379 RVA: 0x0007F018 File Offset: 0x0007D218
+	public bool IsPulled()
+	{
+		return this.state == JetCrate.State.JetActive;
+	}
+
+	// Token: 0x06000D34 RID: 3380 RVA: 0x0007F024 File Offset: 0x0007D224
+	public float GetJetFraction()
+	{
+		if (this.testOldFashioned)
+		{
+			return Mathf.Min(1f, this.timer / this.forceCurve.keys[this.forceCurve.keys.Length - 1].time);
+		}
+		return Mathf.Min(1f, this.timer / this.velocityCurve.keys[this.velocityCurve.keys.Length - 1].time);
+	}
+
+	// Token: 0x06000D35 RID: 3381 RVA: 0x0007F0A8 File Offset: 0x0007D2A8
+	public float GetJetRemainingTime()
+	{
+		if (this.testOldFashioned)
+		{
+			return this.forceCurve.keys[this.forceCurve.keys.Length - 1].time - this.timer;
+		}
+		return this.velocityCurve.keys[this.velocityCurve.keys.Length - 1].time - this.timer;
+	}
+
+	// Token: 0x06000D36 RID: 3382 RVA: 0x0007F118 File Offset: 0x0007D318
+	private void AddForceStarted()
+	{
+		this.addForceActivated = true;
+	}
+
+	// Token: 0x06000D37 RID: 3383 RVA: 0x0007F124 File Offset: 0x0007D324
+	private void TestForBlockAway(Boy boy)
+	{
+		if (boy == ScriptGlobals.boy && !boy.isCharacterActive)
+		{
+			return;
+		}
+		if (boy.status.groundBody != this.jetCrateRigidbody)
+		{
+			BoyReachPlateauState boyReachPlateauState = boy.state as BoyReachPlateauState;
+			if (boyReachPlateauState != null && boyReachPlateauState.edge != null && boyReachPlateauState.edge.collider == base.GetComponent<Collider>())
+			{
+				return;
+			}
+			Vector3 position = base.transform.position;
+			Vector3 pos = boy.pos3;
+			float num = pos.x - position.x;
+			float num2 = pos.y - position.y - 0.07f;
+			float num3 = pos.z - position.z;
+			if (Mathf.Abs(num) < 1.8f && Mathf.Abs(num2) < 1f && Mathf.Abs(num3) < 1.8f)
+			{
+				if (BoyUtils.GetCurrentGrabBody(boy) == this.jetCrateRigidbody)
+				{
+					this.jetCrateRigidbody.AddForce(Mathf.Sign(boy.input.stick.x) * new Vector3(30f * Mathf.Abs(boy.input.stick.x) * this.boyPushForwardForceScale, 0f, 0f));
+					this.pushNoGrabActive = true;
+					this.boyNoGrab.noGrabPlateau = true;
+					this.depthObstruction.depthClimbup = false;
+					this.noGrabPlateauTimer = 0f;
+				}
+				if (boy.isDead)
+				{
+					return;
+				}
+				AnimClipNode component = this.pushBackAnimation.GetComponent<AnimClipNode>();
+				if (Mathf.Sign(num) == boy.facing)
+				{
+					component = this.pushForwardAnimation.GetComponent<AnimClipNode>();
+				}
+				BoyUtils.StartCustomAnim(boy, component, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.15f, 0.3f, 0, 0f);
+			}
+		}
+	}
+
+	// Token: 0x06000D38 RID: 3384 RVA: 0x0007F320 File Offset: 0x0007D520
+	private float GetWantedForceScale(float deltaTime, bool boyOnCrateNow)
+	{
+		float num = this.lastFactor;
+		float num2 = 1f;
+		if (this.boyHasStoodOnJetCrate && !this.crateBlockedThisFrame)
+		{
+			num2 = this.boyOnCrateFactor;
+		}
+		else if (this.currentLiftObjects.Count > 0)
+		{
+			num2 = this.liftObjectFactor;
+			BoyGrabPlateauState boyGrabPlateauState = ScriptGlobals.boy.state as BoyGrabPlateauState;
+			int i = 0;
+			int count = this.currentLiftObjects.Count;
+			while (i < count)
+			{
+				if (ScriptGlobals.boy.status.groundCollider == this.currentLiftObjects[i].GetComponent<Collider>() || (boyGrabPlateauState != null && boyGrabPlateauState.plateau.rigidbody == this.currentLiftObjects[i]))
+				{
+					num2 = this.liftBoyAndObjectFactor;
+				}
+				i++;
+			}
+		}
+		num += (num2 - num) * deltaTime * 1.8f;
+		this.lastFactor = num;
+		return num;
+	}
+
+	// Token: 0x06000D39 RID: 3385 RVA: 0x0007F414 File Offset: 0x0007D614
+	public JetCrate GetJetCrateOnTopOfYou()
+	{
+		int i = 0;
+		int count = this.liftObjects.Count;
+		while (i < count)
+		{
+			JetCrate component = this.currentLiftObjects[i].gameObject.GetComponent<JetCrate>();
+			if (component != null)
+			{
+				return component;
+			}
+			i++;
+		}
+		int j = 0;
+		int count2 = this.stuffInsideTrigger.Count;
+		while (j < count2)
+		{
+			JetCrate component2 = this.stuffInsideTrigger[j].gameObject.GetComponent<JetCrate>();
+			if (component2 != null)
+			{
+				return component2;
+			}
+			j++;
+		}
+		return null;
+	}
+
+	// Token: 0x06000D3A RID: 3386 RVA: 0x0007F4B0 File Offset: 0x0007D6B0
+	public float GetTimeToJet()
+	{
+		if (this.state == JetCrate.State.JetActive)
+		{
+			return this.jetwarmUpTime - this.timer;
+		}
+		return float.MaxValue;
+	}
+
+	// Token: 0x06000D3B RID: 3387 RVA: 0x0007F4D4 File Offset: 0x0007D6D4
+	public void SetTimeToJet(float time)
+	{
+		if (this.state == JetCrate.State.JetActive)
+		{
+			this.timer = this.jetwarmUpTime - time;
+		}
+	}
+
+	// Token: 0x06000D3C RID: 3388 RVA: 0x0007F4F0 File Offset: 0x0007D6F0
+	private void UpdateParticleRotation()
+	{
+		Vector3 vector = base.transform.position + Vector3.down * 2f;
+		this.thrustParticleSystem.transform.LookAt(vector);
+		Vector3 localEulerAngles = this.thrustParticleSystem.transform.localEulerAngles;
+		localEulerAngles.x = Mathf.Round(localEulerAngles.x / 90f) * 90f;
+		localEulerAngles.y = Mathf.Round(localEulerAngles.y / 90f) * 90f;
+		localEulerAngles.z = Mathf.Round(localEulerAngles.z / 90f) * 90f;
+		this.thrustParticleSystem.transform.localEulerAngles = localEulerAngles;
+		this.thrustMidAirParticleSystem.transform.localEulerAngles = localEulerAngles;
+	}
+
+	// Token: 0x06000D3D RID: 3389 RVA: 0x0007F5C0 File Offset: 0x0007D7C0
+	private float LimitFloorTilt(float deltaTime)
+	{
+		if ((this.jetCrateRigidbody.constraints & 64) != null)
+		{
+			return 0f;
+		}
+		Vector3 vector = base.transform.InverseTransformDirection(Vector3.up);
+		float num = Mathf.Abs(vector.y);
+		float num2 = Mathf.Abs(vector.x);
+		if (num > num2)
+		{
+			if (num2 > 0.05f)
+			{
+				Vector3 angularVelocity = this.jetCrateRigidbody.angularVelocity;
+				angularVelocity.z -= (num2 - 0.1f) * 15f * deltaTime * Mathf.Sign(vector.x) * Mathf.Sign(vector.y);
+				this.jetCrateRigidbody.angularVelocity = angularVelocity;
+			}
+		}
+		else if (num > 0.05f)
+		{
+			Vector3 angularVelocity2 = this.jetCrateRigidbody.angularVelocity;
+			angularVelocity2.z += (num - 0.1f) * 15f * deltaTime * Mathf.Sign(vector.x) * Mathf.Sign(vector.y);
+			this.jetCrateRigidbody.angularVelocity = angularVelocity2;
+		}
+		return 0f;
+	}
+
+	// Token: 0x06000D3E RID: 3390 RVA: 0x0007F6D8 File Offset: 0x0007D8D8
+	private Vector3 SetLocalUpForce(Vector3 jetVel, float velocity)
+	{
+		Quaternion quaternion = Quaternion.Inverse(this.boostTimeRotation);
+		Vector3 vector = quaternion * jetVel;
+		Vector3 vector2 = quaternion * Vector3.up;
+		if (Mathf.Abs(vector2.y) > Mathf.Abs(vector2.x))
+		{
+			vector.y = Mathf.Sign(vector2.y) * velocity;
+		}
+		else
+		{
+			vector.x = Mathf.Sign(vector2.x) * velocity;
+		}
+		Vector3 vector3 = this.boostTimeRotation * vector;
+		vector = base.transform.InverseTransformDirection(jetVel);
+		vector2 = base.transform.InverseTransformDirection(Vector3.up);
+		if (Mathf.Abs(vector2.y) > Mathf.Abs(vector2.x))
+		{
+			vector.y = Mathf.Sign(vector2.y) * velocity;
+		}
+		else
+		{
+			vector.x = Mathf.Sign(vector2.x) * velocity;
+		}
+		Vector3 vector4 = base.transform.TransformDirection(vector);
+		return 0.75f * vector3 + 0.25f * vector4;
+	}
+
+	// Token: 0x06000D3F RID: 3391 RVA: 0x0007F7F4 File Offset: 0x0007D9F4
+	public void SetAfterImpactPhysics()
+	{
+		this.afterImpactPhysics = true;
+		this.thrustParticleSystem.Stop();
+		this.thrustMidAirParticleSystem.Stop();
+	}
+
+	// Token: 0x06000D40 RID: 3392 RVA: 0x0007F814 File Offset: 0x0007DA14
+	public void JetIsDone()
+	{
+		this.boyHasStoodOnJetCrate = false;
+		this.crateBlockedThisFrame = false;
+		if (this.jetIsDone != null)
+		{
+			this.jetIsDone.Signal();
+		}
+		SoundEngine.RTPCs.jetCrateDistToSurface.SetFast(0f, this.akGameObj);
+		this.audioBlastStop.PostFast();
+		this.SetIdleState();
+		if (this.boysInsideTrigger.Count > 0)
+		{
+			Boy boy = this.boysInsideTrigger[0];
+			if (boy != null && !(boy.state is BoyJumpState))
+			{
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.3f, 0.2f, 0, 0.1f);
+			}
+		}
+		this.thrustParticleSystem.Stop();
+		this.thrustMidAirParticleSystem.Stop();
+		this.jetCrateRigidbody.angularDrag = this.startAngularDrag;
+	}
+
+	// Token: 0x06000D41 RID: 3393 RVA: 0x0007F8E8 File Offset: 0x0007DAE8
+	private Vector3 GetCurrentUpVector()
+	{
+		Vector3 result = Vector3.up;
+		GravityForce component = base.GetComponent<GravityForce>();
+		if (component != null)
+		{
+			result = -component.GetCurrentGravity().normalized;
+		}
+		return result;
+	}
+
+	// Token: 0x06000D42 RID: 3394 RVA: 0x0007F924 File Offset: 0x0007DB24
+	private void OnCollisionStay(Collision collision)
+	{
+		if (Time.deltaTime == 0f)
+		{
+			return;
+		}
+		ContactPoint[] contacts = collision.contacts;
+		this.midAirParticles = true;
+		int i = 0;
+		int num = contacts.Length;
+		while (i < num)
+		{
+			ContactPoint contactPoint = contacts[i];
+			Collider otherCollider = contactPoint.otherCollider;
+			if (!this.usedByHuddle || !otherCollider.GetComponent<HuddleClothBody>())
+			{
+				Rigidbody attachedRigidbody = otherCollider.attachedRigidbody;
+				float y = contactPoint.normal.y;
+				JetCrate jetCrate = null;
+				if (attachedRigidbody)
+				{
+					jetCrate = attachedRigidbody.GetComponent<JetCrate>();
+				}
+				if (!this.crateBlockedThisFrame && attachedRigidbody && !jetCrate && this.IsJetting() && y < -0.5f)
+				{
+					this.crateBlockedThisFrame = true;
+				}
+				if (y > 0.5f)
+				{
+					if (!jetCrate)
+					{
+						this.midAirParticles = false;
+					}
+					this.noOfGroundColliders++;
+				}
+				else if (y < -0.5f && jetCrate && !this.currentLiftObjects.Contains(attachedRigidbody))
+				{
+					this.currentLiftObjects.Add(attachedRigidbody);
+				}
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06000D43 RID: 3395 RVA: 0x0007FA7C File Offset: 0x0007DC7C
+	private void UpdateBoyAnimationTheme()
+	{
+		if (this.jetCrateRigidbody.isKinematic)
+		{
+			return;
+		}
+		if (!this.animationThemeSet && this.noOfGroundColliders == 0 && this.boysInsideTrigger.Count > 0 && !this.jetCrateRigidbody.IsSleeping())
+		{
+			this.animationThemeSet = true;
+			VisualBoy visualBoy = ScriptGlobals.boy.visualBoy;
+			Transform childComponentAE = visualBoy.transform.GetChildComponentAE("Themes");
+			Transform childComponentAE2 = childComponentAE.GetChildComponentAE(this.balanceThemeName);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.2f, 0.35f, 0, 0f);
+			this.previuosTheme = visualBoy.theme;
+			visualBoy.theme = childComponentAE2;
+		}
+		else if (this.animationThemeSet && (this.noOfGroundColliders > 0 || this.boysInsideTrigger.Count == 0))
+		{
+			VisualBoy visualBoy2 = ScriptGlobals.boy.visualBoy;
+			if (visualBoy2.state.typeIndex != VisualBoyNode.TypeIndex.VisualBoyLand)
+			{
+				visualBoy2.theme = this.previuosTheme;
+				this.animationThemeSet = false;
+			}
+		}
+	}
+
+	// Token: 0x06000D44 RID: 3396 RVA: 0x0007FB8C File Offset: 0x0007DD8C
+	private bool GetLocDir(ref Vector3 locDir, ref float rot)
+	{
+		locDir = this.visualThrusterSphere.transform.InverseTransformDirection(Vector3.down);
+		if ((locDir - this.previousLocDir).sqrMagnitude < 0.0001f)
+		{
+			return false;
+		}
+		rot = 0f;
+		if (Mathf.Abs(locDir.x) < Mathf.Abs(locDir.y))
+		{
+			locDir = Vector3.up * Mathf.Sign(locDir.y);
+			rot = 90f + Mathf.Sign(locDir.y) * 90f;
+		}
+		else
+		{
+			locDir = Vector3.right * Mathf.Sign(locDir.x);
+			rot = 180f - Mathf.Sign(locDir.x) * 90f;
+		}
+		return true;
+	}
+
+	// Token: 0x06000D45 RID: 3397 RVA: 0x0007FC6C File Offset: 0x0007DE6C
+	private void SetHandlePosition()
+	{
+		if (!this.jetHandle)
+		{
+			return;
+		}
+		Vector3 zero = Vector3.zero;
+		float num = 0f;
+		if (!this.GetLocDir(ref zero, ref num))
+		{
+			return;
+		}
+		bool flag = true;
+		if (Vector3.Dot(this.lastDir, zero) < 0.7f)
+		{
+			this.forceIn = true;
+			flag = false;
+			if (this.currentHandleState == JetCrate.HandleState.HandleDown)
+			{
+				this.forceIn = false;
+				float normalizedTime = this.animJetHandleDownState.normalizedTime;
+				if (normalizedTime >= 1f || normalizedTime == 0f)
+				{
+					flag = true;
+				}
+			}
+		}
+		if (flag)
+		{
+			this.jetHandle.transform.localPosition = zero * 0.12f;
+			this.lastDir = zero;
+			this.jetHandle.transform.localEulerAngles = Vector3.forward * num;
+		}
+		this.previousLocDir = zero;
+	}
+
+	// Token: 0x06000D46 RID: 3398 RVA: 0x0007FD48 File Offset: 0x0007DF48
+	private bool SetTriggerAndAnimationPositions(bool useBoyfacing = false)
+	{
+		Vector3 vector = base.transform.InverseTransformDirection(Vector3.up);
+		Vector3 vector2;
+		if (Mathf.Abs(vector.x) < Mathf.Abs(vector.y))
+		{
+			vector = Vector3.up * Mathf.Sign(vector.y);
+			vector2 = Vector3.right * Mathf.Sign(vector.y);
+		}
+		else
+		{
+			vector = Vector3.right * Mathf.Sign(vector.x);
+			vector2 = Vector3.down * Mathf.Sign(vector.x);
+		}
+		Vector3 vector3 = base.transform.TransformDirection(vector);
+		Vector3 vector4 = base.transform.TransformDirection(vector2);
+		Vector3 vector5 = base.transform.position + vector3 * this.grabHeight;
+		float num;
+		if (useBoyfacing)
+		{
+			num = this.boyGrabbingJetCrate.facing;
+		}
+		else if (this.grabDirAllowed != 0f)
+		{
+			num = this.grabDirAllowed;
+		}
+		else
+		{
+			float num2 = this.boyGrabbingJetCrate.facing * -0.15f;
+			num = Mathf.Sign(vector5.x - (this.boyGrabbingJetCrate.pos3.x + num2));
+		}
+		float num3 = Vector3.Angle(vector3, Vector3.right);
+		Vector3 position = vector5 - num * vector4 * 0.11f;
+		Quaternion rotation = Quaternion.Euler(0f, 0f, num3 - 90f) * Quaternion.Euler(0f, num * 90f, 0f);
+		this.animHolder.position = position;
+		this.animHolder.rotation = rotation;
+		return num == this.boyGrabbingJetCrate.facing;
+	}
+
+	// Token: 0x06000D47 RID: 3399 RVA: 0x0007FF10 File Offset: 0x0007E110
+	private void UpdateHandleAnim()
+	{
+		if (this.currentHandleState != JetCrate.HandleState.HandlePull)
+		{
+			if (this.CanBeJetted() && !this.forceIn)
+			{
+				if (this.currentHandleState != JetCrate.HandleState.HandleReady && this.groundTime > 0.4f)
+				{
+					float normalizedTime = this.animJetHandleDownState.normalizedTime;
+					if (normalizedTime == 0f || normalizedTime >= 1f)
+					{
+						this.animJetHandle.Play("AnimUp");
+						this.currentHandleState = JetCrate.HandleState.HandleReady;
+					}
+				}
+			}
+			else if (this.currentHandleState != JetCrate.HandleState.HandleDown)
+			{
+				float normalizedTime2 = this.animJetHandleUpState.normalizedTime;
+				if (normalizedTime2 == 0f || normalizedTime2 >= 1f)
+				{
+					this.forceIn = false;
+					this.animJetHandle.Play("AnimDown");
+					this.currentHandleState = JetCrate.HandleState.HandleDown;
+				}
+			}
+			else
+			{
+				this.forceIn = false;
+			}
+		}
+		else
+		{
+			this.forceIn = false;
+			if (this.grabableState)
+			{
+				this.currentHandleState = JetCrate.HandleState.HandleDown;
+			}
+		}
+	}
+
+	// Token: 0x06000D48 RID: 3400 RVA: 0x00080010 File Offset: 0x0007E210
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.triggerEvents.enterTrigger)
+		{
+			this.OtherTriggerEntered(collider);
+		}
+		else if (sender == this.triggerEvents.exitTrigger)
+		{
+			this.OtherTriggerExited(collider);
+		}
+	}
+
+	// Token: 0x06000D49 RID: 3401 RVA: 0x0008004C File Offset: 0x0007E24C
+	private void OtherTriggerEntered(Collider coll)
+	{
+		Rigidbody attachedRigidbody = coll.attachedRigidbody;
+		if (!attachedRigidbody)
+		{
+			return;
+		}
+		Boy component = attachedRigidbody.GetComponent<Boy>();
+		if (component)
+		{
+			if (this.boysInsideTrigger.Count == 0)
+			{
+				this.insideTriggerCounter = 0f;
+			}
+			if (!this.boysInsideTrigger.Contains(component))
+			{
+				this.boysInsideTrigger.Add(component);
+			}
+		}
+		else if (!coll.isTrigger)
+		{
+			this.stuffInsideTrigger.Add(coll);
+		}
+	}
+
+	// Token: 0x06000D4A RID: 3402 RVA: 0x000800D4 File Offset: 0x0007E2D4
+	private void OtherTriggerExited(Collider coll)
+	{
+		Rigidbody attachedRigidbody = coll.attachedRigidbody;
+		if (!attachedRigidbody)
+		{
+			return;
+		}
+		Boy component = attachedRigidbody.GetComponent<Boy>();
+		if (component)
+		{
+			this.boysInsideTrigger.Remove(component);
+		}
+		else if (!coll.isTrigger)
+		{
+			this.stuffInsideTrigger.Remove(coll);
+		}
+	}
+
+	// Token: 0x040016F1 RID: 5873
+	public AnimationCurve forceCurve;
+
+	// Token: 0x040016F2 RID: 5874
+	public AnimationCurve velocityCurve;
+
+	// Token: 0x040016F3 RID: 5875
+	public float velocityScale = 3f;
+
+	// Token: 0x040016F4 RID: 5876
+	public float boyOnCrateFactor = 0.615f;
+
+	// Token: 0x040016F5 RID: 5877
+	public float liftObjectFactor = 0.78f;
+
+	// Token: 0x040016F6 RID: 5878
+	public float liftBoyAndObjectFactor = 0.595f;
+
+	// Token: 0x040016F7 RID: 5879
+	public float forceScale = 1f;
+
+	// Token: 0x040016F8 RID: 5880
+	public float jetwarmUpTime = 4f;
+
+	// Token: 0x040016F9 RID: 5881
+	public float angularDragWhenAddingForce;
+
+	// Token: 0x040016FA RID: 5882
+	public GameObject trigger;
+
+	// Token: 0x040016FB RID: 5883
+	public Transform jetCrateTop;
+
+	// Token: 0x040016FC RID: 5884
+	public float boyExtraPushDownForce = 5f;
+
+	// Token: 0x040016FD RID: 5885
+	public float boyPushForwardForceScale = 1f;
+
+	// Token: 0x040016FE RID: 5886
+	public float liftObjectForceScale = 1f;
+
+	// Token: 0x040016FF RID: 5887
+	public FakeSpring visualThrusterSphere;
+
+	// Token: 0x04001700 RID: 5888
+	public GameObject jetHandle;
+
+	// Token: 0x04001701 RID: 5889
+	public NoGrab boyNoGrab;
+
+	// Token: 0x04001702 RID: 5890
+	public List<Rigidbody> liftObjects = new List<Rigidbody>();
+
+	// Token: 0x04001703 RID: 5891
+	public bool unifiedForceMode;
+
+	// Token: 0x04001704 RID: 5892
+	public bool testFlyRight;
+
+	// Token: 0x04001705 RID: 5893
+	public bool testOldFashioned;
+
+	// Token: 0x04001706 RID: 5894
+	public float forceCoolDownFactor = 1f;
+
+	// Token: 0x04001707 RID: 5895
+	public float slopeContributionFactor = 0.5f;
+
+	// Token: 0x04001708 RID: 5896
+	public Boy aIBoyInScene;
+
+	// Token: 0x04001709 RID: 5897
+	public bool usedByHuddle;
+
+	// Token: 0x0400170A RID: 5898
+	public bool disallowDropDownKill;
+
+	// Token: 0x0400170B RID: 5899
+	[Header("--- Animation ---")]
+	public Transform animHolder;
+
+	// Token: 0x0400170C RID: 5900
+	public AnimClipNode grabAnimation;
+
+	// Token: 0x0400170D RID: 5901
+	public AnimClipNode grabBackwardsAnimation;
+
+	// Token: 0x0400170E RID: 5902
+	public AnimClipNode releaseAnimation;
+
+	// Token: 0x0400170F RID: 5903
+	public GameObject grabIdleAnimation;
+
+	// Token: 0x04001710 RID: 5904
+	public GameObject pullAnimation;
+
+	// Token: 0x04001711 RID: 5905
+	public GameObject pushBackAnimation;
+
+	// Token: 0x04001712 RID: 5906
+	public GameObject pushForwardAnimation;
+
+	// Token: 0x04001713 RID: 5907
+	public string balanceThemeName = "JetCrateBalance";
+
+	// Token: 0x04001714 RID: 5908
+	[Header("--- Effects ---")]
+	public GameObject startParticleSystemPrefab;
+
+	// Token: 0x04001715 RID: 5909
+	public GameObject thrustParticleSystemPrefab;
+
+	// Token: 0x04001716 RID: 5910
+	public GameObject thrustMidAirParticleSystemPrefab;
+
+	// Token: 0x04001717 RID: 5911
+	public Color particleColor = Color.white;
+
+	// Token: 0x04001718 RID: 5912
+	public GameObject startParticlePivot;
+
+	// Token: 0x04001719 RID: 5913
+	public GameObject thrustParticlePivot;
+
+	// Token: 0x0400171A RID: 5914
+	public ParticleSystem thrustParticleSystem;
+
+	// Token: 0x0400171B RID: 5915
+	public ParticleSystem thrustMidAirParticleSystem;
+
+	// Token: 0x0400171C RID: 5916
+	[Header("--- Audio ---")]
+	public GameObject sliderAudio;
+
+	// Token: 0x0400171D RID: 5917
+	public bool forceSlideSound;
+
+	// Token: 0x0400171E RID: 5918
+	private SignalOut jetActive;
+
+	// Token: 0x0400171F RID: 5919
+	private SignalOut jetIsDone;
+
+	// Token: 0x04001720 RID: 5920
+	private SignalOut jetPulled;
+
+	// Token: 0x04001721 RID: 5921
+	private SignalIn forceJetActive;
+
+	// Token: 0x04001722 RID: 5922
+	public FastEvent jetCrateForceActive = new FastEvent(8);
+
+	// Token: 0x04001723 RID: 5923
+	private JetCrate.State state;
+
+	// Token: 0x04001724 RID: 5924
+	private bool grabableState = true;
+
+	// Token: 0x04001725 RID: 5925
+	private float startAngularDrag;
+
+	// Token: 0x04001726 RID: 5926
+	private float startYVel;
+
+	// Token: 0x04001727 RID: 5927
+	private float lastYVel;
+
+	// Token: 0x04001728 RID: 5928
+	private float grabHeight;
+
+	// Token: 0x04001729 RID: 5929
+	private float insideTriggerCounter;
+
+	// Token: 0x0400172A RID: 5930
+	private float groundTime;
+
+	// Token: 0x0400172B RID: 5931
+	private Transform previuosTheme;
+
+	// Token: 0x0400172C RID: 5932
+	private bool crateBlockedThisFrame;
+
+	// Token: 0x0400172D RID: 5933
+	private BoyDepthObstruction depthObstruction;
+
+	// Token: 0x0400172E RID: 5934
+	private List<Boy> boysInsideTrigger = new List<Boy>();
+
+	// Token: 0x0400172F RID: 5935
+	private List<Collider> stuffInsideTrigger = new List<Collider>();
+
+	// Token: 0x04001730 RID: 5936
+	private Boy boyGrabbingJetCrate;
+
+	// Token: 0x04001731 RID: 5937
+	private bool grabLocked;
+
+	// Token: 0x04001732 RID: 5938
+	private bool rawActionLastFrameToo;
+
+	// Token: 0x04001733 RID: 5939
+	private int noGroundCounter;
+
+	// Token: 0x04001734 RID: 5940
+	private float grabDirAllowed;
+
+	// Token: 0x04001735 RID: 5941
+	private float timer;
+
+	// Token: 0x04001736 RID: 5942
+	private bool addForceActivated;
+
+	// Token: 0x04001737 RID: 5943
+	private bool boyHasStoodOnJetCrate;
+
+	// Token: 0x04001738 RID: 5944
+	private float grabTimer;
+
+	// Token: 0x04001739 RID: 5945
+	private float grabDelay = 0.15f;
+
+	// Token: 0x0400173A RID: 5946
+	private float grabStunTimer;
+
+	// Token: 0x0400173B RID: 5947
+	private float grabStunDelay = 0.12f;
+
+	// Token: 0x0400173C RID: 5948
+	private float releaseTimer;
+
+	// Token: 0x0400173D RID: 5949
+	private float releaseDelay = 0.15f;
+
+	// Token: 0x0400173E RID: 5950
+	private float regrabTimer;
+
+	// Token: 0x0400173F RID: 5951
+	private float regrabDelay = 0.6f;
+
+	// Token: 0x04001740 RID: 5952
+	private JetCrate.HandleState currentHandleState;
+
+	// Token: 0x04001741 RID: 5953
+	private bool forceIn;
+
+	// Token: 0x04001742 RID: 5954
+	private AnimClipNode currentGrabAnim;
+
+	// Token: 0x04001743 RID: 5955
+	private Animation animJetHandle;
+
+	// Token: 0x04001744 RID: 5956
+	private AnimationState animJetHandleDownState;
+
+	// Token: 0x04001745 RID: 5957
+	private AnimationState animJetHandleUpState;
+
+	// Token: 0x04001746 RID: 5958
+	private BoyGround boyGround;
+
+	// Token: 0x04001747 RID: 5959
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04001748 RID: 5960
+	private int triggerExitHandle = -1;
+
+	// Token: 0x04001749 RID: 5961
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObj;
+
+	// Token: 0x0400174A RID: 5962
+	[SerializeField]
+	[HideInInspector]
+	private CollisionEvents triggerEvents;
+
+	// Token: 0x0400174B RID: 5963
+	[SerializeField]
+	[HideInInspector]
+	private AnimClipNode idleAnim;
+
+	// Token: 0x0400174C RID: 5964
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x0400174D RID: 5965
+	[SerializeField]
+	[HideInInspector]
+	private Rigidbody jetCrateRigidbody;
+
+	// Token: 0x0400174E RID: 5966
+	[SerializeField]
+	[HideInInspector]
+	private ParticleSystem startCrateParticleSystem;
+
+	// Token: 0x0400174F RID: 5967
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioGrab;
+
+	// Token: 0x04001750 RID: 5968
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioRelease;
+
+	// Token: 0x04001751 RID: 5969
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioPullHandle;
+
+	// Token: 0x04001752 RID: 5970
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioBlastStart;
+
+	// Token: 0x04001753 RID: 5971
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioBlastStop;
+
+	// Token: 0x04001754 RID: 5972
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioWarmUpStart;
+
+	// Token: 0x04001755 RID: 5973
+	private float noGrabPlateauTimer;
+
+	// Token: 0x04001756 RID: 5974
+	private Vector3 floatIntoStartVelocity;
+
+	// Token: 0x04001757 RID: 5975
+	private Vector3 floatIntoStartAngularVelocity;
+
+	// Token: 0x04001758 RID: 5976
+	private bool pushNoGrabActive;
+
+	// Token: 0x04001759 RID: 5977
+	private float lastFactor = 1f;
+
+	// Token: 0x0400175A RID: 5978
+	private float lastAccell;
+
+	// Token: 0x0400175B RID: 5979
+	private Vector3 thrustOffset = Vector3.zero;
+
+	// Token: 0x0400175C RID: 5980
+	private bool afterImpactPhysics;
+
+	// Token: 0x0400175D RID: 5981
+	private Vector3 initialHuddleThrowSpeed = Vector3.zero;
+
+	// Token: 0x0400175E RID: 5982
+	private bool wasHeldByHuddle;
+
+	// Token: 0x0400175F RID: 5983
+	private float blockFactor = 1f;
+
+	// Token: 0x04001760 RID: 5984
+	private int noOfGroundColliders;
+
+	// Token: 0x04001761 RID: 5985
+	private FastList<Rigidbody> currentLiftObjects = new FastList<Rigidbody>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04001762 RID: 5986
+	private Vector3 boostTimeUpVector = Vector3.up;
+
+	// Token: 0x04001763 RID: 5987
+	private Quaternion boostTimeRotation = default(Quaternion);
+
+	// Token: 0x04001764 RID: 5988
+	private bool midAirParticles = true;
+
+	// Token: 0x04001765 RID: 5989
+	private bool animationThemeSet;
+
+	// Token: 0x04001766 RID: 5990
+	private Vector3 lastDir;
+
+	// Token: 0x04001767 RID: 5991
+	private Vector3 previousLocDir;
+
+	// Token: 0x020001BE RID: 446
+	private enum State
+	{
+		// Token: 0x04001769 RID: 5993
+		None,
+		// Token: 0x0400176A RID: 5994
+		Idle,
+		// Token: 0x0400176B RID: 5995
+		Grab,
+		// Token: 0x0400176C RID: 5996
+		Pull,
+		// Token: 0x0400176D RID: 5997
+		JetActive,
+		// Token: 0x0400176E RID: 5998
+		ForceActive,
+		// Token: 0x0400176F RID: 5999
+		FloatIntoZ
+	}
+
+	// Token: 0x020001BF RID: 447
+	private enum HandleState
+	{
+		// Token: 0x04001771 RID: 6001
+		HandleReady,
+		// Token: 0x04001772 RID: 6002
+		HandleDown,
+		// Token: 0x04001773 RID: 6003
+		HandlePull
+	}
+}

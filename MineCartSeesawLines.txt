@@ -1,0 +1,64 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004D5 RID: 1237
+public class MineCartSeesawLines : MonoBehaviour
+{
+	// Token: 0x0600206D RID: 8301 RVA: 0x00112318 File Offset: 0x00110518
+	private void Start()
+	{
+		this.lr1.SetVertexCount(2);
+		this.lr2.SetVertexCount(2);
+		this.lr3.SetVertexCount(2);
+		this.lr4.SetVertexCount(2);
+	}
+
+	// Token: 0x0600206E RID: 8302 RVA: 0x00112358 File Offset: 0x00110558
+	private void Update()
+	{
+		this.lr1.SetPosition(0, this.anchor1up.position);
+		this.lr1.SetPosition(1, this.anchor1down.position);
+		this.lr2.SetPosition(0, this.anchor2up.position);
+		this.lr2.SetPosition(1, this.anchor2down.position);
+		this.lr3.SetPosition(0, this.anchor3up.position);
+		this.lr3.SetPosition(1, this.anchor3down.position);
+		this.lr4.SetPosition(0, this.anchor4up.position);
+		this.lr4.SetPosition(1, this.anchor4down.position);
+	}
+
+	// Token: 0x04003C15 RID: 15381
+	public Transform anchor1up;
+
+	// Token: 0x04003C16 RID: 15382
+	public Transform anchor1down;
+
+	// Token: 0x04003C17 RID: 15383
+	public Transform anchor2up;
+
+	// Token: 0x04003C18 RID: 15384
+	public Transform anchor2down;
+
+	// Token: 0x04003C19 RID: 15385
+	public Transform anchor3up;
+
+	// Token: 0x04003C1A RID: 15386
+	public Transform anchor3down;
+
+	// Token: 0x04003C1B RID: 15387
+	public Transform anchor4up;
+
+	// Token: 0x04003C1C RID: 15388
+	public Transform anchor4down;
+
+	// Token: 0x04003C1D RID: 15389
+	public LineRenderer lr1;
+
+	// Token: 0x04003C1E RID: 15390
+	public LineRenderer lr2;
+
+	// Token: 0x04003C1F RID: 15391
+	public LineRenderer lr3;
+
+	// Token: 0x04003C20 RID: 15392
+	public LineRenderer lr4;
+}

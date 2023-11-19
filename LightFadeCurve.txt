@@ -1,0 +1,61 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000338 RID: 824
+public class LightFadeCurve : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600170A RID: 5898 RVA: 0x000C9E34 File Offset: 0x000C8034
+	public bool PreAwake(int callcount)
+	{
+		this.fade = SignalIn.Create("fade", base.gameObject, new Action(this.OnFadeStart));
+		this.colorProperty = this.materialInstance.GetOrAddColorProperty(this.property);
+		this.originalColor = this.materialInstance.GetColorValue(this.colorProperty);
+		return true;
+	}
+
+	// Token: 0x0600170B RID: 5899 RVA: 0x000C9E94 File Offset: 0x000C8094
+	private void Update()
+	{
+		if (this.isFading)
+		{
+			this.timer += Time.deltaTime;
+			float num = Mathf.Clamp01(this.timer / this.fadeDuration);
+			float alpha = this.fadeCurve.Evaluate(num);
+			this.materialInstance.SetColorProperty(this.colorProperty, this.originalColor.Alpha(alpha));
+		}
+	}
+
+	// Token: 0x0600170C RID: 5900 RVA: 0x000C9EFC File Offset: 0x000C80FC
+	private void OnFadeStart()
+	{
+		this.isFading = true;
+		this.timer = 0f;
+	}
+
+	// Token: 0x04002936 RID: 10550
+	public AnimationCurve fadeCurve;
+
+	// Token: 0x04002937 RID: 10551
+	public float fadeDuration;
+
+	// Token: 0x04002938 RID: 10552
+	public MaterialInstance materialInstance;
+
+	// Token: 0x04002939 RID: 10553
+	public string property;
+
+	// Token: 0x0400293A RID: 10554
+	private SignalIn fade;
+
+	// Token: 0x0400293B RID: 10555
+	private bool isFading;
+
+	// Token: 0x0400293C RID: 10556
+	private float timer;
+
+	// Token: 0x0400293D RID: 10557
+	private MaterialInstance.ColorProperty colorProperty;
+
+	// Token: 0x0400293E RID: 10558
+	private Color originalColor;
+}

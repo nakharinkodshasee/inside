@@ -1,0 +1,336 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001C1 RID: 449
+public class JetCrateFloorHatch : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06000D52 RID: 3410 RVA: 0x0008049C File Offset: 0x0007E69C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioOpen = new AudioEventSimpleLocal(this.audioPrefix + "_open", akGameObj);
+		this.audioClose = new AudioEventSimpleLocal(this.audioPrefix + "_close", akGameObj);
+		this.audioOpened = new AudioEventSimpleLocal(this.audioPrefix + "_opened", akGameObj);
+		this.audioClosed = new AudioEventSimpleLocal(this.audioPrefix + "_closed", akGameObj);
+		if (this.specificJetCrate != null)
+		{
+			this.depthObstruction = this.specificJetCrate.GetComponent<BoyDepthObstruction>();
+			if (!this.depthObstruction)
+			{
+				this.depthObstruction = this.specificJetCrate.gameObject.AddComponent<BoyDepthObstruction>();
+			}
+			this.depthObstruction.excludeTriggers = true;
+			this.specificJetCrateCollider = this.specificJetCrate.GetComponent<Collider>();
+		}
+	}
+
+	// Token: 0x06000D53 RID: 3411 RVA: 0x000805A0 File Offset: 0x0007E7A0
+	public bool PreAwake(int callcount)
+	{
+		this.stayClosed = SignalIn.Create("stayClosed", base.gameObject, new Action(this.StayClosed));
+		return true;
+	}
+
+	// Token: 0x06000D54 RID: 3412 RVA: 0x000805C8 File Offset: 0x0007E7C8
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.trigger.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.trigger.exitTrigger.Register(this, ref this.triggerExitHandle);
+		this.gfxStartPos = this.gfxHatch.transform.position;
+		this.gfxStartTop = this.gfxHatch.GetComponent<Renderer>().bounds.max.y;
+		this.frameCount = 0;
+	}
+
+	// Token: 0x06000D55 RID: 3413 RVA: 0x0008064C File Offset: 0x0007E84C
+	private void StayClosed()
+	{
+		foreach (Collider collider in base.GetComponentsInChildren<Collider>())
+		{
+			collider.gameObject.layer = LayerMask.NameToLayer("Ungrouped");
+		}
+		this.isStayClosed = true;
+		this.state = JetCrateFloorHatch.State.StayClosed;
+	}
+
+	// Token: 0x06000D56 RID: 3414 RVA: 0x0008069C File Offset: 0x0007E89C
+	private void StayClosedState()
+	{
+		this.gfxHatch.position = Vector3.MoveTowards(this.gfxHatch.position, this.gfxStartPos, 10f * Time.deltaTime);
+	}
+
+	// Token: 0x06000D57 RID: 3415 RVA: 0x000806D8 File Offset: 0x0007E8D8
+	private void SetOpenState()
+	{
+		if (this.soundActive)
+		{
+			this.audioOpen.PostFast();
+		}
+		this.state = JetCrateFloorHatch.State.Open;
+	}
+
+	// Token: 0x06000D58 RID: 3416 RVA: 0x000806F8 File Offset: 0x0007E8F8
+	private void OpenState()
+	{
+		this.gfxHatch.position = Vector3.MoveTowards(this.gfxHatch.position, this.gfxHatchOpenPos.position, 20f * Time.deltaTime);
+		if ((double)(this.gfxHatch.position - this.gfxHatchOpenPos.position).magnitude <= 0.05)
+		{
+			this.SetOpenedState();
+		}
+	}
+
+	// Token: 0x06000D59 RID: 3417 RVA: 0x00080770 File Offset: 0x0007E970
+	private void SetOpenedState()
+	{
+		if (this.soundActive)
+		{
+			this.audioOpened.PostFast();
+		}
+		this.state = JetCrateFloorHatch.State.Opened;
+	}
+
+	// Token: 0x06000D5A RID: 3418 RVA: 0x00080790 File Offset: 0x0007E990
+	private void OpenedState()
+	{
+	}
+
+	// Token: 0x06000D5B RID: 3419 RVA: 0x00080794 File Offset: 0x0007E994
+	private void SetCloseState()
+	{
+		if (this.soundActive)
+		{
+			this.audioClose.PostFast();
+		}
+		this.closeTimer = 0f;
+		this.state = JetCrateFloorHatch.State.Close;
+	}
+
+	// Token: 0x06000D5C RID: 3420 RVA: 0x000807C0 File Offset: 0x0007E9C0
+	private void CloseState()
+	{
+		this.gfxHatch.position = Vector3.MoveTowards(this.gfxHatch.position, this.gfxStartPos, 10f * Time.deltaTime);
+		if ((double)(this.gfxHatch.position - this.gfxStartPos).magnitude <= 0.05)
+		{
+			this.SetClosedState();
+		}
+	}
+
+	// Token: 0x06000D5D RID: 3421 RVA: 0x0008082C File Offset: 0x0007EA2C
+	private void SetClosedState()
+	{
+		if (this.soundActive)
+		{
+			this.audioClosed.PostFast();
+		}
+		this.state = JetCrateFloorHatch.State.Closed;
+	}
+
+	// Token: 0x06000D5E RID: 3422 RVA: 0x0008084C File Offset: 0x0007EA4C
+	private void ClosedState()
+	{
+	}
+
+	// Token: 0x06000D5F RID: 3423 RVA: 0x00080850 File Offset: 0x0007EA50
+	private void FixedUpdate()
+	{
+		if (this.frameCount < 120)
+		{
+			this.frameCount++;
+		}
+		if (!this.soundActive && this.frameCount >= 120)
+		{
+			this.soundActive = true;
+		}
+		switch (this.state)
+		{
+		case JetCrateFloorHatch.State.Open:
+			this.OpenState();
+			break;
+		case JetCrateFloorHatch.State.Opened:
+			this.OpenedState();
+			break;
+		case JetCrateFloorHatch.State.Close:
+			this.CloseState();
+			break;
+		case JetCrateFloorHatch.State.Closed:
+			this.ClosedState();
+			break;
+		case JetCrateFloorHatch.State.StayClosed:
+			this.StayClosedState();
+			break;
+		}
+		if (this.specificJetCrate != null)
+		{
+			float y = this.specificJetCrateCollider.bounds.max.y;
+			float num = y - this.gfxStartTop;
+			if (num > 0.03f)
+			{
+				this.depthObstruction.EnableObstruction();
+			}
+			else
+			{
+				this.depthObstruction.DisableObstruction();
+			}
+		}
+	}
+
+	// Token: 0x06000D60 RID: 3424 RVA: 0x00080954 File Offset: 0x0007EB54
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.trigger.enterTrigger)
+		{
+			this.OtherTriggerEnter(collider);
+		}
+		else if (sender == this.trigger.exitTrigger)
+		{
+			this.OtherTriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06000D61 RID: 3425 RVA: 0x00080990 File Offset: 0x0007EB90
+	private void OtherTriggerEnter(Collider coll)
+	{
+		if (this.isStayClosed)
+		{
+			return;
+		}
+		JetCrate component = coll.GetComponent<JetCrate>();
+		if (!component)
+		{
+			return;
+		}
+		if ((this.specificJetCrate == null || component == this.specificJetCrate) && !this.jetCratesInside.Contains(component))
+		{
+			this.jetCratesInside.Add(component);
+			this.SetOpenState();
+		}
+	}
+
+	// Token: 0x06000D62 RID: 3426 RVA: 0x00080A04 File Offset: 0x0007EC04
+	private void OtherTriggerExit(Collider coll)
+	{
+		if (this.isStayClosed)
+		{
+			return;
+		}
+		JetCrate component = coll.GetComponent<JetCrate>();
+		if (!component)
+		{
+			return;
+		}
+		if (this.specificJetCrate == null || component == this.specificJetCrate)
+		{
+			this.jetCratesInside.Remove(component);
+			if (this.jetCratesInside.Count == 0)
+			{
+				this.SetCloseState();
+			}
+		}
+	}
+
+	// Token: 0x0400177C RID: 6012
+	public CollisionEvents trigger;
+
+	// Token: 0x0400177D RID: 6013
+	public Transform gfxHatch;
+
+	// Token: 0x0400177E RID: 6014
+	public Transform gfxHatchOpenPos;
+
+	// Token: 0x0400177F RID: 6015
+	public JetCrate specificJetCrate;
+
+	// Token: 0x04001780 RID: 6016
+	public string audioPrefix = "mechanisms_jetCrateHatch";
+
+	// Token: 0x04001781 RID: 6017
+	private SignalIn stayClosed;
+
+	// Token: 0x04001782 RID: 6018
+	private JetCrateFloorHatch.State state;
+
+	// Token: 0x04001783 RID: 6019
+	private float closeTimer;
+
+	// Token: 0x04001784 RID: 6020
+	private Vector3 gfxStartPos;
+
+	// Token: 0x04001785 RID: 6021
+	private float gfxStartTop;
+
+	// Token: 0x04001786 RID: 6022
+	private bool soundActive;
+
+	// Token: 0x04001787 RID: 6023
+	private int frameCount;
+
+	// Token: 0x04001788 RID: 6024
+	private bool isStayClosed;
+
+	// Token: 0x04001789 RID: 6025
+	private FastList<JetCrate> jetCratesInside = new FastList<JetCrate>(2, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x0400178A RID: 6026
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x0400178B RID: 6027
+	private int triggerExitHandle = -1;
+
+	// Token: 0x0400178C RID: 6028
+	[HideInInspector]
+	[SerializeField]
+	private Collider specificJetCrateCollider;
+
+	// Token: 0x0400178D RID: 6029
+	[SerializeField]
+	[HideInInspector]
+	private BoyDepthObstruction depthObstruction;
+
+	// Token: 0x0400178E RID: 6030
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x0400178F RID: 6031
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioOpen;
+
+	// Token: 0x04001790 RID: 6032
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioClose;
+
+	// Token: 0x04001791 RID: 6033
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioOpened;
+
+	// Token: 0x04001792 RID: 6034
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioClosed;
+
+	// Token: 0x020001C2 RID: 450
+	private enum State
+	{
+		// Token: 0x04001794 RID: 6036
+		None,
+		// Token: 0x04001795 RID: 6037
+		Open,
+		// Token: 0x04001796 RID: 6038
+		Opened,
+		// Token: 0x04001797 RID: 6039
+		Close,
+		// Token: 0x04001798 RID: 6040
+		Closed,
+		// Token: 0x04001799 RID: 6041
+		StayClosed
+	}
+}

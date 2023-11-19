@@ -1,0 +1,12 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000496 RID: 1174
+public class LabJetCrate : MonoBehaviour
+{
+	// Token: 0x06001ECB RID: 7883 RVA: 0x00107960 File Offset: 0x00105B60
+	private void Awake()
+	{
+		LevelGlobals.labJetCrate = this;
+	}
+}

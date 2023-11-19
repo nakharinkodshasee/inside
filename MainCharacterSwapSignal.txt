@@ -1,0 +1,62 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000381 RID: 897
+public class MainCharacterSwapSignal : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001859 RID: 6233 RVA: 0x000D4858 File Offset: 0x000D2A58
+	public bool PreAwake(int callcount)
+	{
+		this.swapCharacter = SignalIn.Create("swapCharacter", base.gameObject, new Action(this.SwapCharacter));
+		this.characterSwapped = SignalOut.Create("characterSwapped", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x0600185A RID: 6234 RVA: 0x000D48A0 File Offset: 0x000D2AA0
+	private void SwapCharacter()
+	{
+		Boy boy = ScriptGlobals.boy;
+		Huddle huddle = ScriptGlobals.huddle;
+		if (this.useOnlyChangeFrom)
+		{
+			if (boy.isCharacterActive && this.onlyChangeTo == MainCharacterSwapSignal.CharacterType.Boy)
+			{
+				return;
+			}
+			if (huddle.isCharacterActive && this.onlyChangeTo == MainCharacterSwapSignal.CharacterType.Huddle)
+			{
+				return;
+			}
+			if (boy.isCharacterActive && !huddle.isCharacterActive)
+			{
+				MainCharacterSwap.SwapToHuddle();
+			}
+			else if (!boy.isCharacterActive && huddle.isCharacterActive)
+			{
+				MainCharacterSwap.SwapToBoy();
+			}
+			this.characterSwapped.Signal();
+		}
+	}
+
+	// Token: 0x04002C05 RID: 11269
+	public bool useOnlyChangeFrom;
+
+	// Token: 0x04002C06 RID: 11270
+	public MainCharacterSwapSignal.CharacterType onlyChangeTo = MainCharacterSwapSignal.CharacterType.Boy;
+
+	// Token: 0x04002C07 RID: 11271
+	private SignalIn swapCharacter;
+
+	// Token: 0x04002C08 RID: 11272
+	private SignalOut characterSwapped;
+
+	// Token: 0x02000382 RID: 898
+	public enum CharacterType
+	{
+		// Token: 0x04002C0A RID: 11274
+		Boy = 1,
+		// Token: 0x04002C0B RID: 11275
+		Huddle
+	}
+}

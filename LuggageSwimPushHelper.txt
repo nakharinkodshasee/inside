@@ -1,0 +1,26 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000533 RID: 1331
+public class LuggageSwimPushHelper : MonoBehaviour
+{
+	// Token: 0x060022B9 RID: 8889 RVA: 0x001234AC File Offset: 0x001216AC
+	private void FixedUpdate()
+	{
+		this.applyForce = false;
+		if (ScriptGlobals.boy.state is BoySwimState && BoyUtils.GetCurrentGrabBody(ScriptGlobals.boy) == base.GetComponent<Rigidbody>())
+		{
+			this.applyForce = true;
+			if (Mathf.Abs(ScriptGlobals.boy.input.stick.x) > 0.33f)
+			{
+				base.GetComponent<Rigidbody>().AddForce(this.forceAmount * ScriptGlobals.boy.input.stick.x * Vector3.right);
+			}
+		}
+	}
+
+	// Token: 0x040040E0 RID: 16608
+	public float forceAmount = 1f;
+
+	// Token: 0x040040E1 RID: 16609
+	private bool applyForce;
+}

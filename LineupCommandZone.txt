@@ -1,0 +1,48 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000409 RID: 1033
+public class LineupCommandZone : MonoBehaviour
+{
+	// Token: 0x06001B33 RID: 6963 RVA: 0x000EDB64 File Offset: 0x000EBD64
+	[LateProcessBuild(0)]
+	private void PreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.position = base.transform.position;
+	}
+
+	// Token: 0x06001B34 RID: 6964 RVA: 0x000EDB98 File Offset: 0x000EBD98
+	public bool IsInsideZone(Transform objectToCheck)
+	{
+		return this.IsInsideZone(objectToCheck.position);
+	}
+
+	// Token: 0x06001B35 RID: 6965 RVA: 0x000EDBA8 File Offset: 0x000EBDA8
+	public bool IsInsideZone(Vector3 objectPosition)
+	{
+		float num = objectPosition.x - this.position.x;
+		if (num < 0f)
+		{
+			num = -num;
+		}
+		return num < this.length / 2f;
+	}
+
+	// Token: 0x04003143 RID: 12611
+	public float length;
+
+	// Token: 0x04003144 RID: 12612
+	[SerializeField]
+	[HideInInspector]
+	private Vector3 position;
+
+	// Token: 0x04003145 RID: 12613
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

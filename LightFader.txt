@@ -1,0 +1,235 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000339 RID: 825
+public class LightFader : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600170E RID: 5902 RVA: 0x000C9F70 File Offset: 0x000C8170
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		int num = this.lenseFlares.Length;
+		this.lenseFlaresOriginalColor = new Color[num];
+		for (int i = 0; i < num; i++)
+		{
+			this.lenseFlaresOriginalColor[i] = this.lenseFlares[i].color;
+		}
+	}
+
+	// Token: 0x0600170F RID: 5903 RVA: 0x000C9FD8 File Offset: 0x000C81D8
+	private void InitializeColorProperties()
+	{
+		int num = this.materialInstances.Length;
+		this.materialInstanceProperties = new MaterialInstance.ColorProperty[num];
+		this.materialInstanceOriginalColors = new Color[num];
+		for (int i = 0; i < num; i++)
+		{
+			MaterialInstance materialInstance = this.materialInstances[i];
+			Material sharedMaterial = materialInstance.gameObject.GetComponent<Renderer>().sharedMaterial;
+			int j = 0;
+			int num2 = this.colorNames.Length;
+			while (j < num2)
+			{
+				string text = this.colorNames[j];
+				if (sharedMaterial.HasProperty(text))
+				{
+					MaterialInstance.ColorProperty orAddColorProperty = materialInstance.GetOrAddColorProperty(text);
+					this.materialInstanceProperties[i] = orAddColorProperty;
+					this.materialInstanceOriginalColors[i] = materialInstance.GetColorValue(orAddColorProperty);
+				}
+				j++;
+			}
+		}
+	}
+
+	// Token: 0x06001710 RID: 5904 RVA: 0x000CA098 File Offset: 0x000C8298
+	public bool PreAwake(int callcount)
+	{
+		this.fadeIn = SignalIn.Create("fadeIn", base.gameObject, new Action(this.SetFadeInState));
+		this.off = SignalIn.Create("off", base.gameObject, new Action(this.SetOffState));
+		this.InitializeColorProperties();
+		return true;
+	}
+
+	// Token: 0x06001711 RID: 5905 RVA: 0x000CA0F0 File Offset: 0x000C82F0
+	private void Awake()
+	{
+		this.OnPreProcess();
+		if (this.lightOn)
+		{
+			this.SetOnState();
+		}
+		else
+		{
+			this.SetOffState();
+		}
+	}
+
+	// Token: 0x06001712 RID: 5906 RVA: 0x000CA120 File Offset: 0x000C8320
+	private void Update()
+	{
+		if (this.state == LightFader.State.FadeIn)
+		{
+			this.fadeInTimer += Time.deltaTime;
+			float num = Mathf.Clamp01(this.fadeInTimer / this.fadeInDuration);
+			float num2 = this.fadeInCurve.Evaluate(num);
+			this.SetLightIntensity(num2);
+			if (num2 >= 1f)
+			{
+				this.state = LightFader.State.On;
+			}
+		}
+	}
+
+	// Token: 0x06001713 RID: 5907 RVA: 0x000CA184 File Offset: 0x000C8384
+	private void SetLightIntensity(float lightFraction)
+	{
+		this.lightSource.intensity = this.lightIntensity * lightFraction;
+		int i = 0;
+		int num = this.lenseFlares.Length;
+		while (i < num)
+		{
+			this.lenseFlares[i].color = this.lenseFlaresOriginalColor[i] * lightFraction;
+			i++;
+		}
+		int j = 0;
+		int num2 = this.materialInstances.Length;
+		while (j < num2)
+		{
+			MaterialInstance materialInstance = this.materialInstances[j];
+			MaterialInstance.ColorProperty property = this.materialInstanceProperties[j];
+			Color value = this.materialInstanceOriginalColors[j] * lightFraction;
+			materialInstance.SetColorProperty(property, value);
+			j++;
+		}
+	}
+
+	// Token: 0x06001714 RID: 5908 RVA: 0x000CA238 File Offset: 0x000C8438
+	public void SetFadeInState()
+	{
+		if (this.visualsOn)
+		{
+			this.visualsOn.SetActive(true);
+		}
+		if (this.visualsOff)
+		{
+			this.visualsOff.SetActive(false);
+		}
+		this.fadeInTimer = 0f;
+		this.state = LightFader.State.FadeIn;
+	}
+
+	// Token: 0x06001715 RID: 5909 RVA: 0x000CA290 File Offset: 0x000C8490
+	public void SetOffState()
+	{
+		if (this.visualsOn)
+		{
+			this.visualsOn.SetActive(false);
+		}
+		if (this.visualsOff)
+		{
+			this.visualsOff.SetActive(true);
+		}
+		this.SetLightIntensity(0f);
+		this.state = LightFader.State.Off;
+	}
+
+	// Token: 0x06001716 RID: 5910 RVA: 0x000CA2E8 File Offset: 0x000C84E8
+	public void SetOnState()
+	{
+		if (this.visualsOn)
+		{
+			this.visualsOn.SetActive(true);
+		}
+		if (this.visualsOff)
+		{
+			this.visualsOff.SetActive(false);
+		}
+		this.SetLightIntensity(1f);
+		this.state = LightFader.State.On;
+	}
+
+	// Token: 0x0400293F RID: 10559
+	public bool lightOn;
+
+	// Token: 0x04002940 RID: 10560
+	public GameObject visualsOn;
+
+	// Token: 0x04002941 RID: 10561
+	public GameObject visualsOff;
+
+	// Token: 0x04002942 RID: 10562
+	public Light lightSource;
+
+	// Token: 0x04002943 RID: 10563
+	public MaterialInstance[] materialInstances;
+
+	// Token: 0x04002944 RID: 10564
+	public LensFlareSimple[] lenseFlares;
+
+	// Token: 0x04002945 RID: 10565
+	[Header("--- FadeIn ---")]
+	public AnimationCurve fadeInCurve;
+
+	// Token: 0x04002946 RID: 10566
+	public float fadeInDuration = 2f;
+
+	// Token: 0x04002947 RID: 10567
+	public float lightIntensity = 0.6f;
+
+	// Token: 0x04002948 RID: 10568
+	private SignalIn fadeIn;
+
+	// Token: 0x04002949 RID: 10569
+	private SignalIn off;
+
+	// Token: 0x0400294A RID: 10570
+	private LightFader.State state;
+
+	// Token: 0x0400294B RID: 10571
+	private float fadeInTimer;
+
+	// Token: 0x0400294C RID: 10572
+	private string[] colorNames = new string[]
+	{
+		"_IllumTint",
+		"_TintColor",
+		"_MainColor",
+		"_Color",
+		"_MainCol"
+	};
+
+	// Token: 0x0400294D RID: 10573
+	private MaterialInstance.ColorProperty[] materialInstanceProperties;
+
+	// Token: 0x0400294E RID: 10574
+	private Color[] materialInstanceOriginalColors;
+
+	// Token: 0x0400294F RID: 10575
+	[HideInInspector]
+	[SerializeField]
+	private Color[] lenseFlaresOriginalColor;
+
+	// Token: 0x04002950 RID: 10576
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x0200033A RID: 826
+	private enum State
+	{
+		// Token: 0x04002952 RID: 10578
+		On,
+		// Token: 0x04002953 RID: 10579
+		Off,
+		// Token: 0x04002954 RID: 10580
+		FadeIn,
+		// Token: 0x04002955 RID: 10581
+		FadeOut
+	}
+}

@@ -1,0 +1,204 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000B8 RID: 184
+public class MindHatDudeSpawner : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060005F6 RID: 1526 RVA: 0x00046650 File Offset: 0x00044850
+	public bool PreAwake(int callcount)
+	{
+		this.unspawn = SignalIn.Create("unspawn", base.gameObject, new Action(this.OnUnspawn));
+		this.ensureSpawn = SignalIn.Create("ensureSpawn", base.gameObject, new Action(this.OnEnsureSpawn));
+		this.rigBod = base.GetComponent<Rigidbody>();
+		return true;
+	}
+
+	// Token: 0x060005F7 RID: 1527 RVA: 0x000466B0 File Offset: 0x000448B0
+	private void Start()
+	{
+		this.spawn = MindHatCompanionController.instance.BeginSpawn(this, null);
+		this.started = true;
+	}
+
+	// Token: 0x060005F8 RID: 1528 RVA: 0x000466E0 File Offset: 0x000448E0
+	public Boy GetBoy()
+	{
+		return (this.spawn == null) ? null : this.spawn.boy;
+	}
+
+	// Token: 0x060005F9 RID: 1529 RVA: 0x00046700 File Offset: 0x00044900
+	public bool IsBoyReady()
+	{
+		return this.spawn != null && this.spawn.IsActive(this);
+	}
+
+	// Token: 0x060005FA RID: 1530 RVA: 0x0004671C File Offset: 0x0004491C
+	public void TeleportToPosition(GameObject toPoint, bool startMindcontrolled)
+	{
+		if (this.spawn != null)
+		{
+			this.spawn.BeginPosition(this, toPoint.transform.position, startMindcontrolled);
+		}
+	}
+
+	// Token: 0x060005FB RID: 1531 RVA: 0x0004674C File Offset: 0x0004494C
+	private void OnEnsureSpawn()
+	{
+		if (this.spawn == null)
+		{
+			this.spawn = MindHatCompanionController.instance.BeginSpawnForced(this);
+		}
+	}
+
+	// Token: 0x060005FC RID: 1532 RVA: 0x0004676C File Offset: 0x0004496C
+	private void OnUnspawn()
+	{
+		if (this.spawn != null)
+		{
+			this.spawn.boy.gameObject.SetActive(true);
+			this.spawn.boy.visualBoy.gameObject.SetActive(true);
+			if (this.spawn.IsActive(this))
+			{
+				MindHatReceiver component = this.spawn.boy.gameObject.GetComponent<MindHatReceiver>();
+				MindHat hangingInHat = component.GetHangingInHat();
+				if (hangingInHat != null)
+				{
+					this.spawnInHat = hangingInHat;
+					hangingInHat.ForceDetach(true);
+					hangingInHat.SetIdleState();
+				}
+				else
+				{
+					this.spawnInHat = null;
+				}
+			}
+			this.spawn.BeginUnspawn(this);
+			this.spawn = null;
+		}
+	}
+
+	// Token: 0x060005FD RID: 1533 RVA: 0x00046824 File Offset: 0x00044A24
+	private void OnDisable()
+	{
+		this.OnUnspawn();
+	}
+
+	// Token: 0x060005FE RID: 1534 RVA: 0x0004682C File Offset: 0x00044A2C
+	public void WasUnspawned()
+	{
+		this.spawn = null;
+	}
+
+	// Token: 0x060005FF RID: 1535 RVA: 0x00046838 File Offset: 0x00044A38
+	private void OnEnable()
+	{
+		if (this.started)
+		{
+			if (this.spawnInHat)
+			{
+				this.spawn = MindHatCompanionController.instance.BeginSpawn(this, new Vector3?(this.spawnInHat.transform.position + Vector3.up * 0.5f));
+			}
+			else
+			{
+				this.spawn = MindHatCompanionController.instance.BeginSpawn(this, null);
+			}
+		}
+	}
+
+	// Token: 0x06000600 RID: 1536 RVA: 0x000468BC File Offset: 0x00044ABC
+	private void FixedUpdate()
+	{
+		if (this.spawn != null && this.spawn.IsActive(this))
+		{
+			if (this.dangerousHardCodedCulling)
+			{
+				vector2f pos = this.spawn.boy.pos;
+				pos.x -= ScriptGlobals.boy.pos.x;
+				pos.y -= ScriptGlobals.boy.pos.y;
+				bool flag = this.spawn.boy.isMindControlled;
+				if (!ScriptGlobals.boy.isMindControlling)
+				{
+					flag = false;
+				}
+				if (!flag && (pos.x > 35f || pos.x < -23f || FastMath.Abs(pos.y) > 15f))
+				{
+					this.spawn.boy.gameObject.SetActive(false);
+					this.spawn.boy.visualBoy.gameObject.SetActive(false);
+				}
+				else
+				{
+					this.spawn.boy.gameObject.SetActive(true);
+					this.spawn.boy.visualBoy.gameObject.SetActive(true);
+					this.rigBod.MovePosition(this.spawn.boy.pos3);
+				}
+			}
+			else
+			{
+				this.rigBod.MovePosition(this.spawn.boy.pos3);
+			}
+		}
+	}
+
+	// Token: 0x04000A62 RID: 2658
+	public MindHatReceiver.Facing facing = MindHatReceiver.Facing.Right;
+
+	// Token: 0x04000A63 RID: 2659
+	public MindHat connectedHat;
+
+	// Token: 0x04000A64 RID: 2660
+	public bool useGoToSleepAnimation = true;
+
+	// Token: 0x04000A65 RID: 2661
+	public bool inverseForward;
+
+	// Token: 0x04000A66 RID: 2662
+	public float moveSpeedScale = 1f;
+
+	// Token: 0x04000A67 RID: 2663
+	public string initialTheme = "MindCTRL";
+
+	// Token: 0x04000A68 RID: 2664
+	public Material material;
+
+	// Token: 0x04000A69 RID: 2665
+	public float scale = 1.4f;
+
+	// Token: 0x04000A6A RID: 2666
+	public int frameDelay;
+
+	// Token: 0x04000A6B RID: 2667
+	public Mesh mesh;
+
+	// Token: 0x04000A6C RID: 2668
+	public GameObject wantedZPlane;
+
+	// Token: 0x04000A6D RID: 2669
+	public bool offsetUpdate;
+
+	// Token: 0x04000A6E RID: 2670
+	public bool isConnectedToHat;
+
+	// Token: 0x04000A6F RID: 2671
+	public SignalIn unspawn;
+
+	// Token: 0x04000A70 RID: 2672
+	public SignalIn ensureSpawn;
+
+	// Token: 0x04000A71 RID: 2673
+	public bool dangerousHardCodedCulling = true;
+
+	// Token: 0x04000A72 RID: 2674
+	public int priority;
+
+	// Token: 0x04000A73 RID: 2675
+	private MindHat spawnInHat;
+
+	// Token: 0x04000A74 RID: 2676
+	private MindHatCompanionController.DeferredState spawn;
+
+	// Token: 0x04000A75 RID: 2677
+	private Rigidbody rigBod;
+
+	// Token: 0x04000A76 RID: 2678
+	private bool started;
+}

@@ -1,0 +1,33 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020003E1 RID: 993
+public class LineRendererUpdater : MonoBehaviour
+{
+	// Token: 0x06001A8E RID: 6798 RVA: 0x000E8770 File Offset: 0x000E6970
+	private void Start()
+	{
+		this.lineRenderer = base.GetComponent<LineRenderer>();
+	}
+
+	// Token: 0x06001A8F RID: 6799 RVA: 0x000E8780 File Offset: 0x000E6980
+	private void Update()
+	{
+		this.lineRenderer.SetVertexCount(this.PositionTransforms.Count);
+		int i = 0;
+		int count = this.PositionTransforms.Count;
+		while (i < count)
+		{
+			Transform transform = this.PositionTransforms[i];
+			this.lineRenderer.SetPosition(i, transform.position);
+			i++;
+		}
+	}
+
+	// Token: 0x04002FFB RID: 12283
+	public List<Transform> PositionTransforms;
+
+	// Token: 0x04002FFC RID: 12284
+	private LineRenderer lineRenderer;
+}

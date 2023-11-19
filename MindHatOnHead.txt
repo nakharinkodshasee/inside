@@ -1,0 +1,201 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004CE RID: 1230
+public class MindHatOnHead : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002030 RID: 8240 RVA: 0x00110DBC File Offset: 0x0010EFBC
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioAttach = new AudioEventSimple("env_mines_mindHatLoad");
+		this.audioDetach = new AudioEventSimple("env_mines_mindHatExit");
+	}
+
+	// Token: 0x06002031 RID: 8241 RVA: 0x00110DF4 File Offset: 0x0010EFF4
+	public bool PreAwake(int callcount)
+	{
+		this.attachToHead = SignalIn.Create("attachToHead", base.gameObject, new Action(this.Attach));
+		this.detachFromHead = SignalIn.Create("detachFromHead", base.gameObject, new Action(this.Detach));
+		return true;
+	}
+
+	// Token: 0x06002032 RID: 8242 RVA: 0x00110E48 File Offset: 0x0010F048
+	private void Awake()
+	{
+		this.OnPreProcess();
+		LevelGlobals.mindHatOnHead = this;
+	}
+
+	// Token: 0x06002033 RID: 8243 RVA: 0x00110E58 File Offset: 0x0010F058
+	private void Start()
+	{
+		this.saveState = base.GetComponent<PersistentBool>();
+		this.boy = ScriptGlobals.boy;
+		this.ToggleVisuals(false);
+		if (ScriptGlobals.boy.visualBoy == null)
+		{
+			return;
+		}
+		this.headTransform = ScriptGlobals.boy.visualBoy.actor.bones[ScriptGlobals.boy.visualBoy.actor.GetBone("Head")].transform;
+		if (this.saveState.current)
+		{
+			this.audioAttach.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.Attach();
+		}
+		this.isReady = true;
+	}
+
+	// Token: 0x06002034 RID: 8244 RVA: 0x00110F08 File Offset: 0x0010F108
+	public bool IsAttached()
+	{
+		return this.isAttached;
+	}
+
+	// Token: 0x06002035 RID: 8245 RVA: 0x00110F10 File Offset: 0x0010F110
+	public bool IsReady()
+	{
+		return this.isReady;
+	}
+
+	// Token: 0x06002036 RID: 8246 RVA: 0x00110F18 File Offset: 0x0010F118
+	public void EnableLogic()
+	{
+		this.isAttached = true;
+		this.saveState.current = true;
+	}
+
+	// Token: 0x06002037 RID: 8247 RVA: 0x00110F30 File Offset: 0x0010F130
+	private void SetVoiceConfig()
+	{
+		PlayMakerFSM componentInChildren = base.GetComponentInChildren<PlayMakerFSM>();
+		if (componentInChildren)
+		{
+			componentInChildren.SendEvent("setVoice");
+		}
+	}
+
+	// Token: 0x06002038 RID: 8248 RVA: 0x00110F5C File Offset: 0x0010F15C
+	public void Attach()
+	{
+		this.EnableLogic();
+		this.ToggleVisuals(true);
+		Transform childComponent = this.boy.visualBoy.transform.GetChildComponent("Themes");
+		if (!(childComponent == null))
+		{
+			Transform childComponent2 = childComponent.GetChildComponent("MindhatAttached");
+			if (childComponent2)
+			{
+				this.boy.visualBoy.SetTheme(childComponent2, VisualBoy.ThemePriority.Low);
+			}
+		}
+		this.SetVoiceConfig();
+		base.transform.rotation = this.headTransform.rotation;
+		base.transform.position = this.headTransform.position;
+		base.transform.parent = this.headTransform;
+	}
+
+	// Token: 0x06002039 RID: 8249 RVA: 0x00111010 File Offset: 0x0010F210
+	public void Detach()
+	{
+		this.isAttached = false;
+		ScriptGlobals.boy.visualBoy.SetTheme(null, VisualBoy.ThemePriority.Low);
+		this.saveState.current = false;
+	}
+
+	// Token: 0x0600203A RID: 8250 RVA: 0x00111044 File Offset: 0x0010F244
+	public void Reparent(Transform parent)
+	{
+		this.audioDetach.PostFast(AudioKeyObject.AkGameObjs.global);
+		if (parent)
+		{
+			base.transform.parent = parent;
+		}
+	}
+
+	// Token: 0x0600203B RID: 8251 RVA: 0x00111070 File Offset: 0x0010F270
+	public void FadeLight()
+	{
+		this.hatRender.material = this.hatOffMaterial;
+		int i = 0;
+		int num = this.disableLights.Length;
+		while (i < num)
+		{
+			GameObject gameObject = this.disableLights[i];
+			if (gameObject != null)
+			{
+				gameObject.SetActive(false);
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x0600203C RID: 8252 RVA: 0x001110C8 File Offset: 0x0010F2C8
+	private void OnDestroy()
+	{
+		if (LevelGlobals.mindHatOnHead == this)
+		{
+			LevelGlobals.mindHatOnHead = null;
+		}
+	}
+
+	// Token: 0x0600203D RID: 8253 RVA: 0x001110E0 File Offset: 0x0010F2E0
+	private void ToggleVisuals(bool value)
+	{
+		foreach (object obj in base.transform)
+		{
+			Transform transform = (Transform)obj;
+			transform.gameObject.SetActive(value);
+		}
+	}
+
+	// Token: 0x04003BAF RID: 15279
+	public Renderer hatRender;
+
+	// Token: 0x04003BB0 RID: 15280
+	public Material hatOffMaterial;
+
+	// Token: 0x04003BB1 RID: 15281
+	public GameObject[] disableLights;
+
+	// Token: 0x04003BB2 RID: 15282
+	private SignalIn attachToHead;
+
+	// Token: 0x04003BB3 RID: 15283
+	private SignalIn detachFromHead;
+
+	// Token: 0x04003BB4 RID: 15284
+	private bool isAttached;
+
+	// Token: 0x04003BB5 RID: 15285
+	private bool isReady;
+
+	// Token: 0x04003BB6 RID: 15286
+	private Transform headTransform;
+
+	// Token: 0x04003BB7 RID: 15287
+	private PersistentBool saveState;
+
+	// Token: 0x04003BB8 RID: 15288
+	private Boy boy;
+
+	// Token: 0x04003BB9 RID: 15289
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioAttach;
+
+	// Token: 0x04003BBA RID: 15290
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioDetach;
+
+	// Token: 0x04003BBB RID: 15291
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

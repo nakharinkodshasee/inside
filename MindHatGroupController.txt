@@ -1,0 +1,159 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000205 RID: 517
+public class MindHatGroupController : MonoBehaviour
+{
+	// Token: 0x06000FFD RID: 4093 RVA: 0x00097E78 File Offset: 0x00096078
+	public List<AlbinoAI> GetAlbinos()
+	{
+		return this.albinos;
+	}
+
+	// Token: 0x06000FFE RID: 4094 RVA: 0x00097E80 File Offset: 0x00096080
+	private void Start()
+	{
+		foreach (AlbinoSpawner albinoSpawner in this.albinosParent.GetComponentsInChildren<AlbinoSpawner>())
+		{
+			AlbinoAI allocatedAlbinoAI = albinoSpawner.GetAllocatedAlbinoAI();
+			this.albinos.Add(allocatedAlbinoAI);
+		}
+		foreach (MindHat mindHat in this.mindHats)
+		{
+			mindHat.attached.Event += this.attached_Event;
+			mindHat.detached.Event += this.detached_Event;
+		}
+	}
+
+	// Token: 0x06000FFF RID: 4095 RVA: 0x00097F4C File Offset: 0x0009614C
+	public bool GetBoyIsControlling()
+	{
+		return this.boyIsControlling;
+	}
+
+	// Token: 0x06001000 RID: 4096 RVA: 0x00097F54 File Offset: 0x00096154
+	private void attached_Event(MindHat obj)
+	{
+		this.boyIsControlling = true;
+		this.ResetToCenterOfMass();
+	}
+
+	// Token: 0x06001001 RID: 4097 RVA: 0x00097F64 File Offset: 0x00096164
+	private void detached_Event(MindHat obj)
+	{
+		this.boyIsControlling = false;
+		this.ResetToCenterOfMass();
+	}
+
+	// Token: 0x06001002 RID: 4098 RVA: 0x00097F74 File Offset: 0x00096174
+	private void ResetToCenterOfMass()
+	{
+		float centerOfMass = this.GetCenterOfMass();
+		Vector3 position = base.transform.position;
+		position.x = centerOfMass;
+		base.transform.position = position;
+	}
+
+	// Token: 0x06001003 RID: 4099 RVA: 0x00097FA8 File Offset: 0x000961A8
+	private float GetCenterOfMass()
+	{
+		float num = 0f;
+		foreach (AlbinoAI albinoAI in this.albinos)
+		{
+			num += albinoAI.transform.position.x;
+		}
+		num /= (float)this.albinos.Count;
+		return num;
+	}
+
+	// Token: 0x06001004 RID: 4100 RVA: 0x00098034 File Offset: 0x00096234
+	private float GetCenterOfMassY()
+	{
+		float num = 0f;
+		foreach (AlbinoAI albinoAI in this.albinos)
+		{
+			num += albinoAI.transform.position.y;
+		}
+		num /= (float)this.albinos.Count;
+		return num;
+	}
+
+	// Token: 0x06001005 RID: 4101 RVA: 0x000980C0 File Offset: 0x000962C0
+	private void Update()
+	{
+		this.centerOfMassThisUpdate = this.GetCenterOfMass();
+		if (this.boyIsControlling && !ScriptGlobals.boy.input.rawAction)
+		{
+			this.UpdateControlPoint();
+		}
+		this.UpdateAttractorEnable();
+	}
+
+	// Token: 0x06001006 RID: 4102 RVA: 0x00098104 File Offset: 0x00096304
+	private void UpdateAttractorEnable()
+	{
+		float num = Mathf.Abs(ScriptGlobals.boy.transform.position.x - base.transform.position.x);
+		if (num < 1.3f && !(ScriptGlobals.boy.state is BoyCustomAnimState))
+		{
+			this.attractor.ReleaseAll();
+		}
+		else
+		{
+			this.attractor.AttractAll();
+		}
+	}
+
+	// Token: 0x06001007 RID: 4103 RVA: 0x0009817C File Offset: 0x0009637C
+	private void UpdateControlPoint()
+	{
+		float x = ScriptGlobals.boy.input.stick.x;
+		float num = this.centerOfMassThisUpdate;
+		float num2 = base.transform.position.x + x * Time.deltaTime * 30f;
+		if (Mathf.Abs(x) < 0.35f)
+		{
+			float num3 = num - base.transform.position.x;
+			if (Mathf.Abs(num3) < 1f)
+			{
+				num2 = num;
+			}
+			else
+			{
+				num2 = base.transform.position.x + Mathf.Sign(num3) * Time.deltaTime * 2f;
+			}
+		}
+		num2 = Mathf.Clamp(num2, num - 4f, num + 4f);
+		float centerOfMassY = this.GetCenterOfMassY();
+		Vector3 position = base.transform.position;
+		position.x = num2;
+		position.y = centerOfMassY;
+		base.transform.position = position;
+		Vector3 position2;
+		position2..ctor(num, centerOfMassY, 0f);
+		this.centerOfMassTransform.position = position2;
+	}
+
+	// Token: 0x04001D00 RID: 7424
+	private const float maxDistFromCenter = 4f;
+
+	// Token: 0x04001D01 RID: 7425
+	public List<MindHat> mindHats;
+
+	// Token: 0x04001D02 RID: 7426
+	public Transform albinosParent;
+
+	// Token: 0x04001D03 RID: 7427
+	public AlbinoAttractor attractor;
+
+	// Token: 0x04001D04 RID: 7428
+	public Transform centerOfMassTransform;
+
+	// Token: 0x04001D05 RID: 7429
+	private List<AlbinoAI> albinos = new List<AlbinoAI>();
+
+	// Token: 0x04001D06 RID: 7430
+	private bool boyIsControlling;
+
+	// Token: 0x04001D07 RID: 7431
+	private float centerOfMassThisUpdate;
+}

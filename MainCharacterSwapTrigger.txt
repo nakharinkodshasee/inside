@@ -1,0 +1,66 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000383 RID: 899
+public class MainCharacterSwapTrigger : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600185C RID: 6236 RVA: 0x000D4944 File Offset: 0x000D2B44
+	public bool PreAwake(int callcount)
+	{
+		this.swapCharacter = SignalIn.Create("swapCharacter", base.gameObject, new Action(this.SwapCharacter));
+		this.characterSwapped = SignalOut.Create("characterSwapped", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x0600185D RID: 6237 RVA: 0x000D498C File Offset: 0x000D2B8C
+	private void OnTriggerEnter(Collider other)
+	{
+		if (other.attachedRigidbody && other.attachedRigidbody == ScriptGlobals.boy.GetComponent<Rigidbody>() && this.banSwapSteps == 0 && ((this.swapCount == 0 && this.swapOnce) || !this.swapOnce))
+		{
+			this.SwapCharacter();
+		}
+	}
+
+	// Token: 0x0600185E RID: 6238 RVA: 0x000D49F8 File Offset: 0x000D2BF8
+	private void SwapCharacter()
+	{
+		Boy boy = ScriptGlobals.boy;
+		Huddle huddle = ScriptGlobals.huddle;
+		this.banSwapSteps = 180;
+		if (boy.isCharacterActive && !huddle.isCharacterActive)
+		{
+			MainCharacterSwap.SwapToHuddle();
+			this.swapCount++;
+		}
+		else if (!boy.isCharacterActive && huddle.isCharacterActive)
+		{
+			MainCharacterSwap.SwapToBoy();
+			this.swapCount++;
+		}
+		this.characterSwapped.Signal();
+	}
+
+	// Token: 0x0600185F RID: 6239 RVA: 0x000D4A80 File Offset: 0x000D2C80
+	private void FixedUpdate()
+	{
+		if (0 < this.banSwapSteps)
+		{
+			this.banSwapSteps--;
+		}
+	}
+
+	// Token: 0x04002C0C RID: 11276
+	public bool swapOnce;
+
+	// Token: 0x04002C0D RID: 11277
+	private int swapCount;
+
+	// Token: 0x04002C0E RID: 11278
+	private int banSwapSteps;
+
+	// Token: 0x04002C0F RID: 11279
+	private SignalIn swapCharacter;
+
+	// Token: 0x04002C10 RID: 11280
+	private SignalOut characterSwapped;
+}

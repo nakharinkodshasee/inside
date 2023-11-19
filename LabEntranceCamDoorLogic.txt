@@ -1,0 +1,50 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000495 RID: 1173
+public class LabEntranceCamDoorLogic : MonoBehaviour
+{
+	// Token: 0x06001EC8 RID: 7880 RVA: 0x0010782C File Offset: 0x00105A2C
+	private void Start()
+	{
+		this.maxDist = Mathf.Abs(this.doorDown.position.y - this.doorUp.position.y);
+		this.startAims = new List<float>();
+		for (int i = 0; i < this.camBoxes.Count; i++)
+		{
+			this.startAims.Add(this.camBoxes[i].positionAim.x);
+		}
+	}
+
+	// Token: 0x06001EC9 RID: 7881 RVA: 0x001078B4 File Offset: 0x00105AB4
+	private void Update()
+	{
+		float num = Mathf.Abs(this.door.position.y - this.doorDown.position.y);
+		float num2 = Mathf.InverseLerp(0f, this.maxDist, num);
+		for (int i = 0; i < this.camBoxes.Count; i++)
+		{
+			this.camBoxes[i].positionAim.x = Mathf.Lerp(this.startAims[i], this.startAims[i] + this.lookAheadValue, num2);
+		}
+	}
+
+	// Token: 0x040038FA RID: 14586
+	public List<CameraBlendBox> camBoxes;
+
+	// Token: 0x040038FB RID: 14587
+	public Transform door;
+
+	// Token: 0x040038FC RID: 14588
+	public Transform doorUp;
+
+	// Token: 0x040038FD RID: 14589
+	public Transform doorDown;
+
+	// Token: 0x040038FE RID: 14590
+	public float lookAheadValue = 1.5f;
+
+	// Token: 0x040038FF RID: 14591
+	private List<float> startAims;
+
+	// Token: 0x04003900 RID: 14592
+	private float maxDist;
+}

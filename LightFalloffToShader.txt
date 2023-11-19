@@ -1,0 +1,42 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200033C RID: 828
+[ExecuteInEditMode]
+public class LightFalloffToShader : MonoBehaviour
+{
+	// Token: 0x0600171D RID: 5917 RVA: 0x000CA438 File Offset: 0x000C8638
+	private void OnEnable()
+	{
+		this.matinstance = base.GetComponent<MaterialInstance>();
+		this.localTextureProperty = this.matinstance.GetOrAddTextureProperty("_PDLightTextureB0");
+	}
+
+	// Token: 0x0600171E RID: 5918 RVA: 0x000CA468 File Offset: 0x000C8668
+	private void Update()
+	{
+		if (this.AssociatedLight == null || this.AssociatedLight.fallofftex == null)
+		{
+			return;
+		}
+		Texture fallofftex = this.AssociatedLight.fallofftex;
+		this.matinstance.SetTextureProperty(this.localTextureProperty, fallofftex);
+	}
+
+	// Token: 0x0600171F RID: 5919 RVA: 0x000CA4BC File Offset: 0x000C86BC
+	public void OnDrawGizmos()
+	{
+	}
+
+	// Token: 0x0400295A RID: 10586
+	private const string LIGHT_FALLOFF_PROPERTY_NAME = "_PDLightTextureB0";
+
+	// Token: 0x0400295B RID: 10587
+	public Light AssociatedLight;
+
+	// Token: 0x0400295C RID: 10588
+	private MaterialInstance matinstance;
+
+	// Token: 0x0400295D RID: 10589
+	private MaterialInstance.TextureProperty localTextureProperty;
+}

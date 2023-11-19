@@ -1,0 +1,81 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200058F RID: 1423
+public class MindHatColourSwap : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002474 RID: 9332 RVA: 0x0012C81C File Offset: 0x0012AA1C
+	public bool PreAwake(int callcount)
+	{
+		this.swap = SignalIn.Create("swap", base.gameObject, new Action(this.Swap));
+		return true;
+	}
+
+	// Token: 0x06002475 RID: 9333 RVA: 0x0012C844 File Offset: 0x0012AA44
+	private void Start()
+	{
+		this.currentMindHat = this.mindHats[this.hatIndex];
+		foreach (MindHat mindHat in this.mindHats)
+		{
+			if (mindHat != this.currentMindHat)
+			{
+				this.ToggleMindHat(mindHat, false);
+			}
+		}
+	}
+
+	// Token: 0x06002476 RID: 9334 RVA: 0x0012C8D4 File Offset: 0x0012AAD4
+	private void SetMindHats()
+	{
+	}
+
+	// Token: 0x06002477 RID: 9335 RVA: 0x0012C8D8 File Offset: 0x0012AAD8
+	private void ToggleMindHat(MindHat m, bool v)
+	{
+		foreach (object obj in m.transform)
+		{
+			Transform transform = (Transform)obj;
+			Renderer component = transform.gameObject.GetComponent<Renderer>();
+			if (component)
+			{
+				component.enabled = v;
+			}
+		}
+		m.hangOnTrigger.gameObject.SetActive(v);
+		if (m.hangOnTrigger.GetComponent<Renderer>())
+		{
+			m.hangOnTrigger.GetComponent<Renderer>().enabled = false;
+		}
+	}
+
+	// Token: 0x06002478 RID: 9336 RVA: 0x0012C998 File Offset: 0x0012AB98
+	private void Swap()
+	{
+		bool flag = this.currentMindHat.GetBoyInHat();
+		if (flag)
+		{
+			this.currentMindHat.ForceDetach(false);
+		}
+		this.ToggleMindHat(this.currentMindHat, false);
+		this.hatIndex = ((this.hatIndex != this.mindHats.Count - 1) ? (this.hatIndex + 1) : 0);
+		this.currentMindHat = this.mindHats[this.hatIndex];
+		if (flag)
+		{
+			this.currentMindHat.ForceAttach();
+		}
+		this.ToggleMindHat(this.currentMindHat, true);
+	}
+
+	// Token: 0x040042E3 RID: 17123
+	public List<MindHat> mindHats;
+
+	// Token: 0x040042E4 RID: 17124
+	public int hatIndex;
+
+	// Token: 0x040042E5 RID: 17125
+	private MindHat currentMindHat;
+
+	// Token: 0x040042E6 RID: 17126
+	private SignalIn swap;
+}

@@ -1,0 +1,460 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000B3 RID: 179
+public class LineupEndChase : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060005C5 RID: 1477 RVA: 0x00045194 File Offset: 0x00043394
+	public bool PreAwake(int callcount)
+	{
+		this.startPatrol = SignalIn.Create("startPatrol", base.gameObject, new Action(this.SetPatrolState));
+		this.activate = SignalIn.Create("activate", base.gameObject, new Action(this.OnActivate));
+		this.watchBoy = SignalIn.Create("watchBoy", base.gameObject, new Action(this.OnWatchBoy));
+		this.boyDetected = SignalIn.Create("boyDetected", base.gameObject, new Action(this.OnBoyDetected));
+		return true;
+	}
+
+	// Token: 0x060005C6 RID: 1478 RVA: 0x0004522C File Offset: 0x0004342C
+	private void Start()
+	{
+		if (this.guardAnim)
+		{
+			this.idleAnim = this.guardAnim["GuardIdle"];
+			this.walkAnim = this.guardAnim["GuardWalkSlow"];
+			this.walkAnim.speed = 2f;
+		}
+		this.boy = ScriptGlobals.boy;
+		this.hulvPlayer = this.hulv.GetComponent<HulvPlayer>();
+		this.SetIdleState();
+		this.guardAnim.CrossFade(this.idleAnim.clip.name);
+	}
+
+	// Token: 0x060005C7 RID: 1479 RVA: 0x000452C4 File Offset: 0x000434C4
+	private void SetIdleState()
+	{
+		this.hulvPlayer.SetConfiguration(new HulvPlayer.Config
+		{
+			emotionOverride = HulvPlayer.Config.EmotionOverride.Normal,
+			manualBarking = true
+		});
+		this.state = LineupEndChase.State.Idle;
+	}
+
+	// Token: 0x060005C8 RID: 1480 RVA: 0x000452FC File Offset: 0x000434FC
+	private void IdleState()
+	{
+		this.hulvLookAt.transform.position = this.boy.pos3;
+	}
+
+	// Token: 0x060005C9 RID: 1481 RVA: 0x0004531C File Offset: 0x0004351C
+	private void SetPatrolState()
+	{
+		this.guardAnim.CrossFade(this.walkAnim.clip.name);
+		this.patrolTimer = 1f;
+		this.hulvPlayer.SetConfiguration(new HulvPlayer.Config
+		{
+			emotionOverride = HulvPlayer.Config.EmotionOverride.Normal,
+			manualBarking = true
+		});
+		this.state = LineupEndChase.State.Patrol;
+	}
+
+	// Token: 0x060005CA RID: 1482 RVA: 0x0004537C File Offset: 0x0004357C
+	private void PatrolState()
+	{
+		this.MoveGuard();
+		this.hulvLookAt.transform.position = this.boy.pos3;
+		if (this.patrolTimer > 0f)
+		{
+			this.patrolTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.SetBarkState();
+		}
+		if (this.attacking)
+		{
+			this.SetReleaseState(1.15f, false);
+		}
+	}
+
+	// Token: 0x060005CB RID: 1483 RVA: 0x000453F0 File Offset: 0x000435F0
+	private void SetBarkState()
+	{
+		this.hulvPlayer.SetConfiguration(new HulvPlayer.Config
+		{
+			emotionOverride = HulvPlayer.Config.EmotionOverride.Angry
+		});
+		this.barkTimer = 3f;
+		this.guardAnim.CrossFade(this.idleAnim.clip.name);
+		this.state = LineupEndChase.State.Bark;
+	}
+
+	// Token: 0x060005CC RID: 1484 RVA: 0x00045448 File Offset: 0x00043648
+	private void BarkState()
+	{
+		if (this.barkTimer > 0f)
+		{
+			this.barkTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.SetReleaseState(2f, false);
+		}
+		if (this.attacking)
+		{
+			this.SetReleaseState(2f, false);
+		}
+	}
+
+	// Token: 0x060005CD RID: 1485 RVA: 0x000454A0 File Offset: 0x000436A0
+	private void SetHulvAttentionState()
+	{
+		this.hulvPatrolWaypoint.transform.parent = this.guard.transform.parent;
+		this.hulvPlayer.SetConfiguration(new HulvPlayer.Config
+		{
+			emotionOverride = HulvPlayer.Config.EmotionOverride.Angry
+		});
+		this.state = LineupEndChase.State.HulvAttention;
+	}
+
+	// Token: 0x060005CE RID: 1486 RVA: 0x000454F0 File Offset: 0x000436F0
+	private void HulvAttentionState()
+	{
+		this.MoveGuard();
+		this.hulvLookAt.transform.position = this.boy.pos3;
+		float num = this.guard.transform.position.x - this.boy.pos.x + this.guardStopOffset;
+		if (num < 0f)
+		{
+			this.SetAttentionState();
+		}
+		if (this.attacking)
+		{
+			this.SetReleaseState(2f, false);
+		}
+	}
+
+	// Token: 0x060005CF RID: 1487 RVA: 0x0004557C File Offset: 0x0004377C
+	private void SetAttentionState()
+	{
+		this.guardAnim.CrossFade(this.idleAnim.clip.name);
+		this.hulvPlayer.Bark();
+		this.state = LineupEndChase.State.Attention;
+	}
+
+	// Token: 0x060005D0 RID: 1488 RVA: 0x000455B8 File Offset: 0x000437B8
+	private void AttentionState()
+	{
+		this.LookAtBoy();
+		this.hulvLookAt.transform.position = this.boy.pos3;
+		if (this.attentionTimer < 2.5f)
+		{
+			this.attentionTimer += Time.deltaTime;
+		}
+		else
+		{
+			this.SetReleaseState(0.5f, true);
+		}
+		if (this.attacking)
+		{
+			this.SetReleaseState(2.5f - this.attentionTimer, false);
+		}
+	}
+
+	// Token: 0x060005D1 RID: 1489 RVA: 0x00045638 File Offset: 0x00043838
+	private void SetReleaseState(float wait, bool bark)
+	{
+		this.SetBoyFrantic();
+		this.hulvPlayer.Bark();
+		this.posStopWalking = this.boy.transform.position;
+		this.releaseTimer = 1.15f;
+		this.hulvPatrolWaypoint.transform.parent = this.guard.transform.parent;
+		if (bark)
+		{
+		}
+		this.hulvPlayer.SetConfiguration(new HulvPlayer.Config
+		{
+			emotionOverride = HulvPlayer.Config.EmotionOverride.Angry
+		});
+		this.guardAnim.CrossFade(this.idleAnim.clip.name);
+		this.state = LineupEndChase.State.Release;
+	}
+
+	// Token: 0x060005D2 RID: 1490 RVA: 0x000456DC File Offset: 0x000438DC
+	private void ReleaseState()
+	{
+		this.LookAtBoy();
+		this.ChaseKillCheck();
+		this.hulvLookAt.transform.position = this.boy.pos3;
+		if (this.releaseTimer > 0f)
+		{
+			this.releaseTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.SetAttackState();
+		}
+	}
+
+	// Token: 0x060005D3 RID: 1491 RVA: 0x00045740 File Offset: 0x00043940
+	private void SetAttackState()
+	{
+		this.chain.SetActive(false);
+		this.hulv.FollowWaypoint(this.hulvChaseWaypoint.gameObject);
+		this.state = LineupEndChase.State.Attack;
+	}
+
+	// Token: 0x060005D4 RID: 1492 RVA: 0x0004576C File Offset: 0x0004396C
+	private void AttackState()
+	{
+		if (this.boy.pos.x - this.hulv.transform.position.x < 5f)
+		{
+			this.hulv.SetChaseMode(HulvAI.ChaseMode.ChargeToKill);
+			this.state = LineupEndChase.State.None;
+		}
+		this.LookAtBoy();
+	}
+
+	// Token: 0x060005D5 RID: 1493 RVA: 0x000457C8 File Offset: 0x000439C8
+	private void FixedUpdate()
+	{
+		if (this.state != LineupEndChase.State.None)
+		{
+			if (this.isActive)
+			{
+				this.attacking = this.MoveCheck();
+			}
+			switch (this.state)
+			{
+			case LineupEndChase.State.Idle:
+				this.IdleState();
+				break;
+			case LineupEndChase.State.Patrol:
+				this.PatrolState();
+				break;
+			case LineupEndChase.State.Attack:
+				this.AttackState();
+				break;
+			case LineupEndChase.State.Release:
+				this.ReleaseState();
+				break;
+			case LineupEndChase.State.Attention:
+				this.AttentionState();
+				break;
+			case LineupEndChase.State.HulvAttention:
+				this.HulvAttentionState();
+				break;
+			case LineupEndChase.State.Bark:
+				this.BarkState();
+				break;
+			}
+		}
+	}
+
+	// Token: 0x060005D6 RID: 1494 RVA: 0x00045874 File Offset: 0x00043A74
+	private void MoveGuard()
+	{
+		Vector3 vector = this.guard.transform.position;
+		this.guard.transform.LookAt(this.posPatrolTarget.position);
+		vector += this.guard.transform.forward * Time.deltaTime * this.moveSpeed;
+		this.guard.GetComponent<Rigidbody>().MovePosition(vector);
+	}
+
+	// Token: 0x060005D7 RID: 1495 RVA: 0x000458EC File Offset: 0x00043AEC
+	private void LookAtBoy()
+	{
+		if (this.guardLookAt == Vector3.zero)
+		{
+			this.guardLookAt = this.guard.transform.position + this.guard.transform.forward;
+		}
+		Vector3 vector = this.boy.pos3 - this.guard.transform.position;
+		vector.y = 0f;
+		Vector3 vector2 = this.guard.transform.position + vector.normalized;
+		this.guardLookAt += (vector2 - this.guardLookAt) * Time.deltaTime * this.guardRotateSpeed;
+		this.guard.transform.LookAt(this.guardLookAt);
+	}
+
+	// Token: 0x060005D8 RID: 1496 RVA: 0x000459CC File Offset: 0x00043BCC
+	private bool MoveCheck()
+	{
+		vector2f stick = this.boy.input.stick;
+		if (stick.x < 0.25f)
+		{
+			this.stopped = true;
+		}
+		return this.boy.input.jump || (this.stopped && Mathf.Abs(stick.x) > 0.25f);
+	}
+
+	// Token: 0x060005D9 RID: 1497 RVA: 0x00045A3C File Offset: 0x00043C3C
+	private void ChaseKillCheck()
+	{
+		float num = this.boy.pos3.x - this.posStopWalking.x;
+		if (num < 0f || this.boy.input.stick.x < 0.7f)
+		{
+			this.killBoy = true;
+		}
+	}
+
+	// Token: 0x060005DA RID: 1498 RVA: 0x00045AA0 File Offset: 0x00043CA0
+	private void SetBoyFrantic()
+	{
+		ThemeUtils.SetBoyTheme(this.boy.visualBoy, "Frantic", VisualBoy.ThemePriority.High);
+		this.zombieLogic.DisableZombieLogic();
+	}
+
+	// Token: 0x060005DB RID: 1499 RVA: 0x00045AC4 File Offset: 0x00043CC4
+	private void OnActivate()
+	{
+		this.SetPatrolState();
+		this.isActive = true;
+	}
+
+	// Token: 0x060005DC RID: 1500 RVA: 0x00045AD4 File Offset: 0x00043CD4
+	private void OnWatchBoy()
+	{
+		this.watchingBoy = true;
+	}
+
+	// Token: 0x060005DD RID: 1501 RVA: 0x00045AE0 File Offset: 0x00043CE0
+	private void OnBoyDetected()
+	{
+		if (this.watchingBoy)
+		{
+			if (this.state == LineupEndChase.State.Idle)
+			{
+				this.killBoy = true;
+			}
+			this.flashLight.SetActive(true);
+			this.SetReleaseState(0.2f, true);
+		}
+	}
+
+	// Token: 0x04000A1B RID: 2587
+	public SignalIn startPatrol;
+
+	// Token: 0x04000A1C RID: 2588
+	public SignalIn activate;
+
+	// Token: 0x04000A1D RID: 2589
+	public SignalIn watchBoy;
+
+	// Token: 0x04000A1E RID: 2590
+	public SignalIn boyDetected;
+
+	// Token: 0x04000A1F RID: 2591
+	public GameObject guard;
+
+	// Token: 0x04000A20 RID: 2592
+	public Animation guardAnim;
+
+	// Token: 0x04000A21 RID: 2593
+	public float moveSpeed = 0.25f;
+
+	// Token: 0x04000A22 RID: 2594
+	public Transform posPatrolTarget;
+
+	// Token: 0x04000A23 RID: 2595
+	public GameObject flashLight;
+
+	// Token: 0x04000A24 RID: 2596
+	public Hulv hulv;
+
+	// Token: 0x04000A25 RID: 2597
+	private HulvPlayer hulvPlayer;
+
+	// Token: 0x04000A26 RID: 2598
+	public HulvWaypoint hulvPatrolWaypoint;
+
+	// Token: 0x04000A27 RID: 2599
+	public HulvWaypoint hulvChaseWaypoint;
+
+	// Token: 0x04000A28 RID: 2600
+	public Transform hulvChaseWaypointMax;
+
+	// Token: 0x04000A29 RID: 2601
+	public Transform hulvLookAt;
+
+	// Token: 0x04000A2A RID: 2602
+	public BoyZombieLogic zombieLogic;
+
+	// Token: 0x04000A2B RID: 2603
+	public GameObject chain;
+
+	// Token: 0x04000A2C RID: 2604
+	private AnimationState idleAnim;
+
+	// Token: 0x04000A2D RID: 2605
+	private AnimationState walkAnim;
+
+	// Token: 0x04000A2E RID: 2606
+	private float hulvStopOffset = -1f;
+
+	// Token: 0x04000A2F RID: 2607
+	private bool hulvLookAtBoy;
+
+	// Token: 0x04000A30 RID: 2608
+	private Vector3 guardLookAt;
+
+	// Token: 0x04000A31 RID: 2609
+	private float guardStopOffset = 2f;
+
+	// Token: 0x04000A32 RID: 2610
+	private float guardRotateSpeed = 3f;
+
+	// Token: 0x04000A33 RID: 2611
+	private Boy boy;
+
+	// Token: 0x04000A34 RID: 2612
+	private bool attacking;
+
+	// Token: 0x04000A35 RID: 2613
+	private bool isActive;
+
+	// Token: 0x04000A36 RID: 2614
+	private bool killBoy;
+
+	// Token: 0x04000A37 RID: 2615
+	private float releaseTimer;
+
+	// Token: 0x04000A38 RID: 2616
+	private float attentionTimer;
+
+	// Token: 0x04000A39 RID: 2617
+	private float barkTimer;
+
+	// Token: 0x04000A3A RID: 2618
+	private LineupEndChase.State state;
+
+	// Token: 0x04000A3B RID: 2619
+	private float patrolTimer;
+
+	// Token: 0x04000A3C RID: 2620
+	private Vector3 posStopWalking;
+
+	// Token: 0x04000A3D RID: 2621
+	private bool watchingBoy;
+
+	// Token: 0x04000A3E RID: 2622
+	private bool stopped;
+
+	// Token: 0x020000B4 RID: 180
+	private enum State
+	{
+		// Token: 0x04000A40 RID: 2624
+		None,
+		// Token: 0x04000A41 RID: 2625
+		Idle,
+		// Token: 0x04000A42 RID: 2626
+		Patrol,
+		// Token: 0x04000A43 RID: 2627
+		Attack,
+		// Token: 0x04000A44 RID: 2628
+		Release,
+		// Token: 0x04000A45 RID: 2629
+		Attention,
+		// Token: 0x04000A46 RID: 2630
+		HulvAttention,
+		// Token: 0x04000A47 RID: 2631
+		Bark
+	}
+}

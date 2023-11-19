@@ -1,0 +1,60 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000497 RID: 1175
+public class LabJetCrateCheatHelper : MonoBehaviour
+{
+	// Token: 0x06001ECD RID: 7885 RVA: 0x00107970 File Offset: 0x00105B70
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.attachedRigidbody != null)
+		{
+			JetCrate component = coll.attachedRigidbody.GetComponent<JetCrate>();
+			if (component != null)
+			{
+				this.crateInside = component;
+			}
+		}
+	}
+
+	// Token: 0x06001ECE RID: 7886 RVA: 0x001079B0 File Offset: 0x00105BB0
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.attachedRigidbody != null)
+		{
+			JetCrate component = coll.attachedRigidbody.GetComponent<JetCrate>();
+			if (component != null)
+			{
+				this.crateInside = null;
+			}
+		}
+	}
+
+	// Token: 0x06001ECF RID: 7887 RVA: 0x001079F0 File Offset: 0x00105BF0
+	private void FixedUpdate()
+	{
+		if (this.crateInside)
+		{
+			float num = Mathf.InverseLerp(this.Left.position.x, this.Right.position.x, this.crateInside.transform.position.x);
+			this.aimTrigger.maxSpeedModification = Mathf.Lerp(this.MaxSpeedModificationLeft, this.MaxSpeedModificationRight, num);
+		}
+	}
+
+	// Token: 0x04003901 RID: 14593
+	public JetCrateAimTrigger aimTrigger;
+
+	// Token: 0x04003902 RID: 14594
+	public Transform Left;
+
+	// Token: 0x04003903 RID: 14595
+	public Transform Right;
+
+	// Token: 0x04003904 RID: 14596
+	public float MaxSpeedModificationLeft;
+
+	// Token: 0x04003905 RID: 14597
+	public float MaxSpeedModificationRight;
+
+	// Token: 0x04003906 RID: 14598
+	private JetCrate crateInside;
+}

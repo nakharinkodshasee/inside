@@ -1,0 +1,191 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000392 RID: 914
+public class IsTriggeredByProbe : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060018A6 RID: 6310 RVA: 0x000D5F38 File Offset: 0x000D4138
+	public bool PreAwake(int callcount)
+	{
+		this.enterSignal = SignalOut.Create("enterSignal", base.gameObject);
+		this.exitSignal = SignalOut.Create("exitSignal", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060018A7 RID: 6311 RVA: 0x000D5F74 File Offset: 0x000D4174
+	private void OnDisable()
+	{
+		this.noOfCharacterProbesInside = 0;
+	}
+
+	// Token: 0x060018A8 RID: 6312 RVA: 0x000D5F80 File Offset: 0x000D4180
+	private bool isCompanionTarget()
+	{
+		return this.companionType != CompanionType.none;
+	}
+
+	// Token: 0x060018A9 RID: 6313 RVA: 0x000D5F90 File Offset: 0x000D4190
+	private void sendEnterEvents()
+	{
+		this.probeEnter.OnEvent(this);
+		this.enterSignal.Signal();
+	}
+
+	// Token: 0x060018AA RID: 6314 RVA: 0x000D5FAC File Offset: 0x000D41AC
+	private void sendExitEvents()
+	{
+		this.probeExit.OnEvent(this);
+		this.exitSignal.Signal();
+	}
+
+	// Token: 0x060018AB RID: 6315 RVA: 0x000D5FC8 File Offset: 0x000D41C8
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (this.useBoyProbe)
+		{
+			if (coll.GetComponent<BoyProbe>())
+			{
+				this.noOfCharacterProbesInside++;
+				if (this.noOfCharacterProbesInside == 1)
+				{
+					this.sendEnterEvents();
+				}
+			}
+		}
+		else if (this.useHuddleProbe)
+		{
+			if (coll.GetComponent<HuddleProbe>())
+			{
+				this.noOfCharacterProbesInside++;
+				if (this.noOfCharacterProbesInside == 1)
+				{
+					this.sendEnterEvents();
+				}
+			}
+		}
+		else if (this.anyNonTriggerProbe)
+		{
+			if (!coll.isTrigger)
+			{
+				this.sendEnterEvents();
+			}
+		}
+		else if (this.isCompanionTarget())
+		{
+			Companion component = coll.GetComponent<Companion>();
+			if (component && component.companionType == this.companionType)
+			{
+				this.sendEnterEvents();
+			}
+		}
+		else
+		{
+			if (this.probe == coll.gameObject)
+			{
+				this.sendEnterEvents();
+			}
+			if (this.probeParent != null && this.probeParent.transform == coll.transform.parent)
+			{
+				this.sendEnterEvents();
+			}
+			if (this.probeAttachedRigigbody != null && coll.attachedRigidbody == this.probeAttachedRigigbody.GetComponent<Rigidbody>())
+			{
+				this.sendEnterEvents();
+			}
+		}
+	}
+
+	// Token: 0x060018AC RID: 6316 RVA: 0x000D6134 File Offset: 0x000D4334
+	private void OnTriggerExit(Collider coll)
+	{
+		if (this.useBoyProbe)
+		{
+			if (coll.GetComponent<BoyProbe>())
+			{
+				this.noOfCharacterProbesInside--;
+				if (this.noOfCharacterProbesInside == 0)
+				{
+					this.sendExitEvents();
+				}
+			}
+		}
+		else if (this.useHuddleProbe)
+		{
+			if (coll.GetComponent<HuddleProbe>())
+			{
+				this.noOfCharacterProbesInside--;
+				if (this.noOfCharacterProbesInside == 0)
+				{
+					this.sendExitEvents();
+				}
+			}
+		}
+		else if (this.anyNonTriggerProbe)
+		{
+			if (!coll.isTrigger)
+			{
+				this.sendExitEvents();
+			}
+		}
+		else if (this.isCompanionTarget())
+		{
+			Companion component = coll.GetComponent<Companion>();
+			if (component && component.companionType == this.companionType)
+			{
+				this.sendExitEvents();
+			}
+		}
+		else
+		{
+			if (this.probe == coll.gameObject)
+			{
+				this.sendExitEvents();
+			}
+			if (this.probeParent != null && this.probeParent.transform == coll.transform.parent)
+			{
+				this.sendExitEvents();
+			}
+			if (this.probeAttachedRigigbody != null && coll.attachedRigidbody == this.probeAttachedRigigbody.GetComponent<Rigidbody>())
+			{
+				this.sendExitEvents();
+			}
+		}
+	}
+
+	// Token: 0x04002C65 RID: 11365
+	public bool useBoyProbe;
+
+	// Token: 0x04002C66 RID: 11366
+	public bool useHuddleProbe;
+
+	// Token: 0x04002C67 RID: 11367
+	public GameObject probe;
+
+	// Token: 0x04002C68 RID: 11368
+	public CompanionType companionType;
+
+	// Token: 0x04002C69 RID: 11369
+	public GameObject probeParent;
+
+	// Token: 0x04002C6A RID: 11370
+	public GameObject probeAttachedRigigbody;
+
+	// Token: 0x04002C6B RID: 11371
+	public bool anyNonTriggerProbe;
+
+	// Token: 0x04002C6C RID: 11372
+	public SimpleEvent<IsTriggeredByProbe> probeEnter = new SimpleEvent<IsTriggeredByProbe>("probeEnter");
+
+	// Token: 0x04002C6D RID: 11373
+	public SimpleEvent<IsTriggeredByProbe> probeExit = new SimpleEvent<IsTriggeredByProbe>("probeExit");
+
+	// Token: 0x04002C6E RID: 11374
+	public SignalOut enterSignal;
+
+	// Token: 0x04002C6F RID: 11375
+	public SignalOut exitSignal;
+
+	// Token: 0x04002C70 RID: 11376
+	private int noOfCharacterProbesInside;
+}
+

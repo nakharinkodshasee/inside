@@ -1,0 +1,243 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004D8 RID: 1240
+public class MinesCraneShield : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600207D RID: 8317 RVA: 0x001128A4 File Offset: 0x00110AA4
+	public bool PreAwake(int callcount)
+	{
+		this.shakeShield = SignalIn.Create("shakeShield", base.gameObject, new Action(this.OnShake));
+		this.getReady = SignalIn.Create("getReady", base.gameObject, new Action(this.OnGetReady));
+		this.loadEnd = SignalIn.Create("loadEnd", base.gameObject, new Action(this.OnLoadEnd));
+		return true;
+	}
+
+	// Token: 0x0600207E RID: 8318 RVA: 0x00112918 File Offset: 0x00110B18
+	private void Start()
+	{
+		this.animPartAState = this.anim[this.animPartA.name];
+		this.animPartBState = this.anim[this.animPartB.name];
+		this.animPartBState.speed = 0f;
+		this.animShakeState = this.anim[this.animAdditiveShake.name];
+		this.animShakeState.blendMode = 1;
+		this.animShakeState.layer = 1;
+		if (this.state == MinesCraneShield.State.None)
+		{
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x0600207F RID: 8319 RVA: 0x001129B4 File Offset: 0x00110BB4
+	private void SetIdleState()
+	{
+		this.state = MinesCraneShield.State.Idle;
+	}
+
+	// Token: 0x06002080 RID: 8320 RVA: 0x001129C0 File Offset: 0x00110BC0
+	private void IdleState()
+	{
+	}
+
+	// Token: 0x06002081 RID: 8321 RVA: 0x001129C4 File Offset: 0x00110BC4
+	private void SetGetReadyState()
+	{
+		this.anim.CrossFade(this.animPartAState.name, 0.2f);
+		this.state = MinesCraneShield.State.GetReady;
+	}
+
+	// Token: 0x06002082 RID: 8322 RVA: 0x001129F4 File Offset: 0x00110BF4
+	private void GetReadyState()
+	{
+	}
+
+	// Token: 0x06002083 RID: 8323 RVA: 0x001129F8 File Offset: 0x00110BF8
+	private void SetMoveState()
+	{
+		this.UpdateMusicTime();
+		this.anim.CrossFade(this.animPartBState.name, 0.2f);
+		this.state = MinesCraneShield.State.Move;
+	}
+
+	// Token: 0x06002084 RID: 8324 RVA: 0x00112A30 File Offset: 0x00110C30
+	private void MoveState()
+	{
+		this.UpdateMusicTime();
+		this.musicTimer += this.musicDeltaTime * this.moveSpeed;
+		this.moveTimer += this.vel * this.moveSpeed * Time.deltaTime;
+		this.moveTimer = Mathf.Lerp(this.moveTimer, this.musicTimer, this.adjustSpeed * Time.deltaTime);
+		if (this.moveTimer > this.animPartBState.length)
+		{
+			this.SetEndState();
+		}
+		else
+		{
+			this.animPartBState.time = this.moveTimer;
+		}
+	}
+
+	// Token: 0x06002085 RID: 8325 RVA: 0x00112AD4 File Offset: 0x00110CD4
+	private void SetEndState()
+	{
+		this.animPartBState.normalizedTime = 1f;
+		this.state = MinesCraneShield.State.End;
+	}
+
+	// Token: 0x06002086 RID: 8326 RVA: 0x00112AF0 File Offset: 0x00110CF0
+	private void EndState()
+	{
+	}
+
+	// Token: 0x06002087 RID: 8327 RVA: 0x00112AF4 File Offset: 0x00110CF4
+	private void Update()
+	{
+		switch (this.state)
+		{
+		case MinesCraneShield.State.Idle:
+			this.IdleState();
+			break;
+		case MinesCraneShield.State.GetReady:
+			this.GetReadyState();
+			break;
+		case MinesCraneShield.State.Move:
+			this.MoveState();
+			break;
+		case MinesCraneShield.State.End:
+			this.EndState();
+			break;
+		}
+	}
+
+	// Token: 0x06002088 RID: 8328 RVA: 0x00112B54 File Offset: 0x00110D54
+	private void UpdateMusicTime()
+	{
+		float num = PersistentBehaviour<GlobalAudio>.instance.music.GetMusicPosition_s();
+		if (num > this.musicCycleTime)
+		{
+			num -= this.musicCycleTime;
+		}
+		this.musicDeltaTime = num - this.previousMusicTime;
+		if (num < this.previousMusicTime)
+		{
+			this.musicDeltaTime += this.musicCycleTime;
+		}
+		this.previousMusicTime = num;
+	}
+
+	// Token: 0x06002089 RID: 8329 RVA: 0x00112BBC File Offset: 0x00110DBC
+	private void AdditiveShake()
+	{
+		if (this.state == MinesCraneShield.State.Idle)
+		{
+			this.anim.CrossFadeQueued(this.animStartBlast.name, 0.2f, 2);
+		}
+		else
+		{
+			AnimationState animationState = this.anim.CrossFadeQueued(this.animAdditiveShake.name, 0.1f, 2);
+			animationState.layer = this.animShakeState.layer;
+			animationState.blendMode = this.animShakeState.blendMode;
+		}
+	}
+
+	// Token: 0x0600208A RID: 8330 RVA: 0x00112C38 File Offset: 0x00110E38
+	private void OnGetReady()
+	{
+		if (this.state == MinesCraneShield.State.Idle)
+		{
+			this.SetGetReadyState();
+		}
+	}
+
+	// Token: 0x0600208B RID: 8331 RVA: 0x00112C4C File Offset: 0x00110E4C
+	private void OnShake()
+	{
+		this.AdditiveShake();
+		if (this.state == MinesCraneShield.State.GetReady && this.animPartAState.normalizedTime > 0.35f)
+		{
+			this.SetMoveState();
+		}
+	}
+
+	// Token: 0x0600208C RID: 8332 RVA: 0x00112C7C File Offset: 0x00110E7C
+	private void OnLoadEnd()
+	{
+		this.animPartBState.normalizedTime = 1f;
+		this.anim.Play(this.animPartBState.name);
+		this.SetEndState();
+	}
+
+	// Token: 0x04003C3A RID: 15418
+	public float moveSpeed = 0.7f;
+
+	// Token: 0x04003C3B RID: 15419
+	public float adjustSpeed = 0.25f;
+
+	// Token: 0x04003C3C RID: 15420
+	public Animation anim;
+
+	// Token: 0x04003C3D RID: 15421
+	public AnimationClip animStartBlast;
+
+	// Token: 0x04003C3E RID: 15422
+	public AnimationClip animPartA;
+
+	// Token: 0x04003C3F RID: 15423
+	public AnimationClip animPartB;
+
+	// Token: 0x04003C40 RID: 15424
+	public AnimationClip animAdditiveShake;
+
+	// Token: 0x04003C41 RID: 15425
+	private AnimationState animPartAState;
+
+	// Token: 0x04003C42 RID: 15426
+	private AnimationState animPartBState;
+
+	// Token: 0x04003C43 RID: 15427
+	private AnimationState animShakeState;
+
+	// Token: 0x04003C44 RID: 15428
+	private SignalIn shakeShield;
+
+	// Token: 0x04003C45 RID: 15429
+	private SignalIn getReady;
+
+	// Token: 0x04003C46 RID: 15430
+	private SignalIn loadEnd;
+
+	// Token: 0x04003C47 RID: 15431
+	private float moveTimer;
+
+	// Token: 0x04003C48 RID: 15432
+	private float musicTimer;
+
+	// Token: 0x04003C49 RID: 15433
+	private float musicDeltaTime;
+
+	// Token: 0x04003C4A RID: 15434
+	private float previousMusicTime;
+
+	// Token: 0x04003C4B RID: 15435
+	private float musicCycleTime = 6f;
+
+	// Token: 0x04003C4C RID: 15436
+	private float vel = 1f;
+
+	// Token: 0x04003C4D RID: 15437
+	private MinesCraneShield.State state;
+
+	// Token: 0x020004D9 RID: 1241
+	private enum State
+	{
+		// Token: 0x04003C4F RID: 15439
+		None,
+		// Token: 0x04003C50 RID: 15440
+		Idle,
+		// Token: 0x04003C51 RID: 15441
+		GetReady,
+		// Token: 0x04003C52 RID: 15442
+		Move,
+		// Token: 0x04003C53 RID: 15443
+		End
+	}
+}

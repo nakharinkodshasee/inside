@@ -1,0 +1,205 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020001DA RID: 474
+public class LeftRightStickPanel : BoyInput
+{
+	// Token: 0x1700004A RID: 74
+	// (get) Token: 0x06000E11 RID: 3601 RVA: 0x00085D98 File Offset: 0x00083F98
+	public override bool jump
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x1700004B RID: 75
+	// (get) Token: 0x06000E12 RID: 3602 RVA: 0x00085D9C File Offset: 0x00083F9C
+	public override bool action
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x1700004C RID: 76
+	// (get) Token: 0x06000E13 RID: 3603 RVA: 0x00085DA0 File Offset: 0x00083FA0
+	public override bool grab
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x1700004D RID: 77
+	// (get) Token: 0x06000E14 RID: 3604 RVA: 0x00085DA4 File Offset: 0x00083FA4
+	public override vector2f stick
+	{
+		get
+		{
+			if (this.boyUsingStick != ScriptGlobals.boy)
+			{
+				return default(vector2f);
+			}
+			float num = base.transform.position.x - ScriptGlobals.boy.transform.position.x;
+			num = Mathf.Sign(num) * Mathf.Min(1f, Mathf.Abs(num));
+			return new vector2f(num * 2f, 0f);
+		}
+	}
+
+	// Token: 0x06000E15 RID: 3605 RVA: 0x00085E28 File Offset: 0x00084028
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000E16 RID: 3606 RVA: 0x00085E2C File Offset: 0x0008402C
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.attachedRigidbody)
+		{
+			if (coll.attachedRigidbody.GetComponent<Boy>() == ScriptGlobals.boy)
+			{
+				this.boyInside = true;
+			}
+			if (coll.attachedRigidbody && coll.attachedRigidbody.GetComponent<MindHatReceiver>())
+			{
+				this.mindControlledBoysInside.Add(coll.attachedRigidbody.GetComponent<MindHatReceiver>());
+			}
+		}
+	}
+
+	// Token: 0x06000E17 RID: 3607 RVA: 0x00085EA8 File Offset: 0x000840A8
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.attachedRigidbody)
+		{
+			if (coll.attachedRigidbody.GetComponent<Boy>() == ScriptGlobals.boy)
+			{
+				this.boyInside = false;
+			}
+			if (coll.attachedRigidbody && coll.attachedRigidbody.GetComponent<MindHatReceiver>())
+			{
+				this.mindControlledBoysInside.Remove(coll.attachedRigidbody.GetComponent<MindHatReceiver>());
+			}
+		}
+	}
+
+	// Token: 0x06000E18 RID: 3608 RVA: 0x00085F24 File Offset: 0x00084124
+	private void SetNewPos(int pos)
+	{
+		if (pos != this.currentPos)
+		{
+			this.currentPos = pos;
+			if (this.currentPos == -1)
+			{
+				this.panelLeft.OnEvent(this);
+			}
+			else if (this.currentPos == 1)
+			{
+				this.panelRight.OnEvent(this);
+			}
+			else
+			{
+				this.panelCenter.OnEvent(this);
+			}
+		}
+	}
+
+	// Token: 0x06000E19 RID: 3609 RVA: 0x00085F8C File Offset: 0x0008418C
+	private void UpdateControls()
+	{
+		List<Boy> list = new List<Boy>();
+		if (this.boyInside && !(ScriptGlobals.boy.state is BoyGrabState))
+		{
+			list.Add(ScriptGlobals.boy);
+		}
+		else if (this.mindControlledBoysInside.Count > 0)
+		{
+			foreach (MindHatReceiver mindHatReceiver in this.mindControlledBoysInside)
+			{
+				if (mindHatReceiver.ControlIsActive() && !(mindHatReceiver.GetComponent<Boy>().state is BoyGrabState))
+				{
+					list.Add(mindHatReceiver.GetComponent<Boy>());
+				}
+			}
+		}
+		if (this.boyUsingStick == null && GameInput.rawAction && list.Count > 0)
+		{
+			this.boyUsingStick = list[0];
+			this.boyUsingStick.input = this;
+			this.panelGrab.OnEvent(this);
+		}
+		else if (this.boyUsingStick != null && (!GameInput.rawAction || (this.boyUsingStick.GetComponent<MindHatReceiver>() && !this.boyUsingStick.GetComponent<MindHatReceiver>().ControlIsActive())))
+		{
+			this.boyUsingStick.input = null;
+			if (this.boyUsingStick.GetComponent<MindHatReceiver>())
+			{
+				this.boyUsingStick.GetComponent<MindHatReceiver>().ResetBoyInput();
+			}
+			this.boyUsingStick = null;
+			this.panelRelease.OnEvent(this);
+		}
+		if (GameInput.rawAction && this.boyUsingStick != null)
+		{
+			if (GameInput.stick.x < -0.5f)
+			{
+				this.SetNewPos(-1);
+			}
+			else if (GameInput.stick.x > 0.5f)
+			{
+				this.SetNewPos(1);
+			}
+			else
+			{
+				this.SetNewPos(0);
+			}
+		}
+		else
+		{
+			this.SetNewPos(0);
+		}
+	}
+
+	// Token: 0x06000E1A RID: 3610 RVA: 0x000861AC File Offset: 0x000843AC
+	private void DrawDebug()
+	{
+	}
+
+	// Token: 0x06000E1B RID: 3611 RVA: 0x000861B0 File Offset: 0x000843B0
+	private void FixedUpdate()
+	{
+		this.UpdateControls();
+		this.DrawDebug();
+	}
+
+	// Token: 0x04001918 RID: 6424
+	private bool boyInside;
+
+	// Token: 0x04001919 RID: 6425
+	private int currentPos;
+
+	// Token: 0x0400191A RID: 6426
+	private SimpleEvent<LeftRightStickPanel> panelGrab = new SimpleEvent<LeftRightStickPanel>("panelGrab");
+
+	// Token: 0x0400191B RID: 6427
+	private SimpleEvent<LeftRightStickPanel> panelRelease = new SimpleEvent<LeftRightStickPanel>("panelRelease");
+
+	// Token: 0x0400191C RID: 6428
+	private SimpleEvent<LeftRightStickPanel> panelLeft = new SimpleEvent<LeftRightStickPanel>("panelLeft");
+
+	// Token: 0x0400191D RID: 6429
+	private SimpleEvent<LeftRightStickPanel> panelCenter = new SimpleEvent<LeftRightStickPanel>("panelCenter");
+
+	// Token: 0x0400191E RID: 6430
+	private SimpleEvent<LeftRightStickPanel> panelRight = new SimpleEvent<LeftRightStickPanel>("panelRight");
+
+	// Token: 0x0400191F RID: 6431
+	private List<MindHatReceiver> mindControlledBoysInside = new List<MindHatReceiver>();
+
+	// Token: 0x04001920 RID: 6432
+	private Boy boyUsingStick;
+}

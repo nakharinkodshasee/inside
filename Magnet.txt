@@ -1,0 +1,122 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+// Token: 0x020001FF RID: 511
+public class Magnet : MonoBehaviour
+{
+	// Token: 0x06000FB7 RID: 4023 RVA: 0x00094F10 File Offset: 0x00093110
+	private void Start()
+	{
+		if (this.body == null)
+		{
+			this.body = base.GetComponent<Rigidbody>();
+		}
+	}
+
+	// Token: 0x06000FB8 RID: 4024 RVA: 0x00094F30 File Offset: 0x00093130
+	private void FixedUpdate()
+	{
+		this.DetachObjectsOutOfRange();
+		if (this.mAffectedObjects.Count < this.maxAffectedObjects)
+		{
+			this.AddNewObjects();
+		}
+		this.ApplyMagnetism();
+	}
+
+	// Token: 0x06000FB9 RID: 4025 RVA: 0x00094F68 File Offset: 0x00093168
+	private void DetachObjectsOutOfRange()
+	{
+		for (int i = 0; i < this.mAffectedObjects.Count; i++)
+		{
+			float num = Vector3.Distance(base.transform.position, this.mAffectedObjects[i].transform.position);
+			if (num > this.maxDistance)
+			{
+				this.mAffectedObjects.RemoveAt(i--);
+			}
+		}
+	}
+
+	// Token: 0x06000FBA RID: 4026 RVA: 0x00094FD4 File Offset: 0x000931D4
+	private void AddNewObjects()
+	{
+		Magnetic[] array = (from o in this.mObjectsInRange
+		where !this.mAffectedObjects.Contains(o)
+		select o into obj
+		orderby Vector3.Distance(obj.transform.position, base.transform.position)
+		select obj).ToArray<Magnetic>();
+		int num = 0;
+		while (num < array.Length && num < this.maxAffectedObjects - this.mAffectedObjects.Count)
+		{
+			this.mAffectedObjects.Add(array[num]);
+			num++;
+		}
+	}
+
+	// Token: 0x06000FBB RID: 4027 RVA: 0x0009504C File Offset: 0x0009324C
+	private void ApplyMagnetism()
+	{
+		foreach (Magnetic magnetic in this.mAffectedObjects)
+		{
+			Vector3 vector = base.transform.position - magnetic.transform.position;
+			float num = vector.magnitude / this.maxDistance;
+			float num2 = this.forceAtDistanceCurve.Evaluate(num) * this.strength;
+			if (magnetic.GetComponent<Rigidbody>())
+			{
+				magnetic.GetComponent<Rigidbody>().AddForce(vector.normalized * num2 * Time.deltaTime);
+			}
+			this.body.AddForceAtPosition(-vector.normalized * num2 * Time.deltaTime, base.transform.position);
+		}
+	}
+
+	// Token: 0x06000FBC RID: 4028 RVA: 0x00095154 File Offset: 0x00093354
+	private void OnTriggerEnter(Collider aCollider)
+	{
+		if (aCollider.GetComponent<Magnetic>() == null)
+		{
+			return;
+		}
+		this.mObjectsInRange.Add(aCollider.GetComponent<Magnetic>());
+	}
+
+	// Token: 0x06000FBD RID: 4029 RVA: 0x0009517C File Offset: 0x0009337C
+	private void OnTriggerExit(Collider aCollider)
+	{
+		Magnetic component = aCollider.GetComponent<Magnetic>();
+		if (component == null || !this.mObjectsInRange.Contains(component))
+		{
+			return;
+		}
+		this.mObjectsInRange.Remove(component);
+	}
+
+	// Token: 0x06000FBE RID: 4030 RVA: 0x000951BC File Offset: 0x000933BC
+	private void OnDisable()
+	{
+		this.mAffectedObjects.Clear();
+		this.mObjectsInRange.Clear();
+	}
+
+	// Token: 0x04001C8D RID: 7309
+	public Rigidbody body;
+
+	// Token: 0x04001C8E RID: 7310
+	public float strength = 50000f;
+
+	// Token: 0x04001C8F RID: 7311
+	public float maxDistance = 1f;
+
+	// Token: 0x04001C90 RID: 7312
+	public AnimationCurve forceAtDistanceCurve = AnimationCurve.Linear(0f, 1f, 1f, 1f);
+
+	// Token: 0x04001C91 RID: 7313
+	public int maxAffectedObjects = 100;
+
+	// Token: 0x04001C92 RID: 7314
+	private readonly List<Magnetic> mAffectedObjects = new List<Magnetic>();
+
+	// Token: 0x04001C93 RID: 7315
+	private readonly List<Magnetic> mObjectsInRange = new List<Magnetic>();
+}

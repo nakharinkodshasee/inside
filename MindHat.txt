@@ -1,0 +1,1508 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000201 RID: 513
+public class MindHat : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x17000063 RID: 99
+	// (get) Token: 0x06000FC4 RID: 4036 RVA: 0x000952E8 File Offset: 0x000934E8
+	// (set) Token: 0x06000FC3 RID: 4035 RVA: 0x000952AC File Offset: 0x000934AC
+	private Boy boyUsingHat
+	{
+		get
+		{
+			return this.boyUsingHat_internal;
+		}
+		set
+		{
+			if (value != null)
+			{
+				value.isMindControlling = true;
+			}
+			if (this.boyUsingHat_internal != null)
+			{
+				this.boyUsingHat_internal.isMindControlling = false;
+			}
+			this.boyUsingHat_internal = value;
+		}
+	}
+
+	// Token: 0x06000FC5 RID: 4037 RVA: 0x000952F0 File Offset: 0x000934F0
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.softWirePhysicsRoot != null)
+		{
+			Joint childComponent = this.softWirePhysicsRoot;
+			if (this.unMovingReparant == null)
+			{
+				this.unMovingReparant = this.softWirePhysicsRoot.gameObject;
+			}
+			while (childComponent != null)
+			{
+				this.bottomRigidBody = childComponent.GetComponent<Rigidbody>();
+				childComponent.transform.parent = this.unMovingReparant.transform.parent;
+				childComponent = childComponent.transform.GetChildComponent<Joint>();
+			}
+		}
+		this.fakeRope = base.GetComponentInChildren<FakeRopeEndController>();
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioBoyAttach = new AudioEventSimpleLocal("boy_mindhat_on", akGameObj);
+		this.audioBoyDetach = new AudioEventSimpleLocal("boy_mindhat_off", akGameObj);
+		this.audioAttach = new AudioEventSimpleLocal(this.audioPrefix + "_mindhat_on", akGameObj);
+		this.audioDetach = new AudioEventSimpleLocal(this.audioPrefix + "_mindhat_off", akGameObj);
+	}
+
+	// Token: 0x06000FC6 RID: 4038 RVA: 0x00095404 File Offset: 0x00093604
+	public bool PreAwake(int callcount)
+	{
+		this.forceDetach = SignalIn.Create("forceDetach", base.gameObject, new Action(this.ForceDetach));
+		this.forceAttach = SignalIn.Create("forceAttach", base.gameObject, new Action(this.ForceAttach));
+		this.spawnInHat = SignalIn.Create("spawnInHat", base.gameObject, new Action(this.SpawnInHat));
+		this.turnOffHat = SignalIn.Create("turnOffHat", base.gameObject, new Action(this.TurnOffHat));
+		this.turnOnHat = SignalIn.Create("turnOnHat", base.gameObject, new Action(this.TurnOnHat));
+		this.attachedToHat = SignalOut.Create("attachedToHat", base.gameObject);
+		this.detachedFromHat = SignalOut.Create("detachedFromHat", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000FC7 RID: 4039 RVA: 0x000954E8 File Offset: 0x000936E8
+	private void Start()
+	{
+		this.OnPreProcess();
+		if (this.hangAirLadderUp == null)
+		{
+		}
+		this.hangOnTrigger.enterTrigger.Register(this, ref this.hangOnTriggerEnterHandle);
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000FC8 RID: 4040 RVA: 0x0009552C File Offset: 0x0009372C
+	private void OnEnable()
+	{
+		this.sendDetachedEvent = false;
+	}
+
+	// Token: 0x06000FC9 RID: 4041 RVA: 0x00095538 File Offset: 0x00093738
+	public void SetIdleState()
+	{
+		this.stateTimer = 0f;
+		this.boyUsingHat = null;
+		this.state = MindHat.State.Idle;
+	}
+
+	// Token: 0x06000FCA RID: 4042 RVA: 0x00095554 File Offset: 0x00093754
+	private void IdleState()
+	{
+		this.boyUsingHat = null;
+	}
+
+	// Token: 0x06000FCB RID: 4043 RVA: 0x00095560 File Offset: 0x00093760
+	private void SetFailSelfAttachState(Boy boy)
+	{
+		this.stateTimer = 0f;
+		this.boyUsingHat = boy;
+		if (Mathf.Abs(boy.velocity.x) > 1f)
+		{
+			this.chosenFailAnim = this.failControlSelfAnim;
+		}
+		else
+		{
+			this.chosenFailAnim = this.failControlSelfAnim;
+		}
+		this.PlayBoyAnimation(this.boyUsingHat, this.chosenFailAnim, 0f);
+		this.state = MindHat.State.FailSelf;
+	}
+
+	// Token: 0x06000FCC RID: 4044 RVA: 0x000955D8 File Offset: 0x000937D8
+	private void FailSelfState()
+	{
+		if (this.chosenFailAnim.frame >= this.chosenFailAnim.numFrames)
+		{
+			this.SetIdleState();
+			BoyUtils.ClearState(this.boyUsingHat, -1f);
+			this.boyUsingHat = null;
+			this.selfFail.OnEvent(this);
+		}
+	}
+
+	// Token: 0x06000FCD RID: 4045 RVA: 0x0009562C File Offset: 0x0009382C
+	private void SetAttachState(Boy boy, bool sendAudioEvent = true)
+	{
+		if (this.jointToBoyHead != null)
+		{
+			RagdollSkeleton ragdoll = boy.visualBoy.ragdoll;
+			Rigidbody rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.head];
+			this.jointToBoyHead.transform.position = rigidbody.position;
+			this.jointToBoyHead.transform.rotation = rigidbody.rotation;
+			this.jointToBoyHead.connectedBody = rigidbody;
+			this.jointToBoyHead.transform.localPosition = new Vector3(0f, -1f, 0f);
+			this.jointToBoyHead.transform.localRotation = Quaternion.Euler(50f, 90f * boy.facing, 0f);
+		}
+		this.boyUsingHat = boy;
+		if (this.boyUsingHat == ScriptGlobals.boy)
+		{
+			this.audioBoyAttach.PostFast();
+		}
+		if (sendAudioEvent)
+		{
+			this.audioAttach.PostFast();
+		}
+		this.facing = boy.facing;
+		MindHatReceiver component = boy.GetComponent<MindHatReceiver>();
+		if (component != null)
+		{
+			component.SetHanginInHat(this);
+		}
+		this.stateTimer = 0f;
+		MindHatLimitControl component2 = this.boyUsingHat.GetComponent<MindHatLimitControl>();
+		if (component2 != null)
+		{
+			component2.DisableLimit();
+		}
+		if (Mathf.Abs(boy.velocity.x) > 1f)
+		{
+			this.chosenJumpGrabAnim = this.jumpGrabFWAnim;
+		}
+		else
+		{
+			this.chosenJumpGrabAnim = this.jumpGrabUpAnim;
+		}
+		this.lastAnim = this.chosenJumpGrabAnim;
+		this.PlayBoyAnimation(this.boyUsingHat, this.chosenJumpGrabAnim, 0f);
+		if (this.fakeRope != null)
+		{
+			this.fakeRope.AddForce(this.boyUsingHat.velocity.x * 0.2f);
+		}
+		this.attached.OnEvent(this);
+		this.attachedToHat.Signal();
+		this.state = MindHat.State.Attach;
+	}
+
+	// Token: 0x06000FCE RID: 4046 RVA: 0x00095838 File Offset: 0x00093A38
+	private void AttachState()
+	{
+		VisualBoyCustomAnim visualBoyCustomAnim = this.boyUsingHat.visualBoy.state as VisualBoyCustomAnim;
+		bool flag = visualBoyCustomAnim == null || visualBoyCustomAnim.anim == this.chosenJumpGrabAnim;
+		if (!flag || this.chosenJumpGrabAnim.frame >= this.chosenJumpGrabAnim.numFrames || this.boyUsingHat.input.rawAction || this.boyUsingHat.input.stick.y < this.detachInputY || !this.boyUsingHat.gameObject.activeSelf)
+		{
+			this.SetHangingState();
+		}
+	}
+
+	// Token: 0x06000FCF RID: 4047 RVA: 0x000958F0 File Offset: 0x00093AF0
+	private void SetHangingState()
+	{
+		this.stateTimer = 0f;
+		VisualBoyCustomAnim visualBoyCustomAnim = this.boyUsingHat.visualBoy.state as VisualBoyCustomAnim;
+		if (visualBoyCustomAnim != null)
+		{
+			bool flag = true;
+			if (this.inPullOffState)
+			{
+				AnimClipNode component = visualBoyCustomAnim.anim.GetComponent<AnimClipNode>();
+				flag = false;
+				if ((this.lastAnim == this.hangAirDoGrab && component.frame < 6f) || (this.lastAnim == this.hangAirLetGo && component.frame > 6f) || visualBoyCustomAnim.anim == this.chosenJumpGrabAnim)
+				{
+					flag = true;
+				}
+			}
+			if (!flag)
+			{
+				if (this.lastAnim != this.hangAirLetGo)
+				{
+					this.PlayBoyAnimation(this.boyUsingHat, this.hangAirLetGo, 0f);
+				}
+				this.lastAnim = this.hangAirLetGo;
+			}
+			else if (visualBoyCustomAnim.anim != this.chosenJumpGrabAnim)
+			{
+				this.PlayBoyAnimation(this.boyUsingHat, this.hangIdle, 0f);
+				this.lastAnim = this.hangIdle;
+			}
+		}
+		else
+		{
+			this.PlayBoyAnimation(this.boyUsingHat, this.hangAirLetGo, 0f);
+			this.lastAnim = this.hangAirLetGo;
+		}
+		this.inPullOffState = false;
+		this.state = MindHat.State.Hanging;
+	}
+
+	// Token: 0x06000FD0 RID: 4048 RVA: 0x00095A5C File Offset: 0x00093C5C
+	private void HangingState()
+	{
+		if (this.boyUsingHat == null)
+		{
+			return;
+		}
+		bool activeSelf = this.boyUsingHat.gameObject.activeSelf;
+		if (activeSelf)
+		{
+			if (this.jointToBoyHead && this.boysBeingControlled.Count > 0)
+			{
+				this.UpdateRagDoll(this.boysBeingControlled[0]);
+			}
+			if (!this.disableDetach && this.HangingDetachCheck())
+			{
+				this.cacheDetach = true;
+			}
+			if (this.cacheDetach || this.boyUsingHat.input.rawAction || this.boyUsingHat.input.stick.y < this.detachInputY)
+			{
+				this.SetPullOffState();
+			}
+			else
+			{
+				if (this.boyUsingHat.isDead)
+				{
+					if (this.hitBySentry)
+					{
+						this.SetHitBySentryState();
+					}
+					else
+					{
+						this.sendDetachedEvent = true;
+						this.state = MindHat.State.None;
+					}
+					return;
+				}
+				VisualBoy visualBoy = this.boyUsingHat.visualBoy;
+				VisualBoyCustomAnim visualBoyCustomAnim = visualBoy.state as VisualBoyCustomAnim;
+				bool facingChanged = this.DoFacingCode();
+				AnimClipNode animClipNode = this.hangIdle;
+				if (visualBoyCustomAnim == null)
+				{
+					animClipNode = this.lastAnim;
+				}
+				else
+				{
+					AnimClipNode component = visualBoyCustomAnim.anim.GetComponent<AnimClipNode>();
+					if (this.boysBeingControlled.Count > 0)
+					{
+						animClipNode = this.GetAnimBasedOnOtherBoy(this.boysBeingControlled[0]);
+						if (this.lastAnim == this.hangAirLetGo && component.frame < 6f)
+						{
+							animClipNode = this.lastAnim;
+						}
+					}
+					else
+					{
+						animClipNode = this.GetAnimBasedOnInput(component.frame, facingChanged, Mathf.Abs(this.boyUsingHat.input.looseDir.x) > 0.25f);
+					}
+					if (this.lastAnim == animClipNode && component.frame >= component.numFrames - 2f)
+					{
+						animClipNode = this.hangIdle;
+					}
+				}
+				if (this.lastAnim != animClipNode || (activeSelf && !this.activeLastFrame))
+				{
+					this.PlayBoyAnimation(this.boyUsingHat, animClipNode, 0f);
+				}
+				this.lastAnim = animClipNode;
+			}
+		}
+		this.activeLastFrame = activeSelf;
+	}
+
+	// Token: 0x06000FD1 RID: 4049 RVA: 0x00095CC0 File Offset: 0x00093EC0
+	private void SetPullOffState()
+	{
+		this.stateTimer = 0f;
+		this.pullFraction = 0f;
+		this.disallowJump = true;
+		this.releasedJumpInDetach = true;
+		if (this.lastAnim != this.jumpGrabFWAnim && this.lastAnim != this.jumpGrabUpAnim && this.lastAnim != this.hangAirLetGo && this.lastAnim != this.hangAirClimbUp && this.lastAnim != this.hangAirLadderDown && this.lastAnim != this.hangAirLadderUp && this.lastAnim != this.hangAirLadderIdle)
+		{
+			this.PlayBoyAnimation(this.boyUsingHat, this.hangAirDoGrab, 0f);
+			this.lastAnim = this.hangAirDoGrab;
+		}
+		this.inPullOffState = true;
+		this.state = MindHat.State.PullOff;
+	}
+
+	// Token: 0x06000FD2 RID: 4050 RVA: 0x00095DBC File Offset: 0x00093FBC
+	private void PullOffState()
+	{
+		if (this.boyUsingHat && this.boyUsingHat.isDead && this.hitBySentry)
+		{
+			this.SetHitBySentryState();
+			return;
+		}
+		if (this.boysBeingControlled.Count > 0)
+		{
+			this.DoFacingCode();
+			AnimClipNode animBasedOnOtherBoy = this.GetAnimBasedOnOtherBoy(this.boysBeingControlled[0]);
+			if (animBasedOnOtherBoy == this.hangAirJump && this.disallowJump)
+			{
+				animBasedOnOtherBoy = this.hangIdle;
+			}
+			else
+			{
+				this.disallowJump = false;
+			}
+			if (animBasedOnOtherBoy == this.hangAirLand)
+			{
+				animBasedOnOtherBoy = this.hangIdle;
+			}
+			if (animBasedOnOtherBoy == this.hangAirWalk)
+			{
+				animBasedOnOtherBoy = this.hangAirWalkGrab;
+			}
+			else if (animBasedOnOtherBoy == this.hangAirTurn)
+			{
+				animBasedOnOtherBoy = this.hangAirTurnGrab;
+			}
+			else if (animBasedOnOtherBoy == this.hangAirJump)
+			{
+				animBasedOnOtherBoy = this.hangAirJumpGrab;
+			}
+			if (animBasedOnOtherBoy == this.hangAirIdleGrab && this.boyUsingHat.input.stick.y < this.detachInputY)
+			{
+				animBasedOnOtherBoy = this.hangGrab;
+			}
+			VisualBoyCustomAnim visualBoyCustomAnim = this.boyUsingHat.visualBoy.state as VisualBoyCustomAnim;
+			bool flag = false;
+			if (visualBoyCustomAnim != null)
+			{
+				AnimClipNode component = visualBoyCustomAnim.anim.GetComponent<AnimClipNode>();
+				if (this.lastAnim == animBasedOnOtherBoy && component.frame >= component.numFrames - 2f && this.lastAnim != this.hangAirIdleGrab)
+				{
+					animBasedOnOtherBoy = this.hangIdle;
+				}
+				if ((this.lastAnim == this.jumpGrabFWAnim && component.frame < 22f) || (this.lastAnim == this.jumpGrabUpAnim && component.frame < 19f))
+				{
+					flag = true;
+				}
+				if (this.lastAnim == this.hangAirLetGo)
+				{
+					if (component.frame < 5f)
+					{
+						animBasedOnOtherBoy = this.lastAnim;
+					}
+					else if (animBasedOnOtherBoy == this.hangIdle || animBasedOnOtherBoy == this.hangAirLetGo)
+					{
+						if (component.frame > 7f)
+						{
+							animBasedOnOtherBoy = this.hangAirDoGrab;
+						}
+						else
+						{
+							animBasedOnOtherBoy = this.hangGrab;
+						}
+					}
+				}
+				if (animBasedOnOtherBoy == this.hangAirTurnGrab && animBasedOnOtherBoy == this.lastAnim && component.frame > 20f)
+				{
+					animBasedOnOtherBoy = this.hangIdle;
+				}
+				if ((animBasedOnOtherBoy == this.hangAirTouchWall || animBasedOnOtherBoy == this.hangIdle || animBasedOnOtherBoy == this.hangAirLetGo) && this.lastAnim == this.hangAirDoGrab && component.frame >= this.hangAirDoGrab.numFrames - 2f)
+				{
+					animBasedOnOtherBoy = this.hangGrab;
+				}
+				if (animBasedOnOtherBoy != this.hangIdle && animBasedOnOtherBoy != this.hangAirStop && animBasedOnOtherBoy != this.hangAirTouchWall)
+				{
+					if (animBasedOnOtherBoy != this.lastAnim && (this.lastAnim != this.hangAirDoGrab || component == null || component.frame > 6f))
+					{
+						this.PlayBoyAnimation(this.boyUsingHat, animBasedOnOtherBoy, 0f);
+						this.lastAnim = animBasedOnOtherBoy;
+					}
+				}
+				else if (this.lastAnim != this.hangGrab && this.lastAnim != this.hangAirDoGrab && !flag)
+				{
+					if ((this.lastAnim == this.jumpGrabFWAnim && component.frame > 23f) || (this.lastAnim == this.jumpGrabUpAnim && component.frame > 20f))
+					{
+						this.PlayBoyAnimation(this.boyUsingHat, this.hangAirDoGrab, 0f);
+						this.lastAnim = this.hangAirDoGrab;
+					}
+					else
+					{
+						this.PlayBoyAnimation(this.boyUsingHat, this.hangGrab, 0f);
+						this.lastAnim = this.hangGrab;
+					}
+				}
+			}
+		}
+		bool flag2 = false;
+		BoyInput input = this.boyUsingHat.input;
+		vector2f stick = input.stick;
+		if (this.cacheDetach)
+		{
+			if (this.pullFraction < 1f)
+			{
+				this.pullFraction += Time.deltaTime * 3f;
+			}
+			else
+			{
+				flag2 = true;
+			}
+		}
+		else
+		{
+			if (!input.rawAction && stick.y >= this.detachInputY)
+			{
+				this.SetHangingState();
+				return;
+			}
+			if (this.disableDetach)
+			{
+				return;
+			}
+			float num = (float)(Time.timeDbl - this.latestButtonDetachInput);
+			if (this.latestButtonDetachInput != 0.0 && num < this.flickInterval && stick.y < this.detachInputY)
+			{
+				this.cacheDetach = true;
+			}
+			float num2 = (float)(Time.timeDbl - this.latestStickDetachInput);
+			if (this.latestStickDetachInput != 0.0 && num2 < this.flickInterval && (input.action || (input.jump && !this.previousJump)))
+			{
+				this.cacheDetach = true;
+			}
+			if (stick.y < this.detachInputY)
+			{
+				if (this.pullFraction < 1f)
+				{
+					this.pullFraction += Time.deltaTime * 3f;
+				}
+			}
+			else
+			{
+				this.pullFraction = 0f;
+			}
+			if (this.pullFraction > 1f && (input.rawAction || (input.jump && !this.previousJump)))
+			{
+				flag2 = true;
+			}
+		}
+		if (Mathf.Abs(stick.x) > this.cancelDetachX)
+		{
+			this.cacheDetach = false;
+			flag2 = false;
+		}
+		if (flag2)
+		{
+			bool flag3 = true;
+			if (this.boyUsingHat == ScriptGlobals.boy)
+			{
+				this.audioBoyDetach.PostFast();
+			}
+			else if (ScriptGlobals.boy.isMindControlling)
+			{
+				flag3 = false;
+			}
+			this.audioDetach.PostFast();
+			if (flag3)
+			{
+				this.SetDropState();
+				this.sendDetachedEvent = true;
+				if (this.boysBeingControlled.Count > 0 && !this.IsMindHatTurnedOff())
+				{
+					MindHatReceiver component2 = this.boysBeingControlled[0].GetComponent<MindHatReceiver>();
+					if (component2 != null && component2.ControlIsActive() && component2.GetHangingInHat() != null)
+					{
+						component2.GetHangingInHat().ForceDetach(false);
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000FD3 RID: 4051 RVA: 0x000964D8 File Offset: 0x000946D8
+	private void SetDropState()
+	{
+		this.cacheDetach = false;
+		this.stateTimer = 0f;
+		this.PlayBoyAnimation(this.boyUsingHat, this.getOff, 0f);
+		MindHatLimitControl component = this.boyUsingHat.GetComponent<MindHatLimitControl>();
+		if (component != null)
+		{
+			component.EnableLimit();
+		}
+		if (this.jointToBoyHead != null)
+		{
+			this.jointToBoyHead.connectedBody = null;
+		}
+		this.state = MindHat.State.Drop;
+	}
+
+	// Token: 0x06000FD4 RID: 4052 RVA: 0x00096550 File Offset: 0x00094750
+	private void DropState()
+	{
+		VisualBoy visualBoy = this.boyUsingHat.visualBoy;
+		VisualBoyCustomAnim visualBoyCustomAnim = visualBoy.state as VisualBoyCustomAnim;
+		if (this.getOff.frame >= this.getOff.numFrames || visualBoyCustomAnim == null || visualBoyCustomAnim.anim != this.getOff)
+		{
+			if (this.fakeRope != null)
+			{
+				this.fakeRope.AddForce(this.boyUsingHat.facing * 0.2f);
+			}
+			if (this.bottomRigidBody != null)
+			{
+				this.bottomRigidBody.AddForce(Vector3.right * this.boyUsingHat.facing * 2.5f, 2);
+			}
+			BoyUtils.ClearState(this.boyUsingHat, -1f);
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x06000FD5 RID: 4053 RVA: 0x00096634 File Offset: 0x00094834
+	private void SetHitBySentryState()
+	{
+		this.sendDetachedEvent = true;
+		BoyUtils.StartCustomAnim(this.boyUsingHat, this.hitBySentry, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+		if (this.fakeRope != null)
+		{
+			this.fakeRope.AddForce(-0.4f);
+		}
+		if (this.bottomRigidBody != null)
+		{
+			this.bottomRigidBody.AddForce(Vector3.left * 5f, 2);
+		}
+		this.state = MindHat.State.HitBySentry;
+		this.hitBySentryTimer = 0f;
+		this.hasBeenRagdolled = false;
+	}
+
+	// Token: 0x06000FD6 RID: 4054 RVA: 0x000966C8 File Offset: 0x000948C8
+	private void HitBySentryState()
+	{
+		this.hitBySentryTimer += Time.deltaTime;
+		if (this.hitBySentryTimer > 2f && !this.hasBeenRagdolled)
+		{
+			this.audioBoyDetach.PostFast();
+			ScriptGlobals.boy.SpawnExternalState(new BoyRagdollState(ScriptGlobals.boy), Boy.AffectMode.AffectDeadBoy);
+			this.hasBeenRagdolled = true;
+		}
+	}
+
+	// Token: 0x06000FD7 RID: 4055 RVA: 0x0009672C File Offset: 0x0009492C
+	private void FixedUpdate()
+	{
+		if (this.sendDetachedEvent)
+		{
+			this.detached.OnEvent(this);
+			this.detachedFromHat.Signal();
+			this.sendDetachedEvent = false;
+		}
+		if (this.hatIsTurnedOff)
+		{
+			this.UpdateTurnedOff();
+		}
+		this.stateTimer += Time.deltaTime;
+		bool jump = ScriptGlobals.boy.input.jump;
+		if (ScriptGlobals.boy.input.action || (jump && !this.previousJump))
+		{
+			this.latestButtonDetachInput = Time.timeDbl;
+		}
+		if (ScriptGlobals.boy.input.stick.y < this.detachInputY)
+		{
+			this.latestStickDetachInput = Time.timeDbl;
+		}
+		switch (this.state)
+		{
+		case MindHat.State.Idle:
+			this.IdleState();
+			break;
+		case MindHat.State.FailSelf:
+			this.FailSelfState();
+			break;
+		case MindHat.State.Attach:
+			this.AttachState();
+			break;
+		case MindHat.State.Hanging:
+			this.HangingState();
+			break;
+		case MindHat.State.PullOff:
+			this.PullOffState();
+			break;
+		case MindHat.State.Drop:
+			this.DropState();
+			break;
+		case MindHat.State.HitBySentry:
+			this.HitBySentryState();
+			break;
+		}
+		this.previousJump = jump;
+	}
+
+	// Token: 0x06000FD8 RID: 4056 RVA: 0x00096878 File Offset: 0x00094A78
+	private AnimClipNode GetAnimBasedOnOtherBoy(Boy boyToInspect)
+	{
+		AnimClipNode animClipNode = this.hangIdle;
+		if (!boyToInspect.gameObject.activeSelf || boyToInspect.isMindControlledSleeping)
+		{
+			return this.hangIdle;
+		}
+		if (this.IsMindHatTurnedOff() && this.GetBoyInHat() == ScriptGlobals.boy && this.turnedOffTimer > 1f)
+		{
+			if (Mathf.Abs(GameInput.stick.x) <= 0.25f)
+			{
+				if (this.lastAnim == this.hangAirWalk || this.lastAnim == this.hangAirStop)
+				{
+					animClipNode = this.hangAirStop;
+				}
+				else if (this.lastAnim == this.hangAirTurn || this.lastAnim == this.hangAirTurnGrab)
+				{
+					animClipNode = this.lastAnim;
+				}
+				else
+				{
+					animClipNode = this.hangIdle;
+				}
+			}
+			else
+			{
+				if (GameInput.stick.x * this.lastFakeStickDir < 0f)
+				{
+					animClipNode = this.hangAirTurn;
+				}
+				else if (this.lastAnim == this.hangAirTurn && this.lastAnim.frame <= 14f)
+				{
+					animClipNode = this.hangAirTurn;
+				}
+				else
+				{
+					animClipNode = this.hangAirWalk;
+				}
+				this.lastFakeStickDir = GameInput.stick.x;
+			}
+		}
+		else if (boyToInspect.state is BoyRunState)
+		{
+			float num = boyToInspect.history.ElapsedSince(BoyHistory.Event.Jump);
+			if (num < 0.5f)
+			{
+				animClipNode = this.hangAirLand;
+				vector2f relativeLandVelocity = BoyUtils.GetRelativeLandVelocity(boyToInspect);
+			}
+			else
+			{
+				bool flag = false;
+				if (this.hangAirTouchWall != null && boyToInspect.visualBoy.state is VisualBoyObstructed)
+				{
+					flag = true;
+					int i = 0;
+					int count = this.boysBeingControlled.Count;
+					while (i < count)
+					{
+						if (!(this.boysBeingControlled[i].visualBoy.state is VisualBoyObstructed))
+						{
+							flag = false;
+						}
+						i++;
+					}
+				}
+				if (flag)
+				{
+					animClipNode = this.hangAirTouchWall;
+				}
+				else if (boyToInspect.input.looseDir.x == 0f)
+				{
+					if (this.lastAnim == this.hangAirWalk || this.lastAnim == this.hangAirStop)
+					{
+						animClipNode = this.hangAirStop;
+					}
+					else if (this.lastAnim == this.hangAirTurn || this.lastAnim == this.hangAirTurnGrab)
+					{
+						animClipNode = this.lastAnim;
+					}
+					else
+					{
+						animClipNode = this.hangIdle;
+					}
+				}
+				else
+				{
+					VisualBoyRun visualBoyRun = boyToInspect.visualBoy.state as VisualBoyRun;
+					if (visualBoyRun != null && visualBoyRun.isTurnAnim)
+					{
+						AnimFrameNode animFrameNode = visualBoyRun.logicAnim.anim as AnimFrameNode;
+						if (animFrameNode.frame > 14f)
+						{
+							animClipNode = this.hangAirWalk;
+						}
+						else
+						{
+							animClipNode = this.hangAirTurn;
+						}
+					}
+					else
+					{
+						animClipNode = this.hangAirWalk;
+					}
+				}
+			}
+		}
+		else if (boyToInspect.state is BoyJumpState)
+		{
+			animClipNode = this.hangAirJump;
+		}
+		else if (boyToInspect.state is BoyReachPlateauState)
+		{
+			animClipNode = this.hangAirClimbUp;
+		}
+		else if (!(boyToInspect.state is BoyClimbDownState))
+		{
+			if (boyToInspect.state is BoyLadderState)
+			{
+				if (boyToInspect.input.looseDir.y > 0f)
+				{
+					animClipNode = this.hangAirLadderUp;
+				}
+				else if (boyToInspect.input.looseDir.y < 0f)
+				{
+					animClipNode = this.hangAirLadderDown;
+				}
+				else
+				{
+					animClipNode = this.hangAirLadderIdle;
+				}
+			}
+			else if (!(boyToInspect.state is BoyGrabPlateauState))
+			{
+				if (boyToInspect.state is BoySwimState)
+				{
+					if (boyToInspect.input.looseDir.x != 0f || boyToInspect.input.looseDir.y != 0f)
+					{
+						animClipNode = this.hangAirSwimFW;
+					}
+				}
+				else if (boyToInspect.state is BoyGrabState)
+				{
+					if (boyToInspect.input.looseDir.x == 0f)
+					{
+						animClipNode = this.hangAirIdleGrab;
+					}
+					else if (boyToInspect.input.looseDir.x * boyToInspect.facing > 0f)
+					{
+						animClipNode = this.hangAirWalkPush;
+					}
+					else
+					{
+						animClipNode = this.hangAirWalkPull;
+					}
+				}
+				else if (boyToInspect.state is BoyCustomAnimState)
+				{
+					BoyCustomAnimState boyCustomAnimState = boyToInspect.state as BoyCustomAnimState;
+					if (boyCustomAnimState.anim.name.StartsWith("Mindhat"))
+					{
+						AnimClipNode animFromName = this.GetAnimFromName(boyCustomAnimState.anim.name);
+						if (animFromName != null)
+						{
+							animClipNode = animFromName;
+						}
+					}
+				}
+			}
+		}
+		if (this.lastAnim == this.hangAirLetGo && (animClipNode == this.hangIdle || (animClipNode == this.hangAirTouchWall && this.lastAnim.frame < 13f)))
+		{
+			animClipNode = this.hangAirLetGo;
+		}
+		return animClipNode;
+	}
+
+	// Token: 0x06000FD9 RID: 4057 RVA: 0x00096E18 File Offset: 0x00095018
+	private AnimClipNode GetAnimBasedOnInput(float topStateFrame, bool facingChanged, bool moving)
+	{
+		AnimClipNode result = this.hangIdle;
+		if (this.boyUsingHat.input.jump)
+		{
+			result = this.hangAirJump;
+		}
+		else if (facingChanged)
+		{
+			result = this.hangAirTurn;
+		}
+		else if ((topStateFrame < 30f || !moving) && (this.lastAnim == this.hangAirJump || this.lastAnim == this.hangAirLand || this.lastAnim == this.hangAirTurn))
+		{
+			result = this.lastAnim;
+		}
+		else if (moving)
+		{
+			result = this.hangAirWalk;
+		}
+		else if (this.lastAnim == this.hangAirWalk || this.lastAnim == this.hangAirStop)
+		{
+			result = this.hangAirStop;
+		}
+		return result;
+	}
+
+	// Token: 0x06000FDA RID: 4058 RVA: 0x00096F04 File Offset: 0x00095104
+	private bool DoFacingCode()
+	{
+		bool flag = Mathf.Abs(this.boyUsingHat.input.looseDir.x) > 0.25f;
+		bool flag2 = flag && Mathf.Sign(this.boyUsingHat.input.looseDir.x) != this.facing;
+		if (flag2)
+		{
+			this.facing = Mathf.Sign(this.boyUsingHat.input.looseDir.x);
+		}
+		this.AddDanglingMotion(Time.deltaTime, flag2);
+		return flag2;
+	}
+
+	// Token: 0x06000FDB RID: 4059 RVA: 0x00096FA4 File Offset: 0x000951A4
+	public void ForceDetach()
+	{
+		this.ForceDetach(false);
+	}
+
+	// Token: 0x06000FDC RID: 4060 RVA: 0x00096FB0 File Offset: 0x000951B0
+	public void ForceDetach(bool instantly)
+	{
+		this.SetDropState();
+		if (instantly)
+		{
+			this.detached.OnEvent(this);
+			this.detachedFromHat.Signal();
+			this.sendDetachedEvent = false;
+		}
+		else
+		{
+			this.sendDetachedEvent = true;
+		}
+	}
+
+	// Token: 0x06000FDD RID: 4061 RVA: 0x00096FF4 File Offset: 0x000951F4
+	public void ForceAttach()
+	{
+		this.SetAttachState(ScriptGlobals.boy, true);
+	}
+
+	// Token: 0x06000FDE RID: 4062 RVA: 0x00097004 File Offset: 0x00095204
+	public void SpawnInHat()
+	{
+		this.SpawnInHat(null);
+	}
+
+	// Token: 0x06000FDF RID: 4063 RVA: 0x00097010 File Offset: 0x00095210
+	public void SpawnInHat(Boy boyToAttach)
+	{
+		if (boyToAttach == null)
+		{
+			boyToAttach = ScriptGlobals.boy;
+		}
+		this.SetAttachState(boyToAttach, false);
+		this.PlayBoyAnimation(this.boyUsingHat, this.hangIdle, 0f);
+	}
+
+	// Token: 0x06000FE0 RID: 4064 RVA: 0x00097050 File Offset: 0x00095250
+	private void UpdateTurnedOff()
+	{
+		this.turnedOffTimer += Time.deltaTime;
+		float num = Mathf.InverseLerp(0f, 2f, this.turnedOffTimer);
+		MaterialInstance.ColorProperty colorProperty = this.gfxHelmetInner.GetComponent<MaterialInstance>().GetColorProperty("_Color");
+		this.gfxHelmetInner.GetComponent<MaterialInstance>().SetColorProperty(colorProperty, Color.Lerp(this.turnOffStartColor, Color.black, num));
+		if (num > 1f)
+		{
+			this.hatIsTurnedOff = false;
+		}
+	}
+
+	// Token: 0x06000FE1 RID: 4065 RVA: 0x000970D0 File Offset: 0x000952D0
+	public bool JumpAllowed()
+	{
+		if (this.cacheDetach || this.state == MindHat.State.Drop)
+		{
+			return false;
+		}
+		if (this.state == MindHat.State.Hanging && this.HangingDetachCheck())
+		{
+			return false;
+		}
+		if (this.boyUsingHat == null)
+		{
+			return false;
+		}
+		BoyInput input = this.boyUsingHat.input;
+		vector2f stick = input.stick;
+		return this.state != MindHat.State.PullOff || this.disableDetach || stick.y >= this.detachInputY;
+	}
+
+	// Token: 0x06000FE2 RID: 4066 RVA: 0x00097164 File Offset: 0x00095364
+	public bool IsMindHatTurnedOff()
+	{
+		return this.hatIsTurnedOff;
+	}
+
+	// Token: 0x06000FE3 RID: 4067 RVA: 0x0009716C File Offset: 0x0009536C
+	public Boy GetBoyInHat()
+	{
+		return this.boyUsingHat;
+	}
+
+	// Token: 0x06000FE4 RID: 4068 RVA: 0x00097174 File Offset: 0x00095374
+	private void TurnOffHat()
+	{
+		for (int i = 0; i < this.gfxHelmet.childCount; i++)
+		{
+			Transform child = this.gfxHelmet.GetChild(i);
+			if (child != this.gfxHelmetInner.transform)
+			{
+				child.gameObject.SetActive(false);
+			}
+		}
+		if (this.gfxHelmetInner != null)
+		{
+			this.turnOffStartColor = this.gfxHelmetInner.GetComponent<MaterialInstance>().GetColorValue("_Color");
+		}
+		this.hatIsTurnedOff = true;
+	}
+
+	// Token: 0x06000FE5 RID: 4069 RVA: 0x00097200 File Offset: 0x00095400
+	private void TurnOnHat()
+	{
+		for (int i = 0; i < this.gfxHelmet.childCount; i++)
+		{
+			Transform child = this.gfxHelmet.GetChild(i);
+			child.gameObject.SetActive(true);
+		}
+		this.hatIsTurnedOff = false;
+	}
+
+	// Token: 0x06000FE6 RID: 4070 RVA: 0x0009724C File Offset: 0x0009544C
+	private void PlayBoyAnimation(Boy boy, AnimNode animNode, float ragdollForce = 0f)
+	{
+		if (boy.isDead)
+		{
+			return;
+		}
+		this.storedRagdollForce = ragdollForce;
+		if (boy.facing > 0f)
+		{
+			animNode.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+		}
+		else
+		{
+			animNode.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
+		}
+		BoyUtils.StartCustomAnim(boy, animNode, null, this.storedRagdollForce, Boy.AffectMode.Default, EffectMaterial.Material.None);
+	}
+
+	// Token: 0x06000FE7 RID: 4071 RVA: 0x000972D0 File Offset: 0x000954D0
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.hangOnTrigger.enterTrigger)
+		{
+			this.HangOnTriggerEnter(collider);
+		}
+	}
+
+	// Token: 0x06000FE8 RID: 4072 RVA: 0x000972EC File Offset: 0x000954EC
+	private void HangOnTriggerEnter(Collider coll)
+	{
+		Boy boy = null;
+		Rigidbody attachedRigidbody = coll.attachedRigidbody;
+		if (attachedRigidbody != null)
+		{
+			boy = attachedRigidbody.GetComponent<Boy>();
+		}
+		if (boy != null && (boy == ScriptGlobals.boy || !this.onlyUsableByBoy) && this.boyUsingHat == null && (!this.hatIsTurnedOff || boy != ScriptGlobals.boy))
+		{
+			if (this.bottomRigidBody != null)
+			{
+				Vector3 velocity = boy.velocity3;
+				this.bottomRigidBody.AddForce(velocity * 2f, 2);
+			}
+			MindHatReceiver component = attachedRigidbody.GetComponent<MindHatReceiver>();
+			if (component == null || component.connectedHat != this)
+			{
+				this.SetAttachState(boy, true);
+			}
+		}
+	}
+
+	// Token: 0x06000FE9 RID: 4073 RVA: 0x000973C4 File Offset: 0x000955C4
+	private bool HangingDetachCheck()
+	{
+		BoyInput input = this.boyUsingHat.input;
+		return (input.action || (input.jump && !this.previousJump)) && Mathf.Abs(input.stick.x) < this.cancelDetachX && this.latestStickDetachInput != 0.0 && (float)(Time.timeDbl - this.latestStickDetachInput) < this.flickInterval;
+	}
+
+	// Token: 0x06000FEA RID: 4074 RVA: 0x0009744C File Offset: 0x0009564C
+	private float GetLegXMovement()
+	{
+		float num = 0f;
+		RagdollSkeleton ragdoll = this.boyUsingHat.visualBoy.ragdoll;
+		if (ragdoll != null)
+		{
+			Rigidbody rigidbody = ragdoll[this.boyUsingHat.visualBoy.actor.specificBones.knees[0]];
+			num += this.hangIdle.transform.InverseTransformDirection(rigidbody.velocity).x;
+			rigidbody = ragdoll[this.boyUsingHat.visualBoy.actor.specificBones.knees[1]];
+			num += this.hangIdle.transform.InverseTransformDirection(rigidbody.velocity).x;
+			num *= this.boyUsingHat.facing;
+		}
+		return num;
+	}
+
+	// Token: 0x06000FEB RID: 4075 RVA: 0x00097524 File Offset: 0x00095724
+	private void UpdateBone(Rigidbody boyBone, Rigidbody otherBone, Rigidbody headBone, Rigidbody otherHeadBone, float boneForceFactor = 1f)
+	{
+		float num = Time.deltaTime * 2.5f;
+		Vector3 vector = otherBone.transform.position - otherHeadBone.transform.position;
+		if (otherHeadBone.transform.TransformDirection(Vector3.right).z * this.boyUsingHat.facing > 0f)
+		{
+			vector.x = -vector.x;
+			vector.z = -vector.z;
+		}
+		vector.x += this.boyUsingHat.facing * 0.08f;
+		Vector3 vector2 = headBone.transform.position + vector;
+		Vector3 vector3 = vector2 - boyBone.transform.position;
+		Vector3 vector4 = boneForceFactor * 0.8f * num / Time.deltaTime * vector3;
+		vector4.z *= 0.5f;
+		Vector3 vector5 = boyBone.velocity * (1f - num);
+		if (vector4.x * vector5.x > 0f && Mathf.Abs(vector5.x) * 0.3f > Mathf.Abs(vector4.x))
+		{
+			vector4.x *= 0.5f;
+		}
+		boyBone.velocity = vector5 + vector4;
+	}
+
+	// Token: 0x06000FEC RID: 4076 RVA: 0x00097688 File Offset: 0x00095888
+	private void UpdateRagDoll(Boy other)
+	{
+		if (this.storedRagdollForce > 0f)
+		{
+			RagdollSkeleton ragdoll = this.boyUsingHat.visualBoy.ragdoll;
+			RagdollSkeleton ragdoll2 = other.visualBoy.ragdoll;
+			Rigidbody rigidbody = ragdoll[this.boyUsingHat.visualBoy.actor.specificBones.head];
+			Rigidbody otherHeadBone = ragdoll2[other.visualBoy.actor.specificBones.head];
+			SpecificBones specificBones = this.boyUsingHat.visualBoy.actor.specificBones;
+			RagdollSkeleton.BodyIndex bodyIndex = ragdoll.begin;
+			while (bodyIndex != ragdoll.end)
+			{
+				Rigidbody rigidbody2 = ragdoll[bodyIndex];
+				if (rigidbody2 != rigidbody && rigidbody2 != ragdoll[specificBones.spineB])
+				{
+					this.UpdateBone(rigidbody2, ragdoll2[bodyIndex], rigidbody, otherHeadBone, 1f);
+				}
+				bodyIndex = ++bodyIndex;
+			}
+		}
+	}
+
+	// Token: 0x06000FED RID: 4077 RVA: 0x00097788 File Offset: 0x00095988
+	private void AddDanglingMotion(float deltaTime, bool facingChanged)
+	{
+		this.randomTimer -= Time.deltaTime;
+		if (this.randomTimer <= 0f)
+		{
+			if (Mathf.Abs(this.boyUsingHat.input.stick.x) > 0.25f)
+			{
+				if (this.randomTimer < -0.2f)
+				{
+					this.randomforce = this.boyUsingHat.input.stick.x;
+				}
+				else
+				{
+					this.randomforce = 0f;
+				}
+				this.randomTimer = Random.Range(0.5f, 0.7f);
+				this.randomTime = this.randomTimer;
+			}
+			else
+			{
+				this.randomTime = 0.05f;
+			}
+			if (this.fakeRope != null)
+			{
+				float legXMovement = this.GetLegXMovement();
+				this.fakeRope.AddForce(legXMovement * Time.deltaTime);
+			}
+			if (this.bottomRigidBody)
+			{
+				float legXMovement2 = this.GetLegXMovement();
+				this.bottomRigidBody.AddForce(Vector3.right * (legXMovement2 * 3.5f * Time.deltaTime), 2);
+			}
+		}
+		else
+		{
+			if (this.fakeRope != null)
+			{
+				float num = 1f - (1f + Mathf.Cos(this.randomTimer / this.randomTime * 3.1415927f * 2f)) * 0.5f;
+				float legXMovement3 = this.GetLegXMovement();
+				this.fakeRope.AddForce((this.randomforce * num + legXMovement3) * Time.deltaTime);
+			}
+			if (this.bottomRigidBody != null)
+			{
+				float num2 = 1f - (1f + Mathf.Cos(this.randomTimer / this.randomTime * 3.1415927f * 2f)) * 0.5f;
+				float legXMovement4 = this.GetLegXMovement();
+				this.bottomRigidBody.AddForce(Vector3.right * (this.randomforce * num2 + legXMovement4) * Time.deltaTime * 1f, 2);
+			}
+		}
+		if (facingChanged && this.lastAnim != this.hangAirLadderDown && this.lastAnim != this.hangAirLadderIdle && this.lastAnim != this.hangAirLadderIdle)
+		{
+			this.randomTimer = Random.Range(0.5f, 0.7f);
+			this.randomTime = this.randomTimer;
+			this.randomforce = Mathf.Sign(this.boyUsingHat.input.stick.x);
+		}
+	}
+
+	// Token: 0x06000FEE RID: 4078 RVA: 0x00097A2C File Offset: 0x00095C2C
+	private AnimClipNode GetAnimFromName(string name)
+	{
+		AnimClipNode[] componentsInChildren = this.hangIdle.transform.parent.GetComponentsInChildren<AnimClipNode>(true);
+		int i = 0;
+		int num = componentsInChildren.Length;
+		while (i < num)
+		{
+			if (componentsInChildren[i].name.CompareTo(name) == 0)
+			{
+				return componentsInChildren[i];
+			}
+			i++;
+		}
+		return null;
+	}
+
+	// Token: 0x06000FEF RID: 4079 RVA: 0x00097A80 File Offset: 0x00095C80
+	public void AddHatReceiver(Boy receiver)
+	{
+		if (!this.boysBeingControlled.Contains(receiver))
+		{
+			this.boysBeingControlled.Add(receiver);
+		}
+	}
+
+	// Token: 0x06000FF0 RID: 4080 RVA: 0x00097AA0 File Offset: 0x00095CA0
+	public void RemoveHatReceiver(Boy receiver)
+	{
+		this.boysBeingControlled.Remove(receiver);
+	}
+
+	// Token: 0x06000FF1 RID: 4081 RVA: 0x00097AB0 File Offset: 0x00095CB0
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.attachedRigidbody && coll.attachedRigidbody.GetComponent<Boy>() == ScriptGlobals.boy)
+		{
+			this.noOfPlayerProbesInside++;
+		}
+		if (coll.attachedRigidbody && coll.attachedRigidbody.GetComponent<MindHatReceiver>())
+		{
+			this.otherDudesInside.Add(coll.attachedRigidbody.GetComponent<Boy>());
+		}
+	}
+
+	// Token: 0x06000FF2 RID: 4082 RVA: 0x00097B30 File Offset: 0x00095D30
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.attachedRigidbody && coll.attachedRigidbody.GetComponent<Boy>() == ScriptGlobals.boy)
+		{
+			this.noOfPlayerProbesInside--;
+		}
+		if (coll.attachedRigidbody && coll.attachedRigidbody.GetComponent<MindHatReceiver>())
+		{
+			this.otherDudesInside.Remove(coll.attachedRigidbody.GetComponent<Boy>());
+		}
+	}
+
+	// Token: 0x04001C94 RID: 7316
+	public bool disableDetach;
+
+	// Token: 0x04001C95 RID: 7317
+	public bool onlyUsableByBoy;
+
+	// Token: 0x04001C96 RID: 7318
+	public CollisionEvents hangOnTrigger;
+
+	// Token: 0x04001C97 RID: 7319
+	public FixedJoint jointToBoyHead;
+
+	// Token: 0x04001C98 RID: 7320
+	public Joint softWirePhysicsRoot;
+
+	// Token: 0x04001C99 RID: 7321
+	public GameObject unMovingReparant;
+
+	// Token: 0x04001C9A RID: 7322
+	public Transform gfxHelmet;
+
+	// Token: 0x04001C9B RID: 7323
+	public Transform gfxHelmetInner;
+
+	// Token: 0x04001C9C RID: 7324
+	public AnimClipNode grabAnim;
+
+	// Token: 0x04001C9D RID: 7325
+	public AnimBlendNode pullBlendNode;
+
+	// Token: 0x04001C9E RID: 7326
+	public AnimClipNode jumpGrabFWAnim;
+
+	// Token: 0x04001C9F RID: 7327
+	public AnimClipNode jumpGrabUpAnim;
+
+	// Token: 0x04001CA0 RID: 7328
+	public AnimClipNode hangIdle;
+
+	// Token: 0x04001CA1 RID: 7329
+	public AnimClipNode hangGrab;
+
+	// Token: 0x04001CA2 RID: 7330
+	public AnimClipNode getOff;
+
+	// Token: 0x04001CA3 RID: 7331
+	public AnimClipNode hangAirDoGrab;
+
+	// Token: 0x04001CA4 RID: 7332
+	public AnimClipNode hangAirLetGo;
+
+	// Token: 0x04001CA5 RID: 7333
+	public AnimClipNode hangAirWalk;
+
+	// Token: 0x04001CA6 RID: 7334
+	public AnimClipNode hangAirJump;
+
+	// Token: 0x04001CA7 RID: 7335
+	public AnimClipNode hangAirTurn;
+
+	// Token: 0x04001CA8 RID: 7336
+	public AnimClipNode hangAirWalkGrab;
+
+	// Token: 0x04001CA9 RID: 7337
+	public AnimClipNode hangAirWalkPush;
+
+	// Token: 0x04001CAA RID: 7338
+	public AnimClipNode hangAirWalkPull;
+
+	// Token: 0x04001CAB RID: 7339
+	public AnimClipNode hangAirIdleGrab;
+
+	// Token: 0x04001CAC RID: 7340
+	public AnimClipNode hangAirJumpGrab;
+
+	// Token: 0x04001CAD RID: 7341
+	public AnimClipNode hangAirTurnGrab;
+
+	// Token: 0x04001CAE RID: 7342
+	public AnimClipNode hangAirLand;
+
+	// Token: 0x04001CAF RID: 7343
+	public AnimClipNode hangAirStop;
+
+	// Token: 0x04001CB0 RID: 7344
+	public AnimClipNode hangAirClimbUp;
+
+	// Token: 0x04001CB1 RID: 7345
+	public AnimClipNode hangAirLadderDown;
+
+	// Token: 0x04001CB2 RID: 7346
+	public AnimClipNode hangAirLadderIdle;
+
+	// Token: 0x04001CB3 RID: 7347
+	public AnimClipNode hangAirLadderUp;
+
+	// Token: 0x04001CB4 RID: 7348
+	public AnimClipNode hangAirSwimFW;
+
+	// Token: 0x04001CB5 RID: 7349
+	public AnimClipNode hangAirTouchWall;
+
+	// Token: 0x04001CB6 RID: 7350
+	public AnimClipNode failControlSelfAnim;
+
+	// Token: 0x04001CB7 RID: 7351
+	public AnimClipNode hitBySentry;
+
+	// Token: 0x04001CB8 RID: 7352
+	public string audioPrefix;
+
+	// Token: 0x04001CB9 RID: 7353
+	public bool debug;
+
+	// Token: 0x04001CBA RID: 7354
+	private MindHat.State state;
+
+	// Token: 0x04001CBB RID: 7355
+	public SimpleEvent<MindHat> attached = new SimpleEvent<MindHat>("attached");
+
+	// Token: 0x04001CBC RID: 7356
+	public SimpleEvent<MindHat> detached = new SimpleEvent<MindHat>("detached");
+
+	// Token: 0x04001CBD RID: 7357
+	public SimpleEvent<MindHat> selfFail = new SimpleEvent<MindHat>("selfFail");
+
+	// Token: 0x04001CBE RID: 7358
+	private SignalOut attachedToHat;
+
+	// Token: 0x04001CBF RID: 7359
+	private SignalOut detachedFromHat;
+
+	// Token: 0x04001CC0 RID: 7360
+	private SignalIn forceDetach;
+
+	// Token: 0x04001CC1 RID: 7361
+	private SignalIn forceAttach;
+
+	// Token: 0x04001CC2 RID: 7362
+	private SignalIn spawnInHat;
+
+	// Token: 0x04001CC3 RID: 7363
+	private SignalIn turnOffHat;
+
+	// Token: 0x04001CC4 RID: 7364
+	private SignalIn turnOnHat;
+
+	// Token: 0x04001CC5 RID: 7365
+	private Boy boyUsingHat_internal;
+
+	// Token: 0x04001CC6 RID: 7366
+	private List<Boy> boysBeingControlled = new List<Boy>();
+
+	// Token: 0x04001CC7 RID: 7367
+	private float stateTimer;
+
+	// Token: 0x04001CC8 RID: 7368
+	private float facing;
+
+	// Token: 0x04001CC9 RID: 7369
+	private float storedRagdollForce;
+
+	// Token: 0x04001CCA RID: 7370
+	private float detachInputY = -0.8f;
+
+	// Token: 0x04001CCB RID: 7371
+	private float cancelDetachX = 0.4f;
+
+	// Token: 0x04001CCC RID: 7372
+	private double latestStickDetachInput;
+
+	// Token: 0x04001CCD RID: 7373
+	private double latestButtonDetachInput;
+
+	// Token: 0x04001CCE RID: 7374
+	private float turnedOffTimer;
+
+	// Token: 0x04001CCF RID: 7375
+	private float pullFraction;
+
+	// Token: 0x04001CD0 RID: 7376
+	private float lastFakeStickDir;
+
+	// Token: 0x04001CD1 RID: 7377
+	private float randomforce;
+
+	// Token: 0x04001CD2 RID: 7378
+	private float randomTimer;
+
+	// Token: 0x04001CD3 RID: 7379
+	private float randomTime = 0.5f;
+
+	// Token: 0x04001CD4 RID: 7380
+	private int noOfPlayerProbesInside;
+
+	// Token: 0x04001CD5 RID: 7381
+	private float flickInterval = 0.2f;
+
+	// Token: 0x04001CD6 RID: 7382
+	private bool inPullOffState;
+
+	// Token: 0x04001CD7 RID: 7383
+	private bool sendDetachedEvent;
+
+	// Token: 0x04001CD8 RID: 7384
+	private bool disallowJump = true;
+
+	// Token: 0x04001CD9 RID: 7385
+	private bool cacheDetach;
+
+	// Token: 0x04001CDA RID: 7386
+	private bool releasedJumpInDetach;
+
+	// Token: 0x04001CDB RID: 7387
+	private bool hatIsTurnedOff;
+
+	// Token: 0x04001CDC RID: 7388
+	private bool previousJump;
+
+	// Token: 0x04001CDD RID: 7389
+	private List<Boy> otherDudesInside = new List<Boy>();
+
+	// Token: 0x04001CDE RID: 7390
+	private AnimClipNode chosenJumpGrabAnim;
+
+	// Token: 0x04001CDF RID: 7391
+	private AnimClipNode chosenFailAnim;
+
+	// Token: 0x04001CE0 RID: 7392
+	private AnimClipNode lastAnim;
+
+	// Token: 0x04001CE1 RID: 7393
+	private Color turnOffStartColor;
+
+	// Token: 0x04001CE2 RID: 7394
+	private int hangOnTriggerEnterHandle = -1;
+
+	// Token: 0x04001CE3 RID: 7395
+	[HideInInspector]
+	[SerializeField]
+	private FakeRopeEndController fakeRope;
+
+	// Token: 0x04001CE4 RID: 7396
+	[SerializeField]
+	[HideInInspector]
+	private Rigidbody bottomRigidBody;
+
+	// Token: 0x04001CE5 RID: 7397
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04001CE6 RID: 7398
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioBoyAttach;
+
+	// Token: 0x04001CE7 RID: 7399
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioBoyDetach;
+
+	// Token: 0x04001CE8 RID: 7400
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioAttach;
+
+	// Token: 0x04001CE9 RID: 7401
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioDetach;
+
+	// Token: 0x04001CEA RID: 7402
+	private bool activeLastFrame;
+
+	// Token: 0x04001CEB RID: 7403
+	private float hitBySentryTimer;
+
+	// Token: 0x04001CEC RID: 7404
+	private bool hasBeenRagdolled;
+
+	// Token: 0x02000202 RID: 514
+	private enum State
+	{
+		// Token: 0x04001CEE RID: 7406
+		None,
+		// Token: 0x04001CEF RID: 7407
+		Idle,
+		// Token: 0x04001CF0 RID: 7408
+		FailSelf,
+		// Token: 0x04001CF1 RID: 7409
+		Attach,
+		// Token: 0x04001CF2 RID: 7410
+		Hanging,
+		// Token: 0x04001CF3 RID: 7411
+		PullOff,
+		// Token: 0x04001CF4 RID: 7412
+		Drop,
+		// Token: 0x04001CF5 RID: 7413
+		HitBySentry
+	}
+}

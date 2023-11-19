@@ -1,0 +1,49 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004D4 RID: 1236
+public class MindHatWagonConnectGatesAtEnable : MonoBehaviour
+{
+	// Token: 0x0600206A RID: 8298 RVA: 0x0011221C File Offset: 0x0011041C
+	private void OnEnable()
+	{
+		this.gateRight.transform.position = this.gateRightInitPos.position;
+		this.gateRight.transform.rotation = this.gateRightInitPos.rotation;
+		this.gateLeft.transform.position = this.gateLeftInitPos.position;
+		this.gateLeft.transform.rotation = this.gateLeftInitPos.rotation;
+		this.jointRight.connectedBody = this.toConnectTo;
+		this.jointLeft.connectedBody = this.toConnectTo;
+		this.gateRight.isKinematic = false;
+		this.gateLeft.isKinematic = false;
+	}
+
+	// Token: 0x0600206B RID: 8299 RVA: 0x001122D0 File Offset: 0x001104D0
+	private void OnDisable()
+	{
+		this.jointRight.connectedBody = null;
+		this.jointLeft.connectedBody = null;
+		this.gateRight.isKinematic = true;
+		this.gateLeft.isKinematic = true;
+	}
+
+	// Token: 0x04003C0E RID: 15374
+	public Rigidbody gateRight;
+
+	// Token: 0x04003C0F RID: 15375
+	public Rigidbody gateLeft;
+
+	// Token: 0x04003C10 RID: 15376
+	public Joint jointRight;
+
+	// Token: 0x04003C11 RID: 15377
+	public Joint jointLeft;
+
+	// Token: 0x04003C12 RID: 15378
+	public Rigidbody toConnectTo;
+
+	// Token: 0x04003C13 RID: 15379
+	public Transform gateRightInitPos;
+
+	// Token: 0x04003C14 RID: 15380
+	public Transform gateLeftInitPos;
+}

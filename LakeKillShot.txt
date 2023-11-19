@@ -1,0 +1,498 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000451 RID: 1105
+public class LakeKillShot : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06001D0D RID: 7437 RVA: 0x000FBC50 File Offset: 0x000F9E50
+	public bool PreAwake(int callcount)
+	{
+		this.carIsNowReady = SignalIn.Create("carIsNowReady", base.gameObject, new Action(this.SetCarIsReady));
+		this.disableKillShot = SignalIn.Create("disableKillShot", base.gameObject, new Action(this.OnDisableKillShot));
+		this.shootCorpse = SignalIn.Create("shootCorpse", base.gameObject, new Action(this.OnShootCorpse));
+		this.killPlayer = SignalOut.Create("killPlayer", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001D0E RID: 7438 RVA: 0x000FBCDC File Offset: 0x000F9EDC
+	private void Start()
+	{
+		this.triggerDanger.enterTrigger.Register(this, ref this.dangerTriggerEnterHandle);
+		this.triggerDanger.exitTrigger.Register(this, ref this.dangerTriggerExitHandle);
+		this.triggerCoverKill.SetActive(false);
+		this.triggerKill.enterTrigger.Register(this, ref this.killTriggerEnterHandle);
+		if (this.triggerExtraAir)
+		{
+			this.triggerExtraAir.enterTrigger.Register(this, ref this.extraAirTriggerEnterHandle);
+			this.triggerExtraAir.exitTrigger.Register(this, ref this.extraAirTriggerExitHandle);
+		}
+		this.triggerWarningShot.enterTrigger.Register(this, ref this.warningShotTriggerEnterHandle);
+		this.triggerWarningShot.exitTrigger.Register(this, ref this.warningShotTriggerExitHandle);
+		this.dangerBorderX = this.triggerDanger.transform.position.x - this.triggerDanger.GetComponent<Collider>().bounds.size.x / 2f;
+		this.followPointMin = this.followPoint.position.x;
+		this.SetReadyState();
+	}
+
+	// Token: 0x06001D0F RID: 7439 RVA: 0x000FBE0C File Offset: 0x000FA00C
+	private void SetReadyState()
+	{
+		this.state = LakeKillShot.State.Ready;
+	}
+
+	// Token: 0x06001D10 RID: 7440 RVA: 0x000FBE18 File Offset: 0x000FA018
+	private void ReadyState()
+	{
+		if (this.inDanger)
+		{
+			this.SetDangerState();
+		}
+	}
+
+	// Token: 0x06001D11 RID: 7441 RVA: 0x000FBE2C File Offset: 0x000FA02C
+	private void SetDangerState()
+	{
+		this.timer = this.dangerDelay;
+		this.state = LakeKillShot.State.Danger;
+	}
+
+	// Token: 0x06001D12 RID: 7442 RVA: 0x000FBE44 File Offset: 0x000FA044
+	private void DangerState()
+	{
+		this.timer -= Time.deltaTime;
+		if (!this.inDanger)
+		{
+			this.SetReadyState();
+		}
+		else if (this.timer <= 0f)
+		{
+			this.SetShootState();
+		}
+	}
+
+	// Token: 0x06001D13 RID: 7443 RVA: 0x000FBE90 File Offset: 0x000FA090
+	private void SetPreShootState()
+	{
+		this.triggerCoverKill.SetActive(true);
+		this.timer = this.preShootDelay;
+		this.state = LakeKillShot.State.PreShoot;
+	}
+
+	// Token: 0x06001D14 RID: 7444 RVA: 0x000FBEB4 File Offset: 0x000FA0B4
+	private void PreShootState()
+	{
+		this.timer -= Time.deltaTime;
+		if (this.timer < 0f)
+		{
+			this.SetShootState();
+		}
+	}
+
+	// Token: 0x06001D15 RID: 7445 RVA: 0x000FBEEC File Offset: 0x000FA0EC
+	private void SetShootState()
+	{
+		this.killTimer = this.killDelay;
+		this.state = LakeKillShot.State.Shoot;
+	}
+
+	// Token: 0x06001D16 RID: 7446 RVA: 0x000FBF04 File Offset: 0x000FA104
+	private void ShootState()
+	{
+		this.killTimer -= Time.deltaTime;
+		if (this.killTimer <= 0f)
+		{
+			this.Shoot();
+		}
+	}
+
+	// Token: 0x06001D17 RID: 7447 RVA: 0x000FBF3C File Offset: 0x000FA13C
+	private void SetPostKillState()
+	{
+		this.fxBoyHit.transform.position = ScriptGlobals.boy.transform.position;
+		this.fxBoyHit.Play();
+		this.state = LakeKillShot.State.PostKill;
+	}
+
+	// Token: 0x06001D18 RID: 7448 RVA: 0x000FBF7C File Offset: 0x000FA17C
+	private void PostKillState()
+	{
+		this.fxBoyHit.transform.position = ScriptGlobals.boy.transform.position;
+	}
+
+	// Token: 0x06001D19 RID: 7449 RVA: 0x000FBFA8 File Offset: 0x000FA1A8
+	private void FixedUpdate()
+	{
+		if (!this.carIsReady)
+		{
+			return;
+		}
+		if (this.state != LakeKillShot.State.None)
+		{
+			switch (this.state)
+			{
+			case LakeKillShot.State.Ready:
+				this.ReadyState();
+				break;
+			case LakeKillShot.State.Danger:
+				this.DangerState();
+				break;
+			case LakeKillShot.State.PreShoot:
+				this.PreShootState();
+				break;
+			case LakeKillShot.State.Shoot:
+				this.ShootState();
+				break;
+			case LakeKillShot.State.PostKill:
+				this.PostKillState();
+				break;
+			}
+			if (this.addExtraAir)
+			{
+				Boy boy = ScriptGlobals.boy;
+				boy.GiveBoyExtraAir(Time.deltaTime / 3f);
+			}
+			if (this.warningTimer > 0f)
+			{
+				this.warningTimer -= Time.deltaTime;
+			}
+			else if (this.inWarning)
+			{
+				this.MissingShot(ScriptGlobals.boy.pos3);
+				this.warningTimer = this.warningDelay;
+				this.warningDelay *= 1.15f;
+			}
+			if (this.debug && ScriptGlobals.boy.input.action)
+			{
+				this.VisualiseShot(this.aimTest.position, false);
+			}
+		}
+	}
+
+	// Token: 0x06001D1A RID: 7450 RVA: 0x000FC0E0 File Offset: 0x000FA2E0
+	private void SetCarIsReady()
+	{
+		this.carIsReady = true;
+	}
+
+	// Token: 0x06001D1B RID: 7451 RVA: 0x000FC0EC File Offset: 0x000FA2EC
+	private void MissingShot(Vector3 target)
+	{
+		Vector3 target2 = target;
+		target2.x += Random.Range(0.2f, 0.5f);
+		target2.y -= Random.Range(0f, 0.2f);
+		this.VisualiseShot(target2, false);
+	}
+
+	// Token: 0x06001D1C RID: 7452 RVA: 0x000FC140 File Offset: 0x000FA340
+	private void VisualiseShot(Vector3 target, bool kill = false)
+	{
+		if (this.fxImpactSplash.Length == 0 || this.fxImpactBubbles.Length == 0)
+		{
+			return;
+		}
+		Vector3 vector = target - this.shotStart.position;
+		float surfaceHeight = this.water.GetSurfaceHeight(Vector3.up);
+		float num = (this.shotStart.position.y - surfaceHeight) / -vector.y;
+		Vector3 position = this.shotStart.position + vector * num;
+		this.particleIndex++;
+		this.particleIndex %= this.fxImpactSplash.Length;
+		ParticleSystem particleSystem = this.fxImpactSplash[this.particleIndex];
+		if (particleSystem)
+		{
+			particleSystem.transform.position = position;
+			particleSystem.Play();
+		}
+		ParticleSystem particleSystem2 = this.fxImpactBubbles[this.particleIndex];
+		if (particleSystem2)
+		{
+			particleSystem2.transform.position = position;
+			particleSystem2.transform.rotation = Quaternion.LookRotation(vector);
+			particleSystem2.Play();
+		}
+		this.muzzleFlash.Play();
+		this.muzzleLight.OnAnimate();
+	}
+
+	// Token: 0x06001D1D RID: 7453 RVA: 0x000FC26C File Offset: 0x000FA46C
+	private void Shoot()
+	{
+		this.VisualiseShot(ScriptGlobals.boy.pos3, true);
+		this.killPlayer.Signal();
+		if (this.killEffect)
+		{
+			this.killEffect.SetActive(true);
+		}
+		if (this.fxBoyHit != null)
+		{
+			this.SetPostKillState();
+		}
+		else
+		{
+			this.state = LakeKillShot.State.None;
+		}
+	}
+
+	// Token: 0x06001D1E RID: 7454 RVA: 0x000FC2D4 File Offset: 0x000FA4D4
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.triggerDanger.enterTrigger)
+		{
+			this.OnDangerEnter(collider);
+		}
+		else if (sender == this.triggerDanger.exitTrigger)
+		{
+			this.OnDangerExit(collider);
+		}
+		else if (sender == this.triggerKill.enterTrigger)
+		{
+			this.OnKillEnter(collider);
+		}
+		else if (sender == this.triggerExtraAir.enterTrigger)
+		{
+			this.OnExtraAirEnter(collider);
+		}
+		else if (sender == this.triggerExtraAir.exitTrigger)
+		{
+			this.OnExtraAirExit(collider);
+		}
+		else if (sender == this.triggerWarningShot.enterTrigger)
+		{
+			this.OnWarningShotEnter(collider);
+		}
+		else if (sender == this.triggerWarningShot.exitTrigger)
+		{
+			this.OnWarningShotExit(collider);
+		}
+	}
+
+	// Token: 0x06001D1F RID: 7455 RVA: 0x000FC3B0 File Offset: 0x000FA5B0
+	private void OnWarningShotEnter(Collider collider)
+	{
+		this.inWarning = true;
+	}
+
+	// Token: 0x06001D20 RID: 7456 RVA: 0x000FC3BC File Offset: 0x000FA5BC
+	private void OnWarningShotExit(Collider collider)
+	{
+		this.inWarning = false;
+	}
+
+	// Token: 0x06001D21 RID: 7457 RVA: 0x000FC3C8 File Offset: 0x000FA5C8
+	private void OnShootCorpse()
+	{
+		this.VisualiseShot(this.corpseTarget.position, false);
+		if (this.fxCorpseHit != null)
+		{
+			this.fxCorpseHit.Play();
+		}
+		this.state = LakeKillShot.State.None;
+	}
+
+	// Token: 0x06001D22 RID: 7458 RVA: 0x000FC40C File Offset: 0x000FA60C
+	private void OnDisableKillShot()
+	{
+		this.state = LakeKillShot.State.None;
+	}
+
+	// Token: 0x06001D23 RID: 7459 RVA: 0x000FC418 File Offset: 0x000FA618
+	private void OnDangerExit(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.inDanger = false;
+		}
+	}
+
+	// Token: 0x06001D24 RID: 7460 RVA: 0x000FC434 File Offset: 0x000FA634
+	private void OnDangerEnter(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.inDanger = true;
+		}
+	}
+
+	// Token: 0x06001D25 RID: 7461 RVA: 0x000FC450 File Offset: 0x000FA650
+	private void OnKillEnter(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>() && (this.state == LakeKillShot.State.Danger || this.state == LakeKillShot.State.Ready))
+		{
+			this.SetPreShootState();
+		}
+	}
+
+	// Token: 0x06001D26 RID: 7462 RVA: 0x000FC48C File Offset: 0x000FA68C
+	private void OnExtraAirEnter(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.addExtraAir = true;
+		}
+	}
+
+	// Token: 0x06001D27 RID: 7463 RVA: 0x000FC4A8 File Offset: 0x000FA6A8
+	private void OnExtraAirExit(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.addExtraAir = false;
+		}
+	}
+
+	// Token: 0x04003553 RID: 13651
+	public CollisionEvents triggerDanger;
+
+	// Token: 0x04003554 RID: 13652
+	public CollisionEvents triggerKill;
+
+	// Token: 0x04003555 RID: 13653
+	public CollisionEvents triggerExtraAir;
+
+	// Token: 0x04003556 RID: 13654
+	public CollisionEvents triggerWarningShot;
+
+	// Token: 0x04003557 RID: 13655
+	public Transform followPoint;
+
+	// Token: 0x04003558 RID: 13656
+	public Transform searchLight;
+
+	// Token: 0x04003559 RID: 13657
+	public Transform searchLightHolder;
+
+	// Token: 0x0400355A RID: 13658
+	public Transform corpseTarget;
+
+	// Token: 0x0400355B RID: 13659
+	public ParticleSystem fxCorpseHit;
+
+	// Token: 0x0400355C RID: 13660
+	public GameObject killEffect;
+
+	// Token: 0x0400355D RID: 13661
+	public GameObject triggerCoverKill;
+
+	// Token: 0x0400355E RID: 13662
+	public ParticleSystem fxBoyHit;
+
+	// Token: 0x0400355F RID: 13663
+	public bool debug;
+
+	// Token: 0x04003560 RID: 13664
+	public Transform shotStart;
+
+	// Token: 0x04003561 RID: 13665
+	public ParticleSystem muzzleFlash;
+
+	// Token: 0x04003562 RID: 13666
+	public AnimateLight muzzleLight;
+
+	// Token: 0x04003563 RID: 13667
+	public Transform aimTest;
+
+	// Token: 0x04003564 RID: 13668
+	public BoyWater water;
+
+	// Token: 0x04003565 RID: 13669
+	public ParticleSystem[] fxImpactSplash;
+
+	// Token: 0x04003566 RID: 13670
+	public ParticleSystem[] fxImpactBubbles;
+
+	// Token: 0x04003567 RID: 13671
+	private int particleIndex;
+
+	// Token: 0x04003568 RID: 13672
+	private SignalIn carIsNowReady;
+
+	// Token: 0x04003569 RID: 13673
+	private SignalIn disableKillShot;
+
+	// Token: 0x0400356A RID: 13674
+	private SignalOut killPlayer;
+
+	// Token: 0x0400356B RID: 13675
+	private SignalIn shootCorpse;
+
+	// Token: 0x0400356C RID: 13676
+	private LakeKillShot.State state;
+
+	// Token: 0x0400356D RID: 13677
+	private float timer;
+
+	// Token: 0x0400356E RID: 13678
+	private float dangerDelay = 1.5f;
+
+	// Token: 0x0400356F RID: 13679
+	private float preShootDelay = 0.5f;
+
+	// Token: 0x04003570 RID: 13680
+	private float killTimer;
+
+	// Token: 0x04003571 RID: 13681
+	private float killDelay = 0.2f;
+
+	// Token: 0x04003572 RID: 13682
+	private bool inDanger;
+
+	// Token: 0x04003573 RID: 13683
+	private float dangerBorderX;
+
+	// Token: 0x04003574 RID: 13684
+	private float followPointMin;
+
+	// Token: 0x04003575 RID: 13685
+	private bool addExtraAir;
+
+	// Token: 0x04003576 RID: 13686
+	private bool lightFollowBoy;
+
+	// Token: 0x04003577 RID: 13687
+	private bool inWarning;
+
+	// Token: 0x04003578 RID: 13688
+	private float warningTimer;
+
+	// Token: 0x04003579 RID: 13689
+	private float warningDelay = 2.5f;
+
+	// Token: 0x0400357A RID: 13690
+	private int dangerTriggerEnterHandle = -1;
+
+	// Token: 0x0400357B RID: 13691
+	private int dangerTriggerExitHandle = -1;
+
+	// Token: 0x0400357C RID: 13692
+	private int killTriggerEnterHandle = -1;
+
+	// Token: 0x0400357D RID: 13693
+	private int extraAirTriggerEnterHandle = -1;
+
+	// Token: 0x0400357E RID: 13694
+	private int extraAirTriggerExitHandle = -1;
+
+	// Token: 0x0400357F RID: 13695
+	private int warningShotTriggerEnterHandle = -1;
+
+	// Token: 0x04003580 RID: 13696
+	private int warningShotTriggerExitHandle = -1;
+
+	// Token: 0x04003581 RID: 13697
+	private bool carIsReady;
+
+	// Token: 0x02000452 RID: 1106
+	private enum State
+	{
+		// Token: 0x04003583 RID: 13699
+		None,
+		// Token: 0x04003584 RID: 13700
+		Ready,
+		// Token: 0x04003585 RID: 13701
+		Danger,
+		// Token: 0x04003586 RID: 13702
+		PreShoot,
+		// Token: 0x04003587 RID: 13703
+		Shoot,
+		// Token: 0x04003588 RID: 13704
+		PostKill
+	}
+}

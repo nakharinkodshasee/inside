@@ -1,0 +1,97 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000591 RID: 1425
+public class MindHatLineup : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600247F RID: 9343 RVA: 0x0012CD80 File Offset: 0x0012AF80
+	public bool PreAwake(int callcount)
+	{
+		this.on = SignalIn.Create("on", base.gameObject, new Action(this.On));
+		this.off = SignalIn.Create("off", base.gameObject, new Action(this.Off));
+		this.crash = SignalOut.Create("crash", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06002480 RID: 9344 RVA: 0x0012CDE8 File Offset: 0x0012AFE8
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy;
+		this.dudes = base.GetComponentsInChildren<MindHatLineupDude>();
+	}
+
+	// Token: 0x06002481 RID: 9345 RVA: 0x0012CE04 File Offset: 0x0012B004
+	private void On()
+	{
+		this.hatOn = true;
+	}
+
+	// Token: 0x06002482 RID: 9346 RVA: 0x0012CE10 File Offset: 0x0012B010
+	private void Off()
+	{
+		this.hatOn = false;
+	}
+
+	// Token: 0x06002483 RID: 9347 RVA: 0x0012CE1C File Offset: 0x0012B01C
+	public void Crash()
+	{
+		this.crash.Signal();
+	}
+
+	// Token: 0x06002484 RID: 9348 RVA: 0x0012CE2C File Offset: 0x0012B02C
+	private void FixedUpdate()
+	{
+		if (!this.hatOn)
+		{
+			return;
+		}
+		float x = this.boy.input.stick.x;
+		bool rawJump = this.boy.input.rawJump;
+		if (rawJump)
+		{
+			if (!this.justJumped)
+			{
+				foreach (MindHatLineupDude mindHatLineupDude in this.dudes)
+				{
+					mindHatLineupDude.Jump();
+				}
+				this.justJumped = true;
+			}
+		}
+		else
+		{
+			this.justJumped = false;
+		}
+		if (x > 0.3f)
+		{
+			foreach (MindHatLineupDude mindHatLineupDude2 in this.dudes)
+			{
+				mindHatLineupDude2.Move(x);
+			}
+		}
+	}
+
+	// Token: 0x040042F1 RID: 17137
+	public GameObject mainDude;
+
+	// Token: 0x040042F2 RID: 17138
+	private SignalIn on;
+
+	// Token: 0x040042F3 RID: 17139
+	private SignalIn off;
+
+	// Token: 0x040042F4 RID: 17140
+	private SignalOut crash;
+
+	// Token: 0x040042F5 RID: 17141
+	private MindHatLineupDude[] dudes;
+
+	// Token: 0x040042F6 RID: 17142
+	private bool hatOn;
+
+	// Token: 0x040042F7 RID: 17143
+	private bool justJumped;
+
+	// Token: 0x040042F8 RID: 17144
+	private Boy boy;
+}

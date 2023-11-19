@@ -1,0 +1,16 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001C3 RID: 451
+public class JetCrateLiftObject : MonoBehaviour
+{
+	// Token: 0x06000D64 RID: 3428 RVA: 0x00080A80 File Offset: 0x0007EC80
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000D65 RID: 3429 RVA: 0x00080A84 File Offset: 0x0007EC84
+	private void Update()
+	{
+	}
+}

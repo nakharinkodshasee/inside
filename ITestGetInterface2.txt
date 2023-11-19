@@ -1,0 +1,8 @@
+using System;
+
+// Token: 0x020005F5 RID: 1525
+internal interface ITestGetInterface2
+{
+	// Token: 0x06002661 RID: 9825
+	void DoOtherStuff();
+}

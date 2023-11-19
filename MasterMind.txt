@@ -1,0 +1,189 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000B5 RID: 181
+public class MasterMind : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060005DF RID: 1503 RVA: 0x00045B38 File Offset: 0x00043D38
+	public bool PreAwake(int callCount)
+	{
+		switch (callCount)
+		{
+		case 0:
+			this.anim = base.GetComponent<Animation>();
+			this.idleState = this.anim["Idle"];
+			this.jumpState = this.anim["MoveB"];
+			this.randomActionState = this.anim["MoveA"];
+			this.walkState = this.anim["MoveA"];
+			this.anim.Play(this.idleState.name);
+			this.currentAnimState = this.idleState;
+			return false;
+		case 1:
+			this.watchBringUpState = this.anim["WatchBringUp"];
+			this.watchBringDownState = this.anim["WatchBringDown"];
+			this.watchIdleState = this.anim["WatchIdle"];
+			this.watchPressState = this.anim["WatchPress"];
+			return false;
+		case 2:
+			SignalIn.Create("doAJump", base.gameObject, new Action(this.DoAJump));
+			return true;
+		default:
+			return true;
+		}
+	}
+
+	// Token: 0x060005E0 RID: 1504 RVA: 0x00045C64 File Offset: 0x00043E64
+	private AnimationState GetWantedAnim()
+	{
+		if (ScriptGlobals.boy.state is BoyJumpState)
+		{
+			return this.jumpState;
+		}
+		if (!(ScriptGlobals.boy.state is BoyRunState))
+		{
+			return null;
+		}
+		this.onGround = true;
+		if (ScriptGlobals.boy.input.looseDir.x == 0f)
+		{
+			return this.idleState;
+		}
+		return this.walkState;
+	}
+
+	// Token: 0x060005E1 RID: 1505 RVA: 0x00045CD8 File Offset: 0x00043ED8
+	public void BringUpWatch()
+	{
+		this.inWatchMode = true;
+		this.CrossfadeTo(this.watchBringUpState);
+	}
+
+	// Token: 0x060005E2 RID: 1506 RVA: 0x00045CF0 File Offset: 0x00043EF0
+	public void PressWatch()
+	{
+		this.inWatchMode = true;
+		this.CrossfadeTo(this.watchPressState);
+	}
+
+	// Token: 0x060005E3 RID: 1507 RVA: 0x00045D08 File Offset: 0x00043F08
+	public void BringDownWatch()
+	{
+		this.inWatchMode = false;
+		this.CrossfadeTo(this.watchBringDownState);
+	}
+
+	// Token: 0x060005E4 RID: 1508 RVA: 0x00045D20 File Offset: 0x00043F20
+	private void CrossfadeTo(AnimationState newState)
+	{
+		this.anim.CrossFadeQueued(newState.name, 0.35f, 2);
+		this.currentAnimState = newState;
+	}
+
+	// Token: 0x060005E5 RID: 1509 RVA: 0x00045D44 File Offset: 0x00043F44
+	private void DoAJump()
+	{
+		this.forceJump = true;
+	}
+
+	// Token: 0x060005E6 RID: 1510 RVA: 0x00045D50 File Offset: 0x00043F50
+	private void Update()
+	{
+		if (this.inWatchMode)
+		{
+			if ((this.currentAnimState == this.watchBringUpState || this.currentAnimState == this.watchPressState) && this.currentAnimState.normalizedTime > 0.9f)
+			{
+				this.CrossfadeTo(this.watchIdleState);
+			}
+		}
+		else
+		{
+			AnimationState wantedAnim = this.GetWantedAnim();
+			if (this.forceJump)
+			{
+				wantedAnim = this.jumpState;
+			}
+			bool flag = false;
+			if (wantedAnim != null && wantedAnim != this.currentAnimState)
+			{
+				flag = true;
+			}
+			this.forceJump = false;
+			if (wantedAnim == this.idleState)
+			{
+				if (this.currentAnimState == this.jumpState || this.currentAnimState == this.watchBringDownState)
+				{
+					if (this.currentAnimState.normalizedTime < 0.9f)
+					{
+						flag = false;
+					}
+				}
+				else if (this.currentAnimState == this.randomActionState)
+				{
+					flag = false;
+				}
+				else if (this.currentAnimState == this.walkState)
+				{
+					wantedAnim = this.randomActionState;
+				}
+			}
+			else if (wantedAnim == this.jumpState && this.currentAnimState == this.jumpState)
+			{
+				if (this.onGround)
+				{
+					flag = true;
+				}
+				this.onGround = false;
+			}
+			if (flag || this.forceJump)
+			{
+				this.CrossfadeTo(wantedAnim);
+			}
+		}
+		this.forceJump = false;
+	}
+
+	// Token: 0x04000A48 RID: 2632
+	private AnimationState idleState;
+
+	// Token: 0x04000A49 RID: 2633
+	private AnimationState jumpState;
+
+	// Token: 0x04000A4A RID: 2634
+	private AnimationState randomActionState;
+
+	// Token: 0x04000A4B RID: 2635
+	private AnimationState walkState;
+
+	// Token: 0x04000A4C RID: 2636
+	private AnimationState watchBringUpState;
+
+	// Token: 0x04000A4D RID: 2637
+	private AnimationState watchBringDownState;
+
+	// Token: 0x04000A4E RID: 2638
+	private AnimationState watchIdleState;
+
+	// Token: 0x04000A4F RID: 2639
+	private AnimationState watchPressState;
+
+	// Token: 0x04000A50 RID: 2640
+	private Animation anim;
+
+	// Token: 0x04000A51 RID: 2641
+	private AnimationState currentAnimState;
+
+	// Token: 0x04000A52 RID: 2642
+	private bool inWatchMode;
+
+	// Token: 0x04000A53 RID: 2643
+	private SignalIn doAJump;
+
+	// Token: 0x04000A54 RID: 2644
+	private float LastStickDir = 1f;
+
+	// Token: 0x04000A55 RID: 2645
+	private bool onGround;
+
+	// Token: 0x04000A56 RID: 2646
+	private bool forceJump;
+}

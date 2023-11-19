@@ -1,0 +1,30 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200049B RID: 1179
+public class LabJetCratePOI : MonoBehaviour
+{
+	// Token: 0x06001EE0 RID: 7904 RVA: 0x00108278 File Offset: 0x00106478
+	private void Start()
+	{
+		this.jetCrateTransform = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.labJetCrate).transform;
+	}
+
+	// Token: 0x06001EE1 RID: 7905 RVA: 0x00108290 File Offset: 0x00106490
+	private void FixedUpdate()
+	{
+		float num = Mathf.Abs(this.jetCrateTransform.position.x - ScriptGlobals.boy.transform.position.x);
+		if (num < 20f)
+		{
+			base.transform.position = this.jetCrateTransform.position;
+			base.GetComponent<Rigidbody>().velocity = this.jetCrateTransform.GetComponent<Rigidbody>().velocity;
+		}
+		else
+		{
+			base.GetComponent<Rigidbody>().velocity = Vector3.zero;
+		}
+	}
+
+	// Token: 0x04003925 RID: 14629
+	private Transform jetCrateTransform;
+}

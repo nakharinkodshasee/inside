@@ -1,0 +1,105 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000407 RID: 1031
+public class LadderForce : MonoBehaviour
+{
+	// Token: 0x06001B27 RID: 6951 RVA: 0x000ED814 File Offset: 0x000EBA14
+	private void Start()
+	{
+		this.ladderLeft.SetActive(false);
+	}
+
+	// Token: 0x06001B28 RID: 6952 RVA: 0x000ED824 File Offset: 0x000EBA24
+	private void EnterLadder()
+	{
+		this.onLadder = true;
+		if (this.XvelocityBeforeOnLadder < -1f)
+		{
+			this.ladder.GetComponent<Rigidbody>().AddForceAtPosition(Vector3.right * this.forceFromRightAmount, this.atForcePosition.transform.position, 1);
+		}
+		else if (this.XvelocityBeforeOnLadder > 1f)
+		{
+			this.ladder.GetComponent<Rigidbody>().AddForceAtPosition(Vector3.right * this.forceFromLeftAmount, this.atForcePosition.transform.position, 1);
+		}
+	}
+
+	// Token: 0x06001B29 RID: 6953 RVA: 0x000ED8C0 File Offset: 0x000EBAC0
+	private void ExitLadder()
+	{
+		this.onLadder = false;
+		this.ladder.GetComponent<Rigidbody>().AddForceAtPosition(Vector3.right * this.forceFromRightAmount, this.atForcePosition.transform.position, 1);
+	}
+
+	// Token: 0x06001B2A RID: 6954 RVA: 0x000ED908 File Offset: 0x000EBB08
+	private void UpdatePlayerEnteredLadder()
+	{
+		BoyLadderState boyLadderState = ScriptGlobals.boy.state as BoyLadderState;
+		if (boyLadderState == null)
+		{
+			this.XvelocityBeforeOnLadder = ScriptGlobals.boy.velocity.x;
+		}
+		if (boyLadderState != null && !this.onLadder)
+		{
+			this.EnterLadder();
+		}
+		else if (boyLadderState == null && this.onLadder)
+		{
+			this.ExitLadder();
+		}
+	}
+
+	// Token: 0x06001B2B RID: 6955 RVA: 0x000ED978 File Offset: 0x000EBB78
+	private void FixedUpdate()
+	{
+		if (this.boyInsideTrigger)
+		{
+			this.UpdatePlayerEnteredLadder();
+		}
+	}
+
+	// Token: 0x06001B2C RID: 6956 RVA: 0x000ED98C File Offset: 0x000EBB8C
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.attachedRigidbody != null && coll.attachedRigidbody.gameObject == ScriptGlobals.boy.gameObject)
+		{
+			this.boyInsideTrigger = true;
+		}
+	}
+
+	// Token: 0x06001B2D RID: 6957 RVA: 0x000ED9D0 File Offset: 0x000EBBD0
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.attachedRigidbody != null && coll.attachedRigidbody.gameObject == ScriptGlobals.boy.gameObject)
+		{
+			this.boyInsideTrigger = false;
+		}
+	}
+
+	// Token: 0x04003132 RID: 12594
+	public GameObject ladder;
+
+	// Token: 0x04003133 RID: 12595
+	public GameObject atForcePosition;
+
+	// Token: 0x04003134 RID: 12596
+	public float forceFromLeftAmount;
+
+	// Token: 0x04003135 RID: 12597
+	public float forceFromRightAmount;
+
+	// Token: 0x04003136 RID: 12598
+	public GameObject ladderLeft;
+
+	// Token: 0x04003137 RID: 12599
+	public GameObject ladderRight;
+
+	// Token: 0x04003138 RID: 12600
+	private bool onLadder;
+
+	// Token: 0x04003139 RID: 12601
+	private float XvelocityBeforeOnLadder;
+
+	// Token: 0x0400313A RID: 12602
+	private bool boyInsideTrigger;
+}

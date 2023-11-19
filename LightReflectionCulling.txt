@@ -1,0 +1,65 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200033D RID: 829
+[ExecuteInEditMode]
+public class LightReflectionCulling : MonoBehaviour, IFastEventListener
+{
+	// Token: 0x06001721 RID: 5921 RVA: 0x000CA4D8 File Offset: 0x000C86D8
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		this.thisLight = base.GetComponent<Light>();
+	}
+
+	// Token: 0x06001722 RID: 5922 RVA: 0x000CA4E8 File Offset: 0x000C86E8
+	private void OnEnable()
+	{
+		PDReflectionCuller.OnPreReflect.Register(this, ref this.onPreReflectHandle);
+		PDReflectionCuller.OnPostReflect.Register(this, ref this.onPostReflectHandle);
+	}
+
+	// Token: 0x06001723 RID: 5923 RVA: 0x000CA518 File Offset: 0x000C8718
+	private void OnDisable()
+	{
+		this.thisLight.enabled = (this.cullMode == LightReflectionCulling.CullingMask.NoReflection);
+		PDReflectionCuller.OnPreReflect.Unregister(ref this.onPreReflectHandle);
+		PDReflectionCuller.OnPostReflect.Unregister(ref this.onPostReflectHandle);
+	}
+
+	// Token: 0x06001724 RID: 5924 RVA: 0x000CA55C File Offset: 0x000C875C
+	public void OnFastEvent(FastEvent sender)
+	{
+		if (sender == PDReflectionCuller.OnPreReflect)
+		{
+			this.thisLight.enabled = (this.cullMode == LightReflectionCulling.CullingMask.ReflectionOnly);
+		}
+		else if (sender == PDReflectionCuller.OnPostReflect)
+		{
+			this.thisLight.enabled = (this.cullMode == LightReflectionCulling.CullingMask.NoReflection);
+		}
+	}
+
+	// Token: 0x0400295E RID: 10590
+	public LightReflectionCulling.CullingMask cullMode;
+
+	// Token: 0x0400295F RID: 10591
+	private int onPreReflectHandle = -1;
+
+	// Token: 0x04002960 RID: 10592
+	private int onPostReflectHandle = -1;
+
+	// Token: 0x04002961 RID: 10593
+	[HideInInspector]
+	[SerializeField]
+	private Light thisLight;
+
+	// Token: 0x0200033E RID: 830
+	public enum CullingMask
+	{
+		// Token: 0x04002963 RID: 10595
+		NoReflection,
+		// Token: 0x04002964 RID: 10596
+		ReflectionOnly
+	}
+}

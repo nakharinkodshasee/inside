@@ -1,0 +1,715 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001E2 RID: 482
+public class LeverAnalogWater : Device, IPreAwake
+{
+	// Token: 0x06000E69 RID: 3689 RVA: 0x00089408 File Offset: 0x00087608
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, null);
+	}
+
+	// Token: 0x06000E6A RID: 3690 RVA: 0x00089430 File Offset: 0x00087630
+	public bool PreAwake(int callcount)
+	{
+		this.grabbed = SignalOut.Create("grabbed", base.gameObject);
+		this.released = SignalOut.Create("released", base.gameObject);
+		this.activate = SignalIn.Create("activate", base.gameObject, new Action(this.OnActivate));
+		this.deactivate = SignalIn.Create("deactivate", base.gameObject, new Action(this.OnDeactivate));
+		return true;
+	}
+
+	// Token: 0x06000E6B RID: 3691 RVA: 0x000894B0 File Offset: 0x000876B0
+	protected override void Start()
+	{
+		this.OnPreProcess();
+		base.Start();
+		this.visualsAnim = this.visuals.GetComponent<Animation>();
+		this.animStick = this.visualsAnim["Linear"];
+		this.animStick.normalizedSpeed = 0f;
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000E6C RID: 3692 RVA: 0x00089508 File Offset: 0x00087708
+	private void SetIdleState()
+	{
+		this.SetHandleRotation(0f);
+		this.state = LeverAnalogWater.State.Idle;
+	}
+
+	// Token: 0x06000E6D RID: 3693 RVA: 0x0008951C File Offset: 0x0008771C
+	private void IdleState()
+	{
+		if (!this.isActive)
+		{
+			return;
+		}
+		if (this.grabTimer < this.grabDelay)
+		{
+			this.grabTimer += Time.deltaTime;
+		}
+		if (this.regrabTimer > 0f)
+		{
+			this.regrabTimer -= Time.deltaTime;
+		}
+		if (this.releaseTimer > 0f)
+		{
+			this.releaseTimer -= Time.deltaTime;
+			return;
+		}
+		for (int i = 0; i < this.boysInside.Count; i++)
+		{
+			Boy boy = this.boysInside[i];
+			if (boy.input.grab)
+			{
+				if (this.WaterCheck(boy))
+				{
+					if (Device.GrabCheck(boy, false))
+					{
+						Vector3 vector = this.grabPos.position - this.headBone.position;
+						vector.z = 0f;
+						if (vector.magnitude < this.minGrabDistance)
+						{
+							this.grabStunTimer = this.grabStunDelay;
+							this.SetWaterGrabState(boy);
+							break;
+						}
+					}
+				}
+				else if (this.regrabTimer <= 0f || Mathf.Abs(boy.input.stick.x) <= 0.3f)
+				{
+					if (Device.GrabCheck(boy, true))
+					{
+						this.grabStunTimer = this.grabStunDelay;
+						this.SetGrabState(boy);
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000E6E RID: 3694 RVA: 0x000896A8 File Offset: 0x000878A8
+	private void SetGrabState(Boy boy)
+	{
+		if (this.boyGrabbing == null)
+		{
+			this.grabbed.Signal();
+		}
+		this.boyGrabbing = boy;
+		if (this.forceGrabDir != 0)
+		{
+			this.grabDir = this.forceGrabDir;
+		}
+		else if (this.boyGrabbing.transform.position.x + -0.2f * (float)this.dir + this.grabOffset * -this.boyGrabbing.facing > base.transform.position.x)
+		{
+			this.grabDir = 1;
+			this.animHolder.rotation = Quaternion.Euler(0f, 180f, 0f);
+		}
+		else
+		{
+			this.grabDir = -1;
+			this.animHolder.rotation = Quaternion.Euler(0f, 0f, 0f);
+		}
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animFloorBlend, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.state = LeverAnalogWater.State.Grab;
+	}
+
+	// Token: 0x06000E6F RID: 3695 RVA: 0x000897B8 File Offset: 0x000879B8
+	private void GrabState()
+	{
+		if (this.grabStunTimer > 0f)
+		{
+			this.grabStunTimer -= Time.deltaTime;
+		}
+		if (this.grabTimer > 0f)
+		{
+			this.grabTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.targetBlend = this.Input;
+		}
+		BoyCustomAnimState boyCustomAnimState = this.boyGrabbing.state as BoyCustomAnimState;
+		if (boyCustomAnimState == null || boyCustomAnimState.anim != this.animFloorBlend || (!this.boyGrabbing.input.rawAction && this.grabStunTimer <= 0f))
+		{
+			this.Release(0.3f);
+			return;
+		}
+		if (this.WaterCheck(this.boyGrabbing))
+		{
+			this.SetWaterTransState();
+		}
+	}
+
+	// Token: 0x06000E70 RID: 3696 RVA: 0x00089890 File Offset: 0x00087A90
+	private void SetWaterTransState()
+	{
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animTransToWater, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.state = LeverAnalogWater.State.WaterTrans;
+	}
+
+	// Token: 0x06000E71 RID: 3697 RVA: 0x000898C0 File Offset: 0x00087AC0
+	private void WaterTransState()
+	{
+		if (this.boyGrabbing.isDead || !this.boyGrabbing.input.rawAction)
+		{
+			this.Release(0.2f);
+			return;
+		}
+		this.targetBlend = 0f;
+		float num = this.animTransToWater.frame / this.animTransToWater.numFrames;
+		if (num >= 1f || (num > 0.37f && Mathf.Abs(this.Input) > 0.3f))
+		{
+			BoyUtils.StartCustomAnim(this.boyGrabbing, this.animWaterBlend, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.state = LeverAnalogWater.State.WaterGrab;
+		}
+		else if (num > 0.1f && !this.WaterCheck(this.boyGrabbing))
+		{
+			if (num > 0.3f)
+			{
+				this.SetFloorTransState();
+			}
+			else
+			{
+				this.SetGrabState(this.boyGrabbing);
+			}
+		}
+	}
+
+	// Token: 0x06000E72 RID: 3698 RVA: 0x000899B0 File Offset: 0x00087BB0
+	private void SetFloorTransState()
+	{
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animTransToFloor, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.state = LeverAnalogWater.State.FloorTrans;
+	}
+
+	// Token: 0x06000E73 RID: 3699 RVA: 0x000899E0 File Offset: 0x00087BE0
+	private void FloorTransState()
+	{
+		if (this.boyGrabbing.isDead || !this.boyGrabbing.input.rawAction)
+		{
+			this.Release(0.2f);
+			return;
+		}
+		this.targetBlend = 0f;
+		float num = this.animTransToFloor.frame / this.animTransToFloor.numFrames;
+		if (num >= 1f || (num > 0.37f && Mathf.Abs(this.Input) > 0.3f))
+		{
+			BoyUtils.StartCustomAnim(this.boyGrabbing, this.animFloorBlend, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.state = LeverAnalogWater.State.Grab;
+		}
+		else if (num > 0.1f && this.WaterCheck(this.boyGrabbing))
+		{
+			this.SetWaterTransState();
+		}
+	}
+
+	// Token: 0x06000E74 RID: 3700 RVA: 0x00089AB4 File Offset: 0x00087CB4
+	private void SetWaterGrabState(Boy boy)
+	{
+		if (this.boyGrabbing == null)
+		{
+			this.grabbed.Signal();
+		}
+		this.boyGrabbing = boy;
+		this.currentWaterGrabAnim = null;
+		if (this.TopAligned())
+		{
+			this.currentWaterGrabAnim = this.animSwimGrabTop;
+			this.grabTimer = this.grabLeftWaterdelay;
+		}
+		else if (this.boyGrabbing.pos.x < this.animHolder.position.x)
+		{
+			this.currentWaterGrabAnim = this.animSwimGrabLeft;
+			this.grabTimer = this.grabLeftWaterdelay;
+		}
+		if (this.currentWaterGrabAnim)
+		{
+			BoyUtils.StartCustomAnim(this.boyGrabbing, this.currentWaterGrabAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		else
+		{
+			BoyUtils.StartCustomAnim(this.boyGrabbing, this.animWaterBlend, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		this.state = LeverAnalogWater.State.WaterGrab;
+	}
+
+	// Token: 0x06000E75 RID: 3701 RVA: 0x00089BA4 File Offset: 0x00087DA4
+	private void WaterGrabState()
+	{
+		if (this.grabStunTimer > 0f)
+		{
+			this.grabStunTimer -= Time.deltaTime;
+		}
+		BoyCustomAnimState boyCustomAnimState = this.boyGrabbing.state as BoyCustomAnimState;
+		if (this.boyGrabbing.isDead || boyCustomAnimState.anim == null || (!this.boyGrabbing.input.rawAction && this.grabStunTimer <= 0f))
+		{
+			this.Release(0.2f);
+			return;
+		}
+		if (this.grabTimer > 0f)
+		{
+			this.grabTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.targetBlend = this.Input;
+		}
+		if ((this.currentWaterGrabAnim == null || this.currentWaterGrabAnim.frame >= this.currentWaterGrabAnim.numFrames || (this.grabTimer <= 0f && Mathf.Abs(this.Input) > 0.5f)) && boyCustomAnimState.anim != this.animWaterBlend)
+		{
+			BoyUtils.StartCustomAnim(this.boyGrabbing, this.animWaterBlend, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		if (!this.WaterCheck(this.boyGrabbing))
+		{
+			this.SetFloorTransState();
+		}
+	}
+
+	// Token: 0x06000E76 RID: 3702 RVA: 0x00089D00 File Offset: 0x00087F00
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case LeverAnalogWater.State.Idle:
+			this.IdleState();
+			break;
+		case LeverAnalogWater.State.Grab:
+			this.GrabState();
+			break;
+		case LeverAnalogWater.State.WaterTrans:
+			this.WaterTransState();
+			break;
+		case LeverAnalogWater.State.FloorTrans:
+			this.FloorTransState();
+			break;
+		case LeverAnalogWater.State.WaterGrab:
+			this.WaterGrabState();
+			break;
+		}
+	}
+
+	// Token: 0x06000E77 RID: 3703 RVA: 0x00089D6C File Offset: 0x00087F6C
+	private void Update()
+	{
+		this.UpdateAnimBlend();
+	}
+
+	// Token: 0x06000E78 RID: 3704 RVA: 0x00089D74 File Offset: 0x00087F74
+	private void UpdateAnimBlend()
+	{
+		float num = this.targetBlend - this.currentBlend;
+		float num2 = num * Time.deltaTime * ((!this.inWater) ? this.blendSpeed : this.waterBlendSpeed);
+		this.currentBlend += num2;
+		if (this.currentBlend * Mathf.Sign(num) > this.targetBlend * Mathf.Sign(num))
+		{
+			this.currentBlend = this.targetBlend;
+		}
+		this.DirectionAudioEvents();
+		this.MovementAudioEvents(num);
+		float value = Mathf.Abs(num2) * 250f;
+		SoundEngine.RTPCs.move.SetFast(value, this.akGameObj, 0f);
+		float value2 = (this.currentBlend + 1f) * 50f;
+		SoundEngine.RTPCs.position.SetFast(value2, this.akGameObj, 0f);
+		this.AnimStick(this.currentBlend);
+		this.animFloorBlend.currentBlendValue = this.currentBlend;
+		this.animWaterBlend.currentBlendValue = this.currentBlend;
+	}
+
+	// Token: 0x06000E79 RID: 3705 RVA: 0x00089E74 File Offset: 0x00088074
+	private void MovementAudioEvents(float diff)
+	{
+		if (this.audioRestartAllowed)
+		{
+			if (Mathf.Abs(diff) >= this.audioRestartVelocity)
+			{
+				this.audioRestartAllowed = false;
+			}
+		}
+		else if (Mathf.Abs(diff) <= this.audioRestartReturn)
+		{
+			this.audioRestartAllowed = true;
+		}
+		bool flag = Mathf.Abs(diff) > 0.015f;
+		if (flag)
+		{
+			this.moveStopTimer = 0.12f;
+			this.previouslyMoving = flag;
+		}
+		else if (this.moveStopTimer > 0f && this.targetBlend != 0f)
+		{
+			this.moveStopTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.previouslyMoving = flag;
+		}
+	}
+
+	// Token: 0x06000E7A RID: 3706 RVA: 0x00089F2C File Offset: 0x0008812C
+	private void DirectionAudioEvents()
+	{
+		int num;
+		if (this.currentBlend > 0.95f)
+		{
+			num = 1;
+		}
+		else if (this.currentBlend < -0.95f)
+		{
+			num = -1;
+		}
+		else if (this.currentBlend < 0.05f && this.currentBlend > -0.05f)
+		{
+			num = 0;
+		}
+		else
+		{
+			num = -2;
+		}
+		if (num != this.previousNearDir && num != -2)
+		{
+			if (num == 1)
+			{
+				this.moveStopTimer = 0f;
+			}
+			else if (num == -1)
+			{
+				this.moveStopTimer = 0f;
+			}
+			else if (num == 0 && this.targetBlend == 0f)
+			{
+				this.moveStopTimer = 0f;
+			}
+		}
+		this.previousNearDir = num;
+	}
+
+	// Token: 0x06000E7B RID: 3707 RVA: 0x00089FFC File Offset: 0x000881FC
+	public float GetOutput()
+	{
+		if (this.state == LeverAnalogWater.State.WaterTrans || this.state == LeverAnalogWater.State.FloorTrans)
+		{
+			return this.Input;
+		}
+		return this.targetBlend;
+	}
+
+	// Token: 0x06000E7C RID: 3708 RVA: 0x0008A024 File Offset: 0x00088224
+	private void AnimStick(float p)
+	{
+		if (!this.animStick.enabled)
+		{
+			this.visualsAnim.CrossFade(this.animStick.name, 0.1f);
+		}
+		this.animStick.time = (p * -0.5f + 0.5f) * this.animStick.length;
+	}
+
+	// Token: 0x06000E7D RID: 3709 RVA: 0x0008A080 File Offset: 0x00088280
+	private void SetHandleRotation(float angle)
+	{
+		if (this.visualsHandle != null)
+		{
+			this.visualsHandle.transform.localRotation = Quaternion.Euler(angle, 0f, 0f);
+		}
+	}
+
+	// Token: 0x17000054 RID: 84
+	// (get) Token: 0x06000E7E RID: 3710 RVA: 0x0008A0B4 File Offset: 0x000882B4
+	private float InputAbs
+	{
+		get
+		{
+			return (!this.horizontalLever) ? Mathf.Abs(this.boyGrabbing.input.stick.y) : Mathf.Abs(this.boyGrabbing.input.stick.x);
+		}
+	}
+
+	// Token: 0x17000055 RID: 85
+	// (get) Token: 0x06000E7F RID: 3711 RVA: 0x0008A10C File Offset: 0x0008830C
+	private float InputSign
+	{
+		get
+		{
+			return (!this.horizontalLever) ? Mathf.Sign(this.boyGrabbing.input.stick.y) : Mathf.Sign(this.boyGrabbing.input.stick.x);
+		}
+	}
+
+	// Token: 0x17000056 RID: 86
+	// (get) Token: 0x06000E80 RID: 3712 RVA: 0x0008A164 File Offset: 0x00088364
+	private float Input
+	{
+		get
+		{
+			return (!this.horizontalLever) ? this.boyGrabbing.input.stick.y : this.boyGrabbing.input.stick.x;
+		}
+	}
+
+	// Token: 0x06000E81 RID: 3713 RVA: 0x0008A1B4 File Offset: 0x000883B4
+	private void Release(float blendSpeed = 0.2f)
+	{
+		if (this.boyGrabbing && !this.boyGrabbing.isDead)
+		{
+			BoyUtils.ClearState(this.boyGrabbing, blendSpeed);
+		}
+		this.releaseTimer = this.releaseDelay;
+		this.regrabTimer = this.regrabDelay;
+		this.boyGrabbing = null;
+		this.targetBlend = 0f;
+		this.released.Signal();
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000E82 RID: 3714 RVA: 0x0008A228 File Offset: 0x00088428
+	private bool TopAligned()
+	{
+		if (!this.spineBone)
+		{
+			this.spineBone = this.boyGrabbing.visualBoy.actor.bones[this.boyGrabbing.visualBoy.actor.GetBone("SpineA")].transform;
+		}
+		float num = Vector3.Dot(this.spineBone.forward, this.animHolder.up);
+		if (Mathf.Abs(num) < 0.5f)
+		{
+			float num2 = Vector3.Dot(this.spineBone.up, this.animHolder.up);
+			if (num2 < 0f)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x06000E83 RID: 3715 RVA: 0x0008A2E0 File Offset: 0x000884E0
+	private bool WaterCheck(Boy boy)
+	{
+		if (!this.headBone)
+		{
+			this.headBone = boy.visualBoy.actor.bones[boy.visualBoy.actor.GetBone("Head")].transform;
+		}
+		float surfaceHeight = this.water.GetSurfaceHeight(Vector3.down);
+		return this.headBone.position.y + this.waterPosOffset > surfaceHeight;
+	}
+
+	// Token: 0x06000E84 RID: 3716 RVA: 0x0008A364 File Offset: 0x00088564
+	private void OnDeactivate()
+	{
+		this.isActive = false;
+	}
+
+	// Token: 0x06000E85 RID: 3717 RVA: 0x0008A370 File Offset: 0x00088570
+	private void OnActivate()
+	{
+		this.isActive = true;
+	}
+
+	// Token: 0x06000E86 RID: 3718 RVA: 0x0008A37C File Offset: 0x0008857C
+	private void OnDrawGizmos()
+	{
+		if (this.debug && EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			Gizmos.color = Color.red.Alpha(0.2f);
+			if (Application.isPlaying)
+			{
+				if (this.WaterCheck(ScriptGlobals.boy))
+				{
+					Vector3 vector = this.grabPos.position - this.headBone.position;
+					vector.z = 0f;
+					if (this.boysInside.Count > 0 && vector.magnitude < this.minGrabDistance)
+					{
+						Gizmos.color = Color.green.Alpha(0.2f);
+					}
+					Gizmos.DrawSphere(this.grabPos.position, this.minGrabDistance);
+				}
+			}
+			else
+			{
+				Gizmos.DrawSphere(this.grabPos.position, this.minGrabDistance);
+			}
+		}
+	}
+
+	// Token: 0x040019E3 RID: 6627
+	public AnimBlendNode animFloorBlend;
+
+	// Token: 0x040019E4 RID: 6628
+	public AnimBlendNode animWaterBlend;
+
+	// Token: 0x040019E5 RID: 6629
+	public AnimClipNode animTransToFloor;
+
+	// Token: 0x040019E6 RID: 6630
+	public AnimClipNode animTransToWater;
+
+	// Token: 0x040019E7 RID: 6631
+	public AnimClipNode animSwimGrabLeft;
+
+	// Token: 0x040019E8 RID: 6632
+	public AnimClipNode animSwimGrabRight;
+
+	// Token: 0x040019E9 RID: 6633
+	public AnimClipNode animSwimGrabTop;
+
+	// Token: 0x040019EA RID: 6634
+	public Transform animHolder;
+
+	// Token: 0x040019EB RID: 6635
+	public Transform grabPos;
+
+	// Token: 0x040019EC RID: 6636
+	public BoyWater water;
+
+	// Token: 0x040019ED RID: 6637
+	public GameObject visuals;
+
+	// Token: 0x040019EE RID: 6638
+	public GameObject visualsHandle;
+
+	// Token: 0x040019EF RID: 6639
+	public float grabDelay = 0.21f;
+
+	// Token: 0x040019F0 RID: 6640
+	public float grabLeftWaterdelay = 1f;
+
+	// Token: 0x040019F1 RID: 6641
+	public float minGrabDistance = 0.85f;
+
+	// Token: 0x040019F2 RID: 6642
+	public float releaseDelay = 0.075f;
+
+	// Token: 0x040019F3 RID: 6643
+	public float blendSpeed = 10f;
+
+	// Token: 0x040019F4 RID: 6644
+	public float waterBlendSpeed = 10f;
+
+	// Token: 0x040019F5 RID: 6645
+	public int dir = 1;
+
+	// Token: 0x040019F6 RID: 6646
+	public int forceGrabDir;
+
+	// Token: 0x040019F7 RID: 6647
+	public float waterPosOffset = -0.35f;
+
+	// Token: 0x040019F8 RID: 6648
+	public bool horizontalLever = true;
+
+	// Token: 0x040019F9 RID: 6649
+	public float audioRestartVelocity = 0.65f;
+
+	// Token: 0x040019FA RID: 6650
+	public float audioRestartReturn = 0.2f;
+
+	// Token: 0x040019FB RID: 6651
+	private bool audioRestartAllowed;
+
+	// Token: 0x040019FC RID: 6652
+	public bool debug;
+
+	// Token: 0x040019FD RID: 6653
+	public SignalOut grabbed;
+
+	// Token: 0x040019FE RID: 6654
+	public SignalOut released;
+
+	// Token: 0x040019FF RID: 6655
+	public SignalIn activate;
+
+	// Token: 0x04001A00 RID: 6656
+	public SignalIn deactivate;
+
+	// Token: 0x04001A01 RID: 6657
+	private LeverAnalogWater.State state;
+
+	// Token: 0x04001A02 RID: 6658
+	private Animation visualsAnim;
+
+	// Token: 0x04001A03 RID: 6659
+	private AnimationState animStick;
+
+	// Token: 0x04001A04 RID: 6660
+	private int grabDir;
+
+	// Token: 0x04001A05 RID: 6661
+	private float grabTimer;
+
+	// Token: 0x04001A06 RID: 6662
+	private float grabOffset = 0.1f;
+
+	// Token: 0x04001A07 RID: 6663
+	private float releaseTimer;
+
+	// Token: 0x04001A08 RID: 6664
+	private float regrabTimer;
+
+	// Token: 0x04001A09 RID: 6665
+	private float regrabDelay = 0.6f;
+
+	// Token: 0x04001A0A RID: 6666
+	private float grabStunTimer;
+
+	// Token: 0x04001A0B RID: 6667
+	private float grabStunDelay = 0.15f;
+
+	// Token: 0x04001A0C RID: 6668
+	private float targetBlend;
+
+	// Token: 0x04001A0D RID: 6669
+	private float currentBlend;
+
+	// Token: 0x04001A0E RID: 6670
+	private int previousNearDir;
+
+	// Token: 0x04001A0F RID: 6671
+	private bool previouslyMoving;
+
+	// Token: 0x04001A10 RID: 6672
+	private float moveStopTimer;
+
+	// Token: 0x04001A11 RID: 6673
+	private bool inWater;
+
+	// Token: 0x04001A12 RID: 6674
+	private AnimClipNode currentWaterGrabAnim;
+
+	// Token: 0x04001A13 RID: 6675
+	private Transform spineBone;
+
+	// Token: 0x04001A14 RID: 6676
+	private Transform headBone;
+
+	// Token: 0x04001A15 RID: 6677
+	private bool isActive = true;
+
+	// Token: 0x04001A16 RID: 6678
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObj;
+
+	// Token: 0x04001A17 RID: 6679
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x020001E3 RID: 483
+	private enum State
+	{
+		// Token: 0x04001A19 RID: 6681
+		None,
+		// Token: 0x04001A1A RID: 6682
+		Idle,
+		// Token: 0x04001A1B RID: 6683
+		Grab,
+		// Token: 0x04001A1C RID: 6684
+		WaterTrans,
+		// Token: 0x04001A1D RID: 6685
+		FloorTrans,
+		// Token: 0x04001A1E RID: 6686
+		WaterGrab
+	}
+}

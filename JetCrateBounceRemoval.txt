@@ -1,0 +1,24 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000492 RID: 1170
+public class JetCrateBounceRemoval : MonoBehaviour
+{
+	// Token: 0x06001EBF RID: 7871 RVA: 0x001076BC File Offset: 0x001058BC
+	private void OnCollisionEnter(Collision coll)
+	{
+		if (coll.transform.GetComponent<LabJetCrate>())
+		{
+			Vector3 vector = base.transform.GetComponent<Rigidbody>().velocity;
+			float y = vector.y;
+			if (y > 2f)
+			{
+				vector *= this.velocityMultiplier;
+				base.transform.GetComponent<Rigidbody>().velocity = vector;
+			}
+		}
+	}
+
+	// Token: 0x040038F5 RID: 14581
+	public float velocityMultiplier;
+}

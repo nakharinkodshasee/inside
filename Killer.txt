@@ -1,0 +1,162 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000394 RID: 916
+public class Killer : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060018B4 RID: 6324 RVA: 0x000D64D4 File Offset: 0x000D46D4
+	public bool PreAwake(int callcount)
+	{
+		this.kill = SignalOut.Create("kill", base.gameObject);
+		this.enableKiller = SignalIn.Create("enableKiller", base.gameObject, new Action(this.EnableKiller));
+		this.disableKiller = SignalIn.Create("disableKiller", base.gameObject, new Action(this.DisableKiller));
+		return true;
+	}
+
+	// Token: 0x060018B5 RID: 6325 RVA: 0x000D653C File Offset: 0x000D473C
+	private void Start()
+	{
+		if (!this.startEnabled)
+		{
+			this.DisableKiller();
+		}
+	}
+
+	// Token: 0x060018B6 RID: 6326 RVA: 0x000D6550 File Offset: 0x000D4750
+	public bool getActiveState()
+	{
+		return this.isActive;
+	}
+
+	// Token: 0x060018B7 RID: 6327 RVA: 0x000D6558 File Offset: 0x000D4758
+	public void EnableKiller()
+	{
+		this.isActive = true;
+		this.UpdateKill();
+	}
+
+	// Token: 0x060018B8 RID: 6328 RVA: 0x000D6568 File Offset: 0x000D4768
+	public void DisableKiller()
+	{
+		this.isActive = false;
+	}
+
+	// Token: 0x060018B9 RID: 6329 RVA: 0x000D6574 File Offset: 0x000D4774
+	public void KillBoy()
+	{
+		Boy component = ScriptGlobals.boy.GetComponent<Boy>();
+		component.Kill();
+		this.kill.Signal();
+		this.killEvent.OnEvent(this);
+	}
+
+	// Token: 0x060018BA RID: 6330 RVA: 0x000D65AC File Offset: 0x000D47AC
+	private void UpdateKill()
+	{
+		if (this.isActive)
+		{
+			int i = 0;
+			int count = this.boysInsideKiller.Count;
+			while (i < count)
+			{
+				Boy boy = this.boysInsideKiller[i];
+				if (!boy.isDead)
+				{
+					boy.Kill();
+					this.kill.Signal();
+				}
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x060018BB RID: 6331 RVA: 0x000D660C File Offset: 0x000D480C
+	private void FixedUpdate()
+	{
+		this.UpdateKill();
+	}
+
+	// Token: 0x060018BC RID: 6332 RVA: 0x000D6614 File Offset: 0x000D4814
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (collider.attachedRigidbody)
+		{
+			Boy component = collider.attachedRigidbody.GetComponent<Boy>();
+			if (component)
+			{
+				if (this.killerType == Killer.KillerType.both && !this.boysInsideKiller.Contains(component))
+				{
+					this.boysInsideKiller.Add(component);
+				}
+				if (this.killerType == Killer.KillerType.player && component.isPlayer && !this.boysInsideKiller.Contains(component))
+				{
+					this.boysInsideKiller.Add(component);
+				}
+				if (this.killerType == Killer.KillerType.npc && !component.isPlayer && !this.boysInsideKiller.Contains(component))
+				{
+					this.boysInsideKiller.Add(component);
+				}
+			}
+		}
+	}
+
+	// Token: 0x060018BD RID: 6333 RVA: 0x000D66D8 File Offset: 0x000D48D8
+	private void OnTriggerExit(Collider collider)
+	{
+		if (collider.attachedRigidbody)
+		{
+			Boy component = collider.attachedRigidbody.GetComponent<Boy>();
+			if (component)
+			{
+				if (this.killerType == Killer.KillerType.both && this.boysInsideKiller.Contains(component))
+				{
+					this.boysInsideKiller.Remove(component);
+				}
+				if (this.killerType == Killer.KillerType.player && component.isPlayer && this.boysInsideKiller.Contains(component))
+				{
+					this.boysInsideKiller.Remove(component);
+				}
+				if (this.killerType == Killer.KillerType.npc && !component.isPlayer && this.boysInsideKiller.Contains(component))
+				{
+					this.boysInsideKiller.Remove(component);
+				}
+			}
+		}
+	}
+
+	// Token: 0x04002C79 RID: 11385
+	public Killer.KillerType killerType;
+
+	// Token: 0x04002C7A RID: 11386
+	public bool startEnabled = true;
+
+	// Token: 0x04002C7B RID: 11387
+	private SignalIn enableKiller;
+
+	// Token: 0x04002C7C RID: 11388
+	private SignalIn disableKiller;
+
+	// Token: 0x04002C7D RID: 11389
+	private SimpleEvent<Killer> killEvent = new SimpleEvent<Killer>("killEvent");
+
+	// Token: 0x04002C7E RID: 11390
+	private SignalOut kill;
+
+	// Token: 0x04002C7F RID: 11391
+	private List<Boy> boysInsideKiller = new List<Boy>();
+
+	// Token: 0x04002C80 RID: 11392
+	private bool isActive = true;
+
+	// Token: 0x02000395 RID: 917
+	public enum KillerType
+	{
+		// Token: 0x04002C82 RID: 11394
+		player,
+		// Token: 0x04002C83 RID: 11395
+		npc,
+		// Token: 0x04002C84 RID: 11396
+		both
+	}
+}

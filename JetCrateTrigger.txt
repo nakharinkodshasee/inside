@@ -1,0 +1,38 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001C6 RID: 454
+public class JetCrateTrigger : MonoBehaviour
+{
+	// Token: 0x06000D7B RID: 3451 RVA: 0x00081630 File Offset: 0x0007F830
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000D7C RID: 3452 RVA: 0x00081634 File Offset: 0x0007F834
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.attachedRigidbody != null && coll.attachedRigidbody.GetComponent<JetCrate>() && coll.attachedRigidbody.velocity.sqrMagnitude > this.speedRequiredToEnter * this.speedRequiredToEnter)
+		{
+			this.jetCrateEnter.OnEvent(this);
+		}
+	}
+
+	// Token: 0x06000D7D RID: 3453 RVA: 0x00081698 File Offset: 0x0007F898
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.attachedRigidbody != null && coll.attachedRigidbody.GetComponent<JetCrate>())
+		{
+			this.jetCrateExit.OnEvent(this);
+		}
+	}
+
+	// Token: 0x040017CE RID: 6094
+	public float speedRequiredToEnter;
+
+	// Token: 0x040017CF RID: 6095
+	private SimpleEvent<JetCrateTrigger> jetCrateEnter = new SimpleEvent<JetCrateTrigger>("jetCrateEnter");
+
+	// Token: 0x040017D0 RID: 6096
+	private SimpleEvent<JetCrateTrigger> jetCrateExit = new SimpleEvent<JetCrateTrigger>("jetCrateExit");
+}

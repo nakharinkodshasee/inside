@@ -1,0 +1,395 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020001C7 RID: 455
+public class LampSwingBreakable : MonoBehaviour, IFastEventExListener<Collision>
+{
+	// Token: 0x06000D7F RID: 3455 RVA: 0x00081760 File Offset: 0x0007F960
+	private void Start()
+	{
+		this.collision.collisionEnter.Register(this, ref this.collisionEnterHandle);
+		this.animBreakState = this.anim[this.animBreak.name];
+		this.SetSwingState();
+	}
+
+	// Token: 0x06000D80 RID: 3456 RVA: 0x0008179C File Offset: 0x0007F99C
+	private void OnEnable()
+	{
+		if (this.state == LampSwingBreakable.State.None || this.state == LampSwingBreakable.State.Swing)
+		{
+			this.anim.Play(this.animSettle.name);
+			this.anim[this.animSettle.name].normalizedTime = 1f;
+		}
+	}
+
+	// Token: 0x06000D81 RID: 3457 RVA: 0x000817F8 File Offset: 0x0007F9F8
+	private void SetSwingState()
+	{
+		this.state = LampSwingBreakable.State.Swing;
+	}
+
+	// Token: 0x06000D82 RID: 3458 RVA: 0x00081804 File Offset: 0x0007FA04
+	private void SwingState()
+	{
+		float z = this.lampRidigbody.angularVelocity.z;
+		float num = Mathf.Abs(z);
+		float num2 = (num >= this.previousAngVel) ? this.swingFrictionIncrease : this.swingFrictionDecrease;
+		this.lampRidigbody.AddTorque(0f, 0f, -z * Time.deltaTime * num2);
+		float num3 = this.lampRidigbody.rotation.eulerAngles.z;
+		if (num3 > 180f)
+		{
+			num3 = 360f - num3;
+		}
+		if (num > this.swingVelocity && !this.anim.IsPlaying(this.animSwing.name))
+		{
+			this.anim.CrossFade(this.animSwing.name, 0.5f);
+		}
+		else if (num < this.settleVelcoty && num3 < this.settleAngle && !this.anim.IsPlaying(this.animSettle.name))
+		{
+			this.anim.CrossFade(this.animSettle.name, 0.5f);
+		}
+		this.previousAngVel = num;
+	}
+
+	// Token: 0x06000D83 RID: 3459 RVA: 0x00081938 File Offset: 0x0007FB38
+	private void SetBreakState(Collision collision = null)
+	{
+		this.lampBrokenRigidbody.transform.parent = base.transform;
+		this.lampBrokenRigidbody.interpolation = 1;
+		this.lampBrokenRigidbody.isKinematic = false;
+		this.lampBrokenRigidbody.gameObject.SetActive(true);
+		this.lampDetached.SetActive(true);
+		this.lampBrokenRigidbody.angularVelocity = this.lampRidigbody.angularVelocity * this.breakForceFraction;
+		this.lampBrokenRigidbody.velocity = this.lampRidigbody.velocity * this.breakForceFraction;
+		if (collision != null)
+		{
+			Vector3 point = collision.contacts[0].point;
+			Vector3 vector = ScriptGlobals.huddle.velocity * Time.deltaTime * this.huddleImpactForce;
+			this.lampBrokenRigidbody.AddForceAtPosition(vector, collision.contacts[0].point);
+			if (this.debug)
+			{
+				Debug.DrawLine(point, point + vector / 2f, Color.blue, 3f);
+			}
+		}
+		Vector3 vector2 = Random.onUnitSphere * Time.deltaTime;
+		vector2.x *= this.impactTorque.x;
+		vector2.y *= this.impactTorque.y;
+		vector2.z *= this.impactTorque.z;
+		this.lampBrokenRigidbody.AddTorque(vector2);
+		if (this.debug)
+		{
+			Debug.DrawLine(this.lampBrokenRigidbody.position, this.lampBrokenRigidbody.position + vector2 / 2f, Color.red, 3f);
+		}
+		this.lampRidigbody.gameObject.SetActive(false);
+		float z = this.lampRidigbody.angularVelocity.z;
+		this.wireFront.Snap(z);
+		this.wireBack.Snap(z);
+		this.NeonDrop();
+		this.state = LampSwingBreakable.State.Break;
+	}
+
+	// Token: 0x06000D84 RID: 3460 RVA: 0x00081B48 File Offset: 0x0007FD48
+	private void BreakState()
+	{
+	}
+
+	// Token: 0x06000D85 RID: 3461 RVA: 0x00081B4C File Offset: 0x0007FD4C
+	private void SetAnimBreakState()
+	{
+		this.anim.CrossFade(this.animBreak.name);
+		float z = this.lampRidigbody.angularVelocity.z;
+		this.wireBack.Snap(z);
+		this.colliderSwing.SetActive(false);
+		this.colliderAnimBreak.SetActive(true);
+		this.breakTimer = 3f;
+		this.state = LampSwingBreakable.State.AnimBreak;
+	}
+
+	// Token: 0x06000D86 RID: 3462 RVA: 0x00081BBC File Offset: 0x0007FDBC
+	private void AnimBreakState()
+	{
+		if (this.breakTimer > 0f)
+		{
+			this.breakTimer -= Time.deltaTime;
+		}
+		float z = this.lampRidigbody.angularVelocity.z;
+		float num = Mathf.Abs(z);
+		if (num > this.minVelocity)
+		{
+			float num2 = (num >= this.previousAngVel) ? this.swingFrictionIncrease : this.swingFrictionDecrease;
+			this.lampRidigbody.AddTorque(0f, 0f, -z * Time.deltaTime * num2);
+		}
+		this.previousAngVel = num;
+	}
+
+	// Token: 0x06000D87 RID: 3463 RVA: 0x00081C58 File Offset: 0x0007FE58
+	private void FixedUpdate()
+	{
+		if (this.state != LampSwingBreakable.State.None)
+		{
+			this.wireFront.Update();
+			this.wireBack.Update();
+			switch (this.state)
+			{
+			case LampSwingBreakable.State.Break:
+				this.BreakState();
+				break;
+			case LampSwingBreakable.State.AnimBreak:
+				this.AnimBreakState();
+				break;
+			case LampSwingBreakable.State.Swing:
+				this.SwingState();
+				break;
+			}
+		}
+	}
+
+	// Token: 0x06000D88 RID: 3464 RVA: 0x00081CC8 File Offset: 0x0007FEC8
+	public void Break(Collision collision)
+	{
+		if (this.state == LampSwingBreakable.State.AnimBreak)
+		{
+			if (this.breakTimer <= 0f)
+			{
+				this.SetBreakState(null);
+			}
+		}
+		else if (this.state == LampSwingBreakable.State.Swing)
+		{
+			if (this.animatedBreak)
+			{
+				this.SetAnimBreakState();
+			}
+			else
+			{
+				this.SetBreakState(collision);
+			}
+		}
+	}
+
+	// Token: 0x06000D89 RID: 3465 RVA: 0x00081D28 File Offset: 0x0007FF28
+	private void NeonDrop()
+	{
+		if (this.neonTubes.Count <= 0)
+		{
+			return;
+		}
+		NeonTube neonTube = this.neonTubes[Random.Range(0, this.neonTubes.Count)];
+		this.neonTubes.Remove(neonTube);
+		if (Random.value > 0.5f)
+		{
+			neonTube.Fall(this.lampRidigbody.velocity, this.lampRidigbody.angularVelocity);
+		}
+		else
+		{
+			neonTube.BreakImpact();
+		}
+	}
+
+	// Token: 0x06000D8A RID: 3466 RVA: 0x00081DA8 File Offset: 0x0007FFA8
+	public void OnFastEventEx(FastEventEx<Collision> sender, ref Collision arg)
+	{
+		if (sender == this.collision.collisionEnter)
+		{
+			float magnitude = ScriptGlobals.huddle.velocity.magnitude;
+			if (magnitude > this.requiredNeonBreakVelocity)
+			{
+				this.NeonDrop();
+			}
+			if (magnitude > this.requiredBreakVelocity)
+			{
+				this.Break(arg);
+			}
+		}
+	}
+
+	// Token: 0x040017D1 RID: 6097
+	public Animation anim;
+
+	// Token: 0x040017D2 RID: 6098
+	public AnimationClip animSwing;
+
+	// Token: 0x040017D3 RID: 6099
+	public AnimationClip animSettle;
+
+	// Token: 0x040017D4 RID: 6100
+	public AnimationClip animBreak;
+
+	// Token: 0x040017D5 RID: 6101
+	public Rigidbody lampRidigbody;
+
+	// Token: 0x040017D6 RID: 6102
+	public Rigidbody lampBrokenRigidbody;
+
+	// Token: 0x040017D7 RID: 6103
+	public CollisionEvents collision;
+
+	// Token: 0x040017D8 RID: 6104
+	public GameObject lampDetached;
+
+	// Token: 0x040017D9 RID: 6105
+	public GameObject colliderSwing;
+
+	// Token: 0x040017DA RID: 6106
+	public GameObject colliderAnimBreak;
+
+	// Token: 0x040017DB RID: 6107
+	public LampSwingBreakable.Wire wireBack;
+
+	// Token: 0x040017DC RID: 6108
+	public LampSwingBreakable.Wire wireFront;
+
+	// Token: 0x040017DD RID: 6109
+	public List<NeonTube> neonTubes;
+
+	// Token: 0x040017DE RID: 6110
+	public float swingFrictionDecrease = 225f;
+
+	// Token: 0x040017DF RID: 6111
+	public float swingFrictionIncrease = -10f;
+
+	// Token: 0x040017E0 RID: 6112
+	public float minVelocity = 0.03f;
+
+	// Token: 0x040017E1 RID: 6113
+	public float swingVelocity = 0.5f;
+
+	// Token: 0x040017E2 RID: 6114
+	public float settleVelcoty = 0.3f;
+
+	// Token: 0x040017E3 RID: 6115
+	public float settleAngle = 8f;
+
+	// Token: 0x040017E4 RID: 6116
+	public float requiredBreakVelocity = 3.5f;
+
+	// Token: 0x040017E5 RID: 6117
+	public float requiredNeonBreakVelocity = 1.5f;
+
+	// Token: 0x040017E6 RID: 6118
+	public float breakForceFraction = 0.85f;
+
+	// Token: 0x040017E7 RID: 6119
+	public float huddleImpactForce = 30f;
+
+	// Token: 0x040017E8 RID: 6120
+	public Vector3 impactTorque;
+
+	// Token: 0x040017E9 RID: 6121
+	public bool animatedBreak;
+
+	// Token: 0x040017EA RID: 6122
+	public bool debug;
+
+	// Token: 0x040017EB RID: 6123
+	private LampSwingBreakable.State state;
+
+	// Token: 0x040017EC RID: 6124
+	private float previousAngVel;
+
+	// Token: 0x040017ED RID: 6125
+	private float breakTimer;
+
+	// Token: 0x040017EE RID: 6126
+	private AnimationState animBreakState;
+
+	// Token: 0x040017EF RID: 6127
+	private int collisionEnterHandle = -1;
+
+	// Token: 0x020001C8 RID: 456
+	private enum State
+	{
+		// Token: 0x040017F1 RID: 6129
+		None,
+		// Token: 0x040017F2 RID: 6130
+		Break,
+		// Token: 0x040017F3 RID: 6131
+		AnimBreak,
+		// Token: 0x040017F4 RID: 6132
+		Swing
+	}
+
+	// Token: 0x020001C9 RID: 457
+	[Serializable]
+	public class Wire
+	{
+		// Token: 0x06000D8C RID: 3468 RVA: 0x00081E20 File Offset: 0x00080020
+		public void Snap(float velocity = 0f)
+		{
+			if (this.isDetached)
+			{
+				return;
+			}
+			this.wireHolder.transform.rotation = this.wire.transform.rotation;
+			this.currentRotation = this.wire.transform.rotation.eulerAngles;
+			Vector3 zero = Vector3.zero;
+			zero.y = Random.value * 360f;
+			this.wireVisual.transform.localEulerAngles = zero;
+			if (this.currentRotation.z > 180f)
+			{
+				this.currentRotation.z = this.currentRotation.z - 360f;
+			}
+			this.currentVelocity += (Random.value - 0.5f) * this.impactForceFraction;
+			this.wireHolder.SetActive(true);
+			this.wire.SetActive(false);
+			this.isDetached = true;
+		}
+
+		// Token: 0x06000D8D RID: 3469 RVA: 0x00081F0C File Offset: 0x0008010C
+		public void Update()
+		{
+			if (!this.isDetached)
+			{
+				return;
+			}
+			if (Mathf.Abs(this.currentRotation.z) > 0.5f)
+			{
+				float num = -this.currentRotation.z * Time.deltaTime * this.acceleration;
+				this.currentVelocity += num;
+			}
+			else if (Mathf.Abs(this.currentVelocity) < 1f)
+			{
+				this.isDetached = false;
+			}
+			this.currentRotation.z = this.currentRotation.z + this.currentVelocity * Time.deltaTime;
+			this.wireHolder.transform.eulerAngles = this.currentRotation;
+			float num2 = (Mathf.Abs(this.currentRotation.z) >= Mathf.Abs(this.previousRotation.z)) ? this.frictionDecrease : this.frictionIncrease;
+			this.currentVelocity += -this.currentVelocity * Time.deltaTime * num2;
+			this.previousRotation = this.currentRotation;
+		}
+
+		// Token: 0x040017F5 RID: 6133
+		public GameObject wire;
+
+		// Token: 0x040017F6 RID: 6134
+		public GameObject wireHolder;
+
+		// Token: 0x040017F7 RID: 6135
+		public GameObject wireVisual;
+
+		// Token: 0x040017F8 RID: 6136
+		public float acceleration = 100f;
+
+		// Token: 0x040017F9 RID: 6137
+		public float frictionIncrease;
+
+		// Token: 0x040017FA RID: 6138
+		public float frictionDecrease;
+
+		// Token: 0x040017FB RID: 6139
+		public float impactForceFraction = 0.2f;
+
+		// Token: 0x040017FC RID: 6140
+		private float currentVelocity;
+
+		// Token: 0x040017FD RID: 6141
+		private Vector3 currentRotation;
+
+		// Token: 0x040017FE RID: 6142
+		private Vector3 previousRotation;
+
+		// Token: 0x040017FF RID: 6143
+		private bool isDetached;
+	}
+}

@@ -1,0 +1,65 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000408 RID: 1032
+public class LineUpFlashLightAmbient : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001B2F RID: 6959 RVA: 0x000EDA54 File Offset: 0x000EBC54
+	public bool PreAwake(int callcount)
+	{
+		SignalIn.Create("activateScript", base.gameObject, delegate
+		{
+			this.isActive = true;
+		});
+		return true;
+	}
+
+	// Token: 0x06001B30 RID: 6960 RVA: 0x000EDA74 File Offset: 0x000EBC74
+	private void Update()
+	{
+		if (!this.isActive)
+		{
+			return;
+		}
+		Ray ray;
+		ray..ctor(this.flashLight.position, this.flashLight.forward);
+		Plane plane;
+		plane..ctor(Vector3.forward, 0f);
+		float num;
+		plane.Raycast(ray, ref num);
+		float magnitude = (ScriptGlobals.boy.pos3 - ray.GetPoint(num)).magnitude;
+		float num2 = Mathf.InverseLerp(0.3f, 7f, magnitude);
+		Color boyAmbientOverride = Color.Lerp(this.boyIn, this.boyOut, num2);
+		Color customColorOverride = Color.Lerp(this.customIn, this.customOut, num2);
+		this.matBox.boyAmbientOverride = boyAmbientOverride;
+		this.matBox.customColorOverride = customColorOverride;
+		if (magnitude >= 7.1f)
+		{
+			this.isActive = false;
+		}
+	}
+
+	// Token: 0x0400313B RID: 12603
+	public Transform flashLight;
+
+	// Token: 0x0400313C RID: 12604
+	public MaterialInstanceBlendBox matBox;
+
+	// Token: 0x0400313D RID: 12605
+	public Color boyIn = Color.red;
+
+	// Token: 0x0400313E RID: 12606
+	public Color boyOut = Color.white;
+
+	// Token: 0x0400313F RID: 12607
+	public Color customIn = Color.blue;
+
+	// Token: 0x04003140 RID: 12608
+	public Color customOut = Color.yellow;
+
+	// Token: 0x04003141 RID: 12609
+	private bool isActive;
+
+	// Token: 0x04003142 RID: 12610
+	private SignalIn activateScript;
+}

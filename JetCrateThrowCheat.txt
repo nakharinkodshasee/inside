@@ -1,0 +1,139 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200017D RID: 381
+public class JetCrateThrowCheat : MonoBehaviour, IFastEventListener
+{
+	// Token: 0x06000B3F RID: 2879 RVA: 0x0006F738 File Offset: 0x0006D938
+	private void Start()
+	{
+		this.startDrag = this.jetCrate.drag;
+		this.startAngularDrag = this.jetCrate.angularDrag;
+		this.autoAimTargetStartPos = this.autoAimTarget.transform.position;
+		HuddleThrow.throwEvent.Register(this, ref this.throwEventHandle);
+	}
+
+	// Token: 0x06000B40 RID: 2880 RVA: 0x0006F790 File Offset: 0x0006D990
+	private void OnDestroy()
+	{
+		HuddleThrow.throwEvent.Unregister(ref this.throwEventHandle);
+	}
+
+	// Token: 0x06000B41 RID: 2881 RVA: 0x0006F7A4 File Offset: 0x0006D9A4
+	public void OnFastEvent(FastEvent sender)
+	{
+		if (sender == HuddleThrow.throwEvent && !this.actedOnThrowEventThisFrame && ScriptGlobals.huddle.grabState.body == this.jetCrate && this.jetCrate.GetComponent<JetCrate>().IsPulled())
+		{
+			this.actedOnThrowEventThisFrame = true;
+			if (GameInput.controllerType == GameController.Type.Digital)
+			{
+				this.doStuffCounter = 2;
+			}
+			else
+			{
+				this.jetCrate.AddTorque(new Vector3(0f, 0f, this.jetCrate.GetComponent<JetCrate>().GetJetUpVector().x) * 4.5f);
+			}
+		}
+	}
+
+	// Token: 0x06000B42 RID: 2882 RVA: 0x0006F858 File Offset: 0x0006DA58
+	private void FixedUpdate()
+	{
+		this.actedOnThrowEventThisFrame = false;
+		if (this.doStuffCounter > 0)
+		{
+			this.doStuffCounter--;
+			if (this.doStuffCounter == 0)
+			{
+				this.jetCrate.AddTorque(new Vector3(0f, 0f, this.jetCrate.GetComponent<JetCrate>().GetJetUpVector().x) * 4.5f);
+			}
+		}
+		float num = Mathf.InverseLerp(this.autoAimTargetStartPos.x - 5f, this.autoAimTargetStartPos.x + 5f, ScriptGlobals.huddle.transform.position.x);
+		if (this.jetCrate.GetComponent<JetCrate>().IsPulled() || this.jetCrate.GetComponent<JetCrate>().IsJetting())
+		{
+			this.autoAimTarget.position = Vector3.Lerp(this.autoAimTargetStartPos - Vector3.right, this.autoAimTargetStartPos + Vector3.right, num);
+		}
+		else
+		{
+			this.autoAimTarget.position = this.aimPosUpToDude.position;
+		}
+		if (this.jetCrateInZone)
+		{
+			if (this.jetCrate.velocity.y < 1.2f && this.jetCrate.GetComponent<JetCrate>().IsPulled())
+			{
+				this.jetCrate.GetComponent<JetCrate>().SetTimeToJet(0f);
+			}
+			if (this.jetCrate.GetComponent<JetCrate>().IsJetting() && this.jetCrate.transform.position.y > this.onlyDampCheatAboveThis.position.y)
+			{
+				float num2 = Mathf.InverseLerp(2f, 0f, Mathf.Abs(this.jetCrate.transform.position.x - this.target.position.x));
+				if (this.jetCrate.velocity.y < -0.5f)
+				{
+					num2 = 0f;
+				}
+				this.jetCrate.GetComponent<Rigidbody>().drag = Mathf.Lerp(0f, 0.75f * Mathf.Abs(this.jetCrate.velocity.x), num2);
+			}
+		}
+		if (!this.jetCrate.GetComponent<JetCrate>().IsJetting() && this.jetCrate.drag != this.startDrag)
+		{
+			this.jetCrate.drag = this.startDrag;
+		}
+		if (!this.jetCrate.GetComponent<JetCrate>().IsJetting() && this.jetCrate.angularDrag != this.startAngularDrag && ScriptGlobals.huddle.grabState.activeBody != this.jetCrate)
+		{
+			this.jetCrate.angularDrag = this.startAngularDrag;
+		}
+	}
+
+	// Token: 0x06000B43 RID: 2883 RVA: 0x0006FB54 File Offset: 0x0006DD54
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<Rigidbody>() == this.jetCrate)
+		{
+			this.jetCrateInZone = true;
+		}
+	}
+
+	// Token: 0x06000B44 RID: 2884 RVA: 0x0006FB74 File Offset: 0x0006DD74
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<Rigidbody>() == this.jetCrate)
+		{
+			this.jetCrateInZone = false;
+		}
+	}
+
+	// Token: 0x04001389 RID: 5001
+	public Rigidbody jetCrate;
+
+	// Token: 0x0400138A RID: 5002
+	public Transform target;
+
+	// Token: 0x0400138B RID: 5003
+	public Transform autoAimTarget;
+
+	// Token: 0x0400138C RID: 5004
+	public Transform aimPosUpToDude;
+
+	// Token: 0x0400138D RID: 5005
+	public Transform onlyDampCheatAboveThis;
+
+	// Token: 0x0400138E RID: 5006
+	private float startDrag;
+
+	// Token: 0x0400138F RID: 5007
+	private float startAngularDrag;
+
+	// Token: 0x04001390 RID: 5008
+	private Vector3 autoAimTargetStartPos;
+
+	// Token: 0x04001391 RID: 5009
+	private int throwEventHandle = -1;
+
+	// Token: 0x04001392 RID: 5010
+	private bool actedOnThrowEventThisFrame;
+
+	// Token: 0x04001393 RID: 5011
+	private int doStuffCounter;
+
+	// Token: 0x04001394 RID: 5012
+	private bool jetCrateInZone;
+}

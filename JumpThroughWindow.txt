@@ -1,0 +1,96 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000405 RID: 1029
+public class JumpThroughWindow : MonoBehaviour
+{
+	// Token: 0x06001B1E RID: 6942 RVA: 0x000ED5A4 File Offset: 0x000EB7A4
+	private void Start()
+	{
+		if (this.debug)
+		{
+			ThemeUtils.SetBoyTheme(ScriptGlobals.boy.visualBoy, "Frantic", VisualBoy.ThemePriority.High);
+		}
+		this.posX = base.transform.position.x;
+		this.boyInput = base.GetComponent<BoySetInput>();
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x06001B1F RID: 6943 RVA: 0x000ED604 File Offset: 0x000EB804
+	private void FixedUpdate()
+	{
+		if (this.isActive)
+		{
+			this.activeTimer += Time.deltaTime;
+			if (this.activeTimer > 3f || this.boy.velocity.x < this.minVelocity)
+			{
+				this.Deactivate();
+			}
+		}
+		else
+		{
+			BoyJumpState boyJumpState = this.boy.state as BoyJumpState;
+			if (boyJumpState != null && this.previousJumpState == null)
+			{
+				float num = Mathf.Abs(this.posX - this.boy.pos.x);
+				if (num < this.maxDistance && ScriptGlobals.boy.input.stick.x > 0.55f && ScriptGlobals.boy.input.rawJump && this.boy.pos.x < this.posX)
+				{
+					this.Activate();
+				}
+			}
+			this.previousJumpState = boyJumpState;
+		}
+	}
+
+	// Token: 0x06001B20 RID: 6944 RVA: 0x000ED718 File Offset: 0x000EB918
+	private void Deactivate()
+	{
+		this.boyInput.deactivateScript();
+		this.isActive = false;
+		base.enabled = false;
+	}
+
+	// Token: 0x06001B21 RID: 6945 RVA: 0x000ED734 File Offset: 0x000EB934
+	private void Activate()
+	{
+		this.wallTopCollider.enabled = false;
+		this.boyInput.activateScript();
+		this.isActive = true;
+	}
+
+	// Token: 0x04003122 RID: 12578
+	public GameObject smashWindowTrigger;
+
+	// Token: 0x04003123 RID: 12579
+	public Collider wallTopCollider;
+
+	// Token: 0x04003124 RID: 12580
+	public float maxDistance = 1.2f;
+
+	// Token: 0x04003125 RID: 12581
+	public float minVelocity = 1f;
+
+	// Token: 0x04003126 RID: 12582
+	public bool debug;
+
+	// Token: 0x04003127 RID: 12583
+	private float activeTimer;
+
+	// Token: 0x04003128 RID: 12584
+	private float posX;
+
+	// Token: 0x04003129 RID: 12585
+	private float previousVelocityX;
+
+	// Token: 0x0400312A RID: 12586
+	private Boy boy;
+
+	// Token: 0x0400312B RID: 12587
+	private BoyJumpState previousJumpState;
+
+	// Token: 0x0400312C RID: 12588
+	private BoySetInput boyInput;
+
+	// Token: 0x0400312D RID: 12589
+	private bool isActive;
+}

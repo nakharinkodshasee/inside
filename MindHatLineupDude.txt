@@ -1,0 +1,60 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000592 RID: 1426
+public class MindHatLineupDude : MonoBehaviour
+{
+	// Token: 0x06002486 RID: 9350 RVA: 0x0012CF1C File Offset: 0x0012B11C
+	public void Move(float x)
+	{
+		Vector3 velocity = base.GetComponent<Rigidbody>().velocity;
+		velocity.x = x * 2f;
+		base.GetComponent<Rigidbody>().velocity = velocity;
+	}
+
+	// Token: 0x06002487 RID: 9351 RVA: 0x0012CF50 File Offset: 0x0012B150
+	public void Jump()
+	{
+		if (this.jump)
+		{
+			base.GetComponent<Rigidbody>().AddForce(0f, this.jumpForce, 0f);
+		}
+	}
+
+	// Token: 0x06002488 RID: 9352 RVA: 0x0012CF84 File Offset: 0x0012B184
+	private void OnTriggerEnter(Collider c)
+	{
+		if (c.gameObject.name == "TriggerCracks" && this.fat && base.GetComponent<Rigidbody>().velocity.y < -1.5f)
+		{
+			base.transform.parent.SendMessage("Crash");
+		}
+		if (c.gameObject.name == "TriggerJump")
+		{
+			this.jump = true;
+		}
+	}
+
+	// Token: 0x06002489 RID: 9353 RVA: 0x0012D00C File Offset: 0x0012B20C
+	private void OnTriggerExit(Collider c)
+	{
+		if (c.gameObject.name == "TriggerJump")
+		{
+			this.jump = false;
+		}
+	}
+
+	// Token: 0x040042F9 RID: 17145
+	private Vector3 offset;
+
+	// Token: 0x040042FA RID: 17146
+	private bool jump;
+
+	// Token: 0x040042FB RID: 17147
+	public bool fat;
+
+	// Token: 0x040042FC RID: 17148
+	private float moveSpeed = 5f;
+
+	// Token: 0x040042FD RID: 17149
+	public float jumpForce = 200f;
+}

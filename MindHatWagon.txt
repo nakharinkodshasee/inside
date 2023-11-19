@@ -1,0 +1,691 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000593 RID: 1427
+public class MindHatWagon : MonoBehaviour, IFastEventExListener<Collider>
+{
+	// Token: 0x0600248B RID: 9355 RVA: 0x0012D104 File Offset: 0x0012B304
+	private void OnEnable()
+	{
+		int i = 0;
+		int num = this.wheels.Length;
+		while (i < num)
+		{
+			this.wheels[i].maxAngularVelocity = 200f;
+			i++;
+		}
+		this.UpdateFullStop();
+	}
+
+	// Token: 0x0600248C RID: 9356 RVA: 0x0012D144 File Offset: 0x0012B344
+	private void Start()
+	{
+		this.wagonCollision.enterTrigger.Register(this, ref this.wagonTriggerEnterHandle);
+		this.wagonCollision.exitTrigger.Register(this, ref this.wagonTriggerExitHandle);
+		this.slopeTrigger.enterTrigger.Register(this, ref this.slopeTriggerEnterHandle);
+		this.slopeTrigger.exitTrigger.Register(this, ref this.slopeTriggerExitHandle);
+		this.animAntennaMoveState = this.animAntenna[this.animAntennaMove.name];
+		this.animAntenna.Play(this.animAntennaMove.name);
+		this.animAntennaMoveState.speed = 0f;
+		this.SetIdleState(this.timeToHigh);
+		this.frameCount = 0;
+		this.audioActive = false;
+	}
+
+	// Token: 0x0600248D RID: 9357 RVA: 0x0012D20C File Offset: 0x0012B40C
+	private void SetIdleState(float dragStartTime = 0f)
+	{
+		this.dragTimer = dragStartTime;
+		this.state = MindHatWagon.State.Idle;
+	}
+
+	// Token: 0x0600248E RID: 9358 RVA: 0x0012D21C File Offset: 0x0012B41C
+	private void IdleState()
+	{
+		Boy boy = this.GrabCheck();
+		if (boy)
+		{
+			this.SetGrabState(boy);
+			return;
+		}
+		this.dragTimer += Time.deltaTime;
+		if (this.dragTimer <= this.timeToHigh)
+		{
+			this.dragLerpFactor = Mathf.InverseLerp(0f, this.timeToHigh, this.dragTimer);
+			this.newDrag = Mathf.Lerp(this.lowDrag, this.highDrag, this.dragLerpFactor);
+			this.newAngularDrag = Mathf.Lerp(this.lowAngularDrag, this.highAngularDrag, this.dragLerpFactor);
+			this.SetWheelDrag(this.newDrag, this.newAngularDrag);
+		}
+		this.CheckSlope();
+		this.UpdateFullStop();
+	}
+
+	// Token: 0x0600248F RID: 9359 RVA: 0x0012D2DC File Offset: 0x0012B4DC
+	private void SetGrabState(Boy boy)
+	{
+		this.SetWheelDrag(this.lowDrag, this.lowAngularDrag);
+		this.slopeTimer = 0f;
+		this.boyGrabbing = boy;
+		this.grabDir = ((boy.pos.x >= this.wagonRigidbody.position.x) ? -1 : 1);
+		foreach (Rigidbody rigidbody in this.wheels)
+		{
+			rigidbody.constraints = 0;
+		}
+		this.fullStop = false;
+		this.state = MindHatWagon.State.Grab;
+	}
+
+	// Token: 0x06002490 RID: 9360 RVA: 0x0012D378 File Offset: 0x0012B578
+	private void SetGrabStateReturn()
+	{
+		this.state = MindHatWagon.State.Grab;
+	}
+
+	// Token: 0x06002491 RID: 9361 RVA: 0x0012D384 File Offset: 0x0012B584
+	private void GrabState()
+	{
+		if (this.GrabCheck() == null)
+		{
+			this.SetIdleState(0f);
+			return;
+		}
+		float x = this.boyGrabbing.input.stick.x;
+		if (Mathf.Abs(x) > 0.3f)
+		{
+			this.SetPushState();
+		}
+	}
+
+	// Token: 0x06002492 RID: 9362 RVA: 0x0012D3E0 File Offset: 0x0012B5E0
+	private void SetPushState()
+	{
+		this.state = MindHatWagon.State.Push;
+	}
+
+	// Token: 0x06002493 RID: 9363 RVA: 0x0012D3EC File Offset: 0x0012B5EC
+	private void PushState()
+	{
+		if (this.GrabCheck() == null)
+		{
+			this.SetIdleState(0f);
+			return;
+		}
+		float x = this.boyGrabbing.input.stick.x;
+		this.antennaVelocty += Time.deltaTime * this.antennaInfluenceByWagon * Mathf.Sign(x);
+		if (Mathf.Abs(x) < 0.3f)
+		{
+			this.SetGrabStateReturn();
+		}
+	}
+
+	// Token: 0x06002494 RID: 9364 RVA: 0x0012D468 File Offset: 0x0012B668
+	private void FixedUpdate()
+	{
+		if (!this.audioActive)
+		{
+			this.frameCount++;
+			if (this.frameCount >= 60)
+			{
+				this.audioMove.enabled = true;
+				this.audioImpact.enabled = true;
+				this.audioActive = true;
+			}
+		}
+		if (!this.dude1)
+		{
+			this.dude1 = this.boy1.GetBoy();
+		}
+		if (!this.dude2)
+		{
+			this.dude2 = this.boy2.GetBoy();
+		}
+		bool flag = Mathf.Abs(this.wagonRigidbody.velocity.x) > 0.3f;
+		if (flag != this.previousWagonMoving)
+		{
+			if (flag)
+			{
+				this.animWagon.CrossFade(this.animWagonPushRight.name, 0.2f);
+			}
+			else
+			{
+				this.animWagon.CrossFade(this.animWagonBinoOnTop.name, 0.2f);
+			}
+			this.previousWagonMoving = flag;
+		}
+		if (this.state == MindHatWagon.State.Idle)
+		{
+			this.IdleState();
+		}
+		else if (this.state == MindHatWagon.State.Grab)
+		{
+			this.GrabState();
+		}
+		else if (this.state == MindHatWagon.State.Push)
+		{
+			this.PushState();
+		}
+		if (this.wagonRigidbody && this.hatHolderRigidbody)
+		{
+			Vector3 vector;
+			vector..ctor(0f, this.offsetY, 0f);
+			this.hatHolderRigidbody.MovePosition(this.wagonRigidbody.position + vector);
+		}
+		int i = 0;
+		int num = this.avoidPivots.Length;
+		while (i < num)
+		{
+			float x = this.avoidPivots[i].position.x;
+			float num2 = x - this.wagonRigidbody.position.x;
+			float num3 = Mathf.Abs(num2);
+			if (num3 < this.wagonWidth + this.avoidDist && num3 > this.wagonWidth - this.avoidOverlapDist)
+			{
+				this.wagonRigidbody.AddForce(Vector3.left * Mathf.Sign(num2) * this.avoidForce);
+			}
+			i++;
+		}
+		this.UpdatePushAway();
+		this.UpdateAntenna();
+	}
+
+	// Token: 0x06002495 RID: 9365 RVA: 0x0012D6B4 File Offset: 0x0012B8B4
+	private void UpdateAntenna()
+	{
+		this.antennaVelocty += -this.antennaBlend * Time.deltaTime * this.antennaSpringForce;
+		this.antennaVelocty += -this.antennaVelocty * Time.deltaTime * this.antennaFriction;
+		this.antennaBlend += this.antennaVelocty * Time.deltaTime;
+		float x = this.animAntenna.transform.position.x;
+		AntennaBender antennaBender = null;
+		int i = 0;
+		int num = this.antennaBenders.Length;
+		while (i < num)
+		{
+			AntennaBender antennaBender2 = this.antennaBenders[i];
+			if (Mathf.Abs(antennaBender2.posX - x) < 3f)
+			{
+				antennaBender = antennaBender2;
+			}
+			i++;
+		}
+		if (antennaBender == null)
+		{
+			this.currentBender = null;
+		}
+		else if (this.currentBender != antennaBender)
+		{
+			this.currentBender = antennaBender;
+			this.antennaBendDir = ((x >= this.currentBender.posX) ? -1 : 1);
+		}
+		if (this.currentBender != null)
+		{
+			this.maxBend = this.currentBender.maxBend;
+			this.bendFactor = this.currentBender.bendFactor;
+			this.bendFactorLimit = this.currentBender.bendFactorLimit;
+			float num2 = this.currentBender.leftPosX;
+			float num3 = this.currentBender.rightPosX;
+			if (this.antennaBendDir == 1)
+			{
+				num3 += this.bendOffset;
+				if (x < num3)
+				{
+					float num4 = num2 - x;
+					num4 *= ((this.antennaBlend > 0f) ? this.bendFactorLimit : this.bendFactor);
+					if (Mathf.Abs(num4) > this.maxBend)
+					{
+						num4 = Mathf.Sign(num4) * this.maxBend;
+					}
+					if (num4 < 0f && this.antennaBlend > num4)
+					{
+						this.antennaBlend = num4;
+					}
+					if (this.antennaBlend > num4)
+					{
+						this.antennaVelocty *= -this.bounce;
+						this.antennaBlend = num4;
+					}
+				}
+				else
+				{
+					this.antennaBendDir = -1;
+				}
+			}
+			else if (this.antennaBendDir == -1)
+			{
+				num2 -= this.bendOffset;
+				if (x > num2)
+				{
+					float num5 = x - num3;
+					num5 *= ((this.antennaBlend < 0f) ? this.bendFactorLimit : this.bendFactor);
+					num5 *= -1f;
+					if (Mathf.Abs(num5) > this.maxBend)
+					{
+						num5 = Mathf.Sign(num5) * this.maxBend;
+					}
+					if (num5 > 0f && this.antennaBlend < num5)
+					{
+						this.antennaBlend = num5;
+					}
+					if (this.antennaBlend < num5)
+					{
+						this.antennaVelocty *= -this.bounce;
+						this.antennaBlend = num5;
+					}
+				}
+				else
+				{
+					this.antennaBendDir = 1;
+				}
+			}
+		}
+		this.antennaBlend = Mathf.Clamp(this.antennaBlend, -1f, 1f);
+		this.animAntennaMoveState.normalizedTime = (this.antennaBlend + 1f) / 2f;
+	}
+
+	// Token: 0x06002496 RID: 9366 RVA: 0x0012D9F4 File Offset: 0x0012BBF4
+	private Boy GrabCheck()
+	{
+		if (this.dude1)
+		{
+			BoyGrabState boyGrabState = this.dude1.state as BoyGrabState;
+			if (boyGrabState != null && boyGrabState.body == this.wagonRigidbody)
+			{
+				return this.dude1;
+			}
+		}
+		if (this.dude2)
+		{
+			BoyGrabState boyGrabState2 = this.dude2.state as BoyGrabState;
+			if (boyGrabState2 != null && boyGrabState2.body == this.wagonRigidbody)
+			{
+				return this.dude2;
+			}
+		}
+		return null;
+	}
+
+	// Token: 0x06002497 RID: 9367 RVA: 0x0012DA8C File Offset: 0x0012BC8C
+	private bool CheckDudesOnWagon()
+	{
+		float x = this.wagonRigidbody.position.x;
+		return (this.dude1 && this.dude1.pos.x < x && this.dude1.status.groundCollider == this.wagonCollider) || (this.dude2 && this.dude2.pos.x < x && this.dude2.status.groundCollider == this.wagonCollider);
+	}
+
+	// Token: 0x06002498 RID: 9368 RVA: 0x0012DB44 File Offset: 0x0012BD44
+	private void UpdateFullStop()
+	{
+		float magnitude = this.wheels[0].angularVelocity.magnitude;
+		if (magnitude <= 0.2f)
+		{
+			RigidbodyConstraints rigidbodyConstraints = 32;
+			if (this.blockedInDoor)
+			{
+				rigidbodyConstraints |= 4;
+			}
+			foreach (Rigidbody rigidbody in this.wheels)
+			{
+				rigidbody.constraints = rigidbodyConstraints;
+			}
+			this.fullStop = true;
+		}
+	}
+
+	// Token: 0x06002499 RID: 9369 RVA: 0x0012DBB8 File Offset: 0x0012BDB8
+	private void CheckSlope()
+	{
+		if (this.fullStop || !this.onSlope || this.wheels[0].isKinematic)
+		{
+			return;
+		}
+		float z = this.wheels[0].angularVelocity.z;
+		if (z > 0.05f)
+		{
+			foreach (Rigidbody rigidbody in this.wheels)
+			{
+				rigidbody.AddTorque(0f, 0f, -0.025f);
+			}
+		}
+	}
+
+	// Token: 0x0600249A RID: 9370 RVA: 0x0012DC44 File Offset: 0x0012BE44
+	private void UpdatePushAway()
+	{
+		if (!this.mindHatSecond.GetBoyInHat() && this.boyInside && (!this.currentAnim || this.currentAnim.animFinished) && Mathf.Abs(this.wagonRigidbody.velocity.x) > 0.3f)
+		{
+			Vector3 pos = this.boyInside.pos3;
+			if (this.boyInside.pos3.z < -0.5f)
+			{
+				pos.z -= Time.deltaTime * 0.35f;
+				this.boyInside.pos = MathUtils.v2(pos);
+				this.boyInside.plane.posz = pos.z;
+			}
+			else if (!(this.boyInside.state is BoyJumpState))
+			{
+				float num = Mathf.Sign(this.wagonRigidbody.position.x - pos.x);
+				this.currentAnim = ((this.boyInside.facing * num != -1f) ? this.animFrontPush : this.animBackPush);
+				this.currentAnim.mirror = (this.boyInside.facing == -1f);
+				float num2 = this.currentAnim.frame / this.currentAnim.numFrames;
+				if (num2 < 0f || num2 >= 1f)
+				{
+					BoyUtils.StartCustomAnim(this.boyInside, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				}
+			}
+		}
+	}
+
+	// Token: 0x0600249B RID: 9371 RVA: 0x0012DDF4 File Offset: 0x0012BFF4
+	private void SetWheelDrag(float d, float ad)
+	{
+		int i = 0;
+		int num = this.wheels.Length;
+		while (i < num)
+		{
+			Rigidbody rigidbody = this.wheels[i];
+			rigidbody.drag = d;
+			rigidbody.angularDrag = ad;
+			i++;
+		}
+	}
+
+	// Token: 0x0600249C RID: 9372 RVA: 0x0012DE34 File Offset: 0x0012C034
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider col)
+	{
+		if (sender == this.wagonCollision.enterTrigger)
+		{
+			this.OnWagonEnterTrigger(col);
+		}
+		else if (sender == this.wagonCollision.exitTrigger)
+		{
+			this.OnWagonExitTrigger(col);
+		}
+		else if (sender == this.slopeTrigger.enterTrigger)
+		{
+			this.SlopeEnterTrigger(col);
+		}
+		else if (sender == this.slopeTrigger.exitTrigger)
+		{
+			this.SlopeExitTrigger(col);
+		}
+	}
+
+	// Token: 0x0600249D RID: 9373 RVA: 0x0012DEB4 File Offset: 0x0012C0B4
+	private void SlopeEnterTrigger(Collider col)
+	{
+		Rigidbody attachedRigidbody = col.attachedRigidbody;
+		if (!attachedRigidbody || attachedRigidbody != this.wagonRigidbody)
+		{
+			return;
+		}
+		this.onSlope = true;
+	}
+
+	// Token: 0x0600249E RID: 9374 RVA: 0x0012DEEC File Offset: 0x0012C0EC
+	private void SlopeExitTrigger(Collider col)
+	{
+		Rigidbody attachedRigidbody = col.attachedRigidbody;
+		if (!attachedRigidbody || attachedRigidbody != this.wagonRigidbody)
+		{
+			return;
+		}
+		this.onSlope = false;
+	}
+
+	// Token: 0x0600249F RID: 9375 RVA: 0x0012DF24 File Offset: 0x0012C124
+	private void OnWagonEnterTrigger(Collider col)
+	{
+		Rigidbody attachedRigidbody = col.attachedRigidbody;
+		if (!attachedRigidbody)
+		{
+			return;
+		}
+		Boy component = attachedRigidbody.GetComponent<Boy>();
+		if (!component || component == this.boy1.GetBoy())
+		{
+			return;
+		}
+		this.boyInside = component;
+	}
+
+	// Token: 0x060024A0 RID: 9376 RVA: 0x0012DF74 File Offset: 0x0012C174
+	private void OnWagonExitTrigger(Collider col)
+	{
+		Rigidbody attachedRigidbody = col.attachedRigidbody;
+		if (!attachedRigidbody)
+		{
+			return;
+		}
+		Boy component = attachedRigidbody.GetComponent<Boy>();
+		if (!component || component == this.boy1.GetBoy())
+		{
+			return;
+		}
+		this.boyInside = null;
+		this.currentAnim = null;
+	}
+
+	// Token: 0x040042FE RID: 17150
+	public Rigidbody wagonRigidbody;
+
+	// Token: 0x040042FF RID: 17151
+	public Rigidbody hatHolderRigidbody;
+
+	// Token: 0x04004300 RID: 17152
+	public Collider wagonCollider;
+
+	// Token: 0x04004301 RID: 17153
+	public MindHat mindHatFirst;
+
+	// Token: 0x04004302 RID: 17154
+	public MindHat mindHatSecond;
+
+	// Token: 0x04004303 RID: 17155
+	public float offsetY = -4.3f;
+
+	// Token: 0x04004304 RID: 17156
+	public CollisionEvents wagonCollision;
+
+	// Token: 0x04004305 RID: 17157
+	public Rigidbody[] wheels;
+
+	// Token: 0x04004306 RID: 17158
+	public MindHatDudeSpawner boy1;
+
+	// Token: 0x04004307 RID: 17159
+	public MindHatDudeSpawner boy2;
+
+	// Token: 0x04004308 RID: 17160
+	public AnimClipNode animFrontPush;
+
+	// Token: 0x04004309 RID: 17161
+	public AnimClipNode animBackPush;
+
+	// Token: 0x0400430A RID: 17162
+	public Transform[] avoidPivots;
+
+	// Token: 0x0400430B RID: 17163
+	public CollisionEvents slopeTrigger;
+
+	// Token: 0x0400430C RID: 17164
+	public AudioMove audioMove;
+
+	// Token: 0x0400430D RID: 17165
+	public AudioImpact audioImpact;
+
+	// Token: 0x0400430E RID: 17166
+	[Space(5f)]
+	[Header("--- Drag ---")]
+	[Space(5f)]
+	public float lowDrag = 0.25f;
+
+	// Token: 0x0400430F RID: 17167
+	public float highDrag = 2.6f;
+
+	// Token: 0x04004310 RID: 17168
+	public float lowAngularDrag = 1f;
+
+	// Token: 0x04004311 RID: 17169
+	public float highAngularDrag = 2.6f;
+
+	// Token: 0x04004312 RID: 17170
+	public float timeToHigh = 5f;
+
+	// Token: 0x04004313 RID: 17171
+	[Header("--- Wagon Animations ---")]
+	[Space(5f)]
+	[Space(5f)]
+	public Animation animWagon;
+
+	// Token: 0x04004314 RID: 17172
+	public AnimationClip animWagonRest;
+
+	// Token: 0x04004315 RID: 17173
+	public AnimationClip animWagonPushLeft;
+
+	// Token: 0x04004316 RID: 17174
+	public AnimationClip animWagonPushRight;
+
+	// Token: 0x04004317 RID: 17175
+	public AnimationClip animWagonBinoOnTop;
+
+	// Token: 0x04004318 RID: 17176
+	public AnimationClip animWagonBounceUp;
+
+	// Token: 0x04004319 RID: 17177
+	[Space(5f)]
+	[Header("--- Antenna Animations ---")]
+	[Space(5f)]
+	public Animation animAntenna;
+
+	// Token: 0x0400431A RID: 17178
+	public AnimationClip animAntennaMove;
+
+	// Token: 0x0400431B RID: 17179
+	public float antennaSpringForce = 150f;
+
+	// Token: 0x0400431C RID: 17180
+	public float antennaFriction = 6f;
+
+	// Token: 0x0400431D RID: 17181
+	public float antennaInfluenceByWagon = 2f;
+
+	// Token: 0x0400431E RID: 17182
+	public float bounce = 0.25f;
+
+	// Token: 0x0400431F RID: 17183
+	public float bendOffset = 1.25f;
+
+	// Token: 0x04004320 RID: 17184
+	public AntennaBender[] antennaBenders;
+
+	// Token: 0x04004321 RID: 17185
+	private MindHatWagon.State state;
+
+	// Token: 0x04004322 RID: 17186
+	private Boy boyInside;
+
+	// Token: 0x04004323 RID: 17187
+	private AnimClipNode currentAnim;
+
+	// Token: 0x04004324 RID: 17188
+	private bool onSlope;
+
+	// Token: 0x04004325 RID: 17189
+	private bool fullStop;
+
+	// Token: 0x04004326 RID: 17190
+	private int grabDir;
+
+	// Token: 0x04004327 RID: 17191
+	private float wagonWidth = 1.12f;
+
+	// Token: 0x04004328 RID: 17192
+	private float avoidDist = 0.04f;
+
+	// Token: 0x04004329 RID: 17193
+	private float avoidOverlapDist = 0.04f;
+
+	// Token: 0x0400432A RID: 17194
+	private float avoidForce = 0.03f;
+
+	// Token: 0x0400432B RID: 17195
+	private float dragLerpFactor;
+
+	// Token: 0x0400432C RID: 17196
+	private float newDrag;
+
+	// Token: 0x0400432D RID: 17197
+	private float newAngularDrag;
+
+	// Token: 0x0400432E RID: 17198
+	private float slopeTimer;
+
+	// Token: 0x0400432F RID: 17199
+	private float dragTimer;
+
+	// Token: 0x04004330 RID: 17200
+	private float antennaVelocty;
+
+	// Token: 0x04004331 RID: 17201
+	private float antennaBlend;
+
+	// Token: 0x04004332 RID: 17202
+	private int antennaBendDir;
+
+	// Token: 0x04004333 RID: 17203
+	private AntennaBender currentBender;
+
+	// Token: 0x04004334 RID: 17204
+	private float maxBend;
+
+	// Token: 0x04004335 RID: 17205
+	private float bendFactor;
+
+	// Token: 0x04004336 RID: 17206
+	private float bendFactorLimit;
+
+	// Token: 0x04004337 RID: 17207
+	private Boy dude1;
+
+	// Token: 0x04004338 RID: 17208
+	private Boy dude2;
+
+	// Token: 0x04004339 RID: 17209
+	private Boy boyGrabbing;
+
+	// Token: 0x0400433A RID: 17210
+	private AnimationState animAntennaMoveState;
+
+	// Token: 0x0400433B RID: 17211
+	private int frameCount;
+
+	// Token: 0x0400433C RID: 17212
+	private bool audioActive;
+
+	// Token: 0x0400433D RID: 17213
+	private int wagonTriggerEnterHandle = -1;
+
+	// Token: 0x0400433E RID: 17214
+	private int wagonTriggerExitHandle = -1;
+
+	// Token: 0x0400433F RID: 17215
+	private int slopeTriggerEnterHandle = -1;
+
+	// Token: 0x04004340 RID: 17216
+	private int slopeTriggerExitHandle = -1;
+
+	// Token: 0x04004341 RID: 17217
+	[HideInInspector]
+	public bool blockedInDoor;
+
+	// Token: 0x04004342 RID: 17218
+	private bool previousWagonMoving;
+
+	// Token: 0x02000594 RID: 1428
+	private enum State
+	{
+		// Token: 0x04004344 RID: 17220
+		Idle,
+		// Token: 0x04004345 RID: 17221
+		Grab,
+		// Token: 0x04004346 RID: 17222
+		Push
+	}
+}

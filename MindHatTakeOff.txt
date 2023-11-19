@@ -1,0 +1,395 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004D0 RID: 1232
+public class MindHatTakeOff : Device, IPreAwake
+{
+	// Token: 0x06002045 RID: 8261 RVA: 0x001112A4 File Offset: 0x0010F4A4
+	public bool PreAwake(int callcount)
+	{
+		this.disableAlbinos = SignalOut.Create("disableAlbinos", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06002046 RID: 8262 RVA: 0x001112C0 File Offset: 0x0010F4C0
+	protected override void Start()
+	{
+		base.Start();
+		this.animDeviceRunState = this.animDevice[this.animDeviceRun.name];
+		this.animDeviceWalkState = this.animDevice[this.animDeviceWalk.name];
+		this.animDeviceStopState = this.animDevice[this.animDeviceStop.name];
+		this.logicBone = ScriptGlobals.boy.visualBoy.actor.bones[ScriptGlobals.boy.visualBoy.actor.GetBone("Logic")].transform;
+		this.SetWaitState();
+	}
+
+	// Token: 0x06002047 RID: 8263 RVA: 0x00111370 File Offset: 0x0010F570
+	private void SetWaitState()
+	{
+		this.state = MindHatTakeOff.State.Wait;
+	}
+
+	// Token: 0x06002048 RID: 8264 RVA: 0x0011137C File Offset: 0x0010F57C
+	private void WaitState()
+	{
+		int i = 0;
+		int count = this.boysInside.Count;
+		while (i < count)
+		{
+			Boy boy = this.boysInside[i];
+			if (LevelGlobals.mindHatOnHead.IsAttached() && !boy.isDead && !(boy.state is BoyJumpState) && boy.input.stick.x > 0.3f)
+			{
+				this.boyGrabbing = boy;
+				this.SetRunState();
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06002049 RID: 8265 RVA: 0x00111408 File Offset: 0x0010F608
+	private void SetRunState()
+	{
+		this.ChangeAnim(this.animRun, this.animDeviceRunState);
+		this.state = MindHatTakeOff.State.Run;
+	}
+
+	// Token: 0x0600204A RID: 8266 RVA: 0x00111424 File Offset: 0x0010F624
+	private void RunState()
+	{
+		if (this.animRun.frame >= 15f)
+		{
+			this.ParentCheck();
+		}
+		float x = this.boyGrabbing.input.stick.x;
+		if (!this.hatDropped)
+		{
+			if (x < 0.77f)
+			{
+				this.SetWalkState();
+			}
+			if (this.animDeviceRunState.normalizedTime >= 1f)
+			{
+				this.DropHat(this.animDeviceRunEnd, 0.2f);
+			}
+			if (this.animDeviceRunState.normalizedTime < 0.7f && this.boyGrabbing.state is BoyJumpState)
+			{
+				this.DropHat(this.animDeviceJump, 0.1f);
+			}
+			if (x < -0.3f)
+			{
+				this.DropHat(this.animDeviceRunEnd, 0.2f);
+			}
+		}
+	}
+
+	// Token: 0x0600204B RID: 8267 RVA: 0x00111500 File Offset: 0x0010F700
+	private void SetWalkState()
+	{
+		this.ChangeAnim(this.animWalk, this.animDeviceWalkState);
+		this.state = MindHatTakeOff.State.Walk;
+	}
+
+	// Token: 0x0600204C RID: 8268 RVA: 0x0011151C File Offset: 0x0010F71C
+	private void WalkState()
+	{
+		if (this.animWalk.frame >= 25f)
+		{
+			this.ParentCheck();
+		}
+		float x = this.boyGrabbing.input.stick.x;
+		if (!this.hatDropped)
+		{
+			if (this.animDeviceWalkState.normalizedTime >= 1f)
+			{
+				this.DropHat(this.animDeviceWalkEnd, 0.2f);
+			}
+			if (this.animDeviceWalkState.normalizedTime < 0.7f && this.boyGrabbing.state is BoyJumpState)
+			{
+				this.DropHat(this.animDeviceJump, 0.1f);
+			}
+			if (x < -0.3f)
+			{
+				this.DropHat(this.animDeviceRunEnd, 0.2f);
+			}
+		}
+		if (x > 0.77f)
+		{
+			this.SetRunState();
+		}
+		else if (x < 0.3f && this.animWalk.frame < 42f)
+		{
+			this.SetStopState();
+		}
+	}
+
+	// Token: 0x0600204D RID: 8269 RVA: 0x00111624 File Offset: 0x0010F824
+	private void SetStopState()
+	{
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animStop, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.animDevice.CrossFade(this.animDeviceStopState.name, 0.1f);
+		this.state = MindHatTakeOff.State.Stop;
+	}
+
+	// Token: 0x0600204E RID: 8270 RVA: 0x00111664 File Offset: 0x0010F864
+	private void StopState()
+	{
+		if (this.animStop.frame >= 10f)
+		{
+			this.ParentCheck();
+		}
+		float x = this.boyGrabbing.input.stick.x;
+		if (!this.hatDropped)
+		{
+			if (this.animDeviceStopState.normalizedTime >= 1f)
+			{
+				this.DropHat(this.animDeviceStopEnd, 0.2f);
+			}
+			if (this.animDeviceStopState.normalizedTime < 0.28f)
+			{
+				if (this.boyGrabbing.state is BoyJumpState)
+				{
+					this.DropHat(this.animDeviceJump, 0.1f);
+				}
+				if (x < -0.3f)
+				{
+					this.DropHat(this.animDeviceRunEnd, 0.2f);
+				}
+			}
+		}
+		if (x > 0.3f)
+		{
+			this.SetWalkState();
+		}
+	}
+
+	// Token: 0x0600204F RID: 8271 RVA: 0x00111740 File Offset: 0x0010F940
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case MindHatTakeOff.State.Stop:
+			this.StopState();
+			break;
+		case MindHatTakeOff.State.Walk:
+			this.WalkState();
+			break;
+		case MindHatTakeOff.State.Wait:
+			this.WaitState();
+			break;
+		case MindHatTakeOff.State.Run:
+			this.RunState();
+			break;
+		}
+	}
+
+	// Token: 0x06002050 RID: 8272 RVA: 0x001117A0 File Offset: 0x0010F9A0
+	public void Update()
+	{
+		if (this.hatDropped)
+		{
+			Ray ray;
+			ray..ctor(this.mindHatAnimPos.transform.position + Vector3.up, -Vector3.up);
+			RaycastHit raycastHit;
+			if (this.floor && PDPhysics.Raycast(ray, out raycastHit, 5f, this.floor))
+			{
+				this.dropTargetY = raycastHit.point.y;
+			}
+			Vector3 position = this.visuals.transform.position;
+			position.y += (this.dropTargetY - position.y) * Time.deltaTime * 3f;
+			this.visuals.transform.position = position;
+		}
+		else if (this.logicBone != null)
+		{
+			this.visuals.transform.position = this.logicBone.position;
+			if (this.MindHat)
+			{
+				Vector3 position2 = this.MindHat.transform.position;
+				this.currentHatVelocity = position2 - this.previousHatPos;
+				this.previousHatPos = position2;
+			}
+		}
+	}
+
+	// Token: 0x06002051 RID: 8273 RVA: 0x001118D8 File Offset: 0x0010FAD8
+	private void ParentCheck()
+	{
+		if (this.parentToAnim)
+		{
+			return;
+		}
+		this.MindHat.Reparent(this.mindHatAnimPos);
+		this.parentToAnim = true;
+	}
+
+	// Token: 0x06002052 RID: 8274 RVA: 0x0011190C File Offset: 0x0010FB0C
+	private void DropHat(AnimationClip anim = null, float blendSpeed = 0.2f)
+	{
+		if (this.hatDropped)
+		{
+			return;
+		}
+		this.ParentCheck();
+		this.MindHat.Detach();
+		if (anim)
+		{
+			if (blendSpeed == 0f)
+			{
+				this.animDevice.Play(anim.name);
+			}
+			else
+			{
+				this.animDevice.CrossFade(anim.name, blendSpeed);
+			}
+		}
+		this.disableAlbinos.Signal();
+		this.hatDropped = true;
+	}
+
+	// Token: 0x1700008F RID: 143
+	// (get) Token: 0x06002053 RID: 8275 RVA: 0x00111988 File Offset: 0x0010FB88
+	private MindHatOnHead MindHat
+	{
+		get
+		{
+			if (!this.mindHat)
+			{
+				this.mindHat = LevelGlobals.mindHatOnHead;
+			}
+			return this.mindHat;
+		}
+	}
+
+	// Token: 0x06002054 RID: 8276 RVA: 0x001119AC File Offset: 0x0010FBAC
+	private void ChangeAnim(AnimClipNode anim, AnimationState animDeviceState)
+	{
+		if (this.hatDropped)
+		{
+			return;
+		}
+		if (this.currentAnim == anim)
+		{
+			return;
+		}
+		float normalizedTime = (!this.currentAnimDevice) ? 0f : this.currentAnimDevice.normalizedTime;
+		this.currentAnimDevice = animDeviceState;
+		this.currentAnimDevice.normalizedTime = normalizedTime;
+		this.animDevice.CrossFade(this.currentAnimDevice.name, 0.1f);
+		float num = (!this.currentAnim) ? 0f : (this.currentAnim.frame / this.currentAnim.numFrames);
+		this.currentAnim = anim;
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		anim.frame = num * anim.numFrames;
+	}
+
+	// Token: 0x04003BC1 RID: 15297
+	public float velocityScale = 3f;
+
+	// Token: 0x04003BC2 RID: 15298
+	public Transform visuals;
+
+	// Token: 0x04003BC3 RID: 15299
+	public Animation animDevice;
+
+	// Token: 0x04003BC4 RID: 15300
+	public Transform mindHatAnimPos;
+
+	// Token: 0x04003BC5 RID: 15301
+	public AnimationClip animDeviceJump;
+
+	// Token: 0x04003BC6 RID: 15302
+	public AnimationClip animDeviceRun;
+
+	// Token: 0x04003BC7 RID: 15303
+	public AnimationClip animDeviceRunEnd;
+
+	// Token: 0x04003BC8 RID: 15304
+	public AnimationClip animDeviceStop;
+
+	// Token: 0x04003BC9 RID: 15305
+	public AnimationClip animDeviceStopEnd;
+
+	// Token: 0x04003BCA RID: 15306
+	public AnimationClip animDeviceTurn;
+
+	// Token: 0x04003BCB RID: 15307
+	public AnimationClip animDeviceTurnEnd;
+
+	// Token: 0x04003BCC RID: 15308
+	public AnimationClip animDeviceWalk;
+
+	// Token: 0x04003BCD RID: 15309
+	public AnimationClip animDeviceWalkEnd;
+
+	// Token: 0x04003BCE RID: 15310
+	private MindHatTakeOff.State state;
+
+	// Token: 0x04003BCF RID: 15311
+	private AnimationState currentAnimDevice;
+
+	// Token: 0x04003BD0 RID: 15312
+	private AnimationState animDeviceRunState;
+
+	// Token: 0x04003BD1 RID: 15313
+	private AnimationState animDeviceStopState;
+
+	// Token: 0x04003BD2 RID: 15314
+	private AnimationState animDeviceWalkState;
+
+	// Token: 0x04003BD3 RID: 15315
+	public AnimClipNode animRun;
+
+	// Token: 0x04003BD4 RID: 15316
+	public AnimClipNode animWalk;
+
+	// Token: 0x04003BD5 RID: 15317
+	public AnimClipNode animStop;
+
+	// Token: 0x04003BD6 RID: 15318
+	public AnimClipNode animTurn;
+
+	// Token: 0x04003BD7 RID: 15319
+	public AnimClipNode animJump;
+
+	// Token: 0x04003BD8 RID: 15320
+	private AnimClipNode currentAnim;
+
+	// Token: 0x04003BD9 RID: 15321
+	public GameObject floor;
+
+	// Token: 0x04003BDA RID: 15322
+	private float dropTargetY;
+
+	// Token: 0x04003BDB RID: 15323
+	private Transform logicBone;
+
+	// Token: 0x04003BDC RID: 15324
+	private bool parentToAnim;
+
+	// Token: 0x04003BDD RID: 15325
+	private bool hatDropped;
+
+	// Token: 0x04003BDE RID: 15326
+	private MindHatOnHead mindHat;
+
+	// Token: 0x04003BDF RID: 15327
+	private Vector3 currentHatVelocity;
+
+	// Token: 0x04003BE0 RID: 15328
+	private Vector3 previousHatPos;
+
+	// Token: 0x04003BE1 RID: 15329
+	public SignalOut disableAlbinos;
+
+	// Token: 0x020004D1 RID: 1233
+	private enum State
+	{
+		// Token: 0x04003BE3 RID: 15331
+		None,
+		// Token: 0x04003BE4 RID: 15332
+		Stop,
+		// Token: 0x04003BE5 RID: 15333
+		Walk,
+		// Token: 0x04003BE6 RID: 15334
+		Wait,
+		// Token: 0x04003BE7 RID: 15335
+		Run
+	}
+}

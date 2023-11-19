@@ -1,0 +1,96 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200049A RID: 1178
+public class LabJetCrateHitWater : MonoBehaviour
+{
+	// Token: 0x06001EDA RID: 7898 RVA: 0x00108074 File Offset: 0x00106274
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(this.jetPos, null);
+		this.audioEnterWater = new AudioEventSimpleLocal("phy_lab_jetCrateToCeilingWater_jetCrate_enterWater", this.akGameObj);
+		this.audioExitWater = new AudioEventSimpleLocal("phy_lab_jetCrateToCeilingWater_jetCrate_exitWater", this.akGameObj);
+	}
+
+	// Token: 0x06001EDB RID: 7899 RVA: 0x001080D4 File Offset: 0x001062D4
+	private void Awake()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x06001EDC RID: 7900 RVA: 0x001080DC File Offset: 0x001062DC
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<JetCrate>())
+		{
+			this.objectInWater = coll.GetComponent<Rigidbody>();
+			this.jetPos.transform.position = this.objectInWater.position;
+			float magnitude = coll.GetComponent<Rigidbody>().velocity.magnitude;
+			float value = Mathf.InverseLerp(0.1f, 15f, magnitude);
+			SoundEngine.RTPCs.phyWaterImpact.Set01ClampedFast(value, this.akGameObj);
+			this.audioEnterWater.PostFast();
+		}
+	}
+
+	// Token: 0x06001EDD RID: 7901 RVA: 0x00108164 File Offset: 0x00106364
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<JetCrate>())
+		{
+			this.jetPos.transform.position = coll.transform.position;
+			SoundEngine.RTPCs.phyMove.Set01ClampedFast(0f, this.akGameObj);
+			float magnitude = coll.GetComponent<Rigidbody>().velocity.magnitude;
+			float value = Mathf.InverseLerp(0.1f, 15f, magnitude);
+			SoundEngine.RTPCs.phyWaterImpact.Set01ClampedFast(value, this.akGameObj);
+			this.audioExitWater.PostFast();
+			this.objectInWater = null;
+		}
+	}
+
+	// Token: 0x06001EDE RID: 7902 RVA: 0x001081FC File Offset: 0x001063FC
+	private void Update()
+	{
+		if (this.objectInWater != null)
+		{
+			this.jetPos.transform.position = this.objectInWater.transform.position;
+			float magnitude = this.objectInWater.velocity.magnitude;
+			float value = Mathf.InverseLerp(0.1f, 15f, magnitude);
+			SoundEngine.RTPCs.phyMove.Set01ClampedFast(value, this.akGameObj);
+		}
+	}
+
+	// Token: 0x0400391E RID: 14622
+	public GameObject jetPos;
+
+	// Token: 0x0400391F RID: 14623
+	private bool isInWater;
+
+	// Token: 0x04003920 RID: 14624
+	private Rigidbody objectInWater;
+
+	// Token: 0x04003921 RID: 14625
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObj;
+
+	// Token: 0x04003922 RID: 14626
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioEnterWater;
+
+	// Token: 0x04003923 RID: 14627
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioExitWater;
+
+	// Token: 0x04003924 RID: 14628
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

@@ -1,0 +1,32 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000545 RID: 1349
+public class ImHere : MonoBehaviour
+{
+	// Token: 0x06002314 RID: 8980 RVA: 0x0012540C File Offset: 0x0012360C
+	private void OnDrawGizmos()
+	{
+		Event current = Event.current;
+		if (current.shift || this.visible)
+		{
+			Gizmos.color = Color.gray;
+			Gizmos.DrawLine(base.transform.position + base.transform.up * this.posOffset.y * base.transform.localScale.y, base.transform.position + base.transform.up * this.posOffset.y * base.transform.localScale.y + base.transform.up);
+			Gizmos.DrawSphere(base.transform.position + base.transform.up * this.posOffset.y * base.transform.localScale.y + base.transform.up, 0.15f);
+		}
+		if (this.direction)
+		{
+			Gizmos.color = Color.blue;
+			Gizmos.DrawLine(base.transform.position, base.transform.position + base.transform.forward * 2f);
+		}
+	}
+
+	// Token: 0x04004194 RID: 16788
+	public bool visible;
+
+	// Token: 0x04004195 RID: 16789
+	public bool direction;
+
+	// Token: 0x04004196 RID: 16790
+	public Vector3 posOffset = Vector3.zero;
+}

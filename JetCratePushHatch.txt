@@ -1,0 +1,510 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001C4 RID: 452
+public class JetCratePushHatch : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06000D67 RID: 3431 RVA: 0x00080AD8 File Offset: 0x0007ECD8
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioStartOut = new AudioEventSimpleLocal(this.audioPrefix + "_hatchGoOut", akGameObj);
+		this.audioStartIn = new AudioEventSimpleLocal(this.audioPrefix + "_hatchGoIn", akGameObj);
+		this.audioAllOut = new AudioEventSimpleLocal(this.audioPrefix + "_hatchAllOut", akGameObj);
+		this.audioAllIn = new AudioEventSimpleLocal(this.audioPrefix + "_hatchAllIn", akGameObj);
+		this.audioChangeToOut = new AudioEventSimpleLocal(this.audioPrefix + "_hatchChangeToOut", akGameObj);
+		this.audioChangeToIn = new AudioEventSimpleLocal(this.audioPrefix + "_hatchChangeToIn", akGameObj);
+		this.hatchRigidbody = base.GetComponent<Rigidbody>();
+	}
+
+	// Token: 0x06000D68 RID: 3432 RVA: 0x00080BBC File Offset: 0x0007EDBC
+	public bool PreAwake(int callcount)
+	{
+		this.moveIn = SignalIn.Create("moveIn", base.gameObject, new Action(this.DoSetMoveInState));
+		this.moveOut = SignalIn.Create("moveOut", base.gameObject, new Action(this.DoSetMoveOutState));
+		this.setJetCratePushed = SignalIn.Create("setJetCratePushed", base.gameObject, new Action(this.SetJetCratePushed));
+		this.jetCratePushed = SignalOut.Create("jetCratePushed", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000D69 RID: 3433 RVA: 0x00080C48 File Offset: 0x0007EE48
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.trigger.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.trigger.exitTrigger.Register(this, ref this.triggerExitHandle);
+		this.jetcrate = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.labJetCrate);
+		this.jetcrateRigidbody = this.jetcrate.GetComponent<Rigidbody>();
+		this.startDrag = this.jetcrateRigidbody.drag;
+		if (this.moveOutSpeed < 0f)
+		{
+			this.moveOutSpeed = this.moveSpeed;
+		}
+		if (this.initiallyOut)
+		{
+			this.hatchRigidbody.MovePosition(this.outPos.position);
+			this.state = JetCratePushHatch.State.AllOut;
+		}
+		else
+		{
+			this.state = JetCratePushHatch.State.AllIn;
+		}
+	}
+
+	// Token: 0x06000D6A RID: 3434 RVA: 0x00080D0C File Offset: 0x0007EF0C
+	private void DoSetMoveInState()
+	{
+		if (this.state == JetCratePushHatch.State.MoveOut)
+		{
+			this.audioChangeToIn.PostFast();
+		}
+		else
+		{
+			this.audioStartIn.PostFast();
+		}
+		this.state = JetCratePushHatch.State.SetMoveIn;
+	}
+
+	// Token: 0x06000D6B RID: 3435 RVA: 0x00080D4C File Offset: 0x0007EF4C
+	private void DoSetMoveOutState()
+	{
+		if (this.state == JetCratePushHatch.State.MoveIn)
+		{
+			this.audioChangeToOut.PostFast();
+		}
+		else
+		{
+			this.audioStartOut.PostFast();
+		}
+		this.state = JetCratePushHatch.State.SetMoveOut;
+	}
+
+	// Token: 0x06000D6C RID: 3436 RVA: 0x00080D8C File Offset: 0x0007EF8C
+	private void SetMoveInState()
+	{
+		this.state = JetCratePushHatch.State.MoveIn;
+	}
+
+	// Token: 0x06000D6D RID: 3437 RVA: 0x00080D98 File Offset: 0x0007EF98
+	private void MoveInState()
+	{
+		float magnitude = (base.transform.position - this.inPos.position).magnitude;
+		if ((double)magnitude >= 0.01)
+		{
+			Vector3 vector = Vector3.MoveTowards(base.transform.position, this.inPos.position, this.moveSpeed * Time.deltaTime);
+			this.hatchRigidbody.MovePosition(vector);
+			this.jetcrateRigidbody.WakeUp();
+		}
+		else
+		{
+			this.state = JetCratePushHatch.State.SetAllIn;
+		}
+	}
+
+	// Token: 0x06000D6E RID: 3438 RVA: 0x00080E24 File Offset: 0x0007F024
+	private void SetAllInState()
+	{
+		this.audioAllIn.PostFast();
+		this.state = JetCratePushHatch.State.AllIn;
+	}
+
+	// Token: 0x06000D6F RID: 3439 RVA: 0x00080E3C File Offset: 0x0007F03C
+	private void AllInState()
+	{
+	}
+
+	// Token: 0x06000D70 RID: 3440 RVA: 0x00080E40 File Offset: 0x0007F040
+	private void SetMoveOutState()
+	{
+		this.state = JetCratePushHatch.State.MoveOut;
+	}
+
+	// Token: 0x06000D71 RID: 3441 RVA: 0x00080E4C File Offset: 0x0007F04C
+	private void MoveOutState()
+	{
+		float magnitude = (base.transform.position - this.outPos.position).magnitude;
+		if ((double)magnitude >= 0.01)
+		{
+			Vector3 vector = Vector3.MoveTowards(base.transform.position, this.outPos.position, this.moveOutSpeed * Time.deltaTime);
+			if (this.colliderTimer <= 0f)
+			{
+				this.hatchRigidbody.MovePosition(vector);
+			}
+		}
+		else
+		{
+			this.state = JetCratePushHatch.State.SetAllOut;
+		}
+	}
+
+	// Token: 0x06000D72 RID: 3442 RVA: 0x00080EE0 File Offset: 0x0007F0E0
+	private void SetAllOutState()
+	{
+		this.audioAllOut.PostFast();
+		this.state = JetCratePushHatch.State.AllOut;
+	}
+
+	// Token: 0x06000D73 RID: 3443 RVA: 0x00080EF8 File Offset: 0x0007F0F8
+	private void AllOutState()
+	{
+	}
+
+	// Token: 0x06000D74 RID: 3444 RVA: 0x00080EFC File Offset: 0x0007F0FC
+	private void FixedUpdate()
+	{
+		this.punchCoolDownTimer -= Time.deltaTime;
+		if (this.hasBeenScaled && this.scaleColliderHack)
+		{
+			this.colliderScaledTimer += Time.deltaTime;
+			if (this.colliderScaledTimer > 0.33f)
+			{
+				this.hasBeenScaled = false;
+				this.scaleColliderHack = false;
+				this.colliderToScale.localScale = Vector3.one;
+			}
+		}
+		if (this.punchDampingActive)
+		{
+			this.punchDampTimer += Time.deltaTime;
+			float num = Mathf.InverseLerp(0f, 0.25f, this.punchDampTimer);
+			this.jetcrateRigidbody.drag = Mathf.Lerp(7f, this.startDrag, num);
+			this.jetcrateRigidbody.AddTorque(0f, 0f, 12f * this.jetcrateRigidbody.mass * (1f - num) * this.punchRotSign, 0);
+			if (num >= 1f)
+			{
+				this.punchDampingActive = false;
+			}
+		}
+		if (!this.pushCrateFree)
+		{
+			if (this.noOfJetCratesTouching > 0)
+			{
+				this.colliderTimer = 0.2f;
+			}
+			else
+			{
+				this.colliderTimer -= Time.deltaTime;
+			}
+		}
+		switch (this.state)
+		{
+		case JetCratePushHatch.State.AllOut:
+			this.AllOutState();
+			break;
+		case JetCratePushHatch.State.SetAllOut:
+			this.SetAllOutState();
+			break;
+		case JetCratePushHatch.State.AllIn:
+			this.AllInState();
+			break;
+		case JetCratePushHatch.State.SetAllIn:
+			this.SetAllInState();
+			break;
+		case JetCratePushHatch.State.MoveOut:
+			this.MoveOutState();
+			break;
+		case JetCratePushHatch.State.SetMoveOut:
+			this.SetMoveOutState();
+			break;
+		case JetCratePushHatch.State.MoveIn:
+			this.MoveInState();
+			break;
+		case JetCratePushHatch.State.SetMoveIn:
+			this.SetMoveInState();
+			break;
+		}
+		if (this.jetCrateSlider != null && this.jetCrateSlider.isKinematic)
+		{
+			Vector3 position = this.jetcrate.gameObject.transform.position;
+			position.z += this.sliderOffSet;
+			this.jetCrateSlider.transform.position = position;
+		}
+	}
+
+	// Token: 0x06000D75 RID: 3445 RVA: 0x0008112C File Offset: 0x0007F32C
+	private void SetJetCratePushed()
+	{
+		this.jetCratedHasBeenPushed = true;
+		this.pushCrateFree = true;
+	}
+
+	// Token: 0x06000D76 RID: 3446 RVA: 0x0008113C File Offset: 0x0007F33C
+	private bool isJetCratePushable(Collider coll)
+	{
+		float num = coll.transform.position.y + coll.bounds.extents.y * 0.8f;
+		float num2 = coll.transform.position.y - coll.bounds.extents.y * 0.8f;
+		float num3 = base.transform.position.y + base.GetComponent<Collider>().bounds.extents.y;
+		float num4 = base.transform.position.y - base.GetComponent<Collider>().bounds.extents.y;
+		float num5 = coll.transform.position.x + coll.bounds.extents.x * 0.8f;
+		float num6 = coll.transform.position.x - coll.bounds.extents.x * 0.8f;
+		return num > num4 && num2 < num3 && num5 > num6;
+	}
+
+	// Token: 0x06000D77 RID: 3447 RVA: 0x0008129C File Offset: 0x0007F49C
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.trigger.enterTrigger)
+		{
+			this.OtherTriggerEnter(collider);
+		}
+		else if (sender == this.trigger.exitTrigger)
+		{
+			this.OtherTriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06000D78 RID: 3448 RVA: 0x000812D8 File Offset: 0x0007F4D8
+	private void OtherTriggerEnter(Collider coll)
+	{
+		if (this.state != JetCratePushHatch.State.MoveOut)
+		{
+			return;
+		}
+		JetCrate component = coll.GetComponent<JetCrate>();
+		if (component == null)
+		{
+			return;
+		}
+		this.noOfJetCratesTouching++;
+		float sqrMagnitude = (this.outPos.position - base.transform.position).sqrMagnitude;
+		component.SetAfterImpactPhysics();
+		if (sqrMagnitude < 0.25f)
+		{
+			return;
+		}
+		if (this.jetcrate.transform.position.y > base.transform.position.y + 0.25f)
+		{
+			this.punchRotSign = -1f;
+		}
+		else
+		{
+			this.punchRotSign = 1f;
+		}
+		if (!this.pushCrateFree && !this.jetCratedHasBeenPushed)
+		{
+			Vector3 vector = Vector3.MoveTowards(base.transform.position, this.inPos.position, this.moveSpeed * Time.deltaTime * 2f);
+			this.hatchRigidbody.MovePosition(vector);
+		}
+		else if (this.isJetCratePushable(coll) && this.pushCrateFree && this.punchCoolDownTimer < 0f)
+		{
+			if (this.jetCrateSlider && !this.jetCratedHasBeenPushed)
+			{
+				this.jetCrateSlider.isKinematic = false;
+				Vector3 position = this.jetCrateSlider.transform.position;
+				position.y += 2.5f;
+				this.jetCrateSlider.AddForceAtPosition(new Vector3(-2.5f, 0f, 1f), position);
+			}
+			Rigidbody component2 = component.GetComponent<Rigidbody>();
+			if (!this.jetCratedHasBeenPushed)
+			{
+				component2.constraints = 0;
+				component2.constraints |= 8;
+				component2.constraints |= 16;
+				component2.constraints |= 32;
+				component.SetPhysicsSlide();
+				this.jetCratePushed.Signal();
+			}
+			if (this.scaleColliderHack)
+			{
+				float y = base.transform.position.y;
+				float y2 = component.transform.position.y;
+				float num = Mathf.Abs(Mathf.Abs(y) - Mathf.Abs(y2));
+				if (num >= 0.6f)
+				{
+					Vector3 localScale = this.colliderToScale.localScale;
+					localScale.y *= this.scaleMultiplier;
+					this.colliderToScale.localScale = localScale;
+					this.hasBeenScaled = true;
+					this.colliderScaledTimer = 0f;
+				}
+			}
+			component2.AddForce(Vector3.left * 0.1f * component2.mass);
+			component2.angularDrag = 0.5f;
+			this.punchDampingActive = true;
+			component2.drag = 7f;
+			this.punchDampTimer = 0f;
+			this.jetCratedHasBeenPushed = true;
+			this.punchCoolDownTimer = 2f;
+		}
+	}
+
+	// Token: 0x06000D79 RID: 3449 RVA: 0x000815DC File Offset: 0x0007F7DC
+	private void OtherTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<JetCrate>())
+		{
+			this.noOfJetCratesTouching--;
+		}
+	}
+
+	// Token: 0x0400179A RID: 6042
+	private const float punchDrag = 7f;
+
+	// Token: 0x0400179B RID: 6043
+	public float moveSpeed;
+
+	// Token: 0x0400179C RID: 6044
+	public float moveOutSpeed = -1f;
+
+	// Token: 0x0400179D RID: 6045
+	public float forceMultiplier = 1f;
+
+	// Token: 0x0400179E RID: 6046
+	public Transform inPos;
+
+	// Token: 0x0400179F RID: 6047
+	public Transform outPos;
+
+	// Token: 0x040017A0 RID: 6048
+	public bool pushCrateFree;
+
+	// Token: 0x040017A1 RID: 6049
+	public Rigidbody jetCrateSlider;
+
+	// Token: 0x040017A2 RID: 6050
+	public CollisionEvents trigger;
+
+	// Token: 0x040017A3 RID: 6051
+	public bool initiallyOut;
+
+	// Token: 0x040017A4 RID: 6052
+	public string audioPrefix = string.Empty;
+
+	// Token: 0x040017A5 RID: 6053
+	public bool scaleColliderHack;
+
+	// Token: 0x040017A6 RID: 6054
+	public float scaleMultiplier = 2f;
+
+	// Token: 0x040017A7 RID: 6055
+	public Transform colliderToScale;
+
+	// Token: 0x040017A8 RID: 6056
+	public float sliderOffSet;
+
+	// Token: 0x040017A9 RID: 6057
+	private SignalIn moveIn;
+
+	// Token: 0x040017AA RID: 6058
+	private SignalIn moveOut;
+
+	// Token: 0x040017AB RID: 6059
+	private SignalIn setJetCratePushed;
+
+	// Token: 0x040017AC RID: 6060
+	private SignalOut jetCratePushed;
+
+	// Token: 0x040017AD RID: 6061
+	private JetCratePushHatch.State state;
+
+	// Token: 0x040017AE RID: 6062
+	private Companion jetcrate;
+
+	// Token: 0x040017AF RID: 6063
+	private Rigidbody jetcrateRigidbody;
+
+	// Token: 0x040017B0 RID: 6064
+	private float startDrag;
+
+	// Token: 0x040017B1 RID: 6065
+	private bool hasBeenScaled;
+
+	// Token: 0x040017B2 RID: 6066
+	private float punchDampTimer;
+
+	// Token: 0x040017B3 RID: 6067
+	private int noOfJetCratesTouching;
+
+	// Token: 0x040017B4 RID: 6068
+	private bool jetCratedHasBeenPushed;
+
+	// Token: 0x040017B5 RID: 6069
+	private bool punchDampingActive;
+
+	// Token: 0x040017B6 RID: 6070
+	private float punchRotSign;
+
+	// Token: 0x040017B7 RID: 6071
+	private float punchCoolDownTimer;
+
+	// Token: 0x040017B8 RID: 6072
+	private float colliderScaledTimer;
+
+	// Token: 0x040017B9 RID: 6073
+	private float colliderTimer;
+
+	// Token: 0x040017BA RID: 6074
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x040017BB RID: 6075
+	private int triggerExitHandle = -1;
+
+	// Token: 0x040017BC RID: 6076
+	[HideInInspector]
+	[SerializeField]
+	private Rigidbody hatchRigidbody;
+
+	// Token: 0x040017BD RID: 6077
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x040017BE RID: 6078
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStartOut;
+
+	// Token: 0x040017BF RID: 6079
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStartIn;
+
+	// Token: 0x040017C0 RID: 6080
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioAllOut;
+
+	// Token: 0x040017C1 RID: 6081
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioAllIn;
+
+	// Token: 0x040017C2 RID: 6082
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioChangeToOut;
+
+	// Token: 0x040017C3 RID: 6083
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioChangeToIn;
+
+	// Token: 0x020001C5 RID: 453
+	private enum State
+	{
+		// Token: 0x040017C5 RID: 6085
+		None,
+		// Token: 0x040017C6 RID: 6086
+		AllOut,
+		// Token: 0x040017C7 RID: 6087
+		SetAllOut,
+		// Token: 0x040017C8 RID: 6088
+		AllIn,
+		// Token: 0x040017C9 RID: 6089
+		SetAllIn,
+		// Token: 0x040017CA RID: 6090
+		MoveOut,
+		// Token: 0x040017CB RID: 6091
+		SetMoveOut,
+		// Token: 0x040017CC RID: 6092
+		MoveIn,
+		// Token: 0x040017CD RID: 6093
+		SetMoveIn
+	}
+}
+

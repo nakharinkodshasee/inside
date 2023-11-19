@@ -1,0 +1,82 @@
+using System;
+using System.Collections;
+using UnityEngine;
+
+// Token: 0x020004CF RID: 1231
+public class MindHatOnHeadInterface : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600203F RID: 8255 RVA: 0x0011115C File Offset: 0x0010F35C
+	public bool PreAwake(int callcount)
+	{
+		this.enableLogic = SignalIn.Create("enableLogic", base.gameObject, new Action(this.OnEnableLogic));
+		this.attachToHead = SignalIn.Create("attachToHead", base.gameObject, new Action(this.Attach));
+		this.detachFromHead = SignalIn.Create("detachFromHead", base.gameObject, new Action(this.Detach));
+		this.loadAttached = SignalOut.Create("loadAttached", base.gameObject);
+		this.loadDetached = SignalOut.Create("loadDetached", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06002040 RID: 8256 RVA: 0x001111FC File Offset: 0x0010F3FC
+	private IEnumerator Start()
+	{
+		while (LevelGlobals.mindHatOnHead == null || !LevelGlobals.mindHatOnHead.IsReady())
+		{
+			yield return null;
+		}
+		MindHatOnHead mindhat = LevelGlobals.mindHatOnHead;
+		if (mindhat && mindhat.IsAttached())
+		{
+			this.loadAttached.Signal();
+		}
+		else
+		{
+			this.loadDetached.Signal();
+		}
+		yield break;
+	}
+
+	// Token: 0x06002041 RID: 8257 RVA: 0x00111218 File Offset: 0x0010F418
+	private void Attach()
+	{
+		MindHatOnHead mindHatOnHead = LevelGlobals.mindHatOnHead;
+		if (mindHatOnHead != null)
+		{
+			mindHatOnHead.Attach();
+		}
+	}
+
+	// Token: 0x06002042 RID: 8258 RVA: 0x00111240 File Offset: 0x0010F440
+	private void Detach()
+	{
+		MindHatOnHead mindHatOnHead = LevelGlobals.mindHatOnHead;
+		if (mindHatOnHead != null)
+		{
+			mindHatOnHead.Detach();
+		}
+	}
+
+	// Token: 0x06002043 RID: 8259 RVA: 0x00111268 File Offset: 0x0010F468
+	private void OnEnableLogic()
+	{
+		MindHatOnHead mindHatOnHead = LevelGlobals.mindHatOnHead;
+		if (mindHatOnHead != null)
+		{
+			mindHatOnHead.EnableLogic();
+		}
+	}
+
+	// Token: 0x04003BBC RID: 15292
+	private SignalIn enableLogic;
+
+	// Token: 0x04003BBD RID: 15293
+	private SignalIn attachToHead;
+
+	// Token: 0x04003BBE RID: 15294
+	private SignalIn detachFromHead;
+
+	// Token: 0x04003BBF RID: 15295
+	private SignalOut loadAttached;
+
+	// Token: 0x04003BC0 RID: 15296
+	private SignalOut loadDetached;
+}

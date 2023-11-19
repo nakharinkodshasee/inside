@@ -1,0 +1,153 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200033F RID: 831
+[ExecuteInEditMode]
+public class LightToShader : MonoBehaviour
+{
+	// Token: 0x06001727 RID: 5927 RVA: 0x000CA608 File Offset: 0x000C8808
+	private void OnEnable()
+	{
+		this.mi = base.GetComponent<MaterialInstance>();
+		this.colProp = this.mi.GetOrAddColorProperty(LightToShader.colorString);
+		this.falloffTexProp = this.mi.GetOrAddTextureProperty(LightToShader.falloffTexString);
+		this.cookieProp = this.mi.GetOrAddTextureProperty(LightToShader.cookieString);
+		this.lMatX = this.mi.GetOrAddVectorProperty(LightToShader.lMatStringX);
+		this.lMatY = this.mi.GetOrAddVectorProperty(LightToShader.lMatStringY);
+		this.lMatZ = this.mi.GetOrAddVectorProperty(LightToShader.lMatStringZ);
+		this.lMatW = this.mi.GetOrAddVectorProperty(LightToShader.lMatStringW);
+	}
+
+	// Token: 0x06001728 RID: 5928 RVA: 0x000CA6BC File Offset: 0x000C88BC
+	private void OnWillRenderObject()
+	{
+		if (!this.sourceLight)
+		{
+			return;
+		}
+		this.mi.SetColorProperty(this.colProp, this.sourceLight.color * this.sourceLight.intensity * ((!this.sourceLight.enabled) ? 0f : 1f));
+		this.mi.SetTextureProperty(this.falloffTexProp, this.sourceLight.fallofftex);
+		this.mi.SetTextureProperty(this.cookieProp, this.sourceLight.cookie);
+		Matrix4x4 matrix4x;
+		Matrix4x4 matrix4x2;
+		this.buildLightMatrisies(this.sourceLight, out matrix4x, out matrix4x2);
+		this.mi.SetVectorProperty(this.lMatX, matrix4x.GetRow(0));
+		this.mi.SetVectorProperty(this.lMatY, matrix4x.GetRow(1));
+		this.mi.SetVectorProperty(this.lMatZ, matrix4x.GetRow(2));
+		this.mi.SetVectorProperty(this.lMatW, matrix4x.GetRow(3));
+	}
+
+	// Token: 0x06001729 RID: 5929 RVA: 0x000CA7D8 File Offset: 0x000C89D8
+	private void buildLightMatrisies(Light l, out Matrix4x4 lMat, out Matrix4x4 sMat)
+	{
+		Matrix4x4 matrix4x;
+		if (this.isParticleSystem)
+		{
+			matrix4x = Camera.current.cameraToWorldMatrix;
+		}
+		else
+		{
+			matrix4x = Matrix4x4.TRS(base.transform.position, base.transform.rotation, Vector3.one);
+		}
+		if (l.type == null)
+		{
+			sMat = Matrix4x4.TRS(l.transform.position, l.transform.rotation, new Vector3(l.range, l.range, l.range)).inverse;
+			sMat *= matrix4x;
+			lMat = sMat;
+			Matrix4x4 identity = Matrix4x4.identity;
+			Matrix4x4 identity2 = Matrix4x4.identity;
+			float num = Mathf.Tan(l.spotAngle * 0.017453292f * 0.5f);
+			identity2.m32 = 2f * num;
+			identity2.m33 = 0f;
+			float num2 = l.range * 0.5f;
+			float num3 = num2 / num;
+			identity.m00 = num3;
+			identity.m11 = num3;
+			identity.m02 = num2;
+			identity.m12 = num2;
+			identity.m32 = l.range;
+			identity.m23 = -0.041666668f * l.range;
+			identity.m22 = l.range - identity.m23;
+			identity.m33 = 0f;
+			sMat = identity * sMat;
+			lMat = identity2 * lMat;
+		}
+		else
+		{
+			sMat = Matrix4x4.TRS(l.transform.position, l.transform.rotation, l.dirLocalScale).inverse;
+			sMat *= matrix4x;
+			lMat = sMat;
+			lMat.SetRow(0, -lMat.GetRow(0));
+			lMat.SetRow(1, -lMat.GetRow(1));
+			sMat.m03 += 0.5f;
+			sMat.m13 += 0.5f;
+		}
+	}
+
+	// Token: 0x0600172A RID: 5930 RVA: 0x000CAA04 File Offset: 0x000C8C04
+	private void Awake()
+	{
+		if (!Application.isPlaying)
+		{
+			return;
+		}
+		if (base.gameObject.GetComponent<D11LightToShader>() == null)
+		{
+			D11LightToShader d11LightToShader = base.gameObject.AddComponent<D11LightToShader>();
+			d11LightToShader.isParticleSystem = this.isParticleSystem;
+			d11LightToShader.sourceLight = this.sourceLight;
+		}
+		Object.Destroy(this);
+	}
+
+	// Token: 0x04002965 RID: 10597
+	public bool isParticleSystem;
+
+	// Token: 0x04002966 RID: 10598
+	public Light sourceLight;
+
+	// Token: 0x04002967 RID: 10599
+	private MaterialInstance mi;
+
+	// Token: 0x04002968 RID: 10600
+	private MaterialInstance.ColorProperty colProp;
+
+	// Token: 0x04002969 RID: 10601
+	private MaterialInstance.TextureProperty falloffTexProp;
+
+	// Token: 0x0400296A RID: 10602
+	private MaterialInstance.TextureProperty cookieProp;
+
+	// Token: 0x0400296B RID: 10603
+	private MaterialInstance.VectorProperty lMatX;
+
+	// Token: 0x0400296C RID: 10604
+	private MaterialInstance.VectorProperty lMatY;
+
+	// Token: 0x0400296D RID: 10605
+	private MaterialInstance.VectorProperty lMatZ;
+
+	// Token: 0x0400296E RID: 10606
+	private MaterialInstance.VectorProperty lMatW;
+
+	// Token: 0x0400296F RID: 10607
+	private static string colorString = "_LightColor0";
+
+	// Token: 0x04002970 RID: 10608
+	private static string falloffTexString = "_LightTextureB0";
+
+	// Token: 0x04002971 RID: 10609
+	private static string cookieString = "_LightTexture0";
+
+	// Token: 0x04002972 RID: 10610
+	private static string lMatStringX = "_PDLightMatrix_x";
+
+	// Token: 0x04002973 RID: 10611
+	private static string lMatStringY = "_PDLightMatrix_y";
+
+	// Token: 0x04002974 RID: 10612
+	private static string lMatStringZ = "_PDLightMatrix_z";
+
+	// Token: 0x04002975 RID: 10613
+	private static string lMatStringW = "_PDLightMatrix_w";
+}

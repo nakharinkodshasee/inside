@@ -1,0 +1,67 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000206 RID: 518
+public class MindHatGroupSpawner : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001009 RID: 4105 RVA: 0x000982A0 File Offset: 0x000964A0
+	public bool PreAwake(int callcount)
+	{
+		this.dudesOutOfWater = SignalIn.Create("dudesOutOfWater", base.gameObject, new Action(this.OnDudesOutOfWater));
+		this.mindHatOn = SignalIn.Create("mindHatOn", base.gameObject, new Action(this.OnMindHatOn));
+		this.mindHatOff = SignalIn.Create("mindHatOff", base.gameObject, new Action(this.OnMindHatOff));
+		return true;
+	}
+
+	// Token: 0x0600100A RID: 4106 RVA: 0x00098314 File Offset: 0x00096514
+	private void OnDudesOutOfWater()
+	{
+		this.dudesAreOutOfWater = true;
+	}
+
+	// Token: 0x0600100B RID: 4107 RVA: 0x00098320 File Offset: 0x00096520
+	private void OnMindHatOn()
+	{
+		this.mindHatIsOn = true;
+		if (this.dudesAreOutOfWater && !this.dudesAreFollowing)
+		{
+			foreach (AlbinoAI albinoAI in this.controller.GetAlbinos())
+			{
+				albinoAI.SetFollowBoy();
+			}
+			this.dudesAreFollowing = true;
+		}
+	}
+
+	// Token: 0x0600100C RID: 4108 RVA: 0x000983B0 File Offset: 0x000965B0
+	private void OnMindHatOff()
+	{
+		this.mindHatIsOn = false;
+	}
+
+	// Token: 0x0600100D RID: 4109 RVA: 0x000983BC File Offset: 0x000965BC
+	private void Update()
+	{
+	}
+
+	// Token: 0x04001D08 RID: 7432
+	public MindHatGroupController controller;
+
+	// Token: 0x04001D09 RID: 7433
+	private SignalIn dudesOutOfWater;
+
+	// Token: 0x04001D0A RID: 7434
+	private SignalIn mindHatOn;
+
+	// Token: 0x04001D0B RID: 7435
+	private SignalIn mindHatOff;
+
+	// Token: 0x04001D0C RID: 7436
+	private bool dudesAreOutOfWater;
+
+	// Token: 0x04001D0D RID: 7437
+	private bool mindHatIsOn;
+
+	// Token: 0x04001D0E RID: 7438
+	private bool dudesAreFollowing;
+}

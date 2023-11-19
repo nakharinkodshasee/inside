@@ -1,0 +1,57 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000493 RID: 1171
+public class JetCrateSaveTrigger : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001EC1 RID: 7873 RVA: 0x00107728 File Offset: 0x00105928
+	public bool PreAwake(int callcount)
+	{
+		this.jetCrateEnter = SignalOut.Create("jetCrateEnter", base.gameObject);
+		this.jetCrateExit = SignalOut.Create("jetCrateExit", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001EC2 RID: 7874 RVA: 0x00107764 File Offset: 0x00105964
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<JetCrate>())
+		{
+			if (this.ignoreThisJetCrate && coll.gameObject == this.ignoreThisJetCrate)
+			{
+				return;
+			}
+			this.jetCrateEnter.Signal();
+		}
+	}
+
+	// Token: 0x06001EC3 RID: 7875 RVA: 0x001077B4 File Offset: 0x001059B4
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<JetCrate>())
+		{
+			if (this.ignoreThisJetCrate && coll.gameObject == this.ignoreThisJetCrate)
+			{
+				return;
+			}
+			this.jetCrateExit.Signal();
+		}
+	}
+
+	// Token: 0x06001EC4 RID: 7876 RVA: 0x00107804 File Offset: 0x00105A04
+	private void Update()
+	{
+	}
+
+	// Token: 0x040038F6 RID: 14582
+	public GameObject newJetcrate;
+
+	// Token: 0x040038F7 RID: 14583
+	public GameObject ignoreThisJetCrate;
+
+	// Token: 0x040038F8 RID: 14584
+	private SignalOut jetCrateEnter;
+
+	// Token: 0x040038F9 RID: 14585
+	private SignalOut jetCrateExit;
+}

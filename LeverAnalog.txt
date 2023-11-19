@@ -1,0 +1,579 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001DF RID: 479
+public class LeverAnalog : Device, IPreAwake
+{
+	// Token: 0x06000E4E RID: 3662 RVA: 0x000888A8 File Offset: 0x00086AA8
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, null);
+		this.audioMoveStart = new AudioEventSimpleLocal("switch_leverAnalog_moveStart", this.akGameObj);
+		this.audioMoveStop = new AudioEventSimpleLocal("switch_leverAnalog_moveStop", this.akGameObj);
+		this.audioGrab = new AudioEventSimpleLocal("switch_leverAnalog_grab", this.akGameObj);
+		this.audioRelease = new AudioEventSimpleLocal("switch_leverAnalog_release", this.akGameObj);
+		this.audioRestart = new AudioEventSimpleLocal("switch_leverAnalog_restart", this.akGameObj);
+		this.audioMaxUp = new AudioEventSimpleLocal("switch_leverAnalog_maxUp", this.akGameObj);
+		this.audioMaxDown = new AudioEventSimpleLocal("switch_leverAnalog_maxDown", this.akGameObj);
+		this.audioCenter = new AudioEventSimpleLocal("switch_leverAnalog_center", this.akGameObj);
+	}
+
+	// Token: 0x06000E4F RID: 3663 RVA: 0x0008898C File Offset: 0x00086B8C
+	public bool PreAwake(int callcount)
+	{
+		this.grabbed = SignalOut.Create("grabbed", base.gameObject);
+		this.released = SignalOut.Create("released", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000E50 RID: 3664 RVA: 0x000889C8 File Offset: 0x00086BC8
+	protected override void Start()
+	{
+		this.OnPreProcess();
+		base.Start();
+		this.leverTransform = base.transform;
+		this.visualsAnim = this.visuals.GetComponent<Animation>();
+		this.animStick = this.visualsAnim["Linear"];
+		this.animStick.normalizedSpeed = 0f;
+		this.SetIdleState();
+		this.audioState = LeverAnalog.StateAudio.AudioStop;
+	}
+
+	// Token: 0x06000E51 RID: 3665 RVA: 0x00088A34 File Offset: 0x00086C34
+	private void SetIdleState()
+	{
+		this.SetHandleRotation(0f);
+		this.state = LeverAnalog.State.Idle;
+	}
+
+	// Token: 0x06000E52 RID: 3666 RVA: 0x00088A48 File Offset: 0x00086C48
+	private void IdleState()
+	{
+		if (this.releaseTimer > 0f)
+		{
+			this.releaseTimer -= Time.deltaTime;
+			return;
+		}
+		for (int i = 0; i < this.boysInside.Count; i++)
+		{
+			Boy boy = this.boysInside[i];
+			if (Device.GrabCheck(boy, true) && boy.facing != (float)this.forceGrabDir && boy.visualBoy.IsPoseFacing(-1f, this.grabAngle))
+			{
+				this.grabStunTimer = this.grabStunDelay;
+				this.SetGrabState(boy);
+				return;
+			}
+		}
+	}
+
+	// Token: 0x06000E53 RID: 3667 RVA: 0x00088AF0 File Offset: 0x00086CF0
+	private void SetGrabState(Boy boy)
+	{
+		if (this.boyGrabbing == null)
+		{
+			this.grabbed.Signal();
+		}
+		this.boyGrabbing = boy;
+		if (this.forceGrabDir != 0)
+		{
+			this.grabDir = this.forceGrabDir;
+		}
+		else if (this.boyGrabbing.transform.position.x + -0.2f * (float)this.dir + this.grabOffset * -this.boyGrabbing.facing > this.leverTransform.position.x)
+		{
+			this.grabDir = 1;
+			this.animHolder.rotation = Quaternion.Euler(0f, 180f, 0f);
+		}
+		else
+		{
+			this.grabDir = -1;
+			this.animHolder.rotation = Quaternion.Euler(0f, 0f, 0f);
+		}
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animBlend, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		Device.SetVoicePassive();
+		this.grabTimer = this.grabDelay;
+		this.state = LeverAnalog.State.Grab;
+	}
+
+	// Token: 0x06000E54 RID: 3668 RVA: 0x00088C10 File Offset: 0x00086E10
+	private void GrabState()
+	{
+		if (this.grabTimer > 0f)
+		{
+			this.grabTimer -= Time.deltaTime;
+			if (this.grabTimer <= 0f)
+			{
+				this.audioGrab.PostFast();
+			}
+		}
+		else
+		{
+			this.targetBlend = this.Input;
+		}
+		if (this.grabStunTimer > 0f)
+		{
+			this.grabStunTimer -= Time.deltaTime;
+			if (this.boyGrabbing.input.jump)
+			{
+				this.grabStunTimer = 0f;
+			}
+		}
+		BoyCustomAnimState boyCustomAnimState = this.boyGrabbing.state as BoyCustomAnimState;
+		if (boyCustomAnimState == null)
+		{
+			this.Release();
+			return;
+		}
+		if (boyCustomAnimState.anim != this.animBlend || (!this.boyGrabbing.input.rawAction && this.grabStunTimer <= 0f))
+		{
+			this.Release();
+			return;
+		}
+	}
+
+	// Token: 0x06000E55 RID: 3669 RVA: 0x00088D10 File Offset: 0x00086F10
+	private void FixedUpdate()
+	{
+		if (this.state == LeverAnalog.State.Grab)
+		{
+			this.GrabState();
+		}
+		else if (this.state == LeverAnalog.State.Idle)
+		{
+			this.IdleState();
+		}
+	}
+
+	// Token: 0x06000E56 RID: 3670 RVA: 0x00088D3C File Offset: 0x00086F3C
+	private void Update()
+	{
+		this.UnlockCheck();
+		this.UpdateAnimBlend();
+	}
+
+	// Token: 0x06000E57 RID: 3671 RVA: 0x00088D4C File Offset: 0x00086F4C
+	private void LateUpdate()
+	{
+		this.AnimStick(this.currentBlend);
+		this.animBlend.currentBlendValue = this.currentBlend;
+	}
+
+	// Token: 0x06000E58 RID: 3672 RVA: 0x00088D6C File Offset: 0x00086F6C
+	private void UpdateAnimBlend()
+	{
+		float num = this.targetBlend - this.currentBlend;
+		float num2 = num * Time.deltaTime * this.blendSpeed;
+		this.currentBlend += num2;
+		if (this.currentBlend * Mathf.Sign(num) > this.targetBlend * Mathf.Sign(num))
+		{
+			this.currentBlend = this.targetBlend;
+		}
+		this.DirectionAudioEvents();
+		this.MovementAudioEvents(num);
+		float value = Mathf.Abs(num2) * 250f;
+		SoundEngine.RTPCs.move.SetFast(value, this.akGameObj, 0f);
+		float value2 = (this.currentBlend + 1f) * 50f;
+		SoundEngine.RTPCs.position.SetFast(value2, this.akGameObj, 0f);
+	}
+
+	// Token: 0x06000E59 RID: 3673 RVA: 0x00088E28 File Offset: 0x00087028
+	private void SetAudioStopState()
+	{
+		this.audioMoveStop.PostFast();
+		if (this.boyGrabbing)
+		{
+			Device.SetVoicePassive();
+		}
+		this.moveStartTimer = this.audioMoveStartDelay;
+		this.audioState = LeverAnalog.StateAudio.AudioStop;
+	}
+
+	// Token: 0x06000E5A RID: 3674 RVA: 0x00088E6C File Offset: 0x0008706C
+	private void AudioStopState()
+	{
+		if (this.moveStartTimer > 0f)
+		{
+			this.moveStartTimer -= Time.deltaTime;
+			return;
+		}
+		float num = this.targetBlend - this.currentBlend;
+		bool flag = Mathf.Abs(num) > 0.015f;
+		if (flag)
+		{
+			this.SetAudioStartState();
+		}
+	}
+
+	// Token: 0x06000E5B RID: 3675 RVA: 0x00088EC4 File Offset: 0x000870C4
+	private void SetAudioStartState()
+	{
+		this.audioMoveStart.PostFast();
+		if (this.boyGrabbing)
+		{
+			Device.SetVoiceActive();
+		}
+		this.audioState = LeverAnalog.StateAudio.AudioStart;
+	}
+
+	// Token: 0x06000E5C RID: 3676 RVA: 0x00088EFC File Offset: 0x000870FC
+	private void AudioStartState()
+	{
+		float num = (this.targetBlend - this.currentBlend) * Time.deltaTime * 60f;
+		if (Mathf.Abs(num) <= 0.015f)
+		{
+			this.SetAudioStopState();
+			return;
+		}
+		if (this.audioRestartAllowed)
+		{
+			if (Mathf.Abs(num) >= this.audioRestartVelocity)
+			{
+				this.audioRestartAllowed = false;
+				this.audioRestart.PostFast();
+				return;
+			}
+		}
+		else if (Mathf.Abs(num) <= this.audioRestartReturn)
+		{
+			this.audioRestartAllowed = true;
+		}
+	}
+
+	// Token: 0x06000E5D RID: 3677 RVA: 0x00088F8C File Offset: 0x0008718C
+	private void MovementAudioEvents(float diff)
+	{
+		if (this.audioState == LeverAnalog.StateAudio.AudioStart)
+		{
+			this.AudioStartState();
+		}
+		else if (this.audioState == LeverAnalog.StateAudio.AudioStop)
+		{
+			this.AudioStopState();
+		}
+	}
+
+	// Token: 0x06000E5E RID: 3678 RVA: 0x00088FB8 File Offset: 0x000871B8
+	private void DirectionAudioEvents()
+	{
+		int num;
+		if (this.currentBlend > 0.95f)
+		{
+			num = 1;
+		}
+		else if (this.currentBlend < -0.95f)
+		{
+			num = -1;
+		}
+		else if (this.currentBlend < 0.05f && this.currentBlend > -0.05f)
+		{
+			num = 0;
+		}
+		else
+		{
+			num = -2;
+		}
+		if (num != this.previousNearDir && num != -2)
+		{
+			if (num == 1)
+			{
+				this.audioMaxUp.PostFast();
+				this.moveStopTimer = 0f;
+			}
+			else if (num == -1)
+			{
+				this.audioMaxDown.PostFast();
+				this.moveStopTimer = 0f;
+			}
+			else if (num == 0 && this.targetBlend == 0f)
+			{
+				this.audioCenter.PostFast();
+				this.moveStopTimer = 0f;
+			}
+		}
+		this.previousNearDir = num;
+	}
+
+	// Token: 0x06000E5F RID: 3679 RVA: 0x000890AC File Offset: 0x000872AC
+	public float GetTargetBlend()
+	{
+		return this.targetBlend;
+	}
+
+	// Token: 0x06000E60 RID: 3680 RVA: 0x000890B4 File Offset: 0x000872B4
+	private void UnlockCheck()
+	{
+		if (this.lockedDir == 0f)
+		{
+			return;
+		}
+		if (!this.boyGrabbing || this.InputAbs < 0.3f || this.lockedDir * this.InputSign == -1f)
+		{
+			this.lockedDir = 0f;
+		}
+	}
+
+	// Token: 0x06000E61 RID: 3681 RVA: 0x00089114 File Offset: 0x00087314
+	private void AnimStick(float p)
+	{
+		if (!this.animStick.enabled)
+		{
+			this.visualsAnim.CrossFade(this.animStick.name, 0.1f);
+		}
+		this.animStick.time = (p * -0.5f + 0.5f) * this.animStick.length;
+	}
+
+	// Token: 0x06000E62 RID: 3682 RVA: 0x00089170 File Offset: 0x00087370
+	private void SetHandleRotation(float angle)
+	{
+		if (this.visualsHandle != null)
+		{
+			this.visualsHandle.transform.localRotation = Quaternion.Euler(angle, 0f, 0f);
+		}
+	}
+
+	// Token: 0x17000051 RID: 81
+	// (get) Token: 0x06000E63 RID: 3683 RVA: 0x000891A4 File Offset: 0x000873A4
+	private float InputAbs
+	{
+		get
+		{
+			return (!this.horizontalLever) ? Mathf.Abs(this.boyGrabbing.input.stick.y) : Mathf.Abs(this.boyGrabbing.input.stick.x);
+		}
+	}
+
+	// Token: 0x17000052 RID: 82
+	// (get) Token: 0x06000E64 RID: 3684 RVA: 0x000891FC File Offset: 0x000873FC
+	private float InputSign
+	{
+		get
+		{
+			return (!this.horizontalLever) ? Mathf.Sign(this.boyGrabbing.input.stick.y) : Mathf.Sign(this.boyGrabbing.input.stick.x);
+		}
+	}
+
+	// Token: 0x17000053 RID: 83
+	// (get) Token: 0x06000E65 RID: 3685 RVA: 0x00089254 File Offset: 0x00087454
+	private float Input
+	{
+		get
+		{
+			return (!this.horizontalLever) ? this.boyGrabbing.input.stick.y : this.boyGrabbing.input.stick.x;
+		}
+	}
+
+	// Token: 0x06000E66 RID: 3686 RVA: 0x000892A4 File Offset: 0x000874A4
+	private void Release()
+	{
+		if (this.boyGrabbing && !this.boyGrabbing.isDead)
+		{
+			BoyUtils.ClearState(this.boyGrabbing, (this.grabTimer > 0f) ? 0.2f : 0.3f);
+			Device.SetVoiceNone();
+		}
+		if (this.grabTimer <= 0f)
+		{
+			this.audioRelease.PostFast();
+		}
+		this.releaseTimer = this.releaseDelay;
+		this.boyGrabbing = null;
+		this.targetBlend = 0f;
+		this.released.Signal();
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000E67 RID: 3687 RVA: 0x0008934C File Offset: 0x0008754C
+	private void OnUnlockPull()
+	{
+		this.lockedDir = 0f;
+	}
+
+	// Token: 0x040019AB RID: 6571
+	public AnimBlendNode animBlend;
+
+	// Token: 0x040019AC RID: 6572
+	public Transform animHolder;
+
+	// Token: 0x040019AD RID: 6573
+	public GameObject visuals;
+
+	// Token: 0x040019AE RID: 6574
+	public GameObject visualsHandle;
+
+	// Token: 0x040019AF RID: 6575
+	public float grabDelay = 0.21f;
+
+	// Token: 0x040019B0 RID: 6576
+	public float releaseDelay = 0.075f;
+
+	// Token: 0x040019B1 RID: 6577
+	public float blendSpeed = 10f;
+
+	// Token: 0x040019B2 RID: 6578
+	public int dir = 1;
+
+	// Token: 0x040019B3 RID: 6579
+	public int forceGrabDir;
+
+	// Token: 0x040019B4 RID: 6580
+	public float grabAngle = 50f;
+
+	// Token: 0x040019B5 RID: 6581
+	public bool horizontalLever = true;
+
+	// Token: 0x040019B6 RID: 6582
+	public float audioRestartVelocity = 0.65f;
+
+	// Token: 0x040019B7 RID: 6583
+	public float audioRestartReturn = 0.2f;
+
+	// Token: 0x040019B8 RID: 6584
+	public float audioMoveStartDelay = 0.12f;
+
+	// Token: 0x040019B9 RID: 6585
+	public float audioMoveSensitivity = 0.015f;
+
+	// Token: 0x040019BA RID: 6586
+	private bool audioRestartAllowed;
+
+	// Token: 0x040019BB RID: 6587
+	private bool pendingMoveStart;
+
+	// Token: 0x040019BC RID: 6588
+	private float moveStartTimer;
+
+	// Token: 0x040019BD RID: 6589
+	public bool debug;
+
+	// Token: 0x040019BE RID: 6590
+	private LeverAnalog.State state;
+
+	// Token: 0x040019BF RID: 6591
+	private LeverAnalog.StateAudio audioState;
+
+	// Token: 0x040019C0 RID: 6592
+	private Animation visualsAnim;
+
+	// Token: 0x040019C1 RID: 6593
+	private AnimationState animStick;
+
+	// Token: 0x040019C2 RID: 6594
+	private int grabDir;
+
+	// Token: 0x040019C3 RID: 6595
+	private float grabOffset = 0.1f;
+
+	// Token: 0x040019C4 RID: 6596
+	private float grabTimer;
+
+	// Token: 0x040019C5 RID: 6597
+	private float grabStunDelay = 0.15f;
+
+	// Token: 0x040019C6 RID: 6598
+	private float grabStunTimer;
+
+	// Token: 0x040019C7 RID: 6599
+	private float releaseTimer;
+
+	// Token: 0x040019C8 RID: 6600
+	private float lockedDir;
+
+	// Token: 0x040019C9 RID: 6601
+	public SignalOut grabbed;
+
+	// Token: 0x040019CA RID: 6602
+	public SignalOut released;
+
+	// Token: 0x040019CB RID: 6603
+	private float targetBlend;
+
+	// Token: 0x040019CC RID: 6604
+	private float currentBlend;
+
+	// Token: 0x040019CD RID: 6605
+	private int previousNearDir;
+
+	// Token: 0x040019CE RID: 6606
+	private bool previouslyMoving;
+
+	// Token: 0x040019CF RID: 6607
+	private float moveStopTimer;
+
+	// Token: 0x040019D0 RID: 6608
+	private Transform leverTransform;
+
+	// Token: 0x040019D1 RID: 6609
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioMoveStart;
+
+	// Token: 0x040019D2 RID: 6610
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioMoveStop;
+
+	// Token: 0x040019D3 RID: 6611
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioGrab;
+
+	// Token: 0x040019D4 RID: 6612
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioRelease;
+
+	// Token: 0x040019D5 RID: 6613
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioRestart;
+
+	// Token: 0x040019D6 RID: 6614
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioMaxUp;
+
+	// Token: 0x040019D7 RID: 6615
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioMaxDown;
+
+	// Token: 0x040019D8 RID: 6616
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioCenter;
+
+	// Token: 0x040019D9 RID: 6617
+	[SerializeField]
+	[HideInInspector]
+	private AkGameObj akGameObj;
+
+	// Token: 0x040019DA RID: 6618
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x020001E0 RID: 480
+	private enum State
+	{
+		// Token: 0x040019DC RID: 6620
+		None,
+		// Token: 0x040019DD RID: 6621
+		Idle,
+		// Token: 0x040019DE RID: 6622
+		Grab
+	}
+
+	// Token: 0x020001E1 RID: 481
+	private enum StateAudio
+	{
+		// Token: 0x040019E0 RID: 6624
+		None,
+		// Token: 0x040019E1 RID: 6625
+		AudioStop,
+		// Token: 0x040019E2 RID: 6626
+		AudioStart
+	}
+}

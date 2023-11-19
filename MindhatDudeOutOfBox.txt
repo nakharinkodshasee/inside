@@ -1,0 +1,137 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200040B RID: 1035
+public class MindhatDudeOutOfBox : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001B39 RID: 6969 RVA: 0x000EDC50 File Offset: 0x000EBE50
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.boxAnim.gameObject, this);
+		this.audioBoxOpen = new AudioEventSimpleLocal("env_city_mindhatWagon_boxOpenUp", akGameObj);
+		this.audioBoxFlatten = new AudioEventSimpleLocal("env_city_mindhatWagon_boxFlatten", akGameObj);
+	}
+
+	// Token: 0x06001B3A RID: 6970 RVA: 0x000EDCA4 File Offset: 0x000EBEA4
+	public bool PreAwake(int callcount)
+	{
+		this.inHat = SignalIn.Create("inHat", base.gameObject, new Action(this.DoOpen));
+		this.loadTrashed = SignalIn.Create("loadTrashed", base.gameObject, new Action(this.DoLoadTrashed));
+		this.releaseInput = SignalOut.Create("releaseInput", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001B3B RID: 6971 RVA: 0x000EDD0C File Offset: 0x000EBF0C
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.openUpAnim = this.boxAnim["OpenUp"];
+	}
+
+	// Token: 0x06001B3C RID: 6972 RVA: 0x000EDD2C File Offset: 0x000EBF2C
+	private void DoOpen()
+	{
+		if (this.isOpen)
+		{
+			return;
+		}
+		this.boxAnim.Play("OpenUp");
+		this.audioBoxOpen.PostFast();
+		this.isOpen = true;
+		this.inputLocked = true;
+		this.isActive = true;
+	}
+
+	// Token: 0x06001B3D RID: 6973 RVA: 0x000EDD78 File Offset: 0x000EBF78
+	private void DoLoadTrashed()
+	{
+		this.boxAnim.Play("LoadTrashed");
+		this.isOpen = true;
+		this.isTrashed = true;
+		this.inputLocked = true;
+		this.isActive = false;
+	}
+
+	// Token: 0x06001B3E RID: 6974 RVA: 0x000EDDA8 File Offset: 0x000EBFA8
+	private void Update()
+	{
+		if (!this.isActive)
+		{
+			return;
+		}
+		if (this.inputLocked && this.openUpAnim.normalizedTime > 0.2f)
+		{
+			this.inputLocked = false;
+			this.startPos = this.dudePrope.position;
+			this.releaseInput.Signal();
+		}
+		if (this.isOpen && !this.inputLocked && !this.isTrashed)
+		{
+			float magnitude = (this.startPos - this.dudePrope.position).magnitude;
+			if (magnitude > this.distToOpen)
+			{
+				this.isTrashed = true;
+				this.boxAnim.Play("Trash");
+				this.audioBoxFlatten.PostFast();
+				this.isActive = false;
+			}
+		}
+	}
+
+	// Token: 0x04003146 RID: 12614
+	public Animation boxAnim;
+
+	// Token: 0x04003147 RID: 12615
+	public float distToOpen;
+
+	// Token: 0x04003148 RID: 12616
+	public Transform dudePrope;
+
+	// Token: 0x04003149 RID: 12617
+	private bool isOpen;
+
+	// Token: 0x0400314A RID: 12618
+	private bool isTrashed;
+
+	// Token: 0x0400314B RID: 12619
+	private bool inputLocked;
+
+	// Token: 0x0400314C RID: 12620
+	private bool isActive;
+
+	// Token: 0x0400314D RID: 12621
+	private Vector3 startPos;
+
+	// Token: 0x0400314E RID: 12622
+	private SignalIn inHat;
+
+	// Token: 0x0400314F RID: 12623
+	private SignalIn loadTrashed;
+
+	// Token: 0x04003150 RID: 12624
+	private SignalOut releaseInput;
+
+	// Token: 0x04003151 RID: 12625
+	private AnimationState openUpAnim;
+
+	// Token: 0x04003152 RID: 12626
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioBoxOpen;
+
+	// Token: 0x04003153 RID: 12627
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioBoxFlatten;
+
+	// Token: 0x04003154 RID: 12628
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

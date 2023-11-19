@@ -1,0 +1,232 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000207 RID: 519
+public class MindHatReceiverPressurePlate : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x0600100F RID: 4111 RVA: 0x000983F8 File Offset: 0x000965F8
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioUp = new AudioEventSimpleLocal(this.audioPrefix + "_up", akGameObj);
+		this.audioDown = new AudioEventSimpleLocal(this.audioPrefix + "_down", akGameObj);
+	}
+
+	// Token: 0x06001010 RID: 4112 RVA: 0x00098460 File Offset: 0x00096660
+	public bool PreAwake(int callcount)
+	{
+		this.release = SignalOut.Create("release", base.gameObject);
+		this.press = SignalOut.Create("press", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001011 RID: 4113 RVA: 0x0009849C File Offset: 0x0009669C
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.trigger.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.trigger.exitTrigger.Register(this, ref this.triggerExitHandle);
+		this.state = MindHatReceiverPressurePlate.State.Released;
+	}
+
+	// Token: 0x06001012 RID: 4114 RVA: 0x000984DC File Offset: 0x000966DC
+	private void SetReleasedState()
+	{
+		if (this.anim)
+		{
+			this.anim.CrossFade(this.animRelease.name, 0.1f);
+		}
+		this.audioUp.PostFast();
+		this.release.Signal();
+		this.state = MindHatReceiverPressurePlate.State.Released;
+	}
+
+	// Token: 0x06001013 RID: 4115 RVA: 0x00098534 File Offset: 0x00096734
+	private void ReleasedState()
+	{
+		int i = 0;
+		int count = this.boysInside.Count;
+		while (i < count)
+		{
+			Boy boy = this.boysInside[i];
+			VisualBoyNode visualBoyNode = boy.visualBoy.state;
+			if (boy && !(visualBoyNode is VisualBoyCustomAnim) && (!boy.isMindControlledIdle || visualBoyNode is VisualBoyJump || visualBoyNode is VisualBoyLand))
+			{
+				if (!this.boysOnPlate.Contains(boy))
+				{
+					this.boysOnPlate.Add(boy);
+				}
+			}
+			i++;
+		}
+		if (this.boysOnPlate.Count > 0)
+		{
+			this.SetPressedState();
+		}
+	}
+
+	// Token: 0x06001014 RID: 4116 RVA: 0x000985E8 File Offset: 0x000967E8
+	private void SetPressedState()
+	{
+		if (this.anim)
+		{
+			this.anim.CrossFade(this.animPress.name, 0.1f);
+		}
+		this.audioDown.PostFast();
+		this.press.Signal();
+		this.state = MindHatReceiverPressurePlate.State.Pressed;
+	}
+
+	// Token: 0x06001015 RID: 4117 RVA: 0x00098640 File Offset: 0x00096840
+	private void PressedState()
+	{
+		int i = 0;
+		int count = this.boysOnPlate.Count;
+		while (i < count)
+		{
+			Boy boy = this.boysOnPlate[i];
+			if (boy && !(boy.visualBoy.state is VisualBoyCustomAnim) && !boy.isMindControlledIdle)
+			{
+				if (!this.boysInside.Contains(boy))
+				{
+					this.boysOnPlate.Remove(boy);
+				}
+			}
+			i++;
+		}
+		if (this.boysOnPlate.Count <= 0)
+		{
+			this.SetReleasedState();
+		}
+	}
+
+	// Token: 0x06001016 RID: 4118 RVA: 0x000986E0 File Offset: 0x000968E0
+	private void FixedUpdate()
+	{
+		if (this.state == MindHatReceiverPressurePlate.State.Pressed)
+		{
+			this.PressedState();
+		}
+		else if (this.state == MindHatReceiverPressurePlate.State.Released)
+		{
+			this.ReleasedState();
+		}
+	}
+
+	// Token: 0x06001017 RID: 4119 RVA: 0x0009870C File Offset: 0x0009690C
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.trigger.enterTrigger)
+		{
+			this.TriggerEnter(collider);
+		}
+		else if (sender == this.trigger.exitTrigger)
+		{
+			this.TriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06001018 RID: 4120 RVA: 0x00098748 File Offset: 0x00096948
+	private void TriggerEnter(Collider collider)
+	{
+		MindHatReceiverProbe component = collider.GetComponent<MindHatReceiverProbe>();
+		if (component)
+		{
+			Boy boy = component.boy;
+			if (!this.boysInside.Contains(boy))
+			{
+				this.boysInside.Add(boy);
+			}
+			if (!GameManager.IsPlaying() && !this.boysOnPlate.Contains(boy))
+			{
+				this.boysOnPlate.Add(boy);
+			}
+		}
+	}
+
+	// Token: 0x06001019 RID: 4121 RVA: 0x000987B4 File Offset: 0x000969B4
+	private void TriggerExit(Collider collider)
+	{
+		MindHatReceiverProbe component = collider.GetComponent<MindHatReceiverProbe>();
+		if (component)
+		{
+			Boy boy = component.boy;
+			if (this.boysInside.Contains(boy))
+			{
+				this.boysInside.Remove(boy);
+			}
+		}
+	}
+
+	// Token: 0x04001D0F RID: 7439
+	public Animation anim;
+
+	// Token: 0x04001D10 RID: 7440
+	public AnimationClip animRelease;
+
+	// Token: 0x04001D11 RID: 7441
+	public AnimationClip animPress;
+
+	// Token: 0x04001D12 RID: 7442
+	public CollisionEvents trigger;
+
+	// Token: 0x04001D13 RID: 7443
+	public MindHatDudeSpawner[] dudeSpawners;
+
+	// Token: 0x04001D14 RID: 7444
+	public string audioPrefix;
+
+	// Token: 0x04001D15 RID: 7445
+	private SignalOut release;
+
+	// Token: 0x04001D16 RID: 7446
+	private SignalOut press;
+
+	// Token: 0x04001D17 RID: 7447
+	private MindHatReceiverPressurePlate.State state;
+
+	// Token: 0x04001D18 RID: 7448
+	private List<Boy> boysInside = new List<Boy>();
+
+	// Token: 0x04001D19 RID: 7449
+	private List<Boy> boysOnPlate = new List<Boy>();
+
+	// Token: 0x04001D1A RID: 7450
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04001D1B RID: 7451
+	private int triggerExitHandle = -1;
+
+	// Token: 0x04001D1C RID: 7452
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioUp;
+
+	// Token: 0x04001D1D RID: 7453
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioDown;
+
+	// Token: 0x04001D1E RID: 7454
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x02000208 RID: 520
+	private enum State
+	{
+		// Token: 0x04001D20 RID: 7456
+		None,
+		// Token: 0x04001D21 RID: 7457
+		Pressed,
+		// Token: 0x04001D22 RID: 7458
+		Released
+	}
+}

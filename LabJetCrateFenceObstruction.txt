@@ -1,0 +1,217 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000499 RID: 1177
+public class LabJetCrateFenceObstruction : MonoBehaviour
+{
+	// Token: 0x06001ED4 RID: 7892 RVA: 0x00107B5C File Offset: 0x00105D5C
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy;
+		GameObject gameObject = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.labJetCrate).gameObject;
+		if (gameObject == null)
+		{
+			return;
+		}
+		this.jetCrateTransform = gameObject.transform;
+		this.obstruction = gameObject.GetComponent<BoyDepthObstruction>();
+		this.noGrab = gameObject.GetComponent<NoGrab>();
+		this.doorMaxDist = this.doorNearPos.transform.position.x - this.doorPos.transform.position.x - this.doorMinDist;
+	}
+
+	// Token: 0x06001ED5 RID: 7893 RVA: 0x00107BF4 File Offset: 0x00105DF4
+	private void OnDestroy()
+	{
+		if (this.obstruction)
+		{
+			this.obstruction.EnableObstruction();
+			this.obstruction.depthClimbdown = true;
+		}
+		if (this.noGrab)
+		{
+			this.noGrab.noGrabPlateau = false;
+		}
+	}
+
+	// Token: 0x06001ED6 RID: 7894 RVA: 0x00107C44 File Offset: 0x00105E44
+	private void FixedUpdate()
+	{
+		float num = this.jetCrateTransform.position.x - this.boxWidth;
+		bool flag = num < this.doorNearPos.position.x;
+		if (flag)
+		{
+			float x = this.boy.pos3.x;
+			float num2 = num - this.doorPos.position.x - this.doorMinDist;
+			BoyGrabState boyGrabState = this.boy.state as BoyGrabState;
+			float x2 = this.boy.velocity3.x;
+			if (x2 < -0.5f && num2 < 0.5f)
+			{
+				this.noGrab.noGrabPlateau = true;
+				this.obstruction.depthClimbdown = false;
+			}
+			else
+			{
+				this.noGrab.noGrabPlateau = false;
+				this.obstruction.depthClimbdown = true;
+			}
+			if (boyGrabState != null && this.previousGrabState == null)
+			{
+				if (num2 < this.grabDistOffset && x < num && !boyGrabState.depthGrab)
+				{
+					this.delayedGrab = true;
+				}
+				else
+				{
+					this.initiateGrab = true;
+				}
+			}
+			if (boyGrabState == null)
+			{
+				this.initiateGrab = false;
+				this.delayedGrab = false;
+			}
+			if (this.delayedGrab && num2 > this.grabDistOffset)
+			{
+				this.delayedGrab = false;
+				this.initiateGrab = true;
+			}
+			if (this.initiateGrab)
+			{
+				this.initiateGrab = false;
+				this.grabStartDepth = this.boy.pos3.z;
+				if (this.grabStartDepth >= -0.05f)
+				{
+					this.SetDefaultTransition();
+				}
+				else
+				{
+					this.previousDepth = this.grabStartDepth;
+					this.grabDepthFactor = this.grabStartDepth / (this.doorPos.position.x - x);
+				}
+			}
+			this.previousGrabState = boyGrabState;
+			if (boyGrabState != null && this.boy.input.rawAction && !this.delayedGrab)
+			{
+				if (x < num && !boyGrabState.depthGrab)
+				{
+					float boyDepth = this.doorPos.position.x - x;
+					this.SetBoyDepth(boyDepth);
+				}
+				if (x < this.doorPos.position.x)
+				{
+					this.SetDefaultTransition();
+				}
+			}
+			else
+			{
+				if (x < this.doorPos.position.x)
+				{
+					this.obstruction.DisableObstruction();
+				}
+				else
+				{
+					this.obstruction.EnableObstruction();
+				}
+				if (num2 > 0f && x < this.jetCrateTransform.position.x + this.boxWidth)
+				{
+					float num3 = 1f - num2 / this.doorMaxDist;
+					float num4 = this.maxDepthSlope * num3 + 1f;
+					this.boy.properties.climbDown.depthSlope = this.boy.properties.climbDown.defaultDepthSlope * num4;
+				}
+				else
+				{
+					this.boy.properties.climbDown.depthSlope = this.boy.properties.climbDown.defaultDepthSlope;
+				}
+			}
+		}
+		else if (this.previouslyNearDoor)
+		{
+			this.boy.properties.climbDown.depthSlope = this.boy.properties.climbDown.defaultDepthSlope;
+			this.obstruction.EnableObstruction();
+			this.previousGrabState = null;
+		}
+		this.previouslyNearDoor = flag;
+	}
+
+	// Token: 0x06001ED7 RID: 7895 RVA: 0x00107FE0 File Offset: 0x001061E0
+	private void SetDefaultTransition()
+	{
+		this.grabStartDepth = -0.9f;
+		this.grabDepthFactor = 0.4f;
+	}
+
+	// Token: 0x06001ED8 RID: 7896 RVA: 0x00107FF8 File Offset: 0x001061F8
+	private void SetBoyDepth(float boyDoorDist)
+	{
+		float num = boyDoorDist * this.grabDepthFactor;
+		if (num <= this.previousDepth)
+		{
+			this.grabStartDepth = num;
+			this.grabDepthFactor = this.grabStartDepth / boyDoorDist;
+		}
+		if (num < this.grabStartDepth)
+		{
+			num = this.grabStartDepth;
+		}
+		num = Mathf.Clamp(num, -1f, 0f);
+		this.boy.plane.posz = num;
+		this.previousDepth = num;
+	}
+
+	// Token: 0x0400390B RID: 14603
+	public Transform doorNearPos;
+
+	// Token: 0x0400390C RID: 14604
+	public Transform doorPos;
+
+	// Token: 0x0400390D RID: 14605
+	private Transform jetCrateTransform;
+
+	// Token: 0x0400390E RID: 14606
+	private BoyDepthObstruction obstruction;
+
+	// Token: 0x0400390F RID: 14607
+	private NoGrab noGrab;
+
+	// Token: 0x04003910 RID: 14608
+	private Boy boy;
+
+	// Token: 0x04003911 RID: 14609
+	private float boxWidth = 0.6f;
+
+	// Token: 0x04003912 RID: 14610
+	private float doorMinDist = 0.7f;
+
+	// Token: 0x04003913 RID: 14611
+	private float doorMaxDist;
+
+	// Token: 0x04003914 RID: 14612
+	private float maxDepthSlope = 6.5f;
+
+	// Token: 0x04003915 RID: 14613
+	private float grabDistOffset = 0.2f;
+
+	// Token: 0x04003916 RID: 14614
+	private BoyGrabState previousGrabState;
+
+	// Token: 0x04003917 RID: 14615
+	private float grabStartDepth;
+
+	// Token: 0x04003918 RID: 14616
+	private float grabDepthFactor;
+
+	// Token: 0x04003919 RID: 14617
+	private float previousDepth;
+
+	// Token: 0x0400391A RID: 14618
+	private bool delayedGrab;
+
+	// Token: 0x0400391B RID: 14619
+	private bool initiateGrab;
+
+	// Token: 0x0400391C RID: 14620
+	private bool waitForLanding;
+
+	// Token: 0x0400391D RID: 14621
+	private bool previouslyNearDoor;
+}

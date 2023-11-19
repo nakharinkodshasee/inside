@@ -1,0 +1,125 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004D6 RID: 1238
+public class MineExitAudioShift : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002070 RID: 8304 RVA: 0x00112428 File Offset: 0x00110628
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioEnterMusic = new AudioEventSimple("music_mines_forcePushIntro_enter");
+		this.audioEnterAmb = new AudioEventSimple("amb_sws_mines_forcePushIntro_enter");
+		this.audioDoorOpenMusic = new AudioEventSimple("music_mines_mineExit_doorOpen");
+		this.audioDoorOpenAmb = new AudioEventSimple("amb_sws_mines_mineExit_doorOpen");
+	}
+
+	// Token: 0x06002071 RID: 8305 RVA: 0x00112488 File Offset: 0x00110688
+	public bool PreAwake(int callcount)
+	{
+		this.boyAtDoor = SignalIn.Create("boyAtDoor", base.gameObject, delegate
+		{
+			this.boyIsAtDoor = true;
+		});
+		this.boyAwayFromDoor = SignalIn.Create("boyAwayFromDoor", base.gameObject, delegate
+		{
+			this.boyIsAtDoor = false;
+		});
+		this.onRightSide = SignalOut.Create("onRightSide", base.gameObject);
+		this.onLeftSide = SignalOut.Create("onLeftSide", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06002072 RID: 8306 RVA: 0x00112508 File Offset: 0x00110708
+	private void Awake()
+	{
+		this.OnPreProcess();
+		this.doorXpos = this.doorPos.position.x;
+	}
+
+	// Token: 0x06002073 RID: 8307 RVA: 0x00112534 File Offset: 0x00110734
+	private bool IsCamOnRightSide()
+	{
+		float x = Camera.main.transform.position.x;
+		return x >= this.doorXpos;
+	}
+
+	// Token: 0x06002074 RID: 8308 RVA: 0x00112568 File Offset: 0x00110768
+	private void Update()
+	{
+		if (this.boyIsAtDoor)
+		{
+			bool flag = this.IsCamOnRightSide();
+			if (flag && !this.camRightLastFrame)
+			{
+				this.onRightSide.Signal();
+				this.audioEnterMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+				this.audioEnterAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+			}
+			else if (!flag && this.camRightLastFrame)
+			{
+				this.onLeftSide.Signal();
+				this.audioDoorOpenMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+				this.audioDoorOpenAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+			}
+			this.camRightLastFrame = flag;
+		}
+	}
+
+	// Token: 0x04003C21 RID: 15393
+	public Transform doorPos;
+
+	// Token: 0x04003C22 RID: 15394
+	public RTPCSphere sphere;
+
+	// Token: 0x04003C23 RID: 15395
+	private SignalIn boyAtDoor;
+
+	// Token: 0x04003C24 RID: 15396
+	private SignalIn boyAwayFromDoor;
+
+	// Token: 0x04003C25 RID: 15397
+	private SignalOut onRightSide;
+
+	// Token: 0x04003C26 RID: 15398
+	private SignalOut onLeftSide;
+
+	// Token: 0x04003C27 RID: 15399
+	private bool boyIsAtDoor;
+
+	// Token: 0x04003C28 RID: 15400
+	private float doorXpos;
+
+	// Token: 0x04003C29 RID: 15401
+	private bool camRightLastFrame;
+
+	// Token: 0x04003C2A RID: 15402
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioEnterMusic;
+
+	// Token: 0x04003C2B RID: 15403
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioEnterAmb;
+
+	// Token: 0x04003C2C RID: 15404
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioDoorOpenMusic;
+
+	// Token: 0x04003C2D RID: 15405
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioDoorOpenAmb;
+
+	// Token: 0x04003C2E RID: 15406
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

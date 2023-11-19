@@ -1,0 +1,1603 @@
+using System;
+using SceneVerification;
+using UnityEngine;
+
+// Token: 0x020001DB RID: 475
+public class Lever : Device, IPreAwake
+{
+	// Token: 0x06000E1D RID: 3613 RVA: 0x000862D4 File Offset: 0x000844D4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, null);
+		this.audioGrab = new AudioEventSimpleLocal(this.audioPrefix + "_lever_grab", this.akGameObj);
+		this.audioGrabRunning = new AudioEventSimpleLocal(this.audioPrefix + "_lever_grabRunning", this.akGameObj);
+		this.audioRelease = new AudioEventSimpleLocal(this.audioPrefix + "_lever_release", this.akGameObj);
+		this.audioLeft = new AudioEventSimpleLocal(this.audioPrefix + "_lever_left", this.akGameObj);
+		this.audioRight = new AudioEventSimpleLocal(this.audioPrefix + "_lever_right", this.akGameObj);
+		this.audioCenter = new AudioEventSimpleLocal(this.audioPrefix + "_lever_center", this.akGameObj);
+		this.audioUp = new AudioEventSimpleLocal(this.audioPrefix + "_lever_up", this.akGameObj);
+		this.audioDown = new AudioEventSimpleLocal(this.audioPrefix + "_lever_down", this.akGameObj);
+		this.audioMoveStart = new AudioEventSimpleLocal(this.audioPrefix + "_lever_moveStart", this.akGameObj);
+		this.audioMoveStop = new AudioEventSimpleLocal(this.audioPrefix + "_lever_moveStop", this.akGameObj);
+		this.audioCompleteFraction = new AudioEventSimpleLocal(this.audioPrefix + "_lever_completeFraction", this.akGameObj);
+		this.audioReturnFraction = new AudioEventSimpleLocal(this.audioPrefix + "_lever_returnFraction", this.akGameObj);
+	}
+
+	// Token: 0x06000E1E RID: 3614 RVA: 0x00086494 File Offset: 0x00084694
+	public bool PreAwake(int callcount)
+	{
+		this.grabbed = SignalOut.Create("grabbed", base.gameObject);
+		this.released = SignalOut.Create("released", base.gameObject);
+		this.left = SignalOut.Create("left", base.gameObject);
+		this.right = SignalOut.Create("right", base.gameObject);
+		this.center = SignalOut.Create("center", base.gameObject);
+		this.loadLeft = SignalIn.Create("loadLeft", base.gameObject, new Action(this.OnLoadLeft));
+		this.loadRight = SignalIn.Create("loadRight", base.gameObject, new Action(this.OnLoadRight));
+		this.unlockPull = SignalIn.Create("unlockPull", base.gameObject, new Action(this.OnUnlockPull));
+		this.activate = SignalIn.Create("activate", base.gameObject, new Action(this.OnActivate));
+		this.deactivate = SignalIn.Create("deactivate", base.gameObject, new Action(this.OnDeactivate));
+		return true;
+	}
+
+	// Token: 0x06000E1F RID: 3615 RVA: 0x000865BC File Offset: 0x000847BC
+	protected override void Start()
+	{
+		this.OnPreProcess();
+		base.Start();
+		this.visualsAnim = this.visuals.GetComponent<Animation>();
+		this.animStick = this.visualsAnim["Linear"];
+		this.animStick.normalizedSpeed = 0f;
+		if (this.centerHandle && this.returnBack)
+		{
+			this.dir = 0;
+		}
+		this.currentHandleFraction = (float)this.dir;
+		this.previousNearDir = this.FractionToDirection(this.currentHandleFraction);
+		this.currentHandsUsed = this.handsUsed;
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000E20 RID: 3616 RVA: 0x0008665C File Offset: 0x0008485C
+	private void SetIdleState()
+	{
+		this.returnDir = Mathf.Sign((float)this.dir - this.currentHandleFraction);
+		this.grabTimer = this.grabDelay;
+		this.targetHandleFraction = (float)this.dir;
+		this.syncToHands = false;
+		this.state = Lever.State.Idle;
+	}
+
+	// Token: 0x06000E21 RID: 3617 RVA: 0x000866AC File Offset: 0x000848AC
+	private void IdleState()
+	{
+		if (this.disable || !this.isActive)
+		{
+			return;
+		}
+		if (this.verticalReleaseTimer > 0f)
+		{
+			this.verticalReleaseTimer -= Time.deltaTime;
+		}
+		if (this.releaseTimer > 0f)
+		{
+			this.releaseTimer -= Time.deltaTime;
+			return;
+		}
+		for (int i = 0; i < this.boysInside.Count; i++)
+		{
+			Boy boy = this.boysInside[i];
+			Vector3 pos = boy.pos3;
+			if (pos.z > 0f)
+			{
+				vector2f velocity = boy.velocity;
+				if (Mathf.Abs(velocity.x) > 0.1f && Mathf.Sign(base.transform.position.x - pos.x) == Mathf.Sign(velocity.x))
+				{
+					boy.plane.posz += -boy.plane.posz * Time.deltaTime * 3.25f * Mathf.Abs(velocity.x);
+				}
+			}
+			if (this.verticalReleaseTimer <= 0f || Mathf.Abs(boy.input.stick.x) <= 0.4f)
+			{
+				bool flag = Device.GrabCheck(boy, true) && !AlbinoGroupManager.mInstance.IsInAlbinoJumpState();
+				if (flag)
+				{
+					this.grabStunTimer = this.grabStunDelay;
+					this.SetGrabState(boy);
+					break;
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000E22 RID: 3618 RVA: 0x00086854 File Offset: 0x00084A54
+	private void SetGrabState(Boy boy)
+	{
+		this.currentAnim = null;
+		this.grabTransition = null;
+		this.lastChangeAngle = this.currentHandleFraction;
+		if (this.state != Lever.State.Pull)
+		{
+			this.currentHandsUsed = this.handsUsed;
+		}
+		if (this.boyGrabbing == null)
+		{
+			this.grabbed.Signal();
+		}
+		if (this.boyGrabbing != boy)
+		{
+			this.holdL = boy.visualBoy.actor.bones[boy.visualBoy.actor.GetBone("LeftWrist")].transform.GetChild(0);
+			this.holdR = boy.visualBoy.actor.bones[boy.visualBoy.actor.GetBone("RightWrist")].transform.GetChild(0);
+		}
+		this.boyGrabbing = boy;
+		if (this.forceGrabDir != 0)
+		{
+			this.grabDir = this.forceGrabDir;
+		}
+		else
+		{
+			if (this.blockedForceGrabDir != 0)
+			{
+				this.grabDir = this.blockedForceGrabDir;
+			}
+			else if (this.boyGrabbing.transform.position.x + -0.2f * (float)this.dir + this.grabOffset * -this.boyGrabbing.facing > base.transform.position.x)
+			{
+				this.grabDir = 1;
+			}
+			else
+			{
+				this.grabDir = -1;
+			}
+			if (this.grabDir == 1)
+			{
+				this.animHolder.localRotation = Quaternion.Euler(0f, 180f, 0f);
+			}
+			else
+			{
+				this.animHolder.localRotation = Quaternion.Euler(0f, 0f, 0f);
+			}
+		}
+		bool flag = Mathf.Sign(this.boyGrabbing.velocity.x) != (float)this.dir && this.grabDir == this.dir && Mathf.Abs(this.boyGrabbing.velocity.x) > 2f;
+		if (this.allowRunningPush && this.pushRun.animBoy != null && flag)
+		{
+			this.SetRunningPushState();
+		}
+		else
+		{
+			AnimClipNode grabAnim = this.GetGrabAnim();
+			BoyUtils.StartCustomAnim(this.boyGrabbing, grabAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			Device.SetVoicePassive();
+			this.state = Lever.State.Grab;
+		}
+	}
+
+	// Token: 0x06000E23 RID: 3619 RVA: 0x00086AE4 File Offset: 0x00084CE4
+	private void GrabState()
+	{
+		if (this.grabStunTimer > 0f)
+		{
+			this.grabStunTimer -= Time.deltaTime;
+			if (this.boyGrabbing.input.jump)
+			{
+				this.grabStunTimer = 0f;
+			}
+		}
+		if ((!this.boyGrabbing.input.rawAction && this.grabStunTimer <= 0f) || this.boyGrabbing.isDead)
+		{
+			this.Release();
+			return;
+		}
+		if (this.grabTransition)
+		{
+			BoyCustomAnimState boyCustomAnimState = this.boyGrabbing.state as BoyCustomAnimState;
+			if (boyCustomAnimState)
+			{
+				AnimClipNode animClipNode = boyCustomAnimState.anim as AnimClipNode;
+				if (animClipNode.frame / animClipNode.numFrames > 0.9f)
+				{
+					BoyUtils.StartCustomAnim(this.boyGrabbing, this.grabTransition, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+					this.grabTransition = null;
+				}
+			}
+		}
+		if (this.grabTimer > 0f)
+		{
+			this.grabTimer -= Time.deltaTime;
+			if (this.grabTimer <= 0f && this.useAudioGrab)
+			{
+				this.audioGrab.PostFast();
+			}
+		}
+		else
+		{
+			this.SetHandleRotation(-15f);
+			this.syncToHands = true;
+			if (this.centerHandle && !this.returnBack && Mathf.Abs((float)this.dir - this.currentHandleFraction) > 0.002f)
+			{
+				return;
+			}
+			if (this.InputAbs > 0.3f && this.InputSign != (float)this.dir)
+			{
+				this.SetPullState(false);
+			}
+		}
+	}
+
+	// Token: 0x06000E24 RID: 3620 RVA: 0x00086C9C File Offset: 0x00084E9C
+	private void SetRunningPushState()
+	{
+		this.Play(this.pushRun);
+		this.SetAudioMoveStart();
+		if (this.useAudioGrab)
+		{
+			this.audioGrabRunning.PostFast();
+		}
+		this.syncToHands = true;
+		this.pullDir = this.InputSign;
+		this.SwapDirection();
+		this.grabTimer = 0f;
+		Device.SetVoiceActive();
+		this.state = Lever.State.RunningPush;
+	}
+
+	// Token: 0x06000E25 RID: 3621 RVA: 0x00086D04 File Offset: 0x00084F04
+	private void RunningPushState()
+	{
+		float num = this.pushRun.animBoy.frame / this.pushRun.animBoy.numFrames;
+		if (num >= 0.08f)
+		{
+			this.SetHandleRotation(-15f);
+		}
+		if ((num >= 0.18f && !this.boyGrabbing.input.rawAction) || this.boyGrabbing.isDead)
+		{
+			this.Release();
+			return;
+		}
+		if (num >= 0.28f && this.InputAbs > 0.3f && this.InputSign != (float)this.dir)
+		{
+			this.SetGrabState(this.boyGrabbing);
+		}
+		if (num >= 0.92f)
+		{
+			this.SetGrabState(this.boyGrabbing);
+		}
+	}
+
+	// Token: 0x06000E26 RID: 3622 RVA: 0x00086DD0 File Offset: 0x00084FD0
+	private void SetPullState(bool fullMovement = false)
+	{
+		this.pullDir = this.InputSign;
+		if (this.lockDoublePull && this.dir == 0 && this.pullDir == this.lockedDir)
+		{
+			return;
+		}
+		Lever.AnimPair animPair = null;
+		if (this.centerHandle && !this.returnBack)
+		{
+			if (this.dir == 0)
+			{
+				animPair = ((this.pullDir != 1f) ? this.pushHalf : this.pullHalf);
+			}
+			else if (this.dir == 1)
+			{
+				animPair = this.pull;
+			}
+			else if (this.dir == -1)
+			{
+				animPair = this.push;
+			}
+		}
+		else if (this.pullDir * (float)(-(float)this.grabDir) == 1f)
+		{
+			animPair = ((!this.centerHandle || fullMovement) ? this.push : this.pushHalf);
+		}
+		else
+		{
+			animPair = ((!this.centerHandle || fullMovement) ? this.pull : this.pullHalf);
+		}
+		this.currentMove = animPair.animBoy;
+		this.Play(animPair);
+		this.SetAudioMoveStart();
+		this.UpdatePullSpeed();
+		Device.SetVoiceActive();
+		this.state = Lever.State.Pull;
+	}
+
+	// Token: 0x06000E27 RID: 3623 RVA: 0x00086F1C File Offset: 0x0008511C
+	private void PullState()
+	{
+		if ((!this.boyGrabbing.input.rawAction || this.boyGrabbing.isDead) && (this.horizontalLever || Mathf.Abs(this.boyGrabbing.input.stick.x) > 0.3f))
+		{
+			if (!this.horizontalLever)
+			{
+				this.forceTransitionToIdle = true;
+			}
+			this.Release();
+			return;
+		}
+		float num = this.currentMove.frame / this.currentMove.numFrames;
+		if (num >= this.completeFraction)
+		{
+			this.audioCompleteFraction.PostFast();
+			this.currentHandsUsed = this.handsUsed;
+			if (this.returnBack)
+			{
+				this.SetReturnState();
+			}
+			else
+			{
+				this.SetSwapState();
+			}
+			return;
+		}
+		if (this.InputAbs < 0.25f || this.InputSign != this.pullDir)
+		{
+			if (!this.horizontalLever)
+			{
+				this.forceTransitionToIdle = true;
+			}
+			this.SetGrabState(this.boyGrabbing);
+			return;
+		}
+	}
+
+	// Token: 0x06000E28 RID: 3624 RVA: 0x00087034 File Offset: 0x00085234
+	private void SetReturnState()
+	{
+		this.state = Lever.State.Return;
+	}
+
+	// Token: 0x06000E29 RID: 3625 RVA: 0x00087040 File Offset: 0x00085240
+	private void ReturnState()
+	{
+		if (!this.boyGrabbing.input.rawAction || this.boyGrabbing.isDead)
+		{
+			this.SetAudioMoveStart();
+			this.Release();
+			return;
+		}
+		bool flag = (!this.centerHandle) ? (this.InputSign == (float)this.dir) : (this.InputSign != Mathf.Sign(this.currentHandleFraction));
+		if (this.InputAbs < 0.25f || flag)
+		{
+			this.SetDragState();
+			return;
+		}
+		if (this.currentMove != null)
+		{
+			float num = this.currentMove.frame / this.currentMove.numFrames;
+			if (num >= 0.92f)
+			{
+				if (this.InputSign * (float)this.grabDir == 1f)
+				{
+					BoyUtils.StartCustomAnim(this.boyGrabbing, this.grabLeft, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				}
+				else
+				{
+					BoyUtils.StartCustomAnim(this.boyGrabbing, this.grabRight, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				}
+				this.currentMove = null;
+			}
+		}
+	}
+
+	// Token: 0x06000E2A RID: 3626 RVA: 0x0008715C File Offset: 0x0008535C
+	private void SetDragState()
+	{
+		Lever.AnimPair animPair;
+		if (Mathf.Sign(this.currentHandleFraction) * (float)this.grabDir == 1f)
+		{
+			animPair = this.returnPulled;
+		}
+		else
+		{
+			animPair = this.returnPushed;
+		}
+		this.currentReturn = animPair.animBoy;
+		this.Play(animPair);
+		this.SetAudioMoveStart();
+		this.sentCompleteEvent = true;
+		this.state = Lever.State.Drag;
+	}
+
+	// Token: 0x06000E2B RID: 3627 RVA: 0x000871C4 File Offset: 0x000853C4
+	private void DragState()
+	{
+		if (!this.boyGrabbing.input.rawAction || this.boyGrabbing.isDead)
+		{
+			this.Release();
+			return;
+		}
+		float num = this.currentReturn.frame / this.currentReturn.numFrames;
+		if (this.sentCompleteEvent && num >= 0.035f)
+		{
+			this.audioCompleteFraction.PostFast();
+			this.sentCompleteEvent = false;
+		}
+		if (this.InputAbs > 0.3f)
+		{
+			bool flag = (!this.centerHandle) ? (this.InputSign != (float)this.dir) : (this.InputSign == Mathf.Sign(this.currentHandleFraction));
+			if (flag)
+			{
+				if (num < 0.1f)
+				{
+					if (this.InputSign * (float)this.grabDir == 1f)
+					{
+						BoyUtils.StartCustomAnim(this.boyGrabbing, this.grabLeft, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+					}
+					else
+					{
+						BoyUtils.StartCustomAnim(this.boyGrabbing, this.grabRight, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+					}
+					this.currentMove = null;
+					this.SetReturnState();
+				}
+				else
+				{
+					this.SetPullState(false);
+				}
+				return;
+			}
+			if (this.centerHandle)
+			{
+				if (num > 0.1f)
+				{
+					this.SetPullState(false);
+				}
+				else
+				{
+					this.SetPullState(true);
+				}
+			}
+		}
+		if (num >= 0.92f)
+		{
+			this.SetGrabState(this.boyGrabbing);
+		}
+	}
+
+	// Token: 0x06000E2C RID: 3628 RVA: 0x00087340 File Offset: 0x00085540
+	private void SetSwapState()
+	{
+		this.SwapDirection();
+		this.state = Lever.State.Swap;
+	}
+
+	// Token: 0x06000E2D RID: 3629 RVA: 0x00087350 File Offset: 0x00085550
+	private void SwapState()
+	{
+		float num = this.currentMove.frame / this.currentMove.numFrames;
+		if ((!this.boyGrabbing.input.rawAction || this.boyGrabbing.isDead) && (this.horizontalLever || num >= this.returnFraction || Mathf.Abs(this.boyGrabbing.input.stick.x) > 0.3f))
+		{
+			this.Release();
+			return;
+		}
+		if (num >= this.returnFraction)
+		{
+			if (this.singleToggle)
+			{
+				this.Release();
+				return;
+			}
+			if (this.InputAbs > 0.3f && this.InputSign != (float)this.dir)
+			{
+				this.SetPullState(false);
+			}
+		}
+		if (num >= 0.92f)
+		{
+			this.SetGrabState(this.boyGrabbing);
+		}
+	}
+
+	// Token: 0x06000E2E RID: 3630 RVA: 0x00087440 File Offset: 0x00085640
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case Lever.State.Idle:
+			this.IdleState();
+			break;
+		case Lever.State.Pull:
+			this.PullState();
+			break;
+		case Lever.State.Grab:
+			this.GrabState();
+			break;
+		case Lever.State.RunningPush:
+			this.RunningPushState();
+			break;
+		case Lever.State.Return:
+			this.ReturnState();
+			break;
+		case Lever.State.Drag:
+			this.DragState();
+			break;
+		case Lever.State.Swap:
+			this.SwapState();
+			break;
+		}
+	}
+
+	// Token: 0x06000E2F RID: 3631 RVA: 0x000874CC File Offset: 0x000856CC
+	private void Update()
+	{
+		if (this.boyGrabbing != null && this.syncToHands)
+		{
+			this.currentHandleFraction = this.GetHandFraction();
+			this.currentHandleSpeed = this.currentHandleFraction - this.previousFraction;
+		}
+		else if (this.currentHandleFraction != this.targetHandleFraction)
+		{
+			this.currentHandleSpeed += this.returnDir * this.acceleration * Time.deltaTime;
+			float num = this.currentHandleSpeed * Time.deltaTime * this.speedFactor;
+			this.currentHandleFraction += Mathf.Clamp(num, -0.25f, 0.25f);
+			if (this.currentHandleFraction * Mathf.Sign(this.returnDir) >= this.targetHandleFraction * Mathf.Sign(this.returnDir))
+			{
+				if (this.handleBounce != 0f && Mathf.Abs(this.currentHandleSpeed) > 0.2f)
+				{
+					this.currentHandleFraction = this.targetHandleFraction - Mathf.Sign(this.currentHandleSpeed) * 0.01f;
+					this.currentHandleSpeed *= -this.handleBounce;
+				}
+				else
+				{
+					this.currentHandleFraction = this.targetHandleFraction;
+					this.currentHandleSpeed = 0f;
+				}
+			}
+		}
+		if (this.audioMoving)
+		{
+			if (this.state == Lever.State.Grab || this.state == Lever.State.Idle)
+			{
+				if (this.centerHandle && Mathf.Abs(this.currentHandleFraction) < this.audioMoveSensitivity)
+				{
+					this.SetAudioMoveStop();
+				}
+				else if (Mathf.Abs(this.currentHandleFraction) >= 1f - this.audioMoveSensitivity && Mathf.Sign(this.currentHandleFraction) == (float)this.dir)
+				{
+					this.SetAudioMoveStop();
+				}
+			}
+			else if (this.state == Lever.State.Return)
+			{
+				bool flag = Mathf.Abs(this.currentHandleFraction) >= 1f - this.audioMoveSensitivity;
+				if (flag && Mathf.Sign(this.currentHandleFraction) != (float)this.dir)
+				{
+					this.SetAudioMoveStop();
+				}
+			}
+		}
+		if (this.currentHandleSpeed != this.previousHandleSpeed)
+		{
+			SoundEngine.RTPCs.move.SetFast(Mathf.Abs(this.currentHandleSpeed) * 200f, this.akGameObj, 0f);
+		}
+		if ((this.currentAnim == null || this.currentAnim.animDevice == null) && (this.currentHandleFraction != this.previousFraction || this.forceTransitionToIdle))
+		{
+			this.forceTransitionToIdle = false;
+			this.AnimStick(this.currentHandleFraction);
+		}
+		if (this.currentHandleFraction > 0.9f)
+		{
+			this.SentSignal(this.right);
+		}
+		else if (this.currentHandleFraction < -0.9f)
+		{
+			this.SentSignal(this.left);
+		}
+		else if (this.returnBack)
+		{
+			if (Mathf.Abs(this.currentHandleFraction) <= 0.9f)
+			{
+				this.SentSignal(this.center);
+			}
+		}
+		else if (this.centerHandle && Mathf.Abs(this.currentHandleFraction) <= 0.1f)
+		{
+			this.SentSignal(this.center);
+		}
+		this.DirectionAudioEvents();
+		float num2 = (this.currentHandleSpeed != 0f) ? Mathf.Sign(this.currentHandleSpeed) : 0f;
+		float num3 = (this.previousHandleSpeed != 0f) ? Mathf.Sign(this.previousHandleSpeed) : 0f;
+		if (num2 != num3)
+		{
+			this.lastChangeAngle = this.currentHandleFraction;
+		}
+		this.UnlockCheck();
+		this.previousHandleSpeed = this.currentHandleSpeed;
+		this.previousFraction = this.currentHandleFraction;
+	}
+
+	// Token: 0x06000E30 RID: 3632 RVA: 0x0008789C File Offset: 0x00085A9C
+	private void UnlockCheck()
+	{
+		if (this.lockedDir == 0f)
+		{
+			return;
+		}
+		if (!this.boyGrabbing || this.InputAbs < 0.3f || this.lockedDir * this.InputSign == -1f)
+		{
+			this.lockedDir = 0f;
+		}
+	}
+
+	// Token: 0x06000E31 RID: 3633 RVA: 0x000878FC File Offset: 0x00085AFC
+	public void SetDisable(bool v)
+	{
+		this.disable = v;
+	}
+
+	// Token: 0x06000E32 RID: 3634 RVA: 0x00087908 File Offset: 0x00085B08
+	private int FractionToDirection(float fraction)
+	{
+		if (fraction > 0.9f)
+		{
+			return 1;
+		}
+		if (fraction < -0.9f)
+		{
+			return -1;
+		}
+		if (fraction < 0.1f && fraction > -0.1f)
+		{
+			return 0;
+		}
+		return -2;
+	}
+
+	// Token: 0x06000E33 RID: 3635 RVA: 0x0008794C File Offset: 0x00085B4C
+	private void DirectionAudioEvents()
+	{
+		int num = this.FractionToDirection(this.currentHandleFraction);
+		if (this.audioLoadDelay >= 0f)
+		{
+			this.audioLoadDelay -= Time.deltaTime;
+		}
+		bool flag = this.audioLoadDelay < 0f;
+		if (flag && num != this.previousNearDir && num != -2)
+		{
+			if (num == 0 && this.centerHandle)
+			{
+				this.SetAudioImpactSize();
+				this.audioCenter.PostFast();
+			}
+			else if (num == -1)
+			{
+				this.SetAudioImpactSize();
+				if (this.horizontalLever)
+				{
+					this.audioLeft.PostFast();
+				}
+				else
+				{
+					this.audioDown.PostFast();
+				}
+			}
+			else if (num == 1)
+			{
+				this.SetAudioImpactSize();
+				if (this.horizontalLever)
+				{
+					this.audioRight.PostFast();
+				}
+				else
+				{
+					this.audioUp.PostFast();
+				}
+			}
+		}
+		this.previousNearDir = num;
+	}
+
+	// Token: 0x06000E34 RID: 3636 RVA: 0x00087A50 File Offset: 0x00085C50
+	private void SetAudioImpactSize()
+	{
+		float num = Mathf.Abs(this.lastChangeAngle - this.currentHandleFraction);
+		num = Mathf.Round(num * 50f);
+		SoundEngine.RTPCs.phyImpact.SetFast(num, this.akGameObj, 0f);
+		this.SetAudioMoveStop();
+	}
+
+	// Token: 0x06000E35 RID: 3637 RVA: 0x00087A9C File Offset: 0x00085C9C
+	private void SentSignal(SignalOut s)
+	{
+		int num = -2;
+		if (s == this.center)
+		{
+			num = 0;
+		}
+		else if (s == this.left)
+		{
+			num = -1;
+		}
+		else if (s == this.right)
+		{
+			num = 1;
+		}
+		if (num != this.lastSignal)
+		{
+			if (this.lastSignal != -2)
+			{
+				s.Signal();
+				if (this.rumble != 0f)
+				{
+					RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, this.rumble, -1f, 0, 0f);
+				}
+			}
+			this.lastSignal = num;
+		}
+	}
+
+	// Token: 0x06000E36 RID: 3638 RVA: 0x00087B34 File Offset: 0x00085D34
+	private void SwapDirection()
+	{
+		this.lockedDir = this.pullDir;
+		if (this.centerHandle && !this.returnBack)
+		{
+			this.dir += (int)this.pullDir;
+		}
+		else
+		{
+			this.dir = (int)this.pullDir;
+		}
+		if (this.singleToggle)
+		{
+			this.disable = true;
+		}
+	}
+
+	// Token: 0x06000E37 RID: 3639 RVA: 0x00087B9C File Offset: 0x00085D9C
+	private void AnimStick(float p)
+	{
+		if (!this.animStick.enabled)
+		{
+			this.visualsAnim.CrossFade(this.animStick.name, 0.1f);
+		}
+		this.animStick.time = (p * -0.5f + 0.5f) * this.animStick.length;
+	}
+
+	// Token: 0x06000E38 RID: 3640 RVA: 0x00087BF8 File Offset: 0x00085DF8
+	private void SetHandleRotation(float angle)
+	{
+		if (this.visualsHandle != null)
+		{
+			this.visualsHandle.transform.localRotation = Quaternion.Euler(angle, 0f, 0f);
+		}
+	}
+
+	// Token: 0x1700004E RID: 78
+	// (get) Token: 0x06000E39 RID: 3641 RVA: 0x00087C2C File Offset: 0x00085E2C
+	private float InputAbs
+	{
+		get
+		{
+			return (!this.horizontalLever) ? Mathf.Abs(this.boyGrabbing.input.stick.y) : Mathf.Abs(this.boyGrabbing.input.stick.x);
+		}
+	}
+
+	// Token: 0x1700004F RID: 79
+	// (get) Token: 0x06000E3A RID: 3642 RVA: 0x00087C84 File Offset: 0x00085E84
+	private float InputSign
+	{
+		get
+		{
+			return (!this.horizontalLever) ? Mathf.Sign(this.boyGrabbing.input.stick.y) : Mathf.Sign(this.boyGrabbing.input.stick.x);
+		}
+	}
+
+	// Token: 0x17000050 RID: 80
+	// (get) Token: 0x06000E3B RID: 3643 RVA: 0x00087CDC File Offset: 0x00085EDC
+	private float Input
+	{
+		get
+		{
+			return (!this.horizontalLever) ? this.boyGrabbing.input.stick.y : this.boyGrabbing.input.stick.x;
+		}
+	}
+
+	// Token: 0x06000E3C RID: 3644 RVA: 0x00087D2C File Offset: 0x00085F2C
+	private AnimClipNode GetGrabAnim()
+	{
+		AnimClipNode animClipNode = null;
+		AnimClipNode result;
+		if (this.dir == 0)
+		{
+			result = this.grabCenter;
+		}
+		else if (this.dir * this.grabDir == 1)
+		{
+			result = this.grabLeft;
+		}
+		else
+		{
+			result = this.grabRight;
+		}
+		if (this.state == Lever.State.Idle)
+		{
+			float x = base.transform.position.x;
+			bool flag;
+			if (this.forceGrabDir == 0)
+			{
+				flag = (this.boyGrabbing.transform.position.x + -0.2f * (float)this.dir + this.grabOffset * -this.boyGrabbing.facing > x);
+			}
+			else
+			{
+				flag = (this.boyGrabbing.pos3.x + this.grabOffset * -this.boyGrabbing.facing > x);
+			}
+			if (this.dir == 0)
+			{
+				animClipNode = ((!flag) ? this.toGrabCenter.animBoy : this.toGrabCenterMirror.animBoy);
+			}
+			else if (this.dir * this.grabDir == 1)
+			{
+				animClipNode = ((!flag) ? this.toGrabLeft.animBoy : this.toGrabLeftMirror.animBoy);
+			}
+			else
+			{
+				animClipNode = ((!flag) ? this.toGrabRight.animBoy : this.toGrabRightMirror.animBoy);
+			}
+			float num = this.boyGrabbing.pos.x - x;
+			if (this.useFarGrab && Mathf.Abs(num) > 0.2f)
+			{
+				if (Mathf.Sign(num) == -1f)
+				{
+					if (this.dir == 1)
+					{
+						if (this.boyGrabbing.facing == -1f)
+						{
+							animClipNode = this.toGrabLeftFarTurn;
+							this.grabTimer = this.grabDelayLeftFarTurn;
+						}
+						else
+						{
+							animClipNode = this.toGrabLeftFar;
+							this.grabTimer = this.grabDelayLeftFar;
+						}
+					}
+					else if (this.boyGrabbing.facing == -1f)
+					{
+						animClipNode = this.toGrabRightFarTurn;
+						this.grabTimer = this.grabDelayRightFarTurn;
+					}
+					else
+					{
+						animClipNode = this.toGrabRightFar;
+						this.grabTimer = this.grabDelayRightFar;
+					}
+				}
+				else if (this.dir == 1)
+				{
+					this.currentHandsUsed = Lever.HandsUsed.Right;
+					if (this.boyGrabbing.facing == -1f)
+					{
+						animClipNode = this.toGrabLeftFarMirror;
+						this.grabTimer = this.grabDelayLeftFar;
+					}
+					else
+					{
+						animClipNode = this.toGrabLeftFarTurnMirror;
+						this.grabTimer = this.grabDelayLeftFarTurn;
+					}
+				}
+				else if (this.boyGrabbing.facing == -1f)
+				{
+					animClipNode = this.toGrabRightFarMirror;
+					this.grabTimer = this.grabDelayRightFar;
+				}
+				else
+				{
+					animClipNode = this.toGrabRightFarTurnMirror;
+					this.grabTimer = this.grabDelayRightFarTurn;
+				}
+			}
+		}
+		if (animClipNode == null)
+		{
+			return result;
+		}
+		this.grabTransition = result;
+		return animClipNode;
+	}
+
+	// Token: 0x06000E3D RID: 3645 RVA: 0x00088030 File Offset: 0x00086230
+	public void AdjustPullSpeed(float factor)
+	{
+		this.pullSpeedFactor = factor;
+		if (this.state == Lever.State.Pull)
+		{
+			this.UpdatePullSpeed();
+		}
+	}
+
+	// Token: 0x06000E3E RID: 3646 RVA: 0x0008804C File Offset: 0x0008624C
+	private void UpdatePullSpeed()
+	{
+		AnimClipNode animBoy = this.currentAnim.animBoy;
+		if (animBoy)
+		{
+			animBoy.fps = animBoy.defaultfps * this.pullSpeedFactor;
+		}
+		if (this.currentAnim.animDevice)
+		{
+			AnimationState animationState = this.visualsAnim[this.currentAnim.animDevice.name];
+			if (animationState)
+			{
+				animationState.speed = this.pullSpeedFactor;
+			}
+		}
+	}
+
+	// Token: 0x06000E3F RID: 3647 RVA: 0x000880CC File Offset: 0x000862CC
+	private float GetHandFraction()
+	{
+		Vector3 vector;
+		if (this.currentHandsUsed == Lever.HandsUsed.Both)
+		{
+			vector = (this.holdL.transform.position + this.holdR.transform.position) / 2f;
+		}
+		else if (this.currentHandsUsed == Lever.HandsUsed.Left)
+		{
+			vector = this.holdL.transform.position;
+		}
+		else
+		{
+			vector = this.holdR.transform.position;
+		}
+		Debug.DrawLine(vector, vector + ((!this.horizontalLever) ? Vector3.right : Vector3.up));
+		Vector3 vector2 = this.handlePivot.InverseTransformPoint(vector);
+		float num = (!this.horizontalLever) ? vector2.y : vector2.x;
+		bool flag = num < 0f;
+		float num2;
+		if (this.grabDir == 1)
+		{
+			num2 = ((!flag) ? this.handSlopeLeft : this.handSlopeRight);
+		}
+		else
+		{
+			num2 = ((!flag) ? this.handSlopeRight : this.handSlopeLeft);
+		}
+		float num3 = num / num2;
+		if (Mathf.Sign(this.currentHandleSpeed) == 1f)
+		{
+			if (this.handSlopeCurveLeft.length > 1)
+			{
+				num3 = this.handSlopeCurveLeft.Evaluate(num);
+			}
+		}
+		else if (this.handSlopeCurveRight.length > 1)
+		{
+			num3 = this.handSlopeCurveRight.Evaluate(num);
+		}
+		return Mathf.Clamp(num3, -1f, 1f);
+	}
+
+	// Token: 0x06000E40 RID: 3648 RVA: 0x00088260 File Offset: 0x00086460
+	private void Release()
+	{
+		if (!ScriptGlobals.boy.isDead)
+		{
+			BoyCustomAnimState boyCustomAnimState = this.boyGrabbing.state as BoyCustomAnimState;
+			AnimClipNode animClipNode = null;
+			if (boyCustomAnimState != null)
+			{
+				AnimNode anim = boyCustomAnimState.anim;
+				if (this.pullToIdle != null)
+				{
+					bool flag = anim == this.toGrabLeft.animBoy;
+					if (anim == this.grabLeft || anim == this.pull.animBoy || anim == this.returnPushed.animBoy || anim == this.pullHalf.animBoy || anim == this.pushRun.animBoy || flag)
+					{
+						animClipNode = this.pullToIdle.animBoy;
+					}
+					if (anim == this.toGrabLeftFar || anim == this.toGrabLeftFarTurn || anim == this.toGrabLeftFarMirror || anim == this.toGrabLeftFarTurnMirror)
+					{
+						animClipNode = this.pullToIdle.animBoy;
+					}
+				}
+				if (this.pushToIdle != null)
+				{
+					bool flag2 = anim == this.toGrabRight.animBoy;
+					if (anim == this.grabRight || anim == this.push.animBoy || anim == this.returnPulled.animBoy || anim == this.pushHalf.animBoy)
+					{
+						animClipNode = this.pushToIdle.animBoy;
+					}
+					if (anim == this.toGrabRightFarTurn || (anim == this.toGrabRightFar && this.toGrabRightFar.frame > 10f) || anim == this.toGrabRightFarTurnMirror || (anim == this.toGrabRightFarMirror && this.toGrabRightFarMirror.frame > 10f))
+					{
+						animClipNode = this.pushToIdle.animBoy;
+					}
+				}
+			}
+			if (animClipNode)
+			{
+				if (this.forceGrabDir == 0)
+				{
+					if (this.boyGrabbing.transform.position.x > base.transform.position.x)
+					{
+						this.animHolder.localRotation = Quaternion.Euler(0f, 180f, 0f);
+					}
+					else
+					{
+						this.animHolder.localRotation = Quaternion.Euler(0f, 0f, 0f);
+					}
+				}
+				BoyUtils.StartCustomAnim(this.boyGrabbing, animClipNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			}
+			else
+			{
+				BoyUtils.ClearState(this.boyGrabbing, -1f);
+			}
+		}
+		if (this.grabTimer <= 0f && this.useAudioGrab)
+		{
+			this.audioRelease.PostFast();
+		}
+		Device.SetVoiceNone();
+		this.boyGrabbing = null;
+		this.currentAnim = null;
+		if (!this.horizontalLever)
+		{
+			this.verticalReleaseTimer = this.verticalReleaseDelay;
+		}
+		this.releaseTimer = this.releaseDelay;
+		this.released.Signal();
+		this.SetHandleRotation(0f);
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000E41 RID: 3649 RVA: 0x000885A8 File Offset: 0x000867A8
+	private void SetAudioMoveStop()
+	{
+		if (this.audioMoving)
+		{
+			this.audioMoveStop.PostFast();
+			this.audioMoving = false;
+		}
+	}
+
+	// Token: 0x06000E42 RID: 3650 RVA: 0x000885C8 File Offset: 0x000867C8
+	private void SetAudioMoveStart()
+	{
+		if (!this.audioMoving)
+		{
+			this.audioMoveStart.PostFast();
+			this.audioMoving = true;
+		}
+	}
+
+	// Token: 0x06000E43 RID: 3651 RVA: 0x000885E8 File Offset: 0x000867E8
+	private void OnDeactivate()
+	{
+		this.isActive = false;
+	}
+
+	// Token: 0x06000E44 RID: 3652 RVA: 0x000885F4 File Offset: 0x000867F4
+	private void OnActivate()
+	{
+		this.isActive = true;
+	}
+
+	// Token: 0x06000E45 RID: 3653 RVA: 0x00088600 File Offset: 0x00086800
+	private void OnUnlockPull()
+	{
+		this.lockedDir = 0f;
+	}
+
+	// Token: 0x06000E46 RID: 3654 RVA: 0x00088610 File Offset: 0x00086810
+	private void OnLoadLeft()
+	{
+		this.OnLoad(-1);
+	}
+
+	// Token: 0x06000E47 RID: 3655 RVA: 0x0008861C File Offset: 0x0008681C
+	private void OnLoadRight()
+	{
+		this.OnLoad(1);
+	}
+
+	// Token: 0x06000E48 RID: 3656 RVA: 0x00088628 File Offset: 0x00086828
+	private void OnLoad(int d)
+	{
+		if (this.returnBack)
+		{
+			return;
+		}
+		this.lastSignal = -2;
+		if (this.singleToggle && d != this.dir)
+		{
+			this.disable = true;
+		}
+		this.dir = d;
+		this.currentHandleFraction = (this.targetHandleFraction = (float)d);
+	}
+
+	// Token: 0x06000E49 RID: 3657 RVA: 0x00088684 File Offset: 0x00086884
+	private void Play(Lever.AnimPair pair)
+	{
+		if (pair.animBoy && this.boyGrabbing)
+		{
+			BoyUtils.StartCustomAnim(this.boyGrabbing, pair.animBoy, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		if (pair.animDevice)
+		{
+			AnimationState animationState = this.visualsAnim[pair.animDevice.name];
+			animationState.time = 0.012f;
+			this.visualsAnim.Play(pair.animDevice.name);
+		}
+		this.currentAnim = pair;
+	}
+
+	// Token: 0x06000E4A RID: 3658 RVA: 0x0008871C File Offset: 0x0008691C
+	public bool GrabCheck()
+	{
+		return this.state != Lever.State.Idle && this.state != Lever.State.None && !this.disable;
+	}
+
+	// Token: 0x06000E4B RID: 3659 RVA: 0x00088744 File Offset: 0x00086944
+	[Verify("Game Logic/Lever", "Check if audio prefix match subscene and area")]
+	private void VerifyLever(Form form)
+	{
+		string findPrefix = "env";
+		FolderBase folderInParents = FolderUtilities.GetFolderInParents(base.gameObject, FolderTypes.Area);
+		if (folderInParents)
+		{
+			findPrefix = findPrefix + "_" + folderInParents.FolderName.Substring(2);
+		}
+		FolderBase folderInParents2 = FolderUtilities.GetFolderInParents(base.gameObject, FolderTypes.Puzzle);
+		if (folderInParents2)
+		{
+			findPrefix = findPrefix + "_" + folderInParents2.FolderName.Substring(1);
+		}
+		if (findPrefix != this.audioPrefix)
+		{
+			form.ReportInformation(this, "Audio prefix does not match subscene and area", "replace prefix", delegate(Object x)
+			{
+				this.audioPrefix = findPrefix;
+			});
+		}
+	}
+
+	// Token: 0x04001921 RID: 6433
+	[Header("----- Animations -----")]
+	public AnimClipNode grabCenter;
+
+	// Token: 0x04001922 RID: 6434
+	public AnimClipNode grabRight;
+
+	// Token: 0x04001923 RID: 6435
+	public AnimClipNode grabLeft;
+
+	// Token: 0x04001924 RID: 6436
+	public Lever.AnimPair pull;
+
+	// Token: 0x04001925 RID: 6437
+	public Lever.AnimPair pullHalf;
+
+	// Token: 0x04001926 RID: 6438
+	public Lever.AnimPair pullToIdle;
+
+	// Token: 0x04001927 RID: 6439
+	public Lever.AnimPair push;
+
+	// Token: 0x04001928 RID: 6440
+	public Lever.AnimPair pushHalf;
+
+	// Token: 0x04001929 RID: 6441
+	public Lever.AnimPair pushToIdle;
+
+	// Token: 0x0400192A RID: 6442
+	public Lever.AnimPair pushRun;
+
+	// Token: 0x0400192B RID: 6443
+	public Lever.AnimPair returnPulled;
+
+	// Token: 0x0400192C RID: 6444
+	public Lever.AnimPair returnPushed;
+
+	// Token: 0x0400192D RID: 6445
+	[Header("----- Grab Animations -----")]
+	public Lever.AnimPair toGrabLeftMirror;
+
+	// Token: 0x0400192E RID: 6446
+	public Lever.AnimPair toGrabCenterMirror;
+
+	// Token: 0x0400192F RID: 6447
+	public Lever.AnimPair toGrabRightMirror;
+
+	// Token: 0x04001930 RID: 6448
+	public Lever.AnimPair toGrabLeft;
+
+	// Token: 0x04001931 RID: 6449
+	public Lever.AnimPair toGrabCenter;
+
+	// Token: 0x04001932 RID: 6450
+	public Lever.AnimPair toGrabRight;
+
+	// Token: 0x04001933 RID: 6451
+	[Header("----- Far Grab -----")]
+	public bool useFarGrab;
+
+	// Token: 0x04001934 RID: 6452
+	public AnimClipNode toGrabLeftFar;
+
+	// Token: 0x04001935 RID: 6453
+	public AnimClipNode toGrabLeftFarTurn;
+
+	// Token: 0x04001936 RID: 6454
+	public AnimClipNode toGrabRightFar;
+
+	// Token: 0x04001937 RID: 6455
+	public AnimClipNode toGrabRightFarTurn;
+
+	// Token: 0x04001938 RID: 6456
+	public AnimClipNode toGrabLeftFarMirror;
+
+	// Token: 0x04001939 RID: 6457
+	public AnimClipNode toGrabLeftFarTurnMirror;
+
+	// Token: 0x0400193A RID: 6458
+	public AnimClipNode toGrabRightFarMirror;
+
+	// Token: 0x0400193B RID: 6459
+	public AnimClipNode toGrabRightFarTurnMirror;
+
+	// Token: 0x0400193C RID: 6460
+	public float grabDelayLeftFar = 0.35f;
+
+	// Token: 0x0400193D RID: 6461
+	public float grabDelayLeftFarTurn = 0.55f;
+
+	// Token: 0x0400193E RID: 6462
+	public float grabDelayRightFar = 0.2f;
+
+	// Token: 0x0400193F RID: 6463
+	public float grabDelayRightFarTurn = 0.35f;
+
+	// Token: 0x04001940 RID: 6464
+	[Header("----- Settings -----")]
+	public Transform animHolder;
+
+	// Token: 0x04001941 RID: 6465
+	public Transform handlePivot;
+
+	// Token: 0x04001942 RID: 6466
+	public GameObject visuals;
+
+	// Token: 0x04001943 RID: 6467
+	private Animation visualsAnim;
+
+	// Token: 0x04001944 RID: 6468
+	public GameObject visualsHandle;
+
+	// Token: 0x04001945 RID: 6469
+	public float completeFraction = 0.11f;
+
+	// Token: 0x04001946 RID: 6470
+	public float returnFraction = 0.9f;
+
+	// Token: 0x04001947 RID: 6471
+	public float grabDelay = 0.21f;
+
+	// Token: 0x04001948 RID: 6472
+	public float handleBounce = 0.35f;
+
+	// Token: 0x04001949 RID: 6473
+	public bool horizontalLever = true;
+
+	// Token: 0x0400194A RID: 6474
+	public int dir = 1;
+
+	// Token: 0x0400194B RID: 6475
+	public int forceGrabDir;
+
+	// Token: 0x0400194C RID: 6476
+	public int blockedForceGrabDir;
+
+	// Token: 0x0400194D RID: 6477
+	public bool allowRunningPush;
+
+	// Token: 0x0400194E RID: 6478
+	public bool returnBack;
+
+	// Token: 0x0400194F RID: 6479
+	public bool centerHandle;
+
+	// Token: 0x04001950 RID: 6480
+	public bool lockDoublePull;
+
+	// Token: 0x04001951 RID: 6481
+	public bool singleToggle;
+
+	// Token: 0x04001952 RID: 6482
+	public Lever.HandsUsed handsUsed;
+
+	// Token: 0x04001953 RID: 6483
+	public float handSlopeLeft = 0.485f;
+
+	// Token: 0x04001954 RID: 6484
+	public float handSlopeRight = 0.44f;
+
+	// Token: 0x04001955 RID: 6485
+	public AnimationCurve handSlopeCurveLeft;
+
+	// Token: 0x04001956 RID: 6486
+	public AnimationCurve handSlopeCurveRight;
+
+	// Token: 0x04001957 RID: 6487
+	public float rumble;
+
+	// Token: 0x04001958 RID: 6488
+	public string audioPrefix = string.Empty;
+
+	// Token: 0x04001959 RID: 6489
+	public bool useAudioGrab = true;
+
+	// Token: 0x0400195A RID: 6490
+	public bool debug;
+
+	// Token: 0x0400195B RID: 6491
+	public SignalOut grabbed;
+
+	// Token: 0x0400195C RID: 6492
+	public SignalOut released;
+
+	// Token: 0x0400195D RID: 6493
+	public SignalOut left;
+
+	// Token: 0x0400195E RID: 6494
+	public SignalOut right;
+
+	// Token: 0x0400195F RID: 6495
+	public SignalOut center;
+
+	// Token: 0x04001960 RID: 6496
+	public SignalIn loadLeft;
+
+	// Token: 0x04001961 RID: 6497
+	public SignalIn loadRight;
+
+	// Token: 0x04001962 RID: 6498
+	public SignalIn unlockPull;
+
+	// Token: 0x04001963 RID: 6499
+	public SignalIn activate;
+
+	// Token: 0x04001964 RID: 6500
+	public SignalIn deactivate;
+
+	// Token: 0x04001965 RID: 6501
+	private Lever.State state;
+
+	// Token: 0x04001966 RID: 6502
+	private AnimationState animStick;
+
+	// Token: 0x04001967 RID: 6503
+	private Transform holdL;
+
+	// Token: 0x04001968 RID: 6504
+	private Transform holdR;
+
+	// Token: 0x04001969 RID: 6505
+	private int grabDir;
+
+	// Token: 0x0400196A RID: 6506
+	private float returnDir;
+
+	// Token: 0x0400196B RID: 6507
+	private float grabTimer;
+
+	// Token: 0x0400196C RID: 6508
+	private float grabOffset = 0.1f;
+
+	// Token: 0x0400196D RID: 6509
+	private AnimClipNode currentMove;
+
+	// Token: 0x0400196E RID: 6510
+	private AnimClipNode currentReturn;
+
+	// Token: 0x0400196F RID: 6511
+	private float releaseTimer;
+
+	// Token: 0x04001970 RID: 6512
+	private float releaseDelay = 0.15f;
+
+	// Token: 0x04001971 RID: 6513
+	private float grabStunTimer;
+
+	// Token: 0x04001972 RID: 6514
+	private float grabStunDelay = 0.15f;
+
+	// Token: 0x04001973 RID: 6515
+	private float verticalReleaseTimer;
+
+	// Token: 0x04001974 RID: 6516
+	private float verticalReleaseDelay = 0.6f;
+
+	// Token: 0x04001975 RID: 6517
+	private float pullSpeedFactor = 1f;
+
+	// Token: 0x04001976 RID: 6518
+	private float currentHandleFraction;
+
+	// Token: 0x04001977 RID: 6519
+	private float previousFraction;
+
+	// Token: 0x04001978 RID: 6520
+	private float targetHandleFraction;
+
+	// Token: 0x04001979 RID: 6521
+	private float audioMoveSensitivity = 0.03f;
+
+	// Token: 0x0400197A RID: 6522
+	private bool syncToHands;
+
+	// Token: 0x0400197B RID: 6523
+	private Lever.HandsUsed currentHandsUsed;
+
+	// Token: 0x0400197C RID: 6524
+	private bool disable;
+
+	// Token: 0x0400197D RID: 6525
+	private float lockedDir;
+
+	// Token: 0x0400197E RID: 6526
+	private bool isActive = true;
+
+	// Token: 0x0400197F RID: 6527
+	private int previousNearDir;
+
+	// Token: 0x04001980 RID: 6528
+	private bool audioMoving;
+
+	// Token: 0x04001981 RID: 6529
+	private bool sentCompleteEvent;
+
+	// Token: 0x04001982 RID: 6530
+	private bool forceTransitionToIdle;
+
+	// Token: 0x04001983 RID: 6531
+	private int lastSignal = -2;
+
+	// Token: 0x04001984 RID: 6532
+	private Lever.AnimPair currentAnim;
+
+	// Token: 0x04001985 RID: 6533
+	private AnimClipNode grabTransition;
+
+	// Token: 0x04001986 RID: 6534
+	private float pullDir;
+
+	// Token: 0x04001987 RID: 6535
+	private float currentHandleSpeed;
+
+	// Token: 0x04001988 RID: 6536
+	private float lastChangeAngle;
+
+	// Token: 0x04001989 RID: 6537
+	private float acceleration = 2f;
+
+	// Token: 0x0400198A RID: 6538
+	private float speedFactor = 20f;
+
+	// Token: 0x0400198B RID: 6539
+	private float previousHandleSpeed;
+
+	// Token: 0x0400198C RID: 6540
+	private float audioLoadDelay = 2f;
+
+	// Token: 0x0400198D RID: 6541
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObj;
+
+	// Token: 0x0400198E RID: 6542
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x0400198F RID: 6543
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioGrab;
+
+	// Token: 0x04001990 RID: 6544
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioGrabRunning;
+
+	// Token: 0x04001991 RID: 6545
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioRelease;
+
+	// Token: 0x04001992 RID: 6546
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioLeft;
+
+	// Token: 0x04001993 RID: 6547
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioRight;
+
+	// Token: 0x04001994 RID: 6548
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioCenter;
+
+	// Token: 0x04001995 RID: 6549
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioUp;
+
+	// Token: 0x04001996 RID: 6550
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioDown;
+
+	// Token: 0x04001997 RID: 6551
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioMoveStart;
+
+	// Token: 0x04001998 RID: 6552
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioMoveStop;
+
+	// Token: 0x04001999 RID: 6553
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioCompleteFraction;
+
+	// Token: 0x0400199A RID: 6554
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioReturnFraction;
+
+	// Token: 0x020001DC RID: 476
+	public enum HandsUsed
+	{
+		// Token: 0x0400199C RID: 6556
+		Both,
+		// Token: 0x0400199D RID: 6557
+		Left,
+		// Token: 0x0400199E RID: 6558
+		Right,
+		// Token: 0x0400199F RID: 6559
+		None
+	}
+
+	// Token: 0x020001DD RID: 477
+	private enum State
+	{
+		// Token: 0x040019A1 RID: 6561
+		None,
+		// Token: 0x040019A2 RID: 6562
+		Idle,
+		// Token: 0x040019A3 RID: 6563
+		Pull,
+		// Token: 0x040019A4 RID: 6564
+		Grab,
+		// Token: 0x040019A5 RID: 6565
+		RunningPush,
+		// Token: 0x040019A6 RID: 6566
+		Return,
+		// Token: 0x040019A7 RID: 6567
+		Drag,
+		// Token: 0x040019A8 RID: 6568
+		Swap
+	}
+
+	// Token: 0x020001DE RID: 478
+	[Serializable]
+	public class AnimPair
+	{
+		// Token: 0x040019A9 RID: 6569
+		public AnimClipNode animBoy;
+
+		// Token: 0x040019AA RID: 6570
+		public AnimationClip animDevice;
+	}
+}

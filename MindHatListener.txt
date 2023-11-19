@@ -1,0 +1,158 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005C6 RID: 1478
+public class MindHatListener : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600259A RID: 9626 RVA: 0x001334F4 File Offset: 0x001316F4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioInteraction = new AudioEventSimpleLocal("mechanisms_mindHat_interaction", akGameObj);
+	}
+
+	// Token: 0x0600259B RID: 9627 RVA: 0x00133534 File Offset: 0x00131734
+	public bool PreAwake(int callcount)
+	{
+		this.minHatOn = SignalIn.Create("minHatOn", base.gameObject, new Action(this.SetDudeWakingUpState));
+		this.minHatOff = SignalIn.Create("minHatOff", base.gameObject, new Action(this.SetHatOffState));
+		return true;
+	}
+
+	// Token: 0x0600259C RID: 9628 RVA: 0x00133588 File Offset: 0x00131788
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.previousSpeed = float.MaxValue;
+	}
+
+	// Token: 0x0600259D RID: 9629 RVA: 0x0013359C File Offset: 0x0013179C
+	private void SetDudeWakingUpState()
+	{
+		this.state = MindHatListener.State.DudeWakingUp;
+	}
+
+	// Token: 0x0600259E RID: 9630 RVA: 0x001335A8 File Offset: 0x001317A8
+	private void DudeWakingUpState()
+	{
+		this.controlledBoy = this.mindHatReceiver.GetBoyControlledByHat();
+		BoyState boyState = this.controlledBoy.state as BoyCustomAnimState;
+		if (this.controlledBoy && boyState == null && this.IsGettingAnyInput())
+		{
+			this.audioInteraction.PostFast();
+			this.state = MindHatListener.State.DudeAwake;
+		}
+	}
+
+	// Token: 0x0600259F RID: 9631 RVA: 0x0013360C File Offset: 0x0013180C
+	private void SetHatOffState()
+	{
+		this.timer = 0f;
+		this.state = MindHatListener.State.HatOff;
+	}
+
+	// Token: 0x060025A0 RID: 9632 RVA: 0x00133620 File Offset: 0x00131820
+	private void HatOffState()
+	{
+	}
+
+	// Token: 0x060025A1 RID: 9633 RVA: 0x00133624 File Offset: 0x00131824
+	private bool IsGettingAnyInput()
+	{
+		this.controlledBoy = this.mindHatReceiver.GetBoyControlledByHat();
+		return (double)this.controlledBoy.input.stick.magnitude >= 0.05 || this.controlledBoy.input.jump || this.controlledBoy.input.action;
+	}
+
+	// Token: 0x060025A2 RID: 9634 RVA: 0x00133698 File Offset: 0x00131898
+	private bool HasChangeSpeed()
+	{
+		this.controlledBoy = this.mindHatReceiver.GetBoyControlledByHat();
+		if (Mathf.Abs(this.controlledBoy.velocity3.magnitude - this.previousSpeed) > 0.1f)
+		{
+			this.previousSpeed = this.controlledBoy.velocity3.magnitude;
+			return true;
+		}
+		return false;
+	}
+
+	// Token: 0x060025A3 RID: 9635 RVA: 0x001336FC File Offset: 0x001318FC
+	private void DudeAwakeState()
+	{
+		this.timer += Time.deltaTime;
+		if (this.IsGettingAnyInput() && this.timer >= this.refreshrate)
+		{
+			this.timer = 0f;
+			this.audioInteraction.PostFast();
+		}
+	}
+
+	// Token: 0x060025A4 RID: 9636 RVA: 0x00133750 File Offset: 0x00131950
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case MindHatListener.State.HatOff:
+			this.HatOffState();
+			break;
+		case MindHatListener.State.DudeAwake:
+			this.DudeAwakeState();
+			break;
+		case MindHatListener.State.DudeWakingUp:
+			this.DudeWakingUpState();
+			break;
+		}
+	}
+
+	// Token: 0x040044B1 RID: 17585
+	public MindHatReceiver mindHatReceiver;
+
+	// Token: 0x040044B2 RID: 17586
+	public float refreshrate = 5f;
+
+	// Token: 0x040044B3 RID: 17587
+	private SignalIn minHatOn;
+
+	// Token: 0x040044B4 RID: 17588
+	private SignalIn minHatOff;
+
+	// Token: 0x040044B5 RID: 17589
+	private Boy controlledBoy;
+
+	// Token: 0x040044B6 RID: 17590
+	private float timer;
+
+	// Token: 0x040044B7 RID: 17591
+	private float previousSpeed;
+
+	// Token: 0x040044B8 RID: 17592
+	private MindHatListener.State state;
+
+	// Token: 0x040044B9 RID: 17593
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioInteraction;
+
+	// Token: 0x040044BA RID: 17594
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x020005C7 RID: 1479
+	private enum State
+	{
+		// Token: 0x040044BC RID: 17596
+		None,
+		// Token: 0x040044BD RID: 17597
+		HatOff,
+		// Token: 0x040044BE RID: 17598
+		DudeAwake,
+		// Token: 0x040044BF RID: 17599
+		DudeWakingUp
+	}
+}

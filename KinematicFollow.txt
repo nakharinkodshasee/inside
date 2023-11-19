@@ -1,0 +1,110 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200013C RID: 316
+public class KinematicFollow : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060009B4 RID: 2484 RVA: 0x00062260 File Offset: 0x00060460
+	public bool PreAwake(int callcount)
+	{
+		this.activate = SignalIn.Create("activate", base.gameObject, delegate
+		{
+			this.SetActivate(true);
+		});
+		this.deactivate = SignalIn.Create("deactivate", base.gameObject, delegate
+		{
+			this.SetActivate(false);
+		});
+		return true;
+	}
+
+	// Token: 0x060009B5 RID: 2485 RVA: 0x000622B4 File Offset: 0x000604B4
+	private void Start()
+	{
+		base.GetComponent<Rigidbody>().isKinematic = true;
+	}
+
+	// Token: 0x060009B6 RID: 2486 RVA: 0x000622C4 File Offset: 0x000604C4
+	private void SetActivate(bool v)
+	{
+		this.isActive = v;
+	}
+
+	// Token: 0x060009B7 RID: 2487 RVA: 0x000622D0 File Offset: 0x000604D0
+	public static float GetWorldRot(Quaternion a)
+	{
+		return a.eulerAngles.z * 0.017453292f;
+	}
+
+	// Token: 0x060009B8 RID: 2488 RVA: 0x000622F4 File Offset: 0x000604F4
+	private void FixedUpdate()
+	{
+		if (!this.isActive)
+		{
+			return;
+		}
+		Vector3 position = base.GetComponent<Rigidbody>().position;
+		Vector3 position2 = this.target.transform.position;
+		if (!this.posX)
+		{
+			position.x = position2.x;
+		}
+		if (!this.posY)
+		{
+			position.y = position2.y;
+		}
+		if (!this.posZ)
+		{
+			position.z = position2.z;
+		}
+		base.GetComponent<Rigidbody>().MovePosition(position);
+		Quaternion rotation = this.target.transform.rotation;
+		if (!this.ignoreRotation)
+		{
+			base.GetComponent<Rigidbody>().MoveRotation(rotation);
+		}
+		Quaternion rotation2 = base.GetComponent<Rigidbody>().rotation;
+		Quaternion quaternion = Quaternion.LookRotation(rotation2 * Vector3.forward, rotation2 * Vector3.up);
+		Quaternion quaternion2 = Quaternion.LookRotation(new Vector3(0.0383579f, 0.9989238f, 0.02607759f), new Vector3(-0.0355903f, -0.02471469f, 0.9990609f));
+		Quaternion quaternion3 = Quaternion.LookRotation(new Vector3(0.03569821f, 0.9990279f, 0.02586749f), new Vector3(-0.03535432f, -0.02460554f, 0.999072f));
+	}
+
+	// Token: 0x04001099 RID: 4249
+	public GameObject target;
+
+	// Token: 0x0400109A RID: 4250
+	public bool isActive = true;
+
+	// Token: 0x0400109B RID: 4251
+	public bool ignoreRotation;
+
+	// Token: 0x0400109C RID: 4252
+	[HideInInspector]
+	public bool posX;
+
+	// Token: 0x0400109D RID: 4253
+	[HideInInspector]
+	public bool posY;
+
+	// Token: 0x0400109E RID: 4254
+	[HideInInspector]
+	public bool posZ;
+
+	// Token: 0x0400109F RID: 4255
+	[HideInInspector]
+	public bool rotX;
+
+	// Token: 0x040010A0 RID: 4256
+	[HideInInspector]
+	public bool rotY;
+
+	// Token: 0x040010A1 RID: 4257
+	[HideInInspector]
+	public bool rotZ;
+
+	// Token: 0x040010A2 RID: 4258
+	private SignalIn activate;
+
+	// Token: 0x040010A3 RID: 4259
+	private SignalIn deactivate;
+}

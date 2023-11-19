@@ -1,0 +1,56 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000BC RID: 188
+public class MindHatReceiverDevice : MonoBehaviour, IFastEventExListener<Collider>
+{
+	// Token: 0x06000624 RID: 1572 RVA: 0x0004783C File Offset: 0x00045A3C
+	private void Start()
+	{
+		this.device = base.GetComponent<Device>();
+		this.device.triggerGrab.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.device.triggerGrab.exitTrigger.Register(this, ref this.triggerExitHandle);
+	}
+
+	// Token: 0x06000625 RID: 1573 RVA: 0x00047890 File Offset: 0x00045A90
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.device.triggerGrab.enterTrigger)
+		{
+			this.TriggerEnter(collider);
+		}
+		else if (sender == this.device.triggerGrab.exitTrigger)
+		{
+			this.TriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06000626 RID: 1574 RVA: 0x000478E0 File Offset: 0x00045AE0
+	private void TriggerEnter(Collider c)
+	{
+		MindHatReceiverProbe component = c.GetComponent<MindHatReceiverProbe>();
+		if (component)
+		{
+			this.device.AddBoy(component.boy);
+		}
+	}
+
+	// Token: 0x06000627 RID: 1575 RVA: 0x00047910 File Offset: 0x00045B10
+	private void TriggerExit(Collider c)
+	{
+		MindHatReceiverProbe component = c.GetComponent<MindHatReceiverProbe>();
+		if (component)
+		{
+			this.device.RemoveBoy(component.boy);
+		}
+	}
+
+	// Token: 0x04000A9D RID: 2717
+	private Device device;
+
+	// Token: 0x04000A9E RID: 2718
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04000A9F RID: 2719
+	private int triggerExitHandle = -1;
+}

@@ -1,0 +1,47 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000391 RID: 913
+public class IsTriggeredByCamera : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060018A2 RID: 6306 RVA: 0x000D5E1C File Offset: 0x000D401C
+	public bool PreAwake(int callcount)
+	{
+		this.enterSignal = SignalOut.Create("enterSignal", base.gameObject);
+		this.exitSignal = SignalOut.Create("exitSignal", base.gameObject);
+		base.gameObject.layer = LayerMask.NameToLayer("Audio");
+		return true;
+	}
+
+	// Token: 0x060018A3 RID: 6307 RVA: 0x000D5E6C File Offset: 0x000D406C
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (AudioKeyObject.audioCameraProbe != null && coll.gameObject == AudioKeyObject.audioCameraProbe)
+		{
+			this.probeEnter.OnEvent(this);
+			this.enterSignal.Signal();
+		}
+	}
+
+	// Token: 0x060018A4 RID: 6308 RVA: 0x000D5EB8 File Offset: 0x000D40B8
+	private void OnTriggerExit(Collider coll)
+	{
+		if (AudioKeyObject.audioCameraProbe != null && coll.gameObject == AudioKeyObject.audioCameraProbe)
+		{
+			this.probeExit.OnEvent(this);
+			this.exitSignal.Signal();
+		}
+	}
+
+	// Token: 0x04002C61 RID: 11361
+	private SimpleEvent<IsTriggeredByCamera> probeEnter = new SimpleEvent<IsTriggeredByCamera>("probeEnter");
+
+	// Token: 0x04002C62 RID: 11362
+	private SimpleEvent<IsTriggeredByCamera> probeExit = new SimpleEvent<IsTriggeredByCamera>("probeExit");
+
+	// Token: 0x04002C63 RID: 11363
+	public SignalOut enterSignal;
+
+	// Token: 0x04002C64 RID: 11364
+	public SignalOut exitSignal;
+}

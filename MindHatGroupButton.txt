@@ -1,0 +1,102 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000204 RID: 516
+public class MindHatGroupButton : MonoBehaviour
+{
+	// Token: 0x06000FF7 RID: 4087 RVA: 0x00097C98 File Offset: 0x00095E98
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000FF8 RID: 4088 RVA: 0x00097C9C File Offset: 0x00095E9C
+	private bool IsBoyInMindHat()
+	{
+		foreach (MindHat mindHat in this.groupController.mindHats)
+		{
+			if (mindHat.GetBoyInHat() != null)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x06000FF9 RID: 4089 RVA: 0x00097D1C File Offset: 0x00095F1C
+	private void Update()
+	{
+		bool rawAction = GameInput.rawAction;
+		bool flag = false;
+		if (!rawAction && this.previousRawAction && this.rawActionTimer < 0.2f && this.IsBoyInMindHat())
+		{
+			flag = true;
+		}
+		if (!rawAction)
+		{
+			this.rawActionTimer = 0f;
+		}
+		else
+		{
+			this.rawActionTimer += Time.deltaTime;
+		}
+		if (this.albinosAtButton.Count > 0 && flag && !this.boyInsideTrigger)
+		{
+			if (this.button.GetIsOn())
+			{
+				this.button.InvokeTurnOff();
+			}
+			else
+			{
+				this.button.InvokeTurnOn();
+			}
+		}
+		this.previousRawAction = rawAction;
+	}
+
+	// Token: 0x06000FFA RID: 4090 RVA: 0x00097DDC File Offset: 0x00095FDC
+	private void OnTriggerEnter(Collider coll)
+	{
+		AlbinoAI component = coll.GetComponent<AlbinoAI>();
+		if (component != null)
+		{
+			this.albinosAtButton.Add(component);
+		}
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyInsideTrigger = true;
+		}
+	}
+
+	// Token: 0x06000FFB RID: 4091 RVA: 0x00097E20 File Offset: 0x00096020
+	private void OnTriggerExit(Collider coll)
+	{
+		AlbinoAI component = coll.GetComponent<AlbinoAI>();
+		if (component != null)
+		{
+			this.albinosAtButton.Remove(component);
+		}
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyInsideTrigger = false;
+		}
+	}
+
+	// Token: 0x04001CFA RID: 7418
+	public MindHatGroupController groupController;
+
+	// Token: 0x04001CFB RID: 7419
+	public SwitchButton button;
+
+	// Token: 0x04001CFC RID: 7420
+	private bool previousRawAction;
+
+	// Token: 0x04001CFD RID: 7421
+	private float rawActionTimer;
+
+	// Token: 0x04001CFE RID: 7422
+	private List<AlbinoAI> albinosAtButton = new List<AlbinoAI>();
+
+	// Token: 0x04001CFF RID: 7423
+	private bool boyInsideTrigger;
+}

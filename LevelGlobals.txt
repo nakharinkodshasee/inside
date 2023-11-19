@@ -1,0 +1,78 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000380 RID: 896
+public class LevelGlobals : MonoBehaviour, IFastEventExListener<GameManager.Load>
+{
+	// Token: 0x06001854 RID: 6228 RVA: 0x000D47E0 File Offset: 0x000D29E0
+	private void Awake()
+	{
+		LevelGlobals.climbAnimDatabase = this.climbDB;
+	}
+
+	// Token: 0x06001855 RID: 6229 RVA: 0x000D47F0 File Offset: 0x000D29F0
+	private void Start()
+	{
+		GameManager.prepareLoad.Register(this, ref this.prepareLoadHandle);
+	}
+
+	// Token: 0x06001856 RID: 6230 RVA: 0x000D4804 File Offset: 0x000D2A04
+	private void OnDestroy()
+	{
+		GameManager.prepareLoad.Unregister(ref this.prepareLoadHandle);
+	}
+
+	// Token: 0x06001857 RID: 6231 RVA: 0x000D4818 File Offset: 0x000D2A18
+	public void OnFastEventEx(FastEventEx<GameManager.Load> sender, ref GameManager.Load arg)
+	{
+		if (sender == GameManager.prepareLoad && arg == GameManager.Load.Chapter)
+		{
+			LevelGlobals.submarine_crackDestructionSet = false;
+			LevelGlobals.submarine_crackDestructionIndices.Clear();
+			LevelGlobals.subPositionSubmergedChamber = Vector3.zero;
+		}
+	}
+
+	// Token: 0x04002BF7 RID: 11255
+	public static TorchMovement torch;
+
+	// Token: 0x04002BF8 RID: 11256
+	public static ClimbAnimDatabase climbAnimDatabase;
+
+	// Token: 0x04002BF9 RID: 11257
+	public static ForcePushManager forcePushManager;
+
+	// Token: 0x04002BFA RID: 11258
+	public static MindHatOnHead mindHatOnHead;
+
+	// Token: 0x04002BFB RID: 11259
+	public static WaterFlushTunnel waterFlushTunnel;
+
+	// Token: 0x04002BFC RID: 11260
+	public static LabClubCar labClubCar;
+
+	// Token: 0x04002BFD RID: 11261
+	public static LabJetCrate labJetCrate;
+
+	// Token: 0x04002BFE RID: 11262
+	public static SewerSubmarine sewerSubmarine;
+
+	// Token: 0x04002BFF RID: 11263
+	public static testObject testObject;
+
+	// Token: 0x04002C00 RID: 11264
+	public static bool submarine_crackDestructionSet = false;
+
+	// Token: 0x04002C01 RID: 11265
+	public static List<int> submarine_crackDestructionIndices = new List<int>();
+
+	// Token: 0x04002C02 RID: 11266
+	public static Vector3 subPositionSubmergedChamber = Vector3.zero;
+
+	// Token: 0x04002C03 RID: 11267
+	public ClimbAnimDatabase climbDB;
+
+	// Token: 0x04002C04 RID: 11268
+	private int prepareLoadHandle = -1;
+}

@@ -1,0 +1,626 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000B9 RID: 185
+public class MindHatReceiver : BoyInput, IPreAwake
+{
+	// Token: 0x06000602 RID: 1538 RVA: 0x00046ACC File Offset: 0x00044CCC
+	public void SetHanginInHat(MindHat hat)
+	{
+		this.hanginInHat = hat;
+	}
+
+	// Token: 0x06000603 RID: 1539 RVA: 0x00046AD8 File Offset: 0x00044CD8
+	public MindHat GetHangingInHat()
+	{
+		return this.hanginInHat;
+	}
+
+	// Token: 0x06000604 RID: 1540 RVA: 0x00046AE0 File Offset: 0x00044CE0
+	public override void UpdateInput()
+	{
+		base.UpdateInput();
+		this.curStickCacheIndex = (this.curStickCacheIndex + 1) % 30;
+		this.currentDelayedIndex = this.curStickCacheIndex - this.inputFrameDelay;
+		if (this.currentDelayedIndex < 0)
+		{
+			this.currentDelayedIndex += 30;
+		}
+		if (this.controlIsActive && !this.mindHatInControl.IsMindHatTurnedOff())
+		{
+			Boy boyInHat = this.mindHatInControl.GetBoyInHat();
+			if (boyInHat != null)
+			{
+				this.cachedStick[this.curStickCacheIndex] = boyInHat.input.stick;
+				this.cachedJump[this.curStickCacheIndex] = boyInHat.input.jump;
+				this.cachedRawJump[this.curStickCacheIndex] = boyInHat.input.rawJump;
+			}
+		}
+		else
+		{
+			this.cachedStick[this.curStickCacheIndex] = vector2f.zero;
+			this.cachedJump[this.curStickCacheIndex] = false;
+			this.cachedRawJump[this.curStickCacheIndex] = false;
+		}
+	}
+
+	// Token: 0x06000605 RID: 1541 RVA: 0x00046BF4 File Offset: 0x00044DF4
+	private void ClearBuffers()
+	{
+		this.cachedStick = new vector2f[30];
+		this.cachedJump = new bool[30];
+		this.cachedRawJump = new bool[30];
+		this.curStickCacheIndex = -1;
+	}
+
+	// Token: 0x06000606 RID: 1542 RVA: 0x00046C30 File Offset: 0x00044E30
+	public void SetIgnoreNextWakeUp()
+	{
+		this.ignoreNextWakeupAnim = true;
+	}
+
+	// Token: 0x17000018 RID: 24
+	// (get) Token: 0x06000607 RID: 1543 RVA: 0x00046C3C File Offset: 0x00044E3C
+	public override vector2f stick
+	{
+		get
+		{
+			if (this.controlIsActive && !this.mindHatInControl.IsMindHatTurnedOff())
+			{
+				vector2f vector2f;
+				if (GameInput.rawAction && !(base.GetComponent<Boy>().state is BoyCustomAnimState))
+				{
+					vector2f = new vector2f(this.cachedStick[this.currentDelayedIndex].x, Mathf.Max(-0.2f, this.cachedStick[this.currentDelayedIndex].y));
+				}
+				else
+				{
+					vector2f = new vector2f(this.cachedStick[this.currentDelayedIndex].x, this.cachedStick[this.currentDelayedIndex].y);
+				}
+				if (this.moveSpeedScale != 1f && Mathf.Abs(vector2f.x) > 0.5f)
+				{
+					vector2f.x *= Mathf.Lerp(1f, this.moveSpeedScale, Mathf.Abs(vector2f.x) * 2f - 1f);
+				}
+				vector2f *= this.moveSpeed;
+				if (this.inverseForward)
+				{
+					vector2f.x = -vector2f.x;
+				}
+				return vector2f;
+			}
+			return default(vector2f);
+		}
+	}
+
+	// Token: 0x06000608 RID: 1544 RVA: 0x00046D88 File Offset: 0x00044F88
+	public bool HasJumpBeenReleased()
+	{
+		return this.jumpHasBeenReleased;
+	}
+
+	// Token: 0x17000019 RID: 25
+	// (get) Token: 0x06000609 RID: 1545 RVA: 0x00046D90 File Offset: 0x00044F90
+	public override bool jump
+	{
+		get
+		{
+			if (this.controlIsActive && this.mindHatInControl.JumpAllowed() && !this.mindHatInControl.IsMindHatTurnedOff())
+			{
+				if (!this.cachedRawJump[this.currentDelayedIndex])
+				{
+					this.jumpHasBeenReleased = true;
+				}
+				if (this.jumpHasBeenReleased)
+				{
+					if (this.cachedJump[this.currentDelayedIndex])
+					{
+						return true;
+					}
+					int num = this.currentDelayedIndex - 1;
+					if ((float)num < 0f)
+					{
+						num = this.cachedJump.Length - 1;
+					}
+					if (this.cachedRawJump[this.currentDelayedIndex] && !this.cachedRawJump[num])
+					{
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+	}
+
+	// Token: 0x1700001A RID: 26
+	// (get) Token: 0x0600060A RID: 1546 RVA: 0x00046E44 File Offset: 0x00045044
+	public override bool rawJump
+	{
+		get
+		{
+			return this.controlIsActive && this.mindHatInControl.JumpAllowed() && !this.mindHatInControl.IsMindHatTurnedOff() && this.cachedRawJump[this.currentDelayedIndex];
+		}
+	}
+
+	// Token: 0x1700001B RID: 27
+	// (get) Token: 0x0600060B RID: 1547 RVA: 0x00046E8C File Offset: 0x0004508C
+	public override bool grab
+	{
+		get
+		{
+			if (this.controlIsActive && !this.mindHatInControl.IsMindHatTurnedOff())
+			{
+				Boy boyInHat = this.mindHatInControl.GetBoyInHat();
+				return boyInHat && boyInHat.input.rawAction;
+			}
+			return false;
+		}
+	}
+
+	// Token: 0x1700001C RID: 28
+	// (get) Token: 0x0600060C RID: 1548 RVA: 0x00046EDC File Offset: 0x000450DC
+	public override bool rawAction
+	{
+		get
+		{
+			if (this.controlIsActive && !this.mindHatInControl.IsMindHatTurnedOff())
+			{
+				Boy boyInHat = this.mindHatInControl.GetBoyInHat();
+				if (boyInHat)
+				{
+					return boyInHat.input.rawAction;
+				}
+			}
+			return false;
+		}
+	}
+
+	// Token: 0x1700001D RID: 29
+	// (get) Token: 0x0600060D RID: 1549 RVA: 0x00046F28 File Offset: 0x00045128
+	public override bool action
+	{
+		get
+		{
+			if (this.controlIsActive && !this.mindHatInControl.IsMindHatTurnedOff())
+			{
+				Boy boyInHat = this.mindHatInControl.GetBoyInHat();
+				if (boyInHat)
+				{
+					return this.mindHatInControl.GetBoyInHat().input.action;
+				}
+			}
+			return false;
+		}
+	}
+
+	// Token: 0x0600060E RID: 1550 RVA: 0x00046F80 File Offset: 0x00045180
+	public bool ControlIsActive()
+	{
+		return this.controlIsActive;
+	}
+
+	// Token: 0x0600060F RID: 1551 RVA: 0x00046F88 File Offset: 0x00045188
+	private void Terminate()
+	{
+		this.terminated = true;
+	}
+
+	// Token: 0x06000610 RID: 1552 RVA: 0x00046F94 File Offset: 0x00045194
+	public void SetMoveSpeed(float v)
+	{
+		this.moveSpeed = v;
+	}
+
+	// Token: 0x06000611 RID: 1553 RVA: 0x00046FA0 File Offset: 0x000451A0
+	public bool PreAwake(int callcount)
+	{
+		this.terminate = SignalIn.Create("terminate", base.gameObject, new Action(this.Terminate));
+		return true;
+	}
+
+	// Token: 0x06000612 RID: 1554 RVA: 0x00046FC8 File Offset: 0x000451C8
+	public void StartUp(MindHatDudeSpawner spawner)
+	{
+		this.dudeSpawner = spawner;
+		this.inputFrameDelay = spawner.frameDelay;
+		this.connectedHat = spawner.connectedHat;
+		this.useGoToSleepAnimation = spawner.useGoToSleepAnimation;
+		spawner.connectedHat.attached.Event += this.attached_Event;
+		spawner.connectedHat.detached.Event += this.detached_Event;
+		spawner.connectedHat.selfFail.Event += this.selfFail_Event;
+		this.inverseForward = spawner.inverseForward;
+		this.moveSpeedScale = spawner.moveSpeedScale;
+		if (spawner.useGoToSleepAnimation)
+		{
+			this.playGotoSleep = true;
+			this.SetTheme("MindCTRLSleep");
+		}
+	}
+
+	// Token: 0x06000613 RID: 1555 RVA: 0x0004708C File Offset: 0x0004528C
+	public void ResetBoyInput()
+	{
+		base.GetComponent<Boy>().input = this;
+	}
+
+	// Token: 0x06000614 RID: 1556 RVA: 0x0004709C File Offset: 0x0004529C
+	public Boy GetBoyControlledByHat()
+	{
+		return base.GetComponent<Boy>();
+	}
+
+	// Token: 0x06000615 RID: 1557 RVA: 0x000470A4 File Offset: 0x000452A4
+	private void attached_Event(MindHat obj)
+	{
+		this.mindHatInControl = obj;
+		this.controlIsActive = true;
+		Boy boyControlledByHat = this.GetBoyControlledByHat();
+		boyControlledByHat.skipPartialStep = true;
+		boyControlledByHat.isMindControlled = true;
+		boyControlledByHat.status.water = null;
+		BoyCustomAnimState boyCustomAnimState = boyControlledByHat.state as BoyCustomAnimState;
+		bool flag = true;
+		if (!(boyControlledByHat.state is BoySwimState) && this.useGoToSleepAnimation && flag && !this.hanginInHat && boyControlledByHat.specialBoyMode == Boy.SpecialBoyMode.None && !(boyControlledByHat.state is BoyLadderState) && !this.ignoreNextWakeupAnim && !obj.IsMindHatTurnedOff())
+		{
+			if (boyControlledByHat.gameObject.activeSelf)
+			{
+				this.PlayBoyAnimation(this.wakeUpAnim);
+			}
+			this.playGotoSleep = false;
+		}
+		this.mindhatInUse.OnEvent(this);
+		this.jumpHasBeenReleased = false;
+		this.cachedRawJump[this.currentDelayedIndex] = true;
+		if (obj.IsMindHatTurnedOff())
+		{
+			this.SetTheme("MindCTRLSleep");
+			this.SetSleepState();
+		}
+		else
+		{
+			this.SetTheme("MindCTRL");
+			this.SetAwakeState();
+			this.previousBoyInput = base.GetComponent<Boy>().input;
+			base.GetComponent<Boy>().input = this;
+			obj.AddHatReceiver(base.GetComponent<Boy>());
+		}
+	}
+
+	// Token: 0x06000616 RID: 1558 RVA: 0x000471F0 File Offset: 0x000453F0
+	private void detached_Event(MindHat obj)
+	{
+		if (this.mindHatInControl != null && this.mindHatInControl.IsMindHatTurnedOff())
+		{
+			return;
+		}
+		this.ClearBuffers();
+		this.ignoreNextWakeupAnim = false;
+		this.hanginInHat = null;
+		this.mindHatInControl = null;
+		this.controlIsActive = false;
+		this.nextGoToSleepInstant = false;
+		if (this.useGoToSleepAnimation)
+		{
+			this.SetTheme("MindCTRLSleep");
+		}
+		this.mindHatNotInUse.OnEvent(this);
+		this.SetGoToSleepState();
+		Boy component = base.GetComponent<Boy>();
+		component.isMindControlled = false;
+		component.isMindControlling = false;
+		component.status.water = null;
+		component.input = this.previousBoyInput;
+		obj.RemoveHatReceiver(component);
+	}
+
+	// Token: 0x06000617 RID: 1559 RVA: 0x000472A4 File Offset: 0x000454A4
+	public void Reset()
+	{
+		if (this.dudeSpawner != null)
+		{
+			this.dudeSpawner.WasUnspawned();
+			this.dudeSpawner.connectedHat.attached.Event -= this.attached_Event;
+			this.dudeSpawner.connectedHat.detached.Event -= this.detached_Event;
+			this.dudeSpawner.connectedHat.selfFail.Event -= this.selfFail_Event;
+			this.dudeSpawner = null;
+		}
+		this.playGotoSleepTimer = 0f;
+		this.nextGoToSleepInstant = false;
+		this.ignoreNextWakeupAnim = false;
+		this.hanginInHat = null;
+		this.terminated = false;
+		this.mindHatInControl = null;
+		this.controlIsActive = false;
+		this.inverseForward = false;
+		this.moveSpeedScale = 1f;
+		this.moveSpeed = 1f;
+		this.state = MindHatReceiver.State.None;
+		Boy component = base.GetComponent<Boy>();
+		component.skipPartialStep = true;
+		component.isMindControlled = false;
+		component.isMindControlling = false;
+		component.input = this.previousBoyInput;
+		this.playGotoSleep = false;
+		this.jumpHasBeenReleased = false;
+		this.inputFrameDelay = 0;
+		this.ClearBuffers();
+	}
+
+	// Token: 0x06000618 RID: 1560 RVA: 0x000473D4 File Offset: 0x000455D4
+	private void selfFail_Event(MindHat obj)
+	{
+	}
+
+	// Token: 0x06000619 RID: 1561 RVA: 0x000473D8 File Offset: 0x000455D8
+	private void PlayBoyAnimation(AnimClipNode animNode)
+	{
+		Boy component = base.GetComponent<Boy>();
+		if (component.isDead)
+		{
+			return;
+		}
+		float num = 1f;
+		if (component.properties.customGravity.y > 0f)
+		{
+			num = -1f;
+		}
+		animNode.transform.position = component.transform.position + Vector3.down * component.properties.height * 0.5f * num;
+		float num2 = 0f;
+		if (component.properties.customGravity.y > 0f)
+		{
+			num2 = 180f;
+		}
+		if (component.facing > 0f)
+		{
+			animNode.transform.rotation = Quaternion.Euler(0f, 90f, num2);
+		}
+		else
+		{
+			animNode.transform.rotation = Quaternion.Euler(0f, -90f, num2);
+		}
+		if (this.nextGoToSleepInstant && animNode == this.goToSleepAnim)
+		{
+			BoyUtils.StartCustomAnim(component, animNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			animNode.frame = animNode.numFrames - 3f;
+			this.nextGoToSleepInstant = false;
+		}
+		else
+		{
+			BoyUtils.StartCustomAnim(component, animNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+	}
+
+	// Token: 0x0600061A RID: 1562 RVA: 0x00047528 File Offset: 0x00045728
+	private void SetGoToSleepState()
+	{
+		this.state = MindHatReceiver.State.GoToSleep;
+		this.playGotoSleep = true;
+	}
+
+	// Token: 0x0600061B RID: 1563 RVA: 0x00047538 File Offset: 0x00045738
+	private void GoToSleepState()
+	{
+		if (base.GetComponent<Boy>().state is BoyGrabPlateauState)
+		{
+			this.SetSleepState();
+		}
+		if (this.goToSleepAnim.frame >= this.goToSleepAnim.numFrames)
+		{
+			this.SetSleepState();
+		}
+	}
+
+	// Token: 0x0600061C RID: 1564 RVA: 0x00047584 File Offset: 0x00045784
+	private void SetTheme(string themeName)
+	{
+		VisualBoy visualBoy = base.GetComponent<Boy>().visualBoy;
+		Transform childComponentAE = visualBoy.transform.GetChildComponentAE("Themes");
+		Transform childComponentAE2 = childComponentAE.GetChildComponentAE(themeName);
+		visualBoy.theme = childComponentAE2;
+	}
+
+	// Token: 0x0600061D RID: 1565 RVA: 0x000475C0 File Offset: 0x000457C0
+	private void SetSleepState()
+	{
+		this.state = MindHatReceiver.State.Sleep;
+	}
+
+	// Token: 0x0600061E RID: 1566 RVA: 0x000475CC File Offset: 0x000457CC
+	private void SleepState()
+	{
+		if (base.GetComponent<Boy>().state is BoyGrabPlateauState)
+		{
+			BoyUtils.ClearState(base.GetComponent<Boy>(), -1f);
+		}
+	}
+
+	// Token: 0x0600061F RID: 1567 RVA: 0x00047600 File Offset: 0x00045800
+	private void SetAwakeState()
+	{
+		this.state = MindHatReceiver.State.Awake;
+	}
+
+	// Token: 0x06000620 RID: 1568 RVA: 0x0004760C File Offset: 0x0004580C
+	private void AwakeState()
+	{
+		VisualBoy visualBoy = base.GetComponent<Boy>().visualBoy;
+		VisualBoyCustomAnim visualBoyCustomAnim = visualBoy.state as VisualBoyCustomAnim;
+	}
+
+	// Token: 0x06000621 RID: 1569 RVA: 0x00047634 File Offset: 0x00045834
+	public void DontGoToSleep()
+	{
+		this.playGotoSleep = false;
+	}
+
+	// Token: 0x06000622 RID: 1570 RVA: 0x00047640 File Offset: 0x00045840
+	private void FixedUpdate()
+	{
+		if (this.terminated)
+		{
+			return;
+		}
+		if (this.mindHatInControl != null)
+		{
+			Boy boyInHat = this.mindHatInControl.GetBoyInHat();
+			if (boyInHat != null && boyInHat.isMindControlled)
+			{
+				MindHatReceiver component = boyInHat.input.gameObject.GetComponent<MindHatReceiver>();
+				if (!component.ControlIsActive())
+				{
+					this.jumpHasBeenReleased = false;
+				}
+				else
+				{
+					this.jumpHasBeenReleased = component.HasJumpBeenReleased();
+				}
+			}
+		}
+		base.GetComponent<Boy>().properties.swim.infiniteAir = true;
+		Boy component2 = base.GetComponent<Boy>();
+		if (this.playGotoSleep && component2.status.groundCollider != null && component2.specialBoyMode == Boy.SpecialBoyMode.None && !this.hanginInHat)
+		{
+			Actor actor = component2.visualBoy.actor;
+			Actor.Bone bone = actor.bones[actor.specificBones.head];
+			float num = bone.transform.position.y - component2.pos3.y;
+			if (num > -0.1f)
+			{
+				this.playGotoSleepTimer += Time.deltaTime;
+				if (this.playGotoSleepTimer > 0.05f)
+				{
+					if (this.useGoToSleepAnimation && !this.ignoreNextWakeupAnim)
+					{
+						this.PlayBoyAnimation(this.goToSleepAnim);
+					}
+					this.playGotoSleep = false;
+				}
+			}
+		}
+		else if (!this.playGotoSleep)
+		{
+			this.playGotoSleepTimer = 0f;
+		}
+		switch (this.state)
+		{
+		case MindHatReceiver.State.Sleep:
+			this.SleepState();
+			break;
+		case MindHatReceiver.State.Awake:
+			this.AwakeState();
+			break;
+		case MindHatReceiver.State.GoToSleep:
+			this.GoToSleepState();
+			break;
+		}
+	}
+
+	// Token: 0x04000A77 RID: 2679
+	public MindHat connectedHat;
+
+	// Token: 0x04000A78 RID: 2680
+	public AnimClipNode sleepAnim;
+
+	// Token: 0x04000A79 RID: 2681
+	public AnimClipNode wakeUpAnim;
+
+	// Token: 0x04000A7A RID: 2682
+	public AnimClipNode goToSleepAnim;
+
+	// Token: 0x04000A7B RID: 2683
+	public bool useGoToSleepAnimation = true;
+
+	// Token: 0x04000A7C RID: 2684
+	public bool nextGoToSleepInstant;
+
+	// Token: 0x04000A7D RID: 2685
+	public bool inverseForward;
+
+	// Token: 0x04000A7E RID: 2686
+	public float moveSpeedScale = 1f;
+
+	// Token: 0x04000A7F RID: 2687
+	private bool ignoreNextWakeupAnim;
+
+	// Token: 0x04000A80 RID: 2688
+	private vector2f[] cachedStick = new vector2f[30];
+
+	// Token: 0x04000A81 RID: 2689
+	private bool[] cachedJump = new bool[30];
+
+	// Token: 0x04000A82 RID: 2690
+	private bool[] cachedRawJump = new bool[30];
+
+	// Token: 0x04000A83 RID: 2691
+	private int curStickCacheIndex = -1;
+
+	// Token: 0x04000A84 RID: 2692
+	private int currentDelayedIndex;
+
+	// Token: 0x04000A85 RID: 2693
+	private int inputFrameDelay;
+
+	// Token: 0x04000A86 RID: 2694
+	public MindHatReceiver.Facing facing = MindHatReceiver.Facing.Right;
+
+	// Token: 0x04000A87 RID: 2695
+	private bool terminated;
+
+	// Token: 0x04000A88 RID: 2696
+	private float moveSpeed = 1f;
+
+	// Token: 0x04000A89 RID: 2697
+	private SignalIn terminate;
+
+	// Token: 0x04000A8A RID: 2698
+	private SimpleEvent<MindHatReceiver> mindhatInUse = new SimpleEvent<MindHatReceiver>("mindhatInUse");
+
+	// Token: 0x04000A8B RID: 2699
+	private SimpleEvent<MindHatReceiver> mindHatNotInUse = new SimpleEvent<MindHatReceiver>("mindhatNotInUse");
+
+	// Token: 0x04000A8C RID: 2700
+	private MindHatReceiver.State state;
+
+	// Token: 0x04000A8D RID: 2701
+	private MindHatDudeSpawner dudeSpawner;
+
+	// Token: 0x04000A8E RID: 2702
+	private MindHat hanginInHat;
+
+	// Token: 0x04000A8F RID: 2703
+	private bool jumpHasBeenReleased;
+
+	// Token: 0x04000A90 RID: 2704
+	private bool controlIsActive;
+
+	// Token: 0x04000A91 RID: 2705
+	private bool playGotoSleep;
+
+	// Token: 0x04000A92 RID: 2706
+	private BoyInput previousBoyInput;
+
+	// Token: 0x04000A93 RID: 2707
+	private MindHat mindHatInControl;
+
+	// Token: 0x04000A94 RID: 2708
+	private float playGotoSleepTimer;
+
+	// Token: 0x020000BA RID: 186
+	public enum Facing
+	{
+		// Token: 0x04000A96 RID: 2710
+		Left,
+		// Token: 0x04000A97 RID: 2711
+		Right
+	}
+
+	// Token: 0x020000BB RID: 187
+	private enum State
+	{
+		// Token: 0x04000A99 RID: 2713
+		None,
+		// Token: 0x04000A9A RID: 2714
+		Sleep,
+		// Token: 0x04000A9B RID: 2715
+		Awake,
+		// Token: 0x04000A9C RID: 2716
+		GoToSleep
+	}
+}

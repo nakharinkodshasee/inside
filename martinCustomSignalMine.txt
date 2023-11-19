@@ -1,0 +1,75 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005DF RID: 1503
+public class martinCustomSignalMine : MonoBehaviour
+{
+	// Token: 0x060025FD RID: 9725 RVA: 0x001358E4 File Offset: 0x00133AE4
+	public void wagonInPlaceTrue()
+	{
+		this.wagonInPlace = true;
+	}
+
+	// Token: 0x060025FE RID: 9726 RVA: 0x001358F0 File Offset: 0x00133AF0
+	public void wagonInPlaceFalse()
+	{
+		this.wagonInPlace = false;
+	}
+
+	// Token: 0x060025FF RID: 9727 RVA: 0x001358FC File Offset: 0x00133AFC
+	public void inCoverTrue()
+	{
+		this.inCover = true;
+	}
+
+	// Token: 0x06002600 RID: 9728 RVA: 0x00135908 File Offset: 0x00133B08
+	public void inCoverFalse()
+	{
+		this.inCover = false;
+	}
+
+	// Token: 0x06002601 RID: 9729 RVA: 0x00135914 File Offset: 0x00133B14
+	public void buttonPushedTrue()
+	{
+		this.buttonPushed = true;
+	}
+
+	// Token: 0x06002602 RID: 9730 RVA: 0x00135920 File Offset: 0x00133B20
+	public void buttonPushedFalse()
+	{
+		this.buttonPushed = false;
+	}
+
+	// Token: 0x06002603 RID: 9731 RVA: 0x0013592C File Offset: 0x00133B2C
+	public void playSurviveSound()
+	{
+		if (this.wagonInPlace && this.inCover && this.buttonPushed && !this.soundPlayed)
+		{
+			this.soundPlayed = true;
+			SoundEngine.PostEvent("boy_impulse_survive_1", this.forcePushGO);
+		}
+	}
+
+	// Token: 0x06002604 RID: 9732 RVA: 0x00135980 File Offset: 0x00133B80
+	private void Restart()
+	{
+		this.wagonInPlace = false;
+		this.inCover = false;
+		this.buttonPushed = false;
+	}
+
+	// Token: 0x0400453B RID: 17723
+	public bool wagonInPlace;
+
+	// Token: 0x0400453C RID: 17724
+	public bool inCover;
+
+	// Token: 0x0400453D RID: 17725
+	public bool buttonPushed;
+
+	// Token: 0x0400453E RID: 17726
+	public GameObject forcePushGO;
+
+	// Token: 0x0400453F RID: 17727
+	private bool soundPlayed;
+}

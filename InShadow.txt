@@ -1,0 +1,67 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000187 RID: 391
+public class InShadow : MonoBehaviour
+{
+	// Token: 0x06000B73 RID: 2931 RVA: 0x00071240 File Offset: 0x0006F440
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000B74 RID: 2932 RVA: 0x00071244 File Offset: 0x0006F444
+	private void Update()
+	{
+	}
+
+	// Token: 0x06000B75 RID: 2933 RVA: 0x00071248 File Offset: 0x0006F448
+	private void FixedUpdate()
+	{
+		if (this.useBoy)
+		{
+			CapsuleCollider componentInChildren = ScriptGlobals.boy.GetComponentInChildren<CapsuleCollider>();
+			Vector3 vector = componentInChildren.transform.position - componentInChildren.transform.forward * 0.5f;
+			RaycastHit[] array = Physics.CapsuleCastAll(vector + Vector3.up * componentInChildren.height * 0.5f - Vector3.up * componentInChildren.radius, vector - Vector3.up * componentInChildren.height * 0.5f + Vector3.up * componentInChildren.radius, componentInChildren.radius, -this.directionalLight.transform.forward);
+			bool flag = false;
+			foreach (RaycastHit raycastHit in array)
+			{
+				if (!raycastHit.collider.isTrigger)
+				{
+					if (raycastHit.collider.gameObject.layer != ScriptGlobals.boy.gameObject.layer)
+					{
+						flag = true;
+						break;
+					}
+				}
+			}
+			if (flag && !this.inShadow)
+			{
+				this.inShadow = true;
+				this.isInShadow.OnEvent(this);
+			}
+			else if (!flag && this.inShadow)
+			{
+				this.inShadow = false;
+				this.isInLight.OnEvent(this);
+			}
+		}
+	}
+
+	// Token: 0x040013DE RID: 5086
+	public GameObject directionalLight;
+
+	// Token: 0x040013DF RID: 5087
+	public bool useBoy;
+
+	// Token: 0x040013E0 RID: 5088
+	public bool useHuddle;
+
+	// Token: 0x040013E1 RID: 5089
+	private SimpleEvent<InShadow> isInShadow = new SimpleEvent<InShadow>("isInShadow");
+
+	// Token: 0x040013E2 RID: 5090
+	private SimpleEvent<InShadow> isInLight = new SimpleEvent<InShadow>("isInLight");
+
+	// Token: 0x040013E3 RID: 5091
+	private bool inShadow;
+}

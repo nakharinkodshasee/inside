@@ -1,0 +1,62 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005C4 RID: 1476
+public class LightBasedOnDistance : MonoBehaviour
+{
+	// Token: 0x0600258B RID: 9611 RVA: 0x0013319C File Offset: 0x0013139C
+	private void Start()
+	{
+	}
+
+	// Token: 0x0600258C RID: 9612 RVA: 0x001331A0 File Offset: 0x001313A0
+	private void Update()
+	{
+		int num = 1 << LayerMask.NameToLayer("Environment");
+		RaycastHit raycastHit;
+		if (Physics.Raycast(this.spotLight.transform.position, this.spotLight.transform.forward, ref raycastHit, 100f, ~num))
+		{
+			Vector3 point = raycastHit.point;
+			point.x += this.xOffset;
+			point.y += this.yOffset;
+			point.z += this.zOffset;
+			if (this.backLight)
+			{
+				this.backLight.transform.position = point;
+			}
+			this.endOfSight.transform.position = raycastHit.point - Vector3.right * 2f;
+			float distance = raycastHit.distance;
+			this.spotLight.range = distance + this.spotLenghtFactor;
+			float num2 = Mathf.InverseLerp(7f, 26f, distance);
+			float y = Mathf.Lerp(2f, 5.25f, num2);
+			Vector3 localScale = this.coneMesh.transform.localScale;
+			localScale.y = y;
+			this.coneMesh.transform.localScale = localScale;
+			this.coneMesh.transform.position = this.spotLight.transform.position;
+		}
+	}
+
+	// Token: 0x0400449F RID: 17567
+	public Light spotLight;
+
+	// Token: 0x040044A0 RID: 17568
+	public float spotLenghtFactor = 1f;
+
+	// Token: 0x040044A1 RID: 17569
+	public GameObject coneMesh;
+
+	// Token: 0x040044A2 RID: 17570
+	public GameObject endOfSight;
+
+	// Token: 0x040044A3 RID: 17571
+	public GameObject backLight;
+
+	// Token: 0x040044A4 RID: 17572
+	public float xOffset;
+
+	// Token: 0x040044A5 RID: 17573
+	public float yOffset;
+
+	// Token: 0x040044A6 RID: 17574
+	public float zOffset;
+}
