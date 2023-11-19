@@ -1,0 +1,121 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200011B RID: 283
+public class GlobalCachedAnimationMovementInfo : MonoBehaviour, ISerializationCallbackReceiver
+{
+	// Token: 0x06000895 RID: 2197 RVA: 0x0005B274 File Offset: 0x00059474
+	[EarlyProcessBuild(0)]
+	private void PreProcess()
+	{
+		if (this.preprocessed)
+		{
+			return;
+		}
+		this.AddEverything(true);
+		this.preprocessedKeys = new List<string>();
+		this.preprocessedVals = new List<AnimationMovementInfo>();
+		foreach (KeyValuePair<string, AnimationMovementInfo> keyValuePair in this.moveInfoDict)
+		{
+			this.preprocessedKeys.Add(keyValuePair.Key);
+			this.preprocessedVals.Add(keyValuePair.Value);
+		}
+		this.preprocessed = true;
+	}
+
+	// Token: 0x06000896 RID: 2198 RVA: 0x0005B328 File Offset: 0x00059528
+	public void OnBeforeSerialize()
+	{
+	}
+
+	// Token: 0x06000897 RID: 2199 RVA: 0x0005B32C File Offset: 0x0005952C
+	public void OnAfterDeserialize()
+	{
+		GlobalCachedAnimationMovementInfo.mInstance = this;
+		if (this.preprocessed)
+		{
+			int num = 0;
+			int count = this.preprocessedKeys.Count;
+			while (num != count)
+			{
+				this.moveInfoDict.Add(this.preprocessedKeys[num], this.preprocessedVals[num]);
+				this.preprocessedVals[num].CreateDict(true);
+				num++;
+			}
+		}
+	}
+
+	// Token: 0x06000898 RID: 2200 RVA: 0x0005B3A0 File Offset: 0x000595A0
+	private void Awake()
+	{
+		if (!this.preprocessed)
+		{
+			using (PushStateUtility.LogTime("MovementInfo Load time for all anims", null))
+			{
+				this.AddEverything(false);
+			}
+		}
+		this.preprocessedKeys = null;
+		this.preprocessedVals = null;
+		this.preprocessed = false;
+	}
+
+	// Token: 0x06000899 RID: 2201 RVA: 0x0005B40C File Offset: 0x0005960C
+	private void AddEverything(bool clear)
+	{
+		if (clear)
+		{
+			this.moveInfoDict.Clear();
+		}
+		this.Add("movementinfo/Hulv");
+		this.Add("movementinfo/GenericCharacter");
+		this.Add("movementinfo/AlbinoA");
+		this.Add("movementinfo/Scientist_A");
+		this.Add("movementinfo/GuardA");
+		this.Add("movementinfo/PigV2");
+		this.Add("movementinfo/DeadAlbino");
+		this.Add("movementinfo/ChaserDudeAnimCtrl");
+	}
+
+	// Token: 0x0600089A RID: 2202 RVA: 0x0005B48C File Offset: 0x0005968C
+	private AnimationMovementInfo Add(string path)
+	{
+		AnimationMovementInfo animationMovementInfo = Resources.Load(path, typeof(AnimationMovementInfo)) as AnimationMovementInfo;
+		if (animationMovementInfo != null)
+		{
+			animationMovementInfo.CreateDict(false);
+		}
+		this.moveInfoDict.Add(path, animationMovementInfo);
+		return animationMovementInfo;
+	}
+
+	// Token: 0x0600089B RID: 2203 RVA: 0x0005B4D0 File Offset: 0x000596D0
+	public AnimationMovementInfo GetMoveInfo(string path)
+	{
+		AnimationMovementInfo result = null;
+		if (!this.moveInfoDict.TryGetValue(path, out result))
+		{
+			result = this.Add(path);
+		}
+		return result;
+	}
+
+	// Token: 0x04000E89 RID: 3721
+	public static GlobalCachedAnimationMovementInfo mInstance;
+
+	// Token: 0x04000E8A RID: 3722
+	private Dictionary<string, AnimationMovementInfo> moveInfoDict = new Dictionary<string, AnimationMovementInfo>();
+
+	// Token: 0x04000E8B RID: 3723
+	[SerializeField]
+	private bool preprocessed;
+
+	// Token: 0x04000E8C RID: 3724
+	[SerializeField]
+	private List<string> preprocessedKeys;
+
+	// Token: 0x04000E8D RID: 3725
+	[SerializeField]
+	private List<AnimationMovementInfo> preprocessedVals;
+}

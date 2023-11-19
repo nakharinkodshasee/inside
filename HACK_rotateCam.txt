@@ -1,0 +1,51 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020005C2 RID: 1474
+public class HACK_rotateCam : MonoBehaviour
+{
+	// Token: 0x06002584 RID: 9604 RVA: 0x00132F70 File Offset: 0x00131170
+	private Vector3 Rotate(float angle)
+	{
+		angle = angle * 0.017453292f + 1.5707964f;
+		return new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f);
+	}
+
+	// Token: 0x06002585 RID: 9605 RVA: 0x00132F98 File Offset: 0x00131198
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x06002586 RID: 9606 RVA: 0x00132FA8 File Offset: 0x001311A8
+	private void FixedUpdate()
+	{
+		float sqrLength = this.boy.velocity.GetSqrLength();
+		float facing = this.boy.facing;
+		float num = Mathf.InverseLerp(-7.4f, 7.4f, sqrLength * facing);
+		float num2 = Mathf.Lerp(-45f, 45f, num);
+		Debug.Log("angleFromZero2One: " + num2);
+		this.camZone.positionUp = this.Rotate(num2);
+		Vector3 vector = this.camZone.positionUp * -9.8f;
+		foreach (GameObject gameObject in this.boxes)
+		{
+			gameObject.GetComponent<Rigidbody>().AddRelativeForce(vector);
+		}
+	}
+
+	// Token: 0x04004497 RID: 17559
+	public CameraBlendBox camZone;
+
+	// Token: 0x04004498 RID: 17560
+	public GameObject toRotate;
+
+	// Token: 0x04004499 RID: 17561
+	public float testVal;
+
+	// Token: 0x0400449A RID: 17562
+	public List<GameObject> boxes;
+
+	// Token: 0x0400449B RID: 17563
+	private Boy boy;
+}

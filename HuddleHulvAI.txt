@@ -1,0 +1,225 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000465 RID: 1125
+public class HuddleHulvAI : MonoBehaviour
+{
+	// Token: 0x06001D93 RID: 7571 RVA: 0x000FEE30 File Offset: 0x000FD030
+	private void Awake()
+	{
+		this.currentFollowVector = new Vector3(Random.Range(-5f, 5f), 0f, Random.Range(-5f, 5f));
+	}
+
+	// Token: 0x06001D94 RID: 7572 RVA: 0x000FEE6C File Offset: 0x000FD06C
+	private void Start()
+	{
+	}
+
+	// Token: 0x06001D95 RID: 7573 RVA: 0x000FEE70 File Offset: 0x000FD070
+	private void Update()
+	{
+		if (ScriptGlobals.huddle.spine == null)
+		{
+			return;
+		}
+		Vector3 position = ScriptGlobals.huddle.transform.position + this.currentFollowVector;
+		if (position.x < this.leftBorder.position.x)
+		{
+			position.x = this.leftBorder.position.x;
+		}
+		else if (position.x > this.rightBorder.position.x)
+		{
+			position.x = this.rightBorder.position.x;
+		}
+		bool flag = this.hulv.transform.position.x < this.doorRight.position.x && this.hulv.transform.position.x > this.doorLeft.position.x;
+		if (flag)
+		{
+			position.z = Mathf.Clamp(position.z, -0.5f, 0.5f);
+		}
+		else if (this.hulv.transform.position.x > this.doorRight.position.x && position.x < this.doorRight.position.x - 2f)
+		{
+			position.z = Mathf.Clamp(position.z, -0.5f, 0.5f);
+		}
+		else if (this.hulv.transform.position.x < this.doorRight.position.x && position.x > this.doorLeft.position.x + 2f)
+		{
+			position.z = Mathf.Clamp(position.z, -0.5f, 0.5f);
+		}
+		base.transform.position = position;
+		Vector3 vector = ScriptGlobals.huddle.transform.position - this.hulv.transform.position;
+		vector.y = 0f;
+		if (this.myState == HuddleHulvAI.MyState.idle)
+		{
+			this.timer -= Time.deltaTime;
+			this.scaredDisallowTimer -= Time.deltaTime;
+			if (this.timer < 0f)
+			{
+				this.timer = Random.Range(8f, 16f);
+				if (!this.foregroundHulv)
+				{
+					this.currentFollowVector = new Vector3(Random.Range(-5f, 5f), 0f, Random.Range(3f, 5f));
+				}
+				else
+				{
+					this.currentFollowVector = new Vector3(Random.Range(-5f, 5f), 0f, Random.Range(-2f, -3f));
+				}
+			}
+			bool flag2 = false;
+			if (Mathf.Abs(vector.x) < 3f && Random.value > 0.5f)
+			{
+				Vector3 vector2 = this.waypoint.transform.position - this.hulv.transform.position;
+				vector2.y = 0f;
+				float magnitude = vector2.magnitude;
+				if (magnitude > 3f)
+				{
+					vector2 /= magnitude;
+					if (Vector3.Dot(vector2, this.hulv.transform.forward) > 0.9f)
+					{
+						flag2 = true;
+					}
+				}
+			}
+			if (flag2)
+			{
+				this.waypoint.moveMode = HulvWaypoint.MovementMode.Jump;
+			}
+			else
+			{
+				this.waypoint.moveMode = HulvWaypoint.MovementMode.Run;
+			}
+			if (Mathf.Sign(ScriptGlobals.huddle.velocity.x) != Mathf.Sign(vector.x) && Mathf.Abs(ScriptGlobals.huddle.velocity.x) > 1f && vector.sqrMagnitude < 25f)
+			{
+				this.scaredTimer += Time.deltaTime;
+			}
+			else
+			{
+				this.scaredTimer = Mathf.Max(0f, this.scaredTimer - Time.deltaTime);
+			}
+			if (this.scaredTimer > this.timeToScare && this.scaredDisallowTimer <= 0f)
+			{
+				this.timer = Random.Range(0.3f, 1.4f);
+				this.myState = HuddleHulvAI.MyState.flee;
+			}
+		}
+		else if (this.myState == HuddleHulvAI.MyState.flee)
+		{
+			this.timer -= Time.deltaTime;
+			if (this.timer <= 0f || vector.x * ScriptGlobals.huddle.velocity.x > 0f)
+			{
+				this.myState = HuddleHulvAI.MyState.idle;
+				this.scaredDisallowTimer = 3f;
+				this.waypoint.nextWaypoint = null;
+			}
+			else
+			{
+				this.waypoint.nextWaypoint = this.waypoint;
+				if (!this.hulv.FollowingWaypoint())
+				{
+					this.hulv.FollowWaypoint(this.waypoint.gameObject);
+				}
+				this.waypoint.moveMode = HulvWaypoint.MovementMode.Jump;
+				this.waypoint.transform.position = this.hulv.transform.position;
+			}
+		}
+		vector.z *= 2f;
+		if (vector.sqrMagnitude < 4f)
+		{
+			if (Mathf.Abs(this.hulv.velocity.x) <= 3f || this.hulv.velocity.x * vector.x <= 0f)
+			{
+				this.hulv.TrashedByHuddle(Mathf.Abs(ScriptGlobals.huddle.velocity.x) > 1.5f);
+			}
+		}
+		Vector3 position2 = this.hulv.transform.position;
+		if (position2.x > this.rampStart.transform.position.x)
+		{
+			if (this.foregroundHulv)
+			{
+				if (position2.z > -3f)
+				{
+					Vector3 position3 = this.hulv.transform.position;
+					position3.z = -3f;
+					this.hulv.transform.position += (position3 - this.hulv.transform.position) * (2f * Time.deltaTime);
+				}
+			}
+			else if (position2.z < 2.8f)
+			{
+				Vector3 position4 = this.hulv.transform.position;
+				position4.z = 2.8f;
+				this.hulv.transform.position += (position4 - this.hulv.transform.position) * (2f * Time.deltaTime);
+			}
+		}
+		Bounds bounds = this.beam.bounds;
+		bounds.Expand(1f);
+		if (bounds.Contains(this.hulv.transform.position))
+		{
+			if (this.foregroundHulv)
+			{
+				if (position2.z > -1.3f)
+				{
+					Vector3 position5 = this.hulv.transform.position;
+					position5.z = -1.3f;
+					this.hulv.transform.position += (position5 - this.hulv.transform.position) * (2f * Time.deltaTime);
+				}
+			}
+			else if (position2.z < 1.3f)
+			{
+				Vector3 position6 = this.hulv.transform.position;
+				position6.z = 1.3f;
+				this.hulv.transform.position += (position6 - this.hulv.transform.position) * (2f * Time.deltaTime);
+			}
+		}
+	}
+
+	// Token: 0x0400365C RID: 13916
+	public Hulv hulv;
+
+	// Token: 0x0400365D RID: 13917
+	public float timeToScare = 0.1f;
+
+	// Token: 0x0400365E RID: 13918
+	public HulvWaypoint waypoint;
+
+	// Token: 0x0400365F RID: 13919
+	public Transform leftBorder;
+
+	// Token: 0x04003660 RID: 13920
+	public Transform rightBorder;
+
+	// Token: 0x04003661 RID: 13921
+	public Transform doorLeft;
+
+	// Token: 0x04003662 RID: 13922
+	public Transform doorRight;
+
+	// Token: 0x04003663 RID: 13923
+	public Transform rampStart;
+
+	// Token: 0x04003664 RID: 13924
+	public Collider beam;
+
+	// Token: 0x04003665 RID: 13925
+	public bool foregroundHulv;
+
+	// Token: 0x04003666 RID: 13926
+	private HuddleHulvAI.MyState myState;
+
+	// Token: 0x04003667 RID: 13927
+	private float timer;
+
+	// Token: 0x04003668 RID: 13928
+	private Vector3 currentFollowVector;
+
+	// Token: 0x04003669 RID: 13929
+	private float scaredTimer;
+
+	// Token: 0x0400366A RID: 13930
+	private float scaredDisallowTimer;
+
+	// Token: 0x02000466 RID: 1126
+	private enum MyState
+	{
+		// Token: 0x0400366C RID: 13932
+		idle,
+		// Token: 0x0400366D RID: 13933
+		flee
+	}
+}

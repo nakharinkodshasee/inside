@@ -1,0 +1,76 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200046D RID: 1133
+public class HuddleStickAudio : MonoBehaviour
+{
+	// Token: 0x06001DC3 RID: 7619 RVA: 0x001004D8 File Offset: 0x000FE6D8
+	private void Start()
+	{
+		this.right = this.EndRight.GetComponent<AudioImpact>();
+		this.left = this.EndLeft.GetComponent<AudioImpact>();
+	}
+
+	// Token: 0x06001DC4 RID: 7620 RVA: 0x00100508 File Offset: 0x000FE708
+	private void Update()
+	{
+		float distanceBetweenPointAndLine = MathUtils.GetDistanceBetweenPointAndLine(this.Beam.position, this.waterEdgeRight.position, Vector3.left);
+		if (this.waterMove.enabled && distanceBetweenPointAndLine > 1f)
+		{
+			this.waterMove.enabled = false;
+		}
+		else if (!this.waterMove.enabled && distanceBetweenPointAndLine < 1f)
+		{
+			this.waterMove.enabled = true;
+		}
+		if (this.right.enabled && this.endRightPos.position.x > this.waterEdgeRight.position.x)
+		{
+			this.right.enabled = false;
+			this.EndRight.GetComponent<Collider>().enabled = false;
+		}
+		else if (!this.right.enabled && this.endRightPos.position.x < this.waterEdgeRight.position.x)
+		{
+			this.right.enabled = true;
+			this.EndRight.GetComponent<Collider>().enabled = true;
+			this.EndRight.GetComponent<IgnoreCollision>().onSetCollision();
+		}
+		if (this.left.enabled && this.endLeftPos.position.x > this.waterEdgeRight.position.x)
+		{
+			this.left.enabled = false;
+			this.EndLeft.GetComponent<Collider>().enabled = false;
+		}
+		else if (!this.left.enabled && this.endLeftPos.position.x < this.waterEdgeRight.position.x)
+		{
+			this.left.enabled = true;
+			this.EndLeft.GetComponent<Collider>().enabled = true;
+			this.EndLeft.GetComponent<IgnoreCollision>().onSetCollision();
+		}
+	}
+
+	// Token: 0x040036B9 RID: 14009
+	public Transform waterEdgeRight;
+
+	// Token: 0x040036BA RID: 14010
+	public GameObject EndRight;
+
+	// Token: 0x040036BB RID: 14011
+	public GameObject EndLeft;
+
+	// Token: 0x040036BC RID: 14012
+	public Transform endLeftPos;
+
+	// Token: 0x040036BD RID: 14013
+	public Transform endRightPos;
+
+	// Token: 0x040036BE RID: 14014
+	public Transform Beam;
+
+	// Token: 0x040036BF RID: 14015
+	public AudioMove waterMove;
+
+	// Token: 0x040036C0 RID: 14016
+	private AudioImpact right;
+
+	// Token: 0x040036C1 RID: 14017
+	private AudioImpact left;
+}

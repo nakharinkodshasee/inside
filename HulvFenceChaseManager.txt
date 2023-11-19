@@ -1,0 +1,817 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020000AD RID: 173
+public class HulvFenceChaseManager : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060005A7 RID: 1447 RVA: 0x000439A0 File Offset: 0x00041BA0
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.rtpcGlobalGameplay = new RTPC("rtpc_global_gameplay", false);
+	}
+
+	// Token: 0x060005A8 RID: 1448 RVA: 0x000439D4 File Offset: 0x00041BD4
+	public bool PreAwake(int callcount)
+	{
+		this.sendHulvsRight = SignalIn.Create("sendHulvsRight", base.gameObject, new Action(this.OnSendHulvsRight));
+		this.sendHulvsLeft = SignalIn.Create("sendHulvsLeft", base.gameObject, new Action(this.OnSendHulvsLeft));
+		this.stop = SignalIn.Create("stop", base.gameObject, new Action(this.OnStop));
+		this.setMaxEmotion = SignalIn.Create("setMaxEmotion", base.gameObject, new Action(this.OnSetMaxEmotion));
+		this.startEventHandling = SignalIn.Create("startEventHandling", base.gameObject, new Action(this.OnStartEventHandling));
+		this.loadStarted = SignalIn.Create("loadStarted", base.gameObject, new Action(this.OnLoadStarted));
+		this.dogsAtFence = SignalOut.Create("dogsAtFence", base.gameObject);
+		this.boySafe = SignalOut.Create("boySafe", base.gameObject);
+		this.boyNotSafe = SignalOut.Create("boyNotSafe", base.gameObject);
+		this.HulvKilledBoySignal = SignalOut.Create("HulvKilledBoySignal", base.gameObject);
+		this.hulvsAreClose = SignalOut.Create("hulvsAreClose", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060005A9 RID: 1449 RVA: 0x00043B1C File Offset: 0x00041D1C
+	private void Start()
+	{
+		this.OnPreProcess();
+		if (this.fenceThrowLeftAnim)
+		{
+			this.leftAnimInitPos = this.fenceThrowLeftAnim.transform.position;
+		}
+		if (this.fenceThrowRightAnim)
+		{
+			this.rightAnimInitPos = this.fenceThrowRightAnim.transform.position;
+		}
+		int i = 0;
+		int count = this.hulvs.Count;
+		while (i < count)
+		{
+			Hulv hulv = this.hulvs[i];
+			this.hulvEntries.Add(new HulvFenceChaseManager.HulvEntry(hulv));
+			hulv.SetAttackFenceWaypoint(this.leftAttackFence);
+			i++;
+		}
+		if (this.ChaseAndFence)
+		{
+			this.InitChaseAndFence();
+		}
+		this.running = true;
+	}
+
+	// Token: 0x060005AA RID: 1450 RVA: 0x00043BDC File Offset: 0x00041DDC
+	private void InitChaseAndFence()
+	{
+		this.hulvDirection = -1;
+	}
+
+	// Token: 0x060005AB RID: 1451 RVA: 0x00043BE8 File Offset: 0x00041DE8
+	private void StartHulvOnPath(Hulv hulv, HulvWaypoint point)
+	{
+		if (point.nextWaypoint == null)
+		{
+			hulv.FollowWaypoint(point.gameObject);
+		}
+		else
+		{
+			BaseWaypoint baseWaypoint = null;
+			BaseWaypoint baseWaypoint2 = null;
+			float num = float.MaxValue;
+			float num2 = float.MaxValue;
+			Vector3 vector = point.nextWaypoint.transform.position - point.transform.position;
+			Vector3 vector2 = vector;
+			BaseWaypoint baseWaypoint3 = point;
+			if (this.fence)
+			{
+				float num3 = Mathf.Sign(hulv.transform.position.x - this.fence.transform.position.x);
+			}
+			while (baseWaypoint3 != null)
+			{
+				if (baseWaypoint3.nextWaypoint != null)
+				{
+					vector = baseWaypoint3.nextWaypoint.transform.position - baseWaypoint3.transform.position;
+				}
+				Vector3 vector3 = baseWaypoint3.transform.position - hulv.transform.position;
+				vector3.y = 0f;
+				float num4 = vector3.x * vector3.x * 4f + vector3.z * vector3.z;
+				GameObject gameObject = null;
+				if (this.fence != null)
+				{
+					gameObject = this.fence.gameObject;
+				}
+				else if (this.warpToEndPointAvoidance)
+				{
+					gameObject = base.gameObject;
+				}
+				bool flag = true;
+				if (gameObject != null)
+				{
+					float num5 = Mathf.Sign(baseWaypoint3.transform.position.x - gameObject.transform.position.x);
+					float num6 = Mathf.Sign(hulv.transform.position.x - gameObject.transform.position.x);
+					flag = (num5 * num6 > 0f);
+					if (Mathf.Abs(gameObject.transform.position.z - baseWaypoint3.transform.position.z) > 15f)
+					{
+						flag = true;
+					}
+				}
+				if (flag && (baseWaypoint3.nextWaypoint == null || Vector3.Dot(vector, vector3) > 0f || Vector3.Dot(vector2, vector3) > 0f))
+				{
+					if (num4 < num)
+					{
+						baseWaypoint = baseWaypoint3;
+						num = num4;
+					}
+				}
+				if (num4 < num2)
+				{
+					baseWaypoint2 = baseWaypoint3;
+					num2 = num4;
+				}
+				if (baseWaypoint3.nextWaypoint != baseWaypoint3)
+				{
+					baseWaypoint3 = baseWaypoint3.nextWaypoint;
+				}
+				else
+				{
+					baseWaypoint3 = null;
+				}
+				vector2 = vector;
+			}
+			if (baseWaypoint != null)
+			{
+				hulv.FollowWaypoint(baseWaypoint.gameObject);
+			}
+			else
+			{
+				hulv.FollowWaypoint(baseWaypoint2.gameObject);
+			}
+		}
+	}
+
+	// Token: 0x060005AC RID: 1452 RVA: 0x00043EE4 File Offset: 0x000420E4
+	private void OnStartEventHandling()
+	{
+		this.handlingEvents = true;
+	}
+
+	// Token: 0x060005AD RID: 1453 RVA: 0x00043EF0 File Offset: 0x000420F0
+	private void OnLoadStarted()
+	{
+		this.handlingEvents = true;
+		this.safeLastFrame = true;
+	}
+
+	// Token: 0x060005AE RID: 1454 RVA: 0x00043F00 File Offset: 0x00042100
+	private void OnSetMaxEmotion()
+	{
+		int i = 0;
+		int count = this.hulvs.Count;
+		while (i < count)
+		{
+			Hulv hulv = this.hulvs[i];
+			HulvPlayer component = hulv.GetComponent<HulvPlayer>();
+			component.SetConfiguration(new HulvPlayer.Config
+			{
+				emotionOverride = HulvPlayer.Config.EmotionOverride.Angry,
+				barkImmediately = true
+			});
+			i++;
+		}
+	}
+
+	// Token: 0x060005AF RID: 1455 RVA: 0x00043F60 File Offset: 0x00042160
+	private void OnStop()
+	{
+		this.running = false;
+		this.handlingEvents = false;
+		this.rtpcGlobalGameplay.SetFast(0f, AudioKeyObject.AkGameObjs.global, 0f);
+		this.hulvDirection = 0;
+	}
+
+	// Token: 0x060005B0 RID: 1456 RVA: 0x00043F94 File Offset: 0x00042194
+	private void StopAllHulves()
+	{
+		foreach (HulvFenceChaseManager.HulvEntry hulvEntry in this.hulvEntries)
+		{
+			Hulv hulv = hulvEntry.hulv;
+			hulv.FollowWaypoint(null);
+			hulv.SetChaseMode(HulvAI.ChaseMode.Idle);
+		}
+	}
+
+	// Token: 0x060005B1 RID: 1457 RVA: 0x00044008 File Offset: 0x00042208
+	private bool SetWaitTime(bool goRight = false)
+	{
+		this.changePathTimer = this.waitTimeBeforeChangeDir;
+		float num = float.MaxValue;
+		float num2 = float.MinValue;
+		int i = 0;
+		int count = this.hulvEntries.Count;
+		while (i < count)
+		{
+			num = Mathf.Min(num, this.hulvEntries[i].hulv.transform.position.z);
+			num2 = Mathf.Max(num2, this.hulvEntries[i].hulv.transform.position.x);
+			i++;
+		}
+		if (this.rightPathZStop > -2f && this.hulvDirection == 1 && num < this.zIgnoreWait - 1f && num2 > base.transform.position.x)
+		{
+			this.changePathTimer = this.standStillBarkTime;
+		}
+		return (num > this.zIgnoreWait || num < this.zStopMindist) && !goRight;
+	}
+
+	// Token: 0x060005B2 RID: 1458 RVA: 0x00044118 File Offset: 0x00042318
+	private void OnSendHulvsRight()
+	{
+		if (this.rightPathZStop > -2f)
+		{
+			Hulv hulv = this.hulvEntries[0].hulv;
+			Vector3 position = hulv.transform.position;
+			if (position.x > base.transform.position.x + 0.2f && position.z < 9f)
+			{
+				hulv.GetHulvAI().SetChaseMode(HulvAI.ChaseMode.ChargeToKill);
+				this.changePathTimer = 0f;
+				this.hulvDirection = 1;
+				return;
+			}
+		}
+		if (this.running && this.hulvDirection != 1 && !ScriptGlobals.boy.isDead)
+		{
+			if (this.waitTimeBeforeChangeDir > 0f && this.hulvDirection != 0)
+			{
+				bool flag = this.SetWaitTime(true);
+				this.hulvDirection = 1;
+				if (!flag)
+				{
+					this.StopAllHulves();
+				}
+			}
+			else
+			{
+				this.hulvDirection = 1;
+				this.SendOnPath(this.rightAttackFence, this.hulvRightPaths, ref this.currentRightPath);
+			}
+		}
+	}
+
+	// Token: 0x060005B3 RID: 1459 RVA: 0x00044228 File Offset: 0x00042428
+	private void OnSendHulvsLeft()
+	{
+		if (this.running && this.hulvDirection != -1 && !ScriptGlobals.boy.isDead)
+		{
+			if (this.waitTimeBeforeChangeDir > 0f && this.hulvDirection != 0)
+			{
+				bool flag = this.SetWaitTime(false);
+				this.hulvDirection = -1;
+				if (!flag)
+				{
+					this.StopAllHulves();
+				}
+			}
+			else
+			{
+				this.hulvDirection = -1;
+				this.SendOnPath(this.leftAttackFence, this.hulvLeftPaths, ref this.currentLeftPath);
+			}
+		}
+	}
+
+	// Token: 0x060005B4 RID: 1460 RVA: 0x000442B8 File Offset: 0x000424B8
+	private void SendOnPath(GameObject attackFencePoint, List<HulvWaypoint> wayPointList, ref int curPath)
+	{
+		if (!this.chaseStarted)
+		{
+			this.chaseStarted = true;
+			foreach (HulvFenceChaseManager.HulvEntry hulvEntry in this.hulvEntries)
+			{
+				HulvPlayer component = hulvEntry.hulv.GetComponent<HulvPlayer>();
+				component.SetConfiguration(default(HulvPlayer.Config));
+			}
+		}
+		foreach (HulvFenceChaseManager.HulvEntry hulvEntry2 in this.hulvEntries)
+		{
+			Hulv hulv = hulvEntry2.hulv;
+			bool flag = true;
+			int num = 0;
+			if (!this.ChaseAndFence)
+			{
+				num = -1;
+				if (this.hulvDirection == -1 && hulv.GetChaseMode() == HulvAI.ChaseMode.ChargeToKill && hulv.transform.position.z < this.zStopMindist)
+				{
+					flag = false;
+				}
+			}
+			if (flag)
+			{
+				hulv.SetAttackFenceWaypoint(attackFencePoint);
+				hulv.SetChaseMode(HulvAI.ChaseMode.Threaten);
+				this.StartHulvOnPath(hulv, wayPointList[curPath]);
+				curPath = (curPath + 1) % wayPointList.Count;
+				this.FrustratedCheck(hulvEntry2, (float)num);
+			}
+		}
+	}
+
+	// Token: 0x060005B5 RID: 1461 RVA: 0x0004442C File Offset: 0x0004262C
+	private void FrustratedCheck(HulvFenceChaseManager.HulvEntry he, float side)
+	{
+		if (he.frustratedTimer <= 0f)
+		{
+			float num = Mathf.Sign(he.hulv.transform.position.x - base.transform.position.x);
+			if (num != side)
+			{
+				he.frustratedTimer = this.frustratedDuration;
+				HulvPlayer component = he.hulv.GetComponent<HulvPlayer>();
+				component.SetConfiguration(new HulvPlayer.Config
+				{
+					emotionOverride = HulvPlayer.Config.EmotionOverride.Frustrated,
+					barkImmediately = true
+				});
+			}
+		}
+	}
+
+	// Token: 0x060005B6 RID: 1462 RVA: 0x000444BC File Offset: 0x000426BC
+	private void SetFallAnimPos(float offset)
+	{
+		Vector3 position = this.leftAnimInitPos;
+		position.y += offset;
+		this.fenceThrowLeftAnim.transform.position = position;
+		this.fenceThrowLowLeftAnim.transform.position = position;
+		position = this.rightAnimInitPos;
+		position.y += offset;
+		this.fenceThrowRightAnim.transform.position = position;
+		this.fenceThrowLowRightAnim.transform.position = position;
+	}
+
+	// Token: 0x060005B7 RID: 1463 RVA: 0x0004453C File Offset: 0x0004273C
+	private void CheckIfSafe()
+	{
+		float num = float.MaxValue;
+		Hulv hulv = null;
+		float num2 = 0f;
+		float num3 = 0f;
+		int i = 0;
+		int count = this.hulvs.Count;
+		while (i < count)
+		{
+			hulv = this.hulvs[i];
+			if (hulv != null && ScriptGlobals.boy.pos.y - hulv.transform.position.y < num)
+			{
+				num = ScriptGlobals.boy.pos.y - hulv.transform.position.y;
+			}
+			i++;
+		}
+		if ((this.fence || this.warpToEndPointAvoidance) && hulv)
+		{
+			if (this.fence != null)
+			{
+				num2 = Mathf.Sign(hulv.transform.position.x - this.fence.transform.position.x);
+				num3 = Mathf.Sign(ScriptGlobals.boy.pos.x - this.fence.transform.position.x);
+			}
+			else
+			{
+				num2 = Mathf.Sign(hulv.transform.position.x - base.transform.position.x);
+				num3 = Mathf.Sign(ScriptGlobals.boy.pos.x - base.transform.position.x);
+			}
+			this.hulvFenceSideLastFrame = (int)num2;
+		}
+		bool flag;
+		if ((num3 < 0f && num2 < 0f) || (num3 > 0f && num2 > 0f))
+		{
+			flag = true;
+			if (this.safeLastFrame && this.atFenceLastFrame)
+			{
+				this.rtpcGlobalGameplay.SetFast(0f, AudioKeyObject.AkGameObjs.global, 0f);
+			}
+		}
+		else
+		{
+			flag = false;
+			if (this.safeLastFrame && this.atFenceLastFrame)
+			{
+				this.rtpcGlobalGameplay.SetFast(100f, AudioKeyObject.AkGameObjs.global, 0f);
+			}
+		}
+		if (this.safeLastFrame && (((double)num < 2.59 && flag) || ScriptGlobals.boy.state is BoyJumpState))
+		{
+			this.boyNotSafe.Signal();
+			this.safeLastFrame = false;
+		}
+		else if (!this.safeLastFrame && (double)num > 2.6 && ScriptGlobals.boy.state is BoyLadderState)
+		{
+			this.boySafe.Signal();
+			this.safeLastFrame = true;
+		}
+	}
+
+	// Token: 0x060005B8 RID: 1464 RVA: 0x00044824 File Offset: 0x00042A24
+	public float GetRTPC()
+	{
+		return this.rtpc;
+	}
+
+	// Token: 0x060005B9 RID: 1465 RVA: 0x0004482C File Offset: 0x00042A2C
+	private void SetHulvDistRTPC()
+	{
+		float num;
+		if ((this.hulvFenceSideLastFrame == 1 && this.hulvDirection > 0) || (this.hulvFenceSideLastFrame == -1 && this.hulvDirection < 0) || this.hulvDirection == 0)
+		{
+			num = this.GetShortestHulvDist(ScriptGlobals.boy.transform);
+		}
+		else
+		{
+			float magnitude = (this.fence.transform.position - this.wallEdge.position).magnitude;
+			num = magnitude + this.GetShortestHulvDist(this.wallEdge);
+		}
+		if (num <= 10f && !this.hulvsClose)
+		{
+			this.hulvsAreClose.Signal();
+			this.hulvsClose = true;
+		}
+		else if (num >= 11f && this.hulvsClose)
+		{
+			this.hulvsClose = false;
+		}
+		if ((!this.chaseStarted && !this.atFenceLastFrame) || (!this.atFenceLastFrame && this.chaseStarted))
+		{
+			this.rtpc = Mathf.InverseLerp(3.1f, 43f, num) * 100f;
+			this.rtpcGlobalGameplay.SetFast(this.rtpc, AudioKeyObject.AkGameObjs.global, 0f);
+		}
+	}
+
+	// Token: 0x060005BA RID: 1466 RVA: 0x00044978 File Offset: 0x00042B78
+	private float GetShortestHulvDist(Transform target)
+	{
+		float num = float.MaxValue;
+		int i = 0;
+		int count = this.hulvs.Count;
+		while (i < count)
+		{
+			Hulv hulv = this.hulvs[i];
+			if (hulv != null)
+			{
+				float magnitude = (hulv.transform.position - target.position).magnitude;
+				if (magnitude < num)
+				{
+					num = magnitude;
+				}
+			}
+			i++;
+		}
+		return num;
+	}
+
+	// Token: 0x060005BB RID: 1467 RVA: 0x000449F0 File Offset: 0x00042BF0
+	private void CheckIfAtFence()
+	{
+		float num = 0f;
+		if (this.hulvDirection > 0)
+		{
+			num = this.GetShortestHulvDist(this.rightAttackFence.transform);
+		}
+		else if (this.hulvDirection < 0)
+		{
+			num = this.GetShortestHulvDist(this.leftAttackFence.transform);
+		}
+		if (!this.atFenceLastFrame && num < 2f)
+		{
+			this.dogsAtFence.Signal();
+			this.atFenceLastFrame = true;
+		}
+		else if (this.atFenceLastFrame && num > 3f)
+		{
+			this.atFenceLastFrame = false;
+		}
+	}
+
+	// Token: 0x060005BC RID: 1468 RVA: 0x00044A90 File Offset: 0x00042C90
+	private void CheckIfDead()
+	{
+		if (!this.boyDeadLastFrame && ScriptGlobals.boy.isDead)
+		{
+			this.HulvKilledBoySignal.Signal();
+			this.boyDeadLastFrame = true;
+		}
+	}
+
+	// Token: 0x060005BD RID: 1469 RVA: 0x00044ACC File Offset: 0x00042CCC
+	private void FixedUpdate()
+	{
+		if (this.changePathTimer == -1f)
+		{
+			bool flag = false;
+			Vector3 position = this.hulvEntries[0].hulv.transform.position;
+			if (position.x * (float)this.hulvDirection > base.transform.position.x * (float)this.hulvDirection)
+			{
+				flag = true;
+			}
+			else if (this.hulvDirection == -1)
+			{
+				flag = true;
+			}
+			else if (Mathf.Abs(base.transform.position.x - position.x) > 1.5f)
+			{
+				flag = true;
+			}
+			if (flag)
+			{
+				this.changePathTimer = 0f;
+				if (this.hulvDirection == -1)
+				{
+					this.SendOnPath(this.leftAttackFence, this.hulvLeftPaths, ref this.currentLeftPath);
+				}
+				else
+				{
+					this.SendOnPath(this.rightAttackFence, this.hulvRightPaths, ref this.currentRightPath);
+				}
+			}
+		}
+		else if (this.changePathTimer > 0f)
+		{
+			this.changePathTimer -= Time.deltaTime;
+			if (this.changePathTimer <= 0f)
+			{
+				if (this.hulvDirection == -1)
+				{
+					this.SendOnPath(this.leftAttackFence, this.hulvLeftPaths, ref this.currentLeftPath);
+				}
+				else
+				{
+					this.SendOnPath(this.rightAttackFence, this.hulvRightPaths, ref this.currentRightPath);
+				}
+			}
+		}
+		if (this.warpToEndPointAvoidance && this.rightPathZStop > -2f && this.hulvDirection == 1 && this.changePathTimer <= 0f)
+		{
+			int i = 0;
+			int count = this.hulvs.Count;
+			while (i < count)
+			{
+				Hulv hulv = this.hulvs[i];
+				if (hulv.transform.position.z < this.rightPathZStop && hulv.transform.position.x > base.transform.position.x + 0.3f)
+				{
+					this.OnStop();
+					return;
+				}
+				i++;
+			}
+		}
+		if (!this.running)
+		{
+			return;
+		}
+		if (this.handlingEvents)
+		{
+			this.CheckIfSafe();
+			this.CheckIfAtFence();
+			this.CheckIfDead();
+			this.SetHulvDistRTPC();
+		}
+		if (this.animYOffset > 0f)
+		{
+			this.animYOffset = Mathf.Max(this.animYOffset - Time.deltaTime * this.yMoveSpeed, 0f);
+			this.SetFallAnimPos(this.animYOffset);
+		}
+		int j = 0;
+		int count2 = this.hulvEntries.Count;
+		while (j < count2)
+		{
+			HulvFenceChaseManager.HulvEntry hulvEntry = this.hulvEntries[j];
+			if (hulvEntry.frustratedTimer > 0f)
+			{
+				hulvEntry.frustratedTimer -= Time.deltaTime;
+				if (hulvEntry.frustratedTimer <= 0f)
+				{
+					HulvPlayer component = hulvEntry.hulv.GetComponent<HulvPlayer>();
+					component.SetConfiguration(default(HulvPlayer.Config));
+				}
+			}
+			j++;
+		}
+		if (this.fence != null && this.fence.wireDeformer != null)
+		{
+			this.slamDeadZone -= Time.deltaTime;
+			int k = 0;
+			int count3 = this.hulvs.Count;
+			while (k < count3)
+			{
+				Hulv hulv2 = this.hulvs[k];
+				if (hulv2 != null)
+				{
+					float fenceSlam = this.hulvs[k].GetFenceSlam();
+					if (Mathf.Abs(fenceSlam) > 0f)
+					{
+						float num = ScriptGlobals.boy.pos.y - hulv2.transform.position.y;
+						if (ScriptGlobals.boy.facing * fenceSlam > 0f && ScriptGlobals.boy.state is BoyLadderState && num < 2.2f)
+						{
+							AnimClipNode animClipNode = (num >= 1.3f) ? this.fenceThrowLeftAnim : this.fenceThrowLowLeftAnim;
+							if (fenceSlam <= 0f)
+							{
+								animClipNode = ((num >= 1.3f) ? this.fenceThrowRightAnim : this.fenceThrowLowRightAnim);
+							}
+							if (animClipNode != null)
+							{
+								this.animYOffset = ScriptGlobals.boy.pos.y - animClipNode.transform.position.y - 2f;
+								if (this.animYOffset > 0f)
+								{
+									this.yMoveSpeed = this.animYOffset * 2f;
+									this.SetFallAnimPos(this.animYOffset);
+								}
+								BoyUtils.StartCustomAnim(ScriptGlobals.boy, animClipNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+							}
+						}
+					}
+					if ((Mathf.Abs(fenceSlam) > 0.75f && this.slamDeadZone <= 0f) || (Mathf.Abs(fenceSlam) > 0f && !this.fence.wireDeformer.IsEffectRunning()))
+					{
+						Vector3 worldPos = hulv2.transform.position + Vector3.up * 2f;
+						this.fence.wireDeformer.StartPushEffect(worldPos, fenceSlam, false, true);
+						if (Mathf.Abs(fenceSlam) > 0.75f)
+						{
+							this.fence.AddTiltSpeed(fenceSlam * 3f);
+							this.slamDeadZone = 0.1f;
+						}
+						break;
+					}
+				}
+				k++;
+			}
+		}
+	}
+
+	// Token: 0x040009D9 RID: 2521
+	private SignalIn sendHulvsRight;
+
+	// Token: 0x040009DA RID: 2522
+	private SignalIn sendHulvsLeft;
+
+	// Token: 0x040009DB RID: 2523
+	private SignalIn stop;
+
+	// Token: 0x040009DC RID: 2524
+	private SignalIn setMaxEmotion;
+
+	// Token: 0x040009DD RID: 2525
+	private SignalIn startEventHandling;
+
+	// Token: 0x040009DE RID: 2526
+	private SignalIn loadStarted;
+
+	// Token: 0x040009DF RID: 2527
+	private SignalOut dogsAtFence;
+
+	// Token: 0x040009E0 RID: 2528
+	private SignalOut boySafe;
+
+	// Token: 0x040009E1 RID: 2529
+	private SignalOut boyNotSafe;
+
+	// Token: 0x040009E2 RID: 2530
+	private SignalOut HulvKilledBoySignal;
+
+	// Token: 0x040009E3 RID: 2531
+	private SignalOut hulvsAreClose;
+
+	// Token: 0x040009E4 RID: 2532
+	public List<Hulv> hulvs = new List<Hulv>();
+
+	// Token: 0x040009E5 RID: 2533
+	public List<HulvWaypoint> hulvRightPaths = new List<HulvWaypoint>();
+
+	// Token: 0x040009E6 RID: 2534
+	public List<HulvWaypoint> hulvLeftPaths = new List<HulvWaypoint>();
+
+	// Token: 0x040009E7 RID: 2535
+	public GameObject rightAttackFence;
+
+	// Token: 0x040009E8 RID: 2536
+	public GameObject leftAttackFence;
+
+	// Token: 0x040009E9 RID: 2537
+	public Fence fence;
+
+	// Token: 0x040009EA RID: 2538
+	public AnimClipNode fenceThrowLeftAnim;
+
+	// Token: 0x040009EB RID: 2539
+	public AnimClipNode fenceThrowLowLeftAnim;
+
+	// Token: 0x040009EC RID: 2540
+	private Vector3 leftAnimInitPos;
+
+	// Token: 0x040009ED RID: 2541
+	public AnimClipNode fenceThrowRightAnim;
+
+	// Token: 0x040009EE RID: 2542
+	public AnimClipNode fenceThrowLowRightAnim;
+
+	// Token: 0x040009EF RID: 2543
+	public float frustratedDuration = 2f;
+
+	// Token: 0x040009F0 RID: 2544
+	public float waitTimeBeforeChangeDir;
+
+	// Token: 0x040009F1 RID: 2545
+	public Transform wallEdge;
+
+	// Token: 0x040009F2 RID: 2546
+	public bool ChaseAndFence;
+
+	// Token: 0x040009F3 RID: 2547
+	public bool warpToEndPointAvoidance;
+
+	// Token: 0x040009F4 RID: 2548
+	public float rightPathZStop = -2000f;
+
+	// Token: 0x040009F5 RID: 2549
+	public float zIgnoreWait = 11.5f;
+
+	// Token: 0x040009F6 RID: 2550
+	public float standStillBarkTime = 2f;
+
+	// Token: 0x040009F7 RID: 2551
+	public float zStopMindist = 7f;
+
+	// Token: 0x040009F8 RID: 2552
+	private Vector3 rightAnimInitPos;
+
+	// Token: 0x040009F9 RID: 2553
+	private float animYOffset;
+
+	// Token: 0x040009FA RID: 2554
+	private float yMoveSpeed = 2f;
+
+	// Token: 0x040009FB RID: 2555
+	private int currentRightPath;
+
+	// Token: 0x040009FC RID: 2556
+	private int currentLeftPath;
+
+	// Token: 0x040009FD RID: 2557
+	private List<HulvFenceChaseManager.HulvEntry> hulvEntries = new List<HulvFenceChaseManager.HulvEntry>();
+
+	// Token: 0x040009FE RID: 2558
+	private bool chaseStarted;
+
+	// Token: 0x040009FF RID: 2559
+	private bool running = true;
+
+	// Token: 0x04000A00 RID: 2560
+	private int hulvDirection;
+
+	// Token: 0x04000A01 RID: 2561
+	private bool safeLastFrame;
+
+	// Token: 0x04000A02 RID: 2562
+	private bool atFenceLastFrame;
+
+	// Token: 0x04000A03 RID: 2563
+	private bool boyDeadLastFrame;
+
+	// Token: 0x04000A04 RID: 2564
+	private bool hulvsClose;
+
+	// Token: 0x04000A05 RID: 2565
+	private int hulvFenceSideLastFrame;
+
+	// Token: 0x04000A06 RID: 2566
+	private bool handlingEvents;
+
+	// Token: 0x04000A07 RID: 2567
+	private float rtpc;
+
+	// Token: 0x04000A08 RID: 2568
+	private float changePathTimer;
+
+	// Token: 0x04000A09 RID: 2569
+	[HideInInspector]
+	[SerializeField]
+	private RTPC rtpcGlobalGameplay;
+
+	// Token: 0x04000A0A RID: 2570
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04000A0B RID: 2571
+	private float slamDeadZone;
+
+	// Token: 0x020000AE RID: 174
+	private class HulvEntry
+	{
+		// Token: 0x060005BE RID: 1470 RVA: 0x0004507C File Offset: 0x0004327C
+		public HulvEntry(Hulv hulv)
+		{
+			this.hulv = hulv;
+		}
+
+		// Token: 0x04000A0C RID: 2572
+		public float frustratedTimer;
+
+		// Token: 0x04000A0D RID: 2573
+		public Hulv hulv;
+	}
+}

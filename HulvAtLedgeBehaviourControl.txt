@@ -1,0 +1,52 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000AA RID: 170
+public class HulvAtLedgeBehaviourControl : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600059E RID: 1438 RVA: 0x000436D8 File Offset: 0x000418D8
+	public bool PreAwake(int callcount)
+	{
+		this.startControllingHulv = SignalIn.Create("startControllingHulv", base.gameObject, new Action(this.OnStartControllingHulv));
+		return true;
+	}
+
+	// Token: 0x0600059F RID: 1439 RVA: 0x00043700 File Offset: 0x00041900
+	private void OnStartControllingHulv()
+	{
+		this.controllingHulv = true;
+	}
+
+	// Token: 0x060005A0 RID: 1440 RVA: 0x0004370C File Offset: 0x0004190C
+	private void Update()
+	{
+		if (this.controllingHulv)
+		{
+			if (this.timer > 0f)
+			{
+				this.timer -= Time.deltaTime;
+				return;
+			}
+			float num = ScriptGlobals.boy.pos.x - this.hulvToControl.transform.position.x;
+			if (num > this.farDist && this.hulvToControl.GetTopAnimationState() == Hulv.HulvAnimationStates.IdleAtWater_Straight)
+			{
+				this.hulvToControl.SetUniqueAnimation(Hulv.UniqueAnimations.IdleBoyFar, null, false, 0f, -1f, -1f);
+			}
+		}
+	}
+
+	// Token: 0x040009C8 RID: 2504
+	public Hulv hulvToControl;
+
+	// Token: 0x040009C9 RID: 2505
+	public float farDist = 6f;
+
+	// Token: 0x040009CA RID: 2506
+	private SignalIn startControllingHulv;
+
+	// Token: 0x040009CB RID: 2507
+	private bool controllingHulv;
+
+	// Token: 0x040009CC RID: 2508
+	private float timer = 2f;
+}

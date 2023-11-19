@@ -1,0 +1,36 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200050A RID: 1290
+public class HuddlePendulGrabHack : MonoBehaviour
+{
+	// Token: 0x060021AF RID: 8623 RVA: 0x0011A90C File Offset: 0x00118B0C
+	public void SetSecondStage()
+	{
+		this.stage = 1;
+	}
+
+	// Token: 0x060021B0 RID: 8624 RVA: 0x0011A918 File Offset: 0x00118B18
+	private void Update()
+	{
+		if (this.stage == 0)
+		{
+			this.alignObject.transform.position = base.transform.position;
+			base.transform.rotation = this.alignObject.transform.rotation;
+		}
+		else
+		{
+			base.transform.rotation = this.alignObject2.transform.rotation;
+			base.transform.position = this.alignObject2.transform.position;
+		}
+	}
+
+	// Token: 0x04003EBC RID: 16060
+	public GameObject alignObject;
+
+	// Token: 0x04003EBD RID: 16061
+	public GameObject alignObject2;
+
+	// Token: 0x04003EBE RID: 16062
+	private int stage;
+}

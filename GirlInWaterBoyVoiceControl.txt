@@ -1,0 +1,197 @@
+using System;
+using AudioCommands;
+using UnityEngine;
+
+// Token: 0x02000490 RID: 1168
+public class GirlInWaterBoyVoiceControl : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001EAB RID: 7851 RVA: 0x001070F8 File Offset: 0x001052F8
+	public bool PreAwake(int callcount)
+	{
+		this.chaseStart = SignalIn.Create("chaseStart", base.gameObject, new Action(this.StartSettingMinValue));
+		this.chaseStop = SignalIn.Create("chaseStop", base.gameObject, new Action(this.StopSettingMinValue));
+		this.chainFishingStart = SignalIn.Create("chainFishingStart", base.gameObject, new Action(this.StartChainFishing));
+		this.chainFishingStop = SignalIn.Create("chainFishingStop", base.gameObject, new Action(this.StopChainFishing));
+		this.girlGaveUp = SignalIn.Create("girlGaveUp", base.gameObject, new Action(this.GirlDidGiveUp));
+		this.exitWater = SignalOut.Create("exitWater", base.gameObject);
+		this.exitWaterClose = SignalOut.Create("exitWaterClose", base.gameObject);
+		this.exitWaterMedium = SignalOut.Create("exitWaterMedium", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001EAC RID: 7852 RVA: 0x001071F4 File Offset: 0x001053F4
+	private void Awake()
+	{
+		this.config.setIntensity = true;
+		this.config.intensityConfig = new VoiceConfigProbe.ConfigIntensityTimed(this.newMinValue, 100f, 0f, 100f, false, 0f, 0f);
+	}
+
+	// Token: 0x06001EAD RID: 7853 RVA: 0x00107240 File Offset: 0x00105440
+	private void StartSettingMinValue()
+	{
+		this.isActive = true;
+	}
+
+	// Token: 0x06001EAE RID: 7854 RVA: 0x0010724C File Offset: 0x0010544C
+	private void StopSettingMinValue()
+	{
+		this.isActive = false;
+		this.config.intensityConfig.rangeA.Set(0f, 100f);
+		ThemeUtils.SetVoiceConfig(AudioKeyObject.boy, this.config);
+		ThemeUtils.ResetVoiceConfig(AudioKeyObject.boy);
+	}
+
+	// Token: 0x06001EAF RID: 7855 RVA: 0x0010729C File Offset: 0x0010549C
+	private void GirlDidGiveUp()
+	{
+		if (this.isChainFishing)
+		{
+		}
+	}
+
+	// Token: 0x06001EB0 RID: 7856 RVA: 0x001072AC File Offset: 0x001054AC
+	private void StartChainFishing()
+	{
+		this.isChainFishing = true;
+	}
+
+	// Token: 0x06001EB1 RID: 7857 RVA: 0x001072B8 File Offset: 0x001054B8
+	private void StopChainFishing()
+	{
+		this.isChainFishing = false;
+	}
+
+	// Token: 0x06001EB2 RID: 7858 RVA: 0x001072C4 File Offset: 0x001054C4
+	private void Update()
+	{
+		if (this.isActive && ScriptGlobals.boyActive)
+		{
+			this.SetNewMinValue();
+			this.config.intensityConfig.rangeA.Set(this.newMinValue, 100f);
+			ThemeUtils.SetVoiceConfig(AudioKeyObject.boy, this.config);
+			if (this.isChainFishing)
+			{
+				this.UpDateChainLogic();
+			}
+			else
+			{
+				this.UpdateExitWater();
+			}
+		}
+	}
+
+	// Token: 0x06001EB3 RID: 7859 RVA: 0x00107338 File Offset: 0x00105538
+	private void SetNewMinValue()
+	{
+		this.distToGirl = (ScriptGlobals.boy.pos3 - this.girl.transform.position).magnitude;
+		this.newMinValue = Mathf.InverseLerp(this.maxDist, this.minDist, this.distToGirl) * 100f;
+	}
+
+	// Token: 0x06001EB4 RID: 7860 RVA: 0x00107398 File Offset: 0x00105598
+	private void UpDateChainLogic()
+	{
+		bool boyInWater = this.girl.GetBoyInWater();
+		if (boyInWater)
+		{
+			if (this.distToGirl <= this.girlCloseLimit && this.distToGirlLastFrame > this.girlCloseLimit)
+			{
+				this.exitWaterClose.Signal();
+			}
+			else if (this.distToGirl <= this.girlMediumLimit && this.distToGirlLastFrame > this.girlMediumLimit)
+			{
+				this.exitWaterMedium.Signal();
+			}
+		}
+		if (!boyInWater && this.boyInWaterLastFrame)
+		{
+			this.exitWater.Signal();
+		}
+		this.boyInWaterLastFrame = boyInWater;
+		this.distToGirlLastFrame = this.distToGirl;
+	}
+
+	// Token: 0x06001EB5 RID: 7861 RVA: 0x00107448 File Offset: 0x00105648
+	private void UpdateExitWater()
+	{
+		bool boyInWater = this.girl.GetBoyInWater();
+		if (!boyInWater && this.boyInWaterLastFrame)
+		{
+			if (this.distToGirl <= this.girlCloseLimit)
+			{
+				this.exitWaterClose.Signal();
+			}
+			else if (this.distToGirl <= this.girlMediumLimit)
+			{
+				this.exitWaterMedium.Signal();
+			}
+			else
+			{
+				this.exitWater.Signal();
+			}
+		}
+		this.boyInWaterLastFrame = boyInWater;
+	}
+
+	// Token: 0x040038D9 RID: 14553
+	public WaterGirl girl;
+
+	// Token: 0x040038DA RID: 14554
+	public float minDist;
+
+	// Token: 0x040038DB RID: 14555
+	public float maxDist = 20f;
+
+	// Token: 0x040038DC RID: 14556
+	public float girlCloseLimit = 3f;
+
+	// Token: 0x040038DD RID: 14557
+	public float girlMediumLimit = 6f;
+
+	// Token: 0x040038DE RID: 14558
+	private SignalIn chaseStart;
+
+	// Token: 0x040038DF RID: 14559
+	private SignalIn chaseStop;
+
+	// Token: 0x040038E0 RID: 14560
+	private SignalIn chainFishingStart;
+
+	// Token: 0x040038E1 RID: 14561
+	private SignalIn chainFishingStop;
+
+	// Token: 0x040038E2 RID: 14562
+	private SignalIn girlGaveUp;
+
+	// Token: 0x040038E3 RID: 14563
+	private SignalOut exitWater;
+
+	// Token: 0x040038E4 RID: 14564
+	private SignalOut exitWaterClose;
+
+	// Token: 0x040038E5 RID: 14565
+	private SignalOut exitWaterMedium;
+
+	// Token: 0x040038E6 RID: 14566
+	private float newMinValue;
+
+	// Token: 0x040038E7 RID: 14567
+	private BoyVoiceConfig config = new BoyVoiceConfig();
+
+	// Token: 0x040038E8 RID: 14568
+	private bool isActive;
+
+	// Token: 0x040038E9 RID: 14569
+	private Transform girlTransform;
+
+	// Token: 0x040038EA RID: 14570
+	private bool boyInWaterLastFrame;
+
+	// Token: 0x040038EB RID: 14571
+	private float distToGirl = 100f;
+
+	// Token: 0x040038EC RID: 14572
+	private float distToGirlLastFrame = 100f;
+
+	// Token: 0x040038ED RID: 14573
+	private bool isChainFishing;
+}

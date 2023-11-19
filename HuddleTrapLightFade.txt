@@ -1,0 +1,91 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000470 RID: 1136
+public class HuddleTrapLightFade : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001DDC RID: 7644 RVA: 0x00100C44 File Offset: 0x000FEE44
+	public bool PreAwake(int callcount)
+	{
+		this.platePulled = SignalIn.Create("platePulled", base.gameObject, new Action(this.OnPlatePulled));
+		this.loadComplete = SignalIn.Create("loadComplete", base.gameObject, new Action(this.OnLoadComplete));
+		this.intensityProperty_01 = this.bounceLight_01.GetFloatProperty("_Intensity");
+		this.intensityProperty_02 = this.bounceLight_02.GetFloatProperty("_Intensity");
+		this.originalIntensity_01 = this.bounceLight_01.GetFloatValue(this.intensityProperty_01);
+		this.originalIntensity_02 = this.bounceLight_02.GetFloatValue(this.intensityProperty_02);
+		return true;
+	}
+
+	// Token: 0x06001DDD RID: 7645 RVA: 0x00100CF0 File Offset: 0x000FEEF0
+	private void Start()
+	{
+		this.SetIntensity(0f);
+	}
+
+	// Token: 0x06001DDE RID: 7646 RVA: 0x00100D00 File Offset: 0x000FEF00
+	private void Update()
+	{
+		if (this.targetTime > this.timer)
+		{
+			this.timer += Time.deltaTime * this.fadeSpeed;
+			float intensity = this.fadeTransition.Evaluate(this.timer);
+			this.SetIntensity(intensity);
+		}
+	}
+
+	// Token: 0x06001DDF RID: 7647 RVA: 0x00100D50 File Offset: 0x000FEF50
+	private void SetIntensity(float percentage)
+	{
+		float num = Mathf.Clamp01(percentage);
+		this.bounceLight_01.SetFloatProperty(this.intensityProperty_01, this.originalIntensity_01 * num);
+		this.bounceLight_02.SetFloatProperty(this.intensityProperty_02, this.originalIntensity_02 * num);
+	}
+
+	// Token: 0x06001DE0 RID: 7648 RVA: 0x00100D98 File Offset: 0x000FEF98
+	private void OnPlatePulled()
+	{
+		this.targetTime += 1f;
+	}
+
+	// Token: 0x06001DE1 RID: 7649 RVA: 0x00100DAC File Offset: 0x000FEFAC
+	private void OnLoadComplete()
+	{
+		this.SetIntensity(3f);
+	}
+
+	// Token: 0x040036DA RID: 14042
+	public MaterialInstance bounceLight_01;
+
+	// Token: 0x040036DB RID: 14043
+	public MaterialInstance bounceLight_02;
+
+	// Token: 0x040036DC RID: 14044
+	public AnimationCurve fadeTransition;
+
+	// Token: 0x040036DD RID: 14045
+	public float fadeSpeed = 0.5f;
+
+	// Token: 0x040036DE RID: 14046
+	private SignalIn platePulled;
+
+	// Token: 0x040036DF RID: 14047
+	private SignalIn loadComplete;
+
+	// Token: 0x040036E0 RID: 14048
+	private MaterialInstance.FloatProperty intensityProperty_01;
+
+	// Token: 0x040036E1 RID: 14049
+	private MaterialInstance.FloatProperty intensityProperty_02;
+
+	// Token: 0x040036E2 RID: 14050
+	private float originalIntensity_01;
+
+	// Token: 0x040036E3 RID: 14051
+	private float originalIntensity_02;
+
+	// Token: 0x040036E4 RID: 14052
+	private float timer;
+
+	// Token: 0x040036E5 RID: 14053
+	private float targetTime;
+}

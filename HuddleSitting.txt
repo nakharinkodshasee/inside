@@ -1,0 +1,86 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000178 RID: 376
+public class HuddleSitting : MonoBehaviour, IPreAwake
+{
+	// Token: 0x17000044 RID: 68
+	// (get) Token: 0x06000B17 RID: 2839 RVA: 0x0006D948 File Offset: 0x0006BB48
+	private Boy boy
+	{
+		get
+		{
+			return ScriptGlobals.boy;
+		}
+	}
+
+	// Token: 0x17000045 RID: 69
+	// (get) Token: 0x06000B18 RID: 2840 RVA: 0x0006D950 File Offset: 0x0006BB50
+	private Huddle huddle
+	{
+		get
+		{
+			return ScriptGlobals.huddle;
+		}
+	}
+
+	// Token: 0x06000B19 RID: 2841 RVA: 0x0006D958 File Offset: 0x0006BB58
+	public bool PreAwake(int callcount)
+	{
+		this.wakeHuddle = SignalIn.Create("wakeHuddle", base.gameObject, new Action(this.WakeHuddle));
+		return true;
+	}
+
+	// Token: 0x06000B1A RID: 2842 RVA: 0x0006D980 File Offset: 0x0006BB80
+	private void FixedUpdate()
+	{
+		if (ScriptGlobals.boy.isCharacterActive)
+		{
+			float num = Vector3.Distance(ScriptGlobals.boy.pos3, base.transform.position);
+			if (num < this.activationDist)
+			{
+				if (!this.huddleActivated)
+				{
+					this.PlaceHuddle();
+				}
+			}
+			else if (this.huddleActivated)
+			{
+				this.RemoveHuddle();
+			}
+		}
+	}
+
+	// Token: 0x06000B1B RID: 2843 RVA: 0x0006D9EC File Offset: 0x0006BBEC
+	private void PlaceHuddle()
+	{
+		this.huddle.SetCharacterActive(true);
+		this.huddle.Teleport(base.transform.position);
+		this.huddle.SpawnState(new HuddleSittingState(this.huddle));
+		this.huddleActivated = true;
+	}
+
+	// Token: 0x06000B1C RID: 2844 RVA: 0x0006DA38 File Offset: 0x0006BC38
+	private void RemoveHuddle()
+	{
+		this.huddle.SetCharacterActive(false);
+		this.huddleActivated = false;
+	}
+
+	// Token: 0x06000B1D RID: 2845 RVA: 0x0006DA50 File Offset: 0x0006BC50
+	private void WakeHuddle()
+	{
+		this.huddle.SpawnState(new HuddleGetupState(this.huddle, false));
+		SingletonBehaviour<CameraScript>.instance.SetTarget(ScriptGlobals.huddle.transform, 3f);
+		this.boy.SetCharacterActive(false);
+	}
+
+	// Token: 0x0400134A RID: 4938
+	private SignalIn wakeHuddle;
+
+	// Token: 0x0400134B RID: 4939
+	private float activationDist = 30f;
+
+	// Token: 0x0400134C RID: 4940
+	private bool huddleActivated;
+}

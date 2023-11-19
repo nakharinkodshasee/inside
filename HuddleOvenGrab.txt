@@ -1,0 +1,134 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200055F RID: 1375
+public class HuddleOvenGrab : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060023BF RID: 9151 RVA: 0x0012924C File Offset: 0x0012744C
+	public bool PreAwake(int callcount)
+	{
+		this.ovenOpened = SignalIn.Create("ovenOpened", base.gameObject, new Action(this.OnOvenOpened));
+		return true;
+	}
+
+	// Token: 0x060023C0 RID: 9152 RVA: 0x00129274 File Offset: 0x00127474
+	private void Start()
+	{
+		this.startAngularDrag = this.huddleGrabObject.GetComponent<Rigidbody>().angularDrag;
+	}
+
+	// Token: 0x060023C1 RID: 9153 RVA: 0x0012928C File Offset: 0x0012748C
+	private void OnOvenOpened()
+	{
+		this.ovenIsOpen = true;
+	}
+
+	// Token: 0x060023C2 RID: 9154 RVA: 0x00129298 File Offset: 0x00127498
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<CharacterProbe>())
+		{
+			this.noOfCharacterProbes++;
+		}
+	}
+
+	// Token: 0x060023C3 RID: 9155 RVA: 0x001292B8 File Offset: 0x001274B8
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<CharacterProbe>())
+		{
+			this.noOfCharacterProbes--;
+		}
+	}
+
+	// Token: 0x060023C4 RID: 9156 RVA: 0x001292D8 File Offset: 0x001274D8
+	private void FixedUpdate()
+	{
+		if (this.ovenIsOpen)
+		{
+			if (this.noOfCharacterProbes > 0 && GameInput.stick.x < 0f)
+			{
+				if (this.huddleGrabObject.mode != HuddleGrab.Mode.Default)
+				{
+					this.huddleGrabObject.mode = HuddleGrab.Mode.Default;
+					HuddleGrabState grabState = ScriptGlobals.huddle.grabState;
+					grabState.RefreshGrab();
+				}
+				Rigidbody body = ScriptGlobals.huddle.grabState.body;
+				if (body != null)
+				{
+					float num = ScriptGlobals.huddle.pos.x - this.ovenPosition.position.x;
+					if (num < 5f && (body.transform.position - ScriptGlobals.huddle.pos3).x < 0.4f)
+					{
+						this.doBoxOvenAlign = (Mathf.Abs(ScriptGlobals.huddle.input.stick.y) < 0.5f);
+					}
+				}
+			}
+			else if (this.noOfCharacterProbes == 0 || GameInput.stick.x > 0.2f || ScriptGlobals.huddle.grabState.body == null)
+			{
+				this.doBoxOvenAlign = false;
+				if (this.huddleGrabObject.mode != HuddleGrab.Mode.Item)
+				{
+					this.huddleGrabObject.mode = HuddleGrab.Mode.Item;
+					this.huddleGrabObject.GetComponent<Rigidbody>().angularDrag = this.startAngularDrag;
+					HuddleGrabState grabState2 = ScriptGlobals.huddle.grabState;
+					grabState2.RefreshGrab();
+				}
+			}
+			if (this.doBoxOvenAlign)
+			{
+				HuddleGrabBoxState huddleGrabBoxState = ScriptGlobals.huddle.grabState.state as HuddleGrabBoxState;
+				if (huddleGrabBoxState != null)
+				{
+					huddleGrabBoxState.ForceBoxLeft();
+					Rigidbody body2 = ScriptGlobals.huddle.grabState.body;
+					if (body2 != null)
+					{
+						Vector3 vector = body2.transform.position - this.ovenPosition.position;
+						Vector3 vector2 = body2.transform.position - ScriptGlobals.huddle.pos3;
+						if (vector.x < 4f && vector2.x < 0.4f)
+						{
+							if (vector2.x > -0.2f)
+							{
+								body2.AddForce(Vector3.left * Time.deltaTime * 2f, 2);
+							}
+							else
+							{
+								body2.AddForce(Vector3.down * Mathf.Clamp(vector.y, -0.6f, 0.6f) * Time.deltaTime * 5f, 2);
+							}
+							if (ScriptGlobals.huddle.pos.x - this.ovenPosition.position.x < 3f && Mathf.Abs(vector.y) > 1f && GameInput.stick.x < -0.1f)
+							{
+								float x = ScriptGlobals.huddle.velocity.x;
+								float num2 = x + (3f - (ScriptGlobals.huddle.pos.x - this.ovenPosition.position.x)) * Time.deltaTime * 9f;
+								num2 = Mathf.Min(num2, 2f);
+								ScriptGlobals.huddle.AddVelocity(Vector3.right * (num2 - x));
+							}
+						}
+					}
+				}
+				this.doBoxOvenAlign = (Mathf.Abs(ScriptGlobals.huddle.input.stick.y) < 0.5f);
+			}
+		}
+	}
+
+	// Token: 0x0400422F RID: 16943
+	public HuddleGrab huddleGrabObject;
+
+	// Token: 0x04004230 RID: 16944
+	public Transform ovenPosition;
+
+	// Token: 0x04004231 RID: 16945
+	private SignalIn ovenOpened;
+
+	// Token: 0x04004232 RID: 16946
+	private float startAngularDrag;
+
+	// Token: 0x04004233 RID: 16947
+	private int noOfCharacterProbes;
+
+	// Token: 0x04004234 RID: 16948
+	private bool ovenIsOpen;
+
+	// Token: 0x04004235 RID: 16949
+	private bool doBoxOvenAlign;
+}

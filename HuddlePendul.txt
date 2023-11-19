@@ -1,0 +1,86 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000509 RID: 1289
+public class HuddlePendul : MonoBehaviour
+{
+	// Token: 0x060021AB RID: 8619 RVA: 0x0011A688 File Offset: 0x00118888
+	private void Start()
+	{
+		this.grabComponent = base.GetComponent<HuddleGrab>();
+		this.startSwingScale = this.grabComponent.swingStrengthScale;
+	}
+
+	// Token: 0x060021AC RID: 8620 RVA: 0x0011A6A8 File Offset: 0x001188A8
+	private void UpdateHuddleReachOutArms()
+	{
+		if (!(ScriptGlobals.huddle.grabState.state is HuddleHangingGrabState))
+		{
+			float num = Mathf.Abs(base.transform.position.x - ScriptGlobals.huddle.pos.x);
+			if (num < 3.5f && (ScriptGlobals.huddle.input.looseDir.y > 0f || (ScriptGlobals.huddle.input.rawAction && ScriptGlobals.huddle.input.looseDir.y == 0f)))
+			{
+				this.timer = Mathf.Max(this.timer - Time.deltaTime, -1f);
+				if (this.timer < 0f)
+				{
+					float y = ScriptGlobals.huddle.cloth.topBone.pos.y;
+					float num2 = base.transform.position.y - y;
+					if (num2 < 2.5f || ScriptGlobals.huddle.input.looseDir.y > 0f)
+					{
+						ScriptGlobals.huddle.visualHuddle.arms2.ReachOutFor(base.GetComponent<Collider>(), true);
+						this.timer = Random.Range(0.4f, 0.7f);
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x060021AD RID: 8621 RVA: 0x0011A820 File Offset: 0x00118A20
+	private void FixedUpdate()
+	{
+		float num = Mathf.Abs(this.pendulCenter.position.x - this.containersCenter.position.x);
+		float num2;
+		if (num < 5.55f)
+		{
+			num2 = 1f;
+		}
+		else
+		{
+			num2 = 0f;
+		}
+		if (ScriptGlobals.mainCharacter is Huddle)
+		{
+			if (!ScriptGlobals.huddle.status.hasFoothold)
+			{
+				this.grabComponent.swingStrengthScale = this.inAirStrengthScale * num2;
+			}
+			else
+			{
+				this.grabComponent.swingStrengthScale = this.startSwingScale * (0.1f + num2 * 0.9f);
+			}
+			base.GetComponent<Rigidbody>().drag = (1f - num2) * 0.15f;
+			this.UpdateHuddleReachOutArms();
+		}
+		else
+		{
+			base.GetComponent<Rigidbody>().drag = 0.1f;
+		}
+	}
+
+	// Token: 0x04003EB6 RID: 16054
+	public Transform pendulCenter;
+
+	// Token: 0x04003EB7 RID: 16055
+	public Transform containersCenter;
+
+	// Token: 0x04003EB8 RID: 16056
+	public float inAirStrengthScale = 0.25f;
+
+	// Token: 0x04003EB9 RID: 16057
+	private HuddleGrab grabComponent;
+
+	// Token: 0x04003EBA RID: 16058
+	private float startSwingScale;
+
+	// Token: 0x04003EBB RID: 16059
+	private float timer;
+}

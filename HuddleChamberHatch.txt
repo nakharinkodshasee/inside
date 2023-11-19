@@ -1,0 +1,358 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020001B5 RID: 437
+public class HuddleChamberHatch : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000CE6 RID: 3302 RVA: 0x0007BE30 File Offset: 0x0007A030
+	public bool PreAwake(int callcount)
+	{
+		this.unlock = SignalIn.Create("unlock", base.gameObject, new Action(this.OnUnlock));
+		this.streamFadeIn = SignalIn.Create("streamFadeIn", base.gameObject, new Action(this.OnStreamFadeIn));
+		this.streamFadeOut = SignalIn.Create("streamFadeOut", base.gameObject, new Action(this.OnStreamFadeOut));
+		this.opened = SignalOut.Create("opened", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000CE7 RID: 3303 RVA: 0x0007BEBC File Offset: 0x0007A0BC
+	private void Start()
+	{
+		this.colliderHolderOpen.SetActive(false);
+		this.turbulenceTarget = 1f;
+		this.turbulenceFadeSpeed = this.turbulenceFadeInSpeed;
+	}
+
+	// Token: 0x06000CE8 RID: 3304 RVA: 0x0007BEE4 File Offset: 0x0007A0E4
+	private void SetUnlockState()
+	{
+		this.splitTimerLeft = Random.Range(this.splitIntervalMin, this.splitIntervalMax);
+		this.splitTimerRight = Random.Range(this.splitIntervalMin, this.splitIntervalMax);
+		this.state = HuddleChamberHatch.State.Unlock;
+	}
+
+	// Token: 0x06000CE9 RID: 3305 RVA: 0x0007BF1C File Offset: 0x0007A11C
+	private void UnlockState()
+	{
+		if (this.splitTimerRight > 0f)
+		{
+			this.splitTimerRight -= Time.deltaTime;
+		}
+		else if (this.animSplitsRight.Count > 0)
+		{
+			this.EjectSplit(this.animSplitsRight);
+			this.splitTimerRight = Random.Range(this.splitIntervalMin, this.splitIntervalMax);
+		}
+		if (this.splitTimerLeft > 0f)
+		{
+			this.splitTimerLeft -= Time.deltaTime;
+		}
+		else if (this.animSplitsLeft.Count > 0)
+		{
+			this.EjectSplit(this.animSplitsLeft);
+			this.splitTimerLeft = Random.Range(this.splitIntervalMin, this.splitIntervalMax);
+		}
+		if (this.animSplitsLeft.Count <= 0 && this.animSplitsRight.Count <= 0)
+		{
+			this.SetOpenState();
+		}
+	}
+
+	// Token: 0x06000CEA RID: 3306 RVA: 0x0007C008 File Offset: 0x0007A208
+	private void EjectSplit(List<HuddleChamberHatchSplit> splitList)
+	{
+		HuddleChamberHatchSplit huddleChamberHatchSplit = splitList[0];
+		AnimationClip[] array = (this.turbulenceTarget <= 0f) ? this.animSplitEjects : this.animSplitFlushEjects;
+		if (this.splitAnimIndex >= array.Length)
+		{
+			this.splitAnimIndex = 0;
+		}
+		huddleChamberHatchSplit.Eject(array[this.splitAnimIndex]);
+		splitList.RemoveAt(0);
+		this.splitAnimIndex++;
+	}
+
+	// Token: 0x06000CEB RID: 3307 RVA: 0x0007C078 File Offset: 0x0007A278
+	private void SetOpenState()
+	{
+		this.openTimer = this.openDelay;
+		this.state = HuddleChamberHatch.State.Open;
+	}
+
+	// Token: 0x06000CEC RID: 3308 RVA: 0x0007C090 File Offset: 0x0007A290
+	private void OpenState()
+	{
+		if (this.openTimer > 0f)
+		{
+			this.openTimer -= Time.deltaTime;
+			if (this.openTimer <= 0f)
+			{
+				AnimationClip animationClip;
+				AnimationClip animationClip2;
+				if (this.turbulenceTarget > 0f)
+				{
+					animationClip = this.animHatchOpenFlush;
+					animationClip2 = this.animHatchTurbulenceFlush;
+				}
+				else
+				{
+					animationClip = this.animHatchOpen;
+					animationClip2 = this.animHatchTurbulenceFlush;
+				}
+				this.animHatchTurbulenceState = this.animHatch[animationClip2.name];
+				this.animHatchTurbulenceState.layer = 2;
+				this.animHatch.Play(animationClip2.name);
+				this.animHatchTurbulenceState.weight = 0f;
+				this.animHatchOpenState = this.animHatch[animationClip.name];
+				this.animHatch.Play(animationClip.name);
+				this.colliderHolderClosed.SetActive(false);
+				this.colliderHolderOpen.SetActive(true);
+				this.opened.Signal();
+			}
+		}
+		else if (this.animHatchOpenState.normalizedTime >= this.openFractionForTurbulence)
+		{
+			this.SetCompleteState();
+		}
+	}
+
+	// Token: 0x06000CED RID: 3309 RVA: 0x0007C1B4 File Offset: 0x0007A3B4
+	private void SetCompleteState()
+	{
+		this.state = HuddleChamberHatch.State.Complete;
+	}
+
+	// Token: 0x06000CEE RID: 3310 RVA: 0x0007C1C0 File Offset: 0x0007A3C0
+	private void CompleteState()
+	{
+		float num = Mathf.Abs(this.turbulenceTarget - this.turbulenceFactor);
+		if (num > 0.001f)
+		{
+			this.turbulenceFactor += (this.turbulenceTarget - this.turbulenceFactor) * Time.deltaTime * this.turbulenceFadeSpeed;
+			this.turbulenceFactor = Mathf.Clamp01(this.turbulenceFactor);
+			this.animHatchTurbulenceState.speed = this.turbulenceSpeedMin + (this.turbulenceSpeedMax - this.turbulenceSpeedMin) * this.turbulenceFactor;
+			this.animHatchTurbulenceState.weight = this.turbulenceFactor;
+		}
+	}
+
+	// Token: 0x06000CEF RID: 3311 RVA: 0x0007C25C File Offset: 0x0007A45C
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case HuddleChamberHatch.State.Open:
+			this.OpenState();
+			break;
+		case HuddleChamberHatch.State.Unlock:
+			this.UnlockState();
+			break;
+		case HuddleChamberHatch.State.Complete:
+			this.CompleteState();
+			break;
+		}
+		this.UpdateCameraShake();
+	}
+
+	// Token: 0x06000CF0 RID: 3312 RVA: 0x0007C2B0 File Offset: 0x0007A4B0
+	private void UpdateCameraShake()
+	{
+		if (this.turbulenceTarget == 0f || !ScriptGlobals.boy.isCharacterActive)
+		{
+			return;
+		}
+		BoyWater water = ScriptGlobals.boy.status.water;
+		bool flag = water != null && water == this.waterTrigger;
+		if (flag)
+		{
+			if (!this.previouslyInWater)
+			{
+				this.cameraShakeInfo = this.cameraShake.PlayEffect(this.cameraShakeSize, -1f, 1f);
+			}
+			if (this.cameraShakeInfo != null)
+			{
+				float num = Vector3.Distance(ScriptGlobals.boy.pos3, this.cameraShakeMaxPos.position);
+				float num2 = 1f - num / this.maxDist;
+				num2 = Mathf.Clamp01(num2);
+				this.cameraShakeSize = this.cameraShakeMin + (this.cameraShakeMax - this.cameraShakeMin) * num2;
+				this.cameraShakeInfo.size = this.cameraShakeSize;
+			}
+		}
+		else if (this.previouslyInWater)
+		{
+			SingletonBehaviour<CameraShake>.instance.StopCustomEffect(0.1f);
+		}
+		this.previouslyInWater = flag;
+	}
+
+	// Token: 0x06000CF1 RID: 3313 RVA: 0x0007C3CC File Offset: 0x0007A5CC
+	private void OnStreamFadeIn()
+	{
+		this.turbulenceTarget = 1f;
+		this.turbulenceFadeSpeed = this.turbulenceFadeInSpeed;
+	}
+
+	// Token: 0x06000CF2 RID: 3314 RVA: 0x0007C3E8 File Offset: 0x0007A5E8
+	private void OnStreamFadeOut()
+	{
+		this.turbulenceTarget = 0f;
+		this.turbulenceFadeSpeed = this.turbulenceFadeOutSpeed;
+	}
+
+	// Token: 0x06000CF3 RID: 3315 RVA: 0x0007C404 File Offset: 0x0007A604
+	private void OnUnlock()
+	{
+		if (this.state == HuddleChamberHatch.State.None)
+		{
+			this.locks--;
+			if (this.locks <= 0)
+			{
+				this.SetUnlockState();
+			}
+		}
+	}
+
+	// Token: 0x040016A2 RID: 5794
+	public Animation animHatch;
+
+	// Token: 0x040016A3 RID: 5795
+	public AnimationClip animHatchOpen;
+
+	// Token: 0x040016A4 RID: 5796
+	public AnimationClip animHatchOpenFlush;
+
+	// Token: 0x040016A5 RID: 5797
+	public AnimationClip animHatchTurbulence;
+
+	// Token: 0x040016A6 RID: 5798
+	public AnimationClip animHatchTurbulenceFlush;
+
+	// Token: 0x040016A7 RID: 5799
+	public List<HuddleChamberHatchSplit> animSplitsRight;
+
+	// Token: 0x040016A8 RID: 5800
+	public List<HuddleChamberHatchSplit> animSplitsLeft;
+
+	// Token: 0x040016A9 RID: 5801
+	public AnimationClip[] animSplitEjects;
+
+	// Token: 0x040016AA RID: 5802
+	public AnimationClip[] animSplitFlushEjects;
+
+	// Token: 0x040016AB RID: 5803
+	public float splitIntervalMin = 0.19f;
+
+	// Token: 0x040016AC RID: 5804
+	public float splitIntervalMax = 0.21f;
+
+	// Token: 0x040016AD RID: 5805
+	public GameObject colliderHolderClosed;
+
+	// Token: 0x040016AE RID: 5806
+	public GameObject colliderHolderOpen;
+
+	// Token: 0x040016AF RID: 5807
+	public float openDelay = 1.5f;
+
+	// Token: 0x040016B0 RID: 5808
+	[Space(10f)]
+	[Header("--- Turbulence ---")]
+	public float openFractionForTurbulence = 0.5f;
+
+	// Token: 0x040016B1 RID: 5809
+	public float turbulenceFadeInSpeed = 0.2f;
+
+	// Token: 0x040016B2 RID: 5810
+	public float turbulenceFadeOutSpeed = 0.35f;
+
+	// Token: 0x040016B3 RID: 5811
+	public float turbulenceSpeedMin = 0.5f;
+
+	// Token: 0x040016B4 RID: 5812
+	public float turbulenceSpeedMax = 1f;
+
+	// Token: 0x040016B5 RID: 5813
+	[Header("--- Camera Shake ---")]
+	public CameraEffect cameraShake;
+
+	// Token: 0x040016B6 RID: 5814
+	public Transform cameraShakeMaxPos;
+
+	// Token: 0x040016B7 RID: 5815
+	public float maxDist;
+
+	// Token: 0x040016B8 RID: 5816
+	public float cameraShakeMin = 0.05f;
+
+	// Token: 0x040016B9 RID: 5817
+	public float cameraShakeMax = 0.33f;
+
+	// Token: 0x040016BA RID: 5818
+	public BoyWater waterTrigger;
+
+	// Token: 0x040016BB RID: 5819
+	private SignalIn unlock;
+
+	// Token: 0x040016BC RID: 5820
+	private SignalIn streamFadeIn;
+
+	// Token: 0x040016BD RID: 5821
+	private SignalIn streamFadeOut;
+
+	// Token: 0x040016BE RID: 5822
+	private SignalOut opened;
+
+	// Token: 0x040016BF RID: 5823
+	private HuddleChamberHatch.State state;
+
+	// Token: 0x040016C0 RID: 5824
+	private int locks = 2;
+
+	// Token: 0x040016C1 RID: 5825
+	private int splitAnimIndex;
+
+	// Token: 0x040016C2 RID: 5826
+	private float splitTimerLeft;
+
+	// Token: 0x040016C3 RID: 5827
+	private float splitTimerRight;
+
+	// Token: 0x040016C4 RID: 5828
+	private float openTimer;
+
+	// Token: 0x040016C5 RID: 5829
+	private float turbulenceFactor;
+
+	// Token: 0x040016C6 RID: 5830
+	private float turbulenceTarget;
+
+	// Token: 0x040016C7 RID: 5831
+	private float turbulenceFadeSpeed;
+
+	// Token: 0x040016C8 RID: 5832
+	private AnimationState animHatchTurbulenceState;
+
+	// Token: 0x040016C9 RID: 5833
+	private AnimationState animHatchOpenState;
+
+	// Token: 0x040016CA RID: 5834
+	private CameraEffectInfo cameraShakeInfo;
+
+	// Token: 0x040016CB RID: 5835
+	private float cameraShakeSize = 1f;
+
+	// Token: 0x040016CC RID: 5836
+	private bool previouslyInWater;
+
+	// Token: 0x020001B6 RID: 438
+	private enum State
+	{
+		// Token: 0x040016CE RID: 5838
+		None,
+		// Token: 0x040016CF RID: 5839
+		Open,
+		// Token: 0x040016D0 RID: 5840
+		Unlock,
+		// Token: 0x040016D1 RID: 5841
+		Complete
+	}
+}

@@ -1,0 +1,331 @@
+using System;
+using HutongGames.PlayMaker;
+using UnityEngine;
+
+// Token: 0x02000532 RID: 1330
+public class HideInShadowsVoiceLogic : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x060022A8 RID: 8872 RVA: 0x00122E8C File Offset: 0x0012108C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.leftTriggerEvents = this.leftTrigger.AddComponent<CollisionEvents>();
+		this.rightTriggerEvents = this.rightTrigger.AddComponent<CollisionEvents>();
+	}
+
+	// Token: 0x060022A9 RID: 8873 RVA: 0x00122EC4 File Offset: 0x001210C4
+	public bool PreAwake(int callcount)
+	{
+		this.enterCover = SignalIn.Create("enterCover", base.gameObject, new Action(this.OnEnterCover));
+		this.exitCover = SignalIn.Create("exitCover", base.gameObject, new Action(this.OnExitCover));
+		this.inCover = SignalOut.Create("inCover", base.gameObject);
+		this.notInCover = SignalOut.Create("notInCover", base.gameObject);
+		this.boyWillDie = SignalOut.Create("boyWillDie", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060022AA RID: 8874 RVA: 0x00122F58 File Offset: 0x00121158
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.leftTriggerEvents.enterTrigger.Register(this, ref this.leftTriggerEnterHandle);
+		this.leftTriggerEvents.exitTrigger.Register(this, ref this.leftTriggerExitHandle);
+		this.rightTriggerEvents.enterTrigger.Register(this, ref this.rightTriggerEnterHandle);
+		this.rightTriggerEvents.exitTrigger.Register(this, ref this.rightTriggerExitHandle);
+		this.boyInDangerFSM = this.voiceLogic.FsmVariables.FindFsmBool("boyInDanger");
+	}
+
+	// Token: 0x060022AB RID: 8875 RVA: 0x00122FE4 File Offset: 0x001211E4
+	private bool LightRightOfShadowCaster()
+	{
+		return this.leftLight.position.x > this.leftShadowCaster.position.x;
+	}
+
+	// Token: 0x060022AC RID: 8876 RVA: 0x00123020 File Offset: 0x00121220
+	private bool LightMovingRight()
+	{
+		return this.leftLight.position.x > this.previousLightPos.x;
+	}
+
+	// Token: 0x060022AD RID: 8877 RVA: 0x00123054 File Offset: 0x00121254
+	private bool BoyRightOfShadowCaster()
+	{
+		return ScriptGlobals.boy.pos3.x > this.leftShadowCaster.position.x;
+	}
+
+	// Token: 0x060022AE RID: 8878 RVA: 0x00123090 File Offset: 0x00121290
+	private bool CageLowEnough()
+	{
+		return this.cage.position.y < this.correctCageYValue.position.y;
+	}
+
+	// Token: 0x060022AF RID: 8879 RVA: 0x001230CC File Offset: 0x001212CC
+	private void UpdateLightDanger()
+	{
+		this.shortestDist = float.MaxValue;
+		this.closestID = -1;
+		this.closestFSM = null;
+		int i = 0;
+		int num = this.movingLights.Length;
+		while (i < num)
+		{
+			this.dist = (this.movingLights[i].position - ScriptGlobals.boy.pos3).magnitude;
+			if (this.dist < this.shortestDist)
+			{
+				this.shortestDist = this.dist;
+				this.closestID = i;
+			}
+			i++;
+		}
+		if (this.closestID == 0)
+		{
+			this.closestFSM = this.lightFSM1;
+		}
+		else if (this.closestID == 1)
+		{
+			this.closestFSM = this.lightFSM2;
+		}
+		else if (this.closestID == 2)
+		{
+			this.closestFSM = this.lightFSM3;
+		}
+		this.closestDir = this.closestFSM.FsmVariables.FindFsmInt("dir");
+		bool flag = ScriptGlobals.boy.pos3.x > this.movingLights[this.closestID].position.x;
+		if ((flag && this.closestDir.Value > 0) || (!flag && this.closestDir.Value < 0))
+		{
+			this.boyInDanger = true;
+		}
+		else
+		{
+			this.boyInDanger = false;
+		}
+		this.boyInDangerFSM.Value = this.boyInDanger;
+	}
+
+	// Token: 0x060022B0 RID: 8880 RVA: 0x0012324C File Offset: 0x0012144C
+	private void Update()
+	{
+		if ((!this.dieMessageSend && !this.isInCover && this.inLeftTrigger && !this.LightRightOfShadowCaster() && !this.LightMovingRight()) || (!this.CageLowEnough() && this.LightRightOfShadowCaster() && this.inRightTrigger && this.LightMovingRight()))
+		{
+			this.boyWillDie.Signal();
+			this.dieMessageSend = true;
+		}
+		this.previousLightPos = this.leftLight.position;
+		if (!this.isInCover)
+		{
+			this.UpdateLightDanger();
+		}
+	}
+
+	// Token: 0x060022B1 RID: 8881 RVA: 0x001232F0 File Offset: 0x001214F0
+	private void OnEnterCover()
+	{
+		if (!this.isInCover)
+		{
+			this.isInCover = true;
+			this.inCover.Signal();
+		}
+	}
+
+	// Token: 0x060022B2 RID: 8882 RVA: 0x00123310 File Offset: 0x00121510
+	private void OnExitCover()
+	{
+		if (this.isInCover)
+		{
+			this.isInCover = false;
+			this.notInCover.Signal();
+		}
+	}
+
+	// Token: 0x060022B3 RID: 8883 RVA: 0x00123330 File Offset: 0x00121530
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.leftTriggerEvents.enterTrigger)
+		{
+			this.LeftTriggerEnter(collider);
+		}
+		else if (sender == this.leftTriggerEvents.exitTrigger)
+		{
+			this.LeftTriggerExit(collider);
+		}
+		else if (sender == this.rightTriggerEvents.enterTrigger)
+		{
+			this.RightTriggerEnter(collider);
+		}
+		else if (sender == this.rightTriggerEvents.exitTrigger)
+		{
+			this.RightTriggerExit(collider);
+		}
+	}
+
+	// Token: 0x060022B4 RID: 8884 RVA: 0x001233B0 File Offset: 0x001215B0
+	private void LeftTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.noOfProbesInside++;
+			if (this.noOfProbesInside == 1)
+			{
+				this.inLeftTrigger = true;
+			}
+		}
+	}
+
+	// Token: 0x060022B5 RID: 8885 RVA: 0x001233E4 File Offset: 0x001215E4
+	private void LeftTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.noOfProbesInside--;
+			if (this.noOfProbesInside == 0)
+			{
+				this.inLeftTrigger = false;
+			}
+		}
+	}
+
+	// Token: 0x060022B6 RID: 8886 RVA: 0x00123424 File Offset: 0x00121624
+	private void RightTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.noOfProbesInside++;
+			if (this.noOfProbesInside == 1)
+			{
+				this.inRightTrigger = true;
+			}
+		}
+	}
+
+	// Token: 0x060022B7 RID: 8887 RVA: 0x00123458 File Offset: 0x00121658
+	private void RightTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.noOfProbesInside--;
+			if (this.noOfProbesInside == 0)
+			{
+				this.inRightTrigger = false;
+			}
+		}
+	}
+
+	// Token: 0x040040BC RID: 16572
+	public PlayMakerFSM voiceLogic;
+
+	// Token: 0x040040BD RID: 16573
+	public GameObject leftTrigger;
+
+	// Token: 0x040040BE RID: 16574
+	public GameObject rightTrigger;
+
+	// Token: 0x040040BF RID: 16575
+	public Transform cage;
+
+	// Token: 0x040040C0 RID: 16576
+	public Transform correctCageYValue;
+
+	// Token: 0x040040C1 RID: 16577
+	public Transform leftShadowCaster;
+
+	// Token: 0x040040C2 RID: 16578
+	public Transform leftLight;
+
+	// Token: 0x040040C3 RID: 16579
+	public Transform[] movingLights = new Transform[3];
+
+	// Token: 0x040040C4 RID: 16580
+	public PlayMakerFSM lightFSM1;
+
+	// Token: 0x040040C5 RID: 16581
+	public PlayMakerFSM lightFSM2;
+
+	// Token: 0x040040C6 RID: 16582
+	public PlayMakerFSM lightFSM3;
+
+	// Token: 0x040040C7 RID: 16583
+	private SignalIn enterCover;
+
+	// Token: 0x040040C8 RID: 16584
+	private SignalIn exitCover;
+
+	// Token: 0x040040C9 RID: 16585
+	private SignalOut inCover;
+
+	// Token: 0x040040CA RID: 16586
+	private SignalOut notInCover;
+
+	// Token: 0x040040CB RID: 16587
+	private SignalOut boyWillDie;
+
+	// Token: 0x040040CC RID: 16588
+	private bool inLeftTrigger;
+
+	// Token: 0x040040CD RID: 16589
+	private bool inRightTrigger;
+
+	// Token: 0x040040CE RID: 16590
+	private bool isInCover;
+
+	// Token: 0x040040CF RID: 16591
+	private bool dieMessageSend;
+
+	// Token: 0x040040D0 RID: 16592
+	private Vector3 previousLightPos;
+
+	// Token: 0x040040D1 RID: 16593
+	private bool boyInDanger;
+
+	// Token: 0x040040D2 RID: 16594
+	private int noOfProbesInside;
+
+	// Token: 0x040040D3 RID: 16595
+	private int leftTriggerEnterHandle = -1;
+
+	// Token: 0x040040D4 RID: 16596
+	private int leftTriggerExitHandle = -1;
+
+	// Token: 0x040040D5 RID: 16597
+	private int rightTriggerEnterHandle = -1;
+
+	// Token: 0x040040D6 RID: 16598
+	private int rightTriggerExitHandle = -1;
+
+	// Token: 0x040040D7 RID: 16599
+	private FsmBool boyInDangerFSM = false;
+
+	// Token: 0x040040D8 RID: 16600
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x040040D9 RID: 16601
+	[SerializeField]
+	[HideInInspector]
+	private CollisionEvents leftTriggerEvents;
+
+	// Token: 0x040040DA RID: 16602
+	[SerializeField]
+	[HideInInspector]
+	private CollisionEvents rightTriggerEvents;
+
+	// Token: 0x040040DB RID: 16603
+	private float shortestDist = float.MaxValue;
+
+	// Token: 0x040040DC RID: 16604
+	private int closestID = -1;
+
+	// Token: 0x040040DD RID: 16605
+	private PlayMakerFSM closestFSM;
+
+	// Token: 0x040040DE RID: 16606
+	private float dist;
+
+	// Token: 0x040040DF RID: 16607
+	private FsmInt closestDir = 0;
+}

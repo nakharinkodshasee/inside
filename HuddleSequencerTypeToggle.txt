@@ -1,0 +1,114 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000601 RID: 1537
+public class HuddleSequencerTypeToggle : MonoBehaviour
+{
+	// Token: 0x0600268E RID: 9870 RVA: 0x00138518 File Offset: 0x00136718
+	private void Awake()
+	{
+		this.modes = (HuddleSequencerTypeToggle.Mode[])Enum.GetValues(typeof(HuddleSequencerTypeToggle.Mode));
+	}
+
+	// Token: 0x0600268F RID: 9871 RVA: 0x00138534 File Offset: 0x00136734
+	private void Update()
+	{
+		if (this.huddleSequencer != null)
+		{
+			bool enabled = this.huddleSequencer.enabled;
+			bool activeInHierarchy = this.huddleAudioFSMs.activeInHierarchy;
+			if (!enabled && !activeInHierarchy)
+			{
+				this.mode = HuddleSequencerTypeToggle.Mode.None;
+			}
+			else if (enabled && !activeInHierarchy)
+			{
+				this.mode = HuddleSequencerTypeToggle.Mode.Script;
+			}
+			else if (!enabled && activeInHierarchy)
+			{
+				this.mode = HuddleSequencerTypeToggle.Mode.FSM;
+			}
+		}
+	}
+
+	// Token: 0x06002690 RID: 9872 RVA: 0x001385B4 File Offset: 0x001367B4
+	private void OnGUI()
+	{
+		GUILayout.BeginHorizontal(new GUILayoutOption[]
+		{
+			GUILayout.Width((float)Screen.width)
+		});
+		GUILayout.FlexibleSpace();
+		GUILayout.BeginVertical(new GUILayoutOption[0]);
+		int i = 0;
+		int num = this.modes.Length;
+		while (i < num)
+		{
+			HuddleSequencerTypeToggle.Mode mode = this.modes[i];
+			using (PDGUI.BackgroundColor((mode != this.mode) ? Color.white : Color.green))
+			{
+				if (GUILayout.Button(mode.ToString(), new GUILayoutOption[]
+				{
+					GUILayout.Width(200f)
+				}))
+				{
+					this.UpdateMode(mode);
+				}
+			}
+			i++;
+		}
+		GUILayout.EndVertical();
+		GUILayout.EndHorizontal();
+	}
+
+	// Token: 0x06002691 RID: 9873 RVA: 0x00138694 File Offset: 0x00136894
+	public void UpdateMode(HuddleSequencerTypeToggle.Mode newMode)
+	{
+		Huddle huddle = ScriptGlobals.huddle;
+		this.huddleSequencer = huddle.GetComponentInChildren<HuddleSequencer>();
+		this.fx = huddle.transform.parent.FindChild("fx").gameObject;
+		this.huddleAudioFSMs = huddle.transform.parent.FindChild("fx/HuddleAudioFSMs").gameObject;
+		this.ToggleFSMs(newMode == HuddleSequencerTypeToggle.Mode.FSM, this.huddleAudioFSMs, this.fx);
+		this.ToggleScript(newMode == HuddleSequencerTypeToggle.Mode.Script, this.huddleSequencer);
+	}
+
+	// Token: 0x06002692 RID: 9874 RVA: 0x0013871C File Offset: 0x0013691C
+	private void ToggleScript(bool toggle, HuddleSequencer huddleSequencer)
+	{
+		huddleSequencer.enabled = toggle;
+	}
+
+	// Token: 0x06002693 RID: 9875 RVA: 0x00138728 File Offset: 0x00136928
+	private void ToggleFSMs(bool toggle, GameObject fsmGameObject, GameObject fx)
+	{
+		fsmGameObject.SetActive(toggle);
+		fx.SetActive(toggle);
+	}
+
+	// Token: 0x040045D8 RID: 17880
+	private HuddleSequencerTypeToggle.Mode mode;
+
+	// Token: 0x040045D9 RID: 17881
+	private HuddleSequencerTypeToggle.Mode[] modes;
+
+	// Token: 0x040045DA RID: 17882
+	private HuddleSequencer huddleSequencer;
+
+	// Token: 0x040045DB RID: 17883
+	private GameObject fx;
+
+	// Token: 0x040045DC RID: 17884
+	private GameObject huddleAudioFSMs;
+
+	// Token: 0x02000602 RID: 1538
+	public enum Mode
+	{
+		// Token: 0x040045DE RID: 17886
+		None,
+		// Token: 0x040045DF RID: 17887
+		FSM,
+		// Token: 0x040045E0 RID: 17888
+		Script
+	}
+}

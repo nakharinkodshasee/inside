@@ -1,0 +1,48 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000177 RID: 375
+public class HuddleSetTheme : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000B11 RID: 2833 RVA: 0x0006D864 File Offset: 0x0006BA64
+	public bool PreAwake(int callcount)
+	{
+		this.enterSignalIn = SignalIn.Create("enterSignalIn", base.gameObject, new Action(this.SetTheme));
+		this.exitSignalIn = SignalIn.Create("exitSignalIn", base.gameObject, new Action(this.ResetTheme));
+		return true;
+	}
+
+	// Token: 0x06000B12 RID: 2834 RVA: 0x0006D8B8 File Offset: 0x0006BAB8
+	private void Start()
+	{
+		IsTriggeredByProbe component = base.gameObject.GetComponent<IsTriggeredByProbe>();
+		PersistentBehaviour<SignalManager>.instance.CreateConnection(base.gameObject, "enterSignal", base.gameObject, "enterSignalIn", null);
+		PersistentBehaviour<SignalManager>.instance.CreateConnection(base.gameObject, "exitSignal", base.gameObject, "exitSignalIn", null);
+	}
+
+	// Token: 0x06000B13 RID: 2835 RVA: 0x0006D918 File Offset: 0x0006BB18
+	private void Update()
+	{
+	}
+
+	// Token: 0x06000B14 RID: 2836 RVA: 0x0006D91C File Offset: 0x0006BB1C
+	private void SetTheme()
+	{
+		ThemeUtils.SetHuddleTheme(this.theme);
+	}
+
+	// Token: 0x06000B15 RID: 2837 RVA: 0x0006D92C File Offset: 0x0006BB2C
+	private void ResetTheme()
+	{
+		ThemeUtils.TryResetHuddleTheme();
+	}
+
+	// Token: 0x04001347 RID: 4935
+	public string theme;
+
+	// Token: 0x04001348 RID: 4936
+	private SignalIn enterSignalIn;
+
+	// Token: 0x04001349 RID: 4937
+	private SignalIn exitSignalIn;
+}

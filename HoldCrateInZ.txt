@@ -1,0 +1,19 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200016A RID: 362
+public class HoldCrateInZ : MonoBehaviour
+{
+	// Token: 0x06000AA1 RID: 2721 RVA: 0x00067C98 File Offset: 0x00065E98
+	private void FixedUpdate()
+	{
+		if (ScriptGlobals.huddleActive && ScriptGlobals.huddle.grabState.body == base.GetComponent<Rigidbody>() && !base.GetComponent<RestrictObjectToZ>().enabled)
+		{
+			base.GetComponent<Rigidbody>().AddForce(new Vector3(0f, 0f, -base.transform.position.z * 6f), 0);
+			if (Mathf.Abs(base.transform.position.z) < 0.15f)
+			{
+				base.GetComponent<RestrictObjectToZ>().ActivateRestrict();
+			}
+		}
+	}
+}

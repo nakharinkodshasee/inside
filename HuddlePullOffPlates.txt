@@ -1,0 +1,342 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000175 RID: 373
+public class HuddlePullOffPlates : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000B03 RID: 2819 RVA: 0x0006D160 File Offset: 0x0006B360
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioGrab = new AudioEventSimpleLocal(this.audioPrefix + "_grab", akGameObj);
+		this.audioLetGo = new AudioEventSimpleLocal(this.audioPrefix + "_letGo", akGameObj);
+		this.audioPullStart = new AudioEventSimpleLocal(this.audioPrefix + "_pullStart", akGameObj);
+		this.audioPullStop = new AudioEventSimpleLocal(this.audioPrefix + "_pullStop", akGameObj);
+		this.audioGiveWay = new AudioEventSimpleLocal(this.audioPrefix + "_pullGiveWay", akGameObj);
+		this.audioPullOff = new AudioEventSimpleLocal(this.audioPrefix + "_pullOff", akGameObj);
+		AudioUtils.EnsureAkGameObj(base.gameObject, null);
+		if (this.grabCollider.GetComponent<HuddleNoGrab>() == null)
+		{
+			this.grabCollider.gameObject.AddComponent<HuddleNoGrab>();
+		}
+	}
+
+	// Token: 0x06000B04 RID: 2820 RVA: 0x0006D26C File Offset: 0x0006B46C
+	public bool PreAwake(int callcount)
+	{
+		this.pullFinished = SignalOut.Create("pullFinished", base.gameObject);
+		this.activate = SignalIn.Create("activate", base.gameObject, new Action(this.OnActivate));
+		return true;
+	}
+
+	// Token: 0x06000B05 RID: 2821 RVA: 0x0006D2B4 File Offset: 0x0006B4B4
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.state = HuddlePullOffPlates.State.Idle;
+	}
+
+	// Token: 0x06000B06 RID: 2822 RVA: 0x0006D2C4 File Offset: 0x0006B4C4
+	private void IdleState()
+	{
+		if (ScriptGlobals.huddle.grabState != null && ScriptGlobals.huddle.grabState.collider == this.grabCollider)
+		{
+			this.SetPullState();
+		}
+	}
+
+	// Token: 0x06000B07 RID: 2823 RVA: 0x0006D308 File Offset: 0x0006B508
+	private void SetPullState()
+	{
+		this.audioGrab.PostFast();
+		this.state = HuddlePullOffPlates.State.Pull;
+	}
+
+	// Token: 0x06000B08 RID: 2824 RVA: 0x0006D320 File Offset: 0x0006B520
+	private void PullState()
+	{
+		if (ScriptGlobals.huddle.grabState.collider != this.grabCollider)
+		{
+			if (this.isPulling)
+			{
+				this.audioPullStop.PostFast();
+				this.isPulling = false;
+			}
+			this.audioLetGo.PostFast();
+			this.state = HuddlePullOffPlates.State.Idle;
+			return;
+		}
+		VisualHuddleArms2 arms = ScriptGlobals.huddle.visualHuddle.arms2;
+		FastList<HuddleArmControl2> armsGrabbingBody = arms.GetArmsGrabbingBody(ScriptGlobals.huddle.grabState.body);
+		if (armsGrabbingBody.Count > 1 && ScriptGlobals.huddle.input.stick.x * this.pullSign > 0.6f)
+		{
+			if (!this.isPulling)
+			{
+				this.audioPullStart.PostFast();
+				this.isPulling = true;
+			}
+			this.pullTimer += Time.deltaTime;
+			if (this.pullTimer > this.pullTimers[this.pullIndex])
+			{
+				this.PullOff();
+			}
+		}
+		else
+		{
+			if (this.isPulling)
+			{
+				this.audioPullStop.PostFast();
+				this.isPulling = false;
+			}
+			this.pullTimer = Mathf.Max(0f, this.pullTimer - Time.deltaTime);
+		}
+	}
+
+	// Token: 0x06000B09 RID: 2825 RVA: 0x0006D46C File Offset: 0x0006B66C
+	private void PullOff()
+	{
+		this.currentAnimState = this.anim[this.clips[this.pullIndex].name];
+		this.anim.Play(this.currentAnimState.name);
+		this.pullIndex++;
+		this.pullTimer = 0f;
+		if (this.pullIndex < this.clips.Count)
+		{
+			this.audioGiveWay.PostFast();
+		}
+		if (this.pullIndex >= this.clips.Count)
+		{
+			this.SetPullOffState();
+		}
+		else
+		{
+			this.state = HuddlePullOffPlates.State.Pull;
+		}
+	}
+
+	// Token: 0x06000B0A RID: 2826 RVA: 0x0006D51C File Offset: 0x0006B71C
+	private void SetPullOffState()
+	{
+		this.audioPullOff.PostFast();
+		this.audioPullStop.PostFast();
+		this.audioLetGo.PostFast();
+		this.state = HuddlePullOffPlates.State.PullOff;
+	}
+
+	// Token: 0x06000B0B RID: 2827 RVA: 0x0006D54C File Offset: 0x0006B74C
+	private void PullOffState()
+	{
+		if (this.currentAnimState.normalizedTime >= 1f)
+		{
+			this.SetFreeState();
+		}
+	}
+
+	// Token: 0x06000B0C RID: 2828 RVA: 0x0006D56C File Offset: 0x0006B76C
+	private void SetFreeState()
+	{
+		if (this.noGrabWhenDone)
+		{
+			this.grabCollider.GetComponent<HuddleNoGrab>().SetIsEnabled(true);
+		}
+		if (this.huddleFallWhenDone)
+		{
+			HuddleUtils.SpawnFallState(ScriptGlobals.huddle, this.pullSign, 3f);
+			ScriptGlobals.huddle.AddImpulse(this.huddleAddForceWhenDone, ScriptGlobals.huddle.pos + new Vector3(this.posOffset.x, this.posOffset.y, 0f));
+		}
+		else if (this.huddleAddForceWhenDone != Vector3.zero)
+		{
+			ScriptGlobals.huddle.AddImpulse(this.huddleAddForceWhenDone, ScriptGlobals.huddle.pos + new Vector3(this.posOffset.x, this.posOffset.y, 0f));
+		}
+		if (ScriptGlobals.huddle.isSwimming)
+		{
+			HuddleSwimState huddleSwimState = ScriptGlobals.huddle.state as HuddleSwimState;
+			if (huddleSwimState != null)
+			{
+				huddleSwimState.SetStunTime(0.8f);
+			}
+		}
+		if (this.disableMeWhenDone)
+		{
+			this.disableMeWhenDone.SetActive(false);
+		}
+		if (ScriptGlobals.huddle.grabState != null)
+		{
+			if (this.noGrabWhenDone)
+			{
+				ScriptGlobals.huddle.grabState.DropGrabBody(0.3f);
+			}
+			ScriptGlobals.huddle.grabState.RefreshGrab();
+		}
+		this.pullFinished.Signal();
+		if (this.objectRigidbody)
+		{
+			this.anim.Stop();
+			this.objectRigidbody.isKinematic = false;
+			this.objectRigidbody.AddRelativeTorque(this.pullOffTorque, 1);
+			this.objectRigidbody.AddRelativeForce(this.pullOffForce, 1);
+		}
+		this.state = HuddlePullOffPlates.State.Free;
+	}
+
+	// Token: 0x06000B0D RID: 2829 RVA: 0x0006D734 File Offset: 0x0006B934
+	private void FreeState()
+	{
+		if (this.pullOfConstantForce != Vector3.zero)
+		{
+			Transform transform = this.objectRigidbody.transform;
+			Vector3 vector = transform.position + transform.up * 1.5f * Time.deltaTime * 60f;
+			Vector3 vector2 = transform.position - transform.up * 1.5f * Time.deltaTime * 60f;
+			this.objectRigidbody.AddForceAtPosition(this.pullOfConstantForce, vector);
+			this.objectRigidbody.AddForceAtPosition(this.pullOfConstantForce, vector2);
+		}
+	}
+
+	// Token: 0x06000B0E RID: 2830 RVA: 0x0006D7E8 File Offset: 0x0006B9E8
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case HuddlePullOffPlates.State.Idle:
+			this.IdleState();
+			break;
+		case HuddlePullOffPlates.State.Pull:
+			this.PullState();
+			break;
+		case HuddlePullOffPlates.State.PullOff:
+			this.PullOffState();
+			break;
+		case HuddlePullOffPlates.State.Free:
+			this.FreeState();
+			break;
+		}
+	}
+
+	// Token: 0x06000B0F RID: 2831 RVA: 0x0006D848 File Offset: 0x0006BA48
+	private void OnActivate()
+	{
+		this.grabCollider.GetComponent<HuddleNoGrab>().SetIsEnabled(false);
+	}
+
+	// Token: 0x04001324 RID: 4900
+	public float pullSign = 1f;
+
+	// Token: 0x04001325 RID: 4901
+	public Collider grabCollider;
+
+	// Token: 0x04001326 RID: 4902
+	public List<AnimationClip> clips;
+
+	// Token: 0x04001327 RID: 4903
+	public List<float> pullTimers;
+
+	// Token: 0x04001328 RID: 4904
+	public Animation anim;
+
+	// Token: 0x04001329 RID: 4905
+	public GameObject disableMeWhenDone;
+
+	// Token: 0x0400132A RID: 4906
+	public bool noGrabWhenDone = true;
+
+	// Token: 0x0400132B RID: 4907
+	public bool huddleFallWhenDone = true;
+
+	// Token: 0x0400132C RID: 4908
+	public Vector3 huddleAddForceWhenDone = Vector3.zero;
+
+	// Token: 0x0400132D RID: 4909
+	public Vector2 posOffset = Vector2.zero;
+
+	// Token: 0x0400132E RID: 4910
+	public Rigidbody objectRigidbody;
+
+	// Token: 0x0400132F RID: 4911
+	public Vector3 pullOffTorque;
+
+	// Token: 0x04001330 RID: 4912
+	public Vector3 pullOffForce;
+
+	// Token: 0x04001331 RID: 4913
+	public Vector3 pullOfConstantForce;
+
+	// Token: 0x04001332 RID: 4914
+	private SignalOut pullFinished;
+
+	// Token: 0x04001333 RID: 4915
+	private SignalIn activate;
+
+	// Token: 0x04001334 RID: 4916
+	private HuddlePullOffPlates.State state;
+
+	// Token: 0x04001335 RID: 4917
+	private int pullIndex;
+
+	// Token: 0x04001336 RID: 4918
+	private float pullTimer;
+
+	// Token: 0x04001337 RID: 4919
+	private AnimationState currentAnimState;
+
+	// Token: 0x04001338 RID: 4920
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioPullStart;
+
+	// Token: 0x04001339 RID: 4921
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioPullStop;
+
+	// Token: 0x0400133A RID: 4922
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioGiveWay;
+
+	// Token: 0x0400133B RID: 4923
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioPullOff;
+
+	// Token: 0x0400133C RID: 4924
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioGrab;
+
+	// Token: 0x0400133D RID: 4925
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioLetGo;
+
+	// Token: 0x0400133E RID: 4926
+	private bool isPulling;
+
+	// Token: 0x0400133F RID: 4927
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04001340 RID: 4928
+	public string audioPrefix;
+
+	// Token: 0x02000176 RID: 374
+	private enum State
+	{
+		// Token: 0x04001342 RID: 4930
+		None,
+		// Token: 0x04001343 RID: 4931
+		Idle,
+		// Token: 0x04001344 RID: 4932
+		Pull,
+		// Token: 0x04001345 RID: 4933
+		PullOff,
+		// Token: 0x04001346 RID: 4934
+		Free
+	}
+}

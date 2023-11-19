@@ -1,0 +1,90 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000D3 RID: 211
+public class GirlAndSubmarineAudio : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000691 RID: 1681 RVA: 0x0004AC2C File Offset: 0x00048E2C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioGirlEnterAmb = new AudioEventSimple("amb_sws_sewer_submarineAndGirl_enter");
+		this.audioGirlEnterEnv = new AudioEventSimple("env_sewer_submarineAndGirl_enter");
+	}
+
+	// Token: 0x06000692 RID: 1682 RVA: 0x0004AC64 File Offset: 0x00048E64
+	public bool PreAwake(int callcount)
+	{
+		this.startRTPC = SignalIn.Create("startRTPC", base.gameObject, new Action(this.DoStartUpdate));
+		this.stopRTPC = SignalIn.Create("stopRTPC", base.gameObject, new Action(this.DoStopUpdate));
+		return true;
+	}
+
+	// Token: 0x06000693 RID: 1683 RVA: 0x0004ACB8 File Offset: 0x00048EB8
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.sub = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine).transform;
+	}
+
+	// Token: 0x06000694 RID: 1684 RVA: 0x0004ACE4 File Offset: 0x00048EE4
+	private void DoStartUpdate()
+	{
+		this.audioGirlEnterAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.audioGirlEnterEnv.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.scriptActive = true;
+	}
+
+	// Token: 0x06000695 RID: 1685 RVA: 0x0004AD10 File Offset: 0x00048F10
+	private void DoStopUpdate()
+	{
+		this.scriptActive = false;
+	}
+
+	// Token: 0x06000696 RID: 1686 RVA: 0x0004AD1C File Offset: 0x00048F1C
+	private void Update()
+	{
+		if (!this.scriptActive)
+		{
+			return;
+		}
+		float magnitude = (this.girl.position - this.sub.position).magnitude;
+		float value = Mathf.InverseLerp(1.5f, 14f, magnitude) * 100f;
+		SoundEngine.RTPCs.puzzleTransitionAR1.SetFast(value, AudioKeyObject.AkGameObjs.global, 0f);
+	}
+
+	// Token: 0x04000B4B RID: 2891
+	public Transform girl;
+
+	// Token: 0x04000B4C RID: 2892
+	private Transform sub;
+
+	// Token: 0x04000B4D RID: 2893
+	private bool scriptActive;
+
+	// Token: 0x04000B4E RID: 2894
+	private SignalIn startRTPC;
+
+	// Token: 0x04000B4F RID: 2895
+	private SignalIn stopRTPC;
+
+	// Token: 0x04000B50 RID: 2896
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioGirlEnterAmb;
+
+	// Token: 0x04000B51 RID: 2897
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioGirlEnterEnv;
+
+	// Token: 0x04000B52 RID: 2898
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

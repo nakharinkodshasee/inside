@@ -1,0 +1,56 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200047D RID: 1149
+public class huddleSphereCamScript : MonoBehaviour
+{
+	// Token: 0x06001E28 RID: 7720 RVA: 0x00102AF4 File Offset: 0x00100CF4
+	private void Start()
+	{
+		this.startZoom = this.blendBox.positionCamera.z;
+	}
+
+	// Token: 0x06001E29 RID: 7721 RVA: 0x00102B0C File Offset: 0x00100D0C
+	private void Update()
+	{
+		if (Time.deltaTime <= 0f)
+		{
+			return;
+		}
+		float num = (ScriptGlobals.boy.transform.position - this.huddlePos.transform.position).magnitude;
+		num = Mathf.Min(40f, num);
+		float num2 = Mathf.InverseLerp(this.minDist, this.maxDist, num);
+		base.transform.position = ScriptGlobals.boy.transform.position;
+		this.blendBox.cameraLock.x = Mathf.Lerp(this.posStr, 1f, num2);
+		this.blendBox.cameraLock.y = Mathf.Lerp(this.posStr, 1f, num2);
+		this.blendBox.aimLock.x = Mathf.Lerp(this.aimStr, 1f, num2);
+		this.blendBox.aimLock.y = Mathf.Lerp(this.aimStr, 1f, num2);
+		Vector3 positionCamera = this.blendBox.positionCamera;
+		positionCamera.z = Mathf.Lerp(this.startZoom, this.targetZoom, 1f - num2);
+		this.blendBox.positionCamera = positionCamera;
+	}
+
+	// Token: 0x04003785 RID: 14213
+	public CameraBlendBox blendBox;
+
+	// Token: 0x04003786 RID: 14214
+	public Transform huddlePos;
+
+	// Token: 0x04003787 RID: 14215
+	public float minDist = 2f;
+
+	// Token: 0x04003788 RID: 14216
+	public float maxDist = 20f;
+
+	// Token: 0x04003789 RID: 14217
+	public float posStr;
+
+	// Token: 0x0400378A RID: 14218
+	public float aimStr;
+
+	// Token: 0x0400378B RID: 14219
+	public float targetZoom = -6.25f;
+
+	// Token: 0x0400378C RID: 14220
+	private float startZoom;
+}

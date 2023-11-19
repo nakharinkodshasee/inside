@@ -1,0 +1,19 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000502 RID: 1282
+public class HuddleApproachSetNewLeashLength : MonoBehaviour
+{
+	// Token: 0x0600218B RID: 8587 RVA: 0x00119268 File Offset: 0x00117468
+	private void OnTriggerEnter(Collider collider)
+	{
+		AlbinoAI component = collider.GetComponent<AlbinoAI>();
+		if (component)
+		{
+			component.SetNewLeashLength(this.newLeashLenght);
+		}
+	}
+
+	// Token: 0x04003E51 RID: 15953
+	public float newLeashLenght = 50f;
+}

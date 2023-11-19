@@ -1,0 +1,148 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200046E RID: 1134
+public class HuddleStickAudioManuel : MonoBehaviour
+{
+	// Token: 0x06001DC6 RID: 7622 RVA: 0x00100730 File Offset: 0x000FE930
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObjWaterMove = AudioUtils.EnsureAkGameObj(this.waterMove.gameObject, null);
+		this.audioStickEnterWater = new AudioEventSimpleLocal("phy_huddle_stickAndLift_stick_water_enterWater", this.akGameObjWaterMove);
+	}
+
+	// Token: 0x06001DC7 RID: 7623 RVA: 0x00100780 File Offset: 0x000FE980
+	private void Start()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x06001DC8 RID: 7624 RVA: 0x00100788 File Offset: 0x000FE988
+	private void CheckCorners()
+	{
+		float magnitude = base.GetComponent<Rigidbody>().velocity.magnitude;
+		float value = Mathf.InverseLerp(0.5f, 10f, magnitude) * 100f;
+		int num = 0;
+		foreach (Transform transform in this.cornersRight)
+		{
+			if (this.water.bounds.Contains(transform.position))
+			{
+				if (!this.rightInWater && this.activated)
+				{
+					SoundEngine.RTPCs.phyWaterImpact.SetFast(value, this.akGameObjWaterMove, 0f);
+					this.audioStickEnterWater.PostFast();
+				}
+				num++;
+				this.rightInWater = true;
+			}
+		}
+		if (num == 0)
+		{
+			this.rightInWater = false;
+		}
+		num = 0;
+		foreach (Transform transform2 in this.cornersLeft)
+		{
+			if (this.water.bounds.Contains(transform2.position))
+			{
+				if (!this.leftInWater && this.activated)
+				{
+					SoundEngine.RTPCs.phyWaterImpact.SetFast(value, this.akGameObjWaterMove, 0f);
+					this.audioStickEnterWater.PostFast();
+				}
+				num++;
+				this.leftInWater = true;
+			}
+		}
+		if (num == 0)
+		{
+			this.leftInWater = false;
+		}
+	}
+
+	// Token: 0x06001DC9 RID: 7625 RVA: 0x0010094C File Offset: 0x000FEB4C
+	private void UpdateWaterMove()
+	{
+		float distanceBetweenPointAndLine = MathUtils.GetDistanceBetweenPointAndLine(base.transform.position, this.waterEdgeRight.position, Vector3.left);
+		if (!this.moveOveride && distanceBetweenPointAndLine > 1f)
+		{
+			this.waterMove.EnableOverideValue(0f);
+			this.moveOveride = true;
+		}
+		else if (this.moveOveride && distanceBetweenPointAndLine < 1f)
+		{
+			this.waterMove.DisableOverideValue();
+			this.moveOveride = false;
+		}
+	}
+
+	// Token: 0x06001DCA RID: 7626 RVA: 0x001009D4 File Offset: 0x000FEBD4
+	private void FixedUpdate()
+	{
+		if (!this.activated && this.frameCount < this.frameDelay)
+		{
+			this.frameCount++;
+		}
+		if (this.frameCount >= this.frameDelay)
+		{
+			this.activated = true;
+		}
+		this.CheckCorners();
+		this.UpdateWaterMove();
+	}
+
+	// Token: 0x040036C2 RID: 14018
+	public Collider water;
+
+	// Token: 0x040036C3 RID: 14019
+	public AudioMove waterMove;
+
+	// Token: 0x040036C4 RID: 14020
+	public Transform waterEdgeRight;
+
+	// Token: 0x040036C5 RID: 14021
+	public List<Transform> cornersRight;
+
+	// Token: 0x040036C6 RID: 14022
+	public List<Transform> cornersLeft;
+
+	// Token: 0x040036C7 RID: 14023
+	private bool rightInWater = true;
+
+	// Token: 0x040036C8 RID: 14024
+	private bool leftInWater;
+
+	// Token: 0x040036C9 RID: 14025
+	private int frameDelay = 120;
+
+	// Token: 0x040036CA RID: 14026
+	private int frameCount;
+
+	// Token: 0x040036CB RID: 14027
+	private bool activated;
+
+	// Token: 0x040036CC RID: 14028
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStickEnterWater;
+
+	// Token: 0x040036CD RID: 14029
+	[SerializeField]
+	[HideInInspector]
+	private AkGameObj akGameObjWaterMove;
+
+	// Token: 0x040036CE RID: 14030
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x040036CF RID: 14031
+	private bool moveOveride;
+}

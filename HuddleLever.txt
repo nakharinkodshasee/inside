@@ -1,0 +1,165 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001D8 RID: 472
+public class HuddleLever : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000E03 RID: 3587 RVA: 0x00085648 File Offset: 0x00083848
+	public bool PreAwake(int callcount)
+	{
+		this.leverLeft = SignalOut.Create("leverLeft", base.gameObject);
+		this.leverRight = SignalOut.Create("leverRight", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000E04 RID: 3588 RVA: 0x00085684 File Offset: 0x00083884
+	private void Start()
+	{
+		if (Vector3.Dot(base.transform.up, Vector3.down) > 0.5f)
+		{
+			this.upSideDown = true;
+		}
+		if (this.startAtRight)
+		{
+			base.GetComponent<Rigidbody>().AddTorque(new Vector3(0f, 0f, -this.force * base.GetComponent<Rigidbody>().mass));
+		}
+		else
+		{
+			base.GetComponent<Rigidbody>().AddTorque(new Vector3(0f, 0f, this.force * base.GetComponent<Rigidbody>().mass));
+		}
+	}
+
+	// Token: 0x06000E05 RID: 3589 RVA: 0x00085720 File Offset: 0x00083920
+	private void UpdateGrabStatus()
+	{
+		if (ScriptGlobals.huddle == null)
+		{
+			return;
+		}
+		if (ScriptGlobals.huddle.grabState.body == base.GetComponent<Rigidbody>())
+		{
+			this.huddleIsGrabbingLever = true;
+			this.grabbingLeverTimer += Time.deltaTime;
+			this.releaseLeverTimer = 0f;
+		}
+		else
+		{
+			this.huddleIsGrabbingLever = false;
+			this.grabbingLeverTimer = 0f;
+			this.releaseLeverTimer += Time.deltaTime;
+		}
+	}
+
+	// Token: 0x06000E06 RID: 3590 RVA: 0x000857AC File Offset: 0x000839AC
+	private void UpdateLeverRotation()
+	{
+		if (this.huddleIsGrabbingLever && this.grabbingLeverTimer > 0.15f)
+		{
+			float num = 0f;
+			if (ScriptGlobals.huddle)
+			{
+				num = ScriptGlobals.huddle.input.stick.x;
+			}
+			if (this.upSideDown)
+			{
+				num = -num;
+			}
+			if (num > 0.5f)
+			{
+				base.GetComponent<Rigidbody>().AddTorque(new Vector3(0f, 0f, -this.force * base.GetComponent<Rigidbody>().mass));
+			}
+			else if (num < -0.5f)
+			{
+				base.GetComponent<Rigidbody>().AddTorque(new Vector3(0f, 0f, this.force * base.GetComponent<Rigidbody>().mass));
+			}
+		}
+		else if (this.releaseLeverTimer < 0.5f)
+		{
+			float num2 = base.transform.localRotation.eulerAngles.z;
+			if (num2 > 180f)
+			{
+				num2 -= 360f;
+			}
+			num2 *= -1f;
+			float num3 = 1f;
+			if (!this.upSideDown)
+			{
+				num3 = -1f;
+			}
+			if (num2 > 0f)
+			{
+				base.GetComponent<Rigidbody>().AddTorque(new Vector3(0f, 0f, this.force * base.GetComponent<Rigidbody>().mass * num3));
+			}
+			else
+			{
+				base.GetComponent<Rigidbody>().AddTorque(new Vector3(0f, 0f, -this.force * base.GetComponent<Rigidbody>().mass * num3));
+			}
+		}
+	}
+
+	// Token: 0x06000E07 RID: 3591 RVA: 0x00085958 File Offset: 0x00083B58
+	private void UpdateEvents()
+	{
+		float num = base.transform.localRotation.eulerAngles.z;
+		if (num > 180f)
+		{
+			num -= 360f;
+		}
+		num *= -1f;
+		if (Mathf.Abs(num) < 20f)
+		{
+			this.eventSend = false;
+		}
+		if (!this.eventSend)
+		{
+			if (num > 28f)
+			{
+				this.leverRight.Signal();
+				this.eventSend = true;
+			}
+			else if (num < -28f)
+			{
+				this.leverLeft.Signal();
+				this.eventSend = true;
+			}
+		}
+	}
+
+	// Token: 0x06000E08 RID: 3592 RVA: 0x00085A00 File Offset: 0x00083C00
+	private void FixedUpdate()
+	{
+		if (ScriptGlobals.huddle.isCharacterActive)
+		{
+			this.UpdateGrabStatus();
+			this.UpdateLeverRotation();
+			this.UpdateEvents();
+		}
+	}
+
+	// Token: 0x04001907 RID: 6407
+	public float force = 100f;
+
+	// Token: 0x04001908 RID: 6408
+	public bool startAtRight = true;
+
+	// Token: 0x04001909 RID: 6409
+	private bool huddleIsGrabbingLever;
+
+	// Token: 0x0400190A RID: 6410
+	private SignalOut leverLeft;
+
+	// Token: 0x0400190B RID: 6411
+	private SignalOut leverRight;
+
+	// Token: 0x0400190C RID: 6412
+	private bool upSideDown;
+
+	// Token: 0x0400190D RID: 6413
+	private float grabbingLeverTimer;
+
+	// Token: 0x0400190E RID: 6414
+	private float releaseLeverTimer = 100f;
+
+	// Token: 0x0400190F RID: 6415
+	private bool eventSend;
+}

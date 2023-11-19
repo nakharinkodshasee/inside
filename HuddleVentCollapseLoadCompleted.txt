@@ -1,0 +1,85 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000471 RID: 1137
+public class HuddleVentCollapseLoadCompleted : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001DE3 RID: 7651 RVA: 0x00100DDC File Offset: 0x000FEFDC
+	public bool PreAwake(int callcount)
+	{
+		this.loadCompleted = SignalIn.Create("loadCompleted", base.gameObject, new Action(this.DoLoadCompleted));
+		return true;
+	}
+
+	// Token: 0x06001DE4 RID: 7652 RVA: 0x00100E04 File Offset: 0x000FF004
+	private void EnableAndNormalizeAnims()
+	{
+		int i = 0;
+		int num = this.animToSet.Length;
+		while (i < num)
+		{
+			this.animToSet[i].gameObject.SetActive(true);
+			this.animToSet[i].Play();
+			this.animToSet[i][this.animToSet[i].clip.name].normalizedTime = 1f;
+			i++;
+		}
+	}
+
+	// Token: 0x06001DE5 RID: 7653 RVA: 0x00100E78 File Offset: 0x000FF078
+	private void DisableThings()
+	{
+		int i = 0;
+		int num = this.disablings.Length;
+		while (i < num)
+		{
+			this.disablings[i].SetActive(false);
+			i++;
+		}
+	}
+
+	// Token: 0x06001DE6 RID: 7654 RVA: 0x00100EB0 File Offset: 0x000FF0B0
+	private void HandleServer()
+	{
+		this.server.parent = this.serverLoadPos;
+		this.server.localPosition = Vector3.zero;
+		this.server.gameObject.SetActive(true);
+	}
+
+	// Token: 0x06001DE7 RID: 7655 RVA: 0x00100EF0 File Offset: 0x000FF0F0
+	private void DoLoadCompleted()
+	{
+		this.EnableAndNormalizeAnims();
+		this.DisableThings();
+		this.HandleServer();
+		this.dioramaWallRight.Play("Crash");
+		this.dioramaWallRight["Crash"].normalizedTime = 1f;
+		this.dioramaWallLeft.Play("Crash2");
+		this.dioramaWallLeft["Crash2"].normalizedTime = 1f;
+		this.serverAnim.Play("RipOff");
+		this.serverAnim["RipOff"].normalizedTime = 1f;
+	}
+
+	// Token: 0x040036E6 RID: 14054
+	public Animation[] animToSet = new Animation[0];
+
+	// Token: 0x040036E7 RID: 14055
+	public GameObject[] disablings = new GameObject[0];
+
+	// Token: 0x040036E8 RID: 14056
+	public Animation dioramaWallRight;
+
+	// Token: 0x040036E9 RID: 14057
+	public Animation dioramaWallLeft;
+
+	// Token: 0x040036EA RID: 14058
+	public Animation serverAnim;
+
+	// Token: 0x040036EB RID: 14059
+	public Transform server;
+
+	// Token: 0x040036EC RID: 14060
+	public Transform serverLoadPos;
+
+	// Token: 0x040036ED RID: 14061
+	private SignalIn loadCompleted;
+}

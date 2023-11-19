@@ -1,0 +1,4331 @@
+using System;
+using System.Collections.Generic;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x020000A0 RID: 160
+public class Hulv : MonoBehaviour, IPreAwake
+{
+	// Token: 0x17000017 RID: 23
+	// (get) Token: 0x0600052A RID: 1322 RVA: 0x00038CC4 File Offset: 0x00036EC4
+	public Vector3 velocity
+	{
+		get
+		{
+			return this.mHulvVelocity;
+		}
+	}
+
+	// Token: 0x0600052B RID: 1323 RVA: 0x00038CCC File Offset: 0x00036ECC
+	public AnimationBlendHelper GetBlendHelper()
+	{
+		return this.blendHelper;
+	}
+
+	// Token: 0x0600052C RID: 1324 RVA: 0x00038CD4 File Offset: 0x00036ED4
+	public static Hulv GetHulvKilledBoy()
+	{
+		return Hulv.hulvKilledBoy;
+	}
+
+	// Token: 0x0600052D RID: 1325 RVA: 0x00038CDC File Offset: 0x00036EDC
+	private ABDefinition CreateSingleAnimTransitionState(string animName, Hulv.HulvAnimationStates definitionID, bool syncAnim = false, float speedFactor = 1f, bool isStaticAnim = false)
+	{
+		ABDefinition.ABLevel ablevel = new ABDefinition.ABLevel(0f, animName);
+		AnimationState animationState = this.anim[animName];
+		if (animationState != null)
+		{
+			ablevel.CreateAndAddNode(this.blendHelper, animationState, 0f, speedFactor, this.animDB);
+			ABDefinition abdefinition = new ABDefinition(ablevel, (int)definitionID, syncAnim, animName);
+			abdefinition.isStatic = isStaticAnim;
+			this.blendHelper.AddBlendDefinition(abdefinition);
+			return abdefinition;
+		}
+		return null;
+	}
+
+	// Token: 0x0600052E RID: 1326 RVA: 0x00038D4C File Offset: 0x00036F4C
+	private void OnBreakChase()
+	{
+		if (this.hulvAI.GetChaseMode() == HulvAI.ChaseMode.ChargeIn || this.hulvAI.GetChaseMode() == HulvAI.ChaseMode.ChargeToKill)
+		{
+			this.hulvAI.SetChaseMode(HulvAI.ChaseMode.Idle);
+		}
+	}
+
+	// Token: 0x0600052F RID: 1327 RVA: 0x00038D7C File Offset: 0x00036F7C
+	private void OnBoyHasTorch()
+	{
+		this.boyHasTorch = true;
+	}
+
+	// Token: 0x06000530 RID: 1328 RVA: 0x00038D88 File Offset: 0x00036F88
+	private void OnBoyHasNoTorch()
+	{
+		this.boyHasTorch = false;
+	}
+
+	// Token: 0x06000531 RID: 1329 RVA: 0x00038D94 File Offset: 0x00036F94
+	private void OnAllowQuickAnimBreak()
+	{
+		this.allowQuickAnimBreak = true;
+	}
+
+	// Token: 0x06000532 RID: 1330 RVA: 0x00038DA0 File Offset: 0x00036FA0
+	private void Awake()
+	{
+		this.timeSliceStart = !GameManager.IsLoading();
+		this.killBlendIn = 0f;
+	}
+
+	// Token: 0x06000533 RID: 1331 RVA: 0x00038DBC File Offset: 0x00036FBC
+	public Vector3 GetStaticExtraOffset()
+	{
+		return this.wantedBasePosExtraOffset;
+	}
+
+	// Token: 0x06000534 RID: 1332 RVA: 0x00038DC4 File Offset: 0x00036FC4
+	public void SetExtraOffsetZ(float zVal)
+	{
+		this.wantedBasePosExtraOffset.z = zVal;
+	}
+
+	// Token: 0x06000535 RID: 1333 RVA: 0x00038DD4 File Offset: 0x00036FD4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.hulvRender = base.gameObject.GetComponentInChildren<SkinnedMeshRenderer>();
+		if (this.jawRigidBody != null)
+		{
+			this.jawRigidBody.transform.parent = base.transform.parent;
+			this.jawRigidBody.gameObject.SetActive(false);
+		}
+		if (this.probe != null)
+		{
+			this.probe.transform.parent = base.transform.parent;
+			HulvProbe component = this.probe.GetComponent<HulvProbe>();
+			if (component)
+			{
+				component.hulv = this;
+			}
+		}
+	}
+
+	// Token: 0x06000536 RID: 1334 RVA: 0x00038E8C File Offset: 0x0003708C
+	public void WarmUp()
+	{
+		int num = 0;
+		bool flag = this.PreAwake(num);
+		while (!flag)
+		{
+			num++;
+			flag = this.PreAwake(num);
+		}
+		this.DoTheUpdate(0.01f);
+		this.SetUniqueAnimation(Hulv.UniqueAnimations.JumpAttack, null, false, 0f, -1f, -1f);
+	}
+
+	// Token: 0x06000537 RID: 1335 RVA: 0x00038EE0 File Offset: 0x000370E0
+	public bool MyAwake(int callCount)
+	{
+		switch (callCount)
+		{
+		case 0:
+			this.OnPreProcess();
+			this.anim = base.GetComponent<Animation>();
+			this.isReady = false;
+			this.BoyHasTorch = SignalIn.Create("BoyHasTorch", base.gameObject, new Action(this.OnBoyHasTorch));
+			this.BoyHasNoTorch = SignalIn.Create("BoyHasNoTorch", base.gameObject, new Action(this.OnBoyHasNoTorch));
+			this.BreakChase = SignalIn.Create("BreakChase", base.gameObject, new Action(this.OnBreakChase));
+			return true;
+		case 1:
+			this.AllowQuickAnimBreak = SignalIn.Create("AllowQuickAnimBreak", base.gameObject, new Action(this.OnAllowQuickAnimBreak));
+			this.HulvScaredAwaySignal = SignalOut.Create("HulvScaredAwaySignal", base.gameObject);
+			this.hulvKilledBoySignal = SignalOut.Create("hulvKilledBoySignal", base.gameObject);
+			return true;
+		case 2:
+			this.hulvAI.InitHulvAI(this);
+			this.hulvAI.stickDeadzone = this.stickDeadZone;
+			this.hulvAI.defaultStopDist = this.stopDist;
+			this.hulvModel = base.gameObject;
+			this.anim.Play("IdleAngryA");
+			if (this.blendHelper == null)
+			{
+				this.blendHelper = AnimationBlendHelper.CreateAnimationBlendHelper(base.gameObject, 2);
+			}
+			else
+			{
+				this.blendHelper.InitializeBlendParameters(2);
+			}
+			if (this.moveToPoint != null)
+			{
+				this.hulvAI.FollowWaypoint(this.moveToPoint);
+			}
+			for (int i = 1; i < 10; i++)
+			{
+				this.anim.SyncLayer(i * 2);
+			}
+			this.animDB = GlobalCachedAnimationMovementInfo.mInstance.GetMoveInfo("movementinfo/Hulv");
+			return true;
+		case 3:
+		{
+			AnimationState animationState = this.anim["RunFastA"];
+			if (animationState != null)
+			{
+				ABDefinition.ABLevel ablevel = new ABDefinition.ABLevel(1f, "runFast");
+				ablevel.CreateAndAddNode(this.blendHelper, this.anim["RunSlowTurnL70"], -30f, 1.2f, this.animDB);
+				ablevel.CreateAndAddNode(this.blendHelper, this.anim["RunSlowTurnL"], -10f, 1.6f, this.animDB);
+				ablevel.CreateAndAddNode(this.blendHelper, animationState, 0f, 0f, this.animDB);
+				ablevel.CreateAndAddNode(this.blendHelper, this.anim["RunSlowTurnR"], 10f, 1.6f, this.animDB);
+				ablevel.CreateAndAddNode(this.blendHelper, this.anim["RunSlowTurnR70"], 30f, 1.2f, this.animDB);
+				ABDefinition.ABLevel ablevel2 = new ABDefinition.ABLevel(0f, "runSlow");
+				ablevel2.CreateAndAddNode(this.blendHelper, this.anim["RunSlowTurnL70"], -30f, 1f, this.animDB);
+				ablevel2.CreateAndAddNode(this.blendHelper, this.anim["RunSlowTurnL"], -20f, 1f, this.animDB);
+				ablevel2.CreateAndAddNode(this.blendHelper, this.anim["RunSlowA"], 0f, 0f, this.animDB);
+				ablevel2.CreateAndAddNode(this.blendHelper, this.anim["RunSlowTurnR"], 10f, 1f, this.animDB);
+				ablevel2.CreateAndAddNode(this.blendHelper, this.anim["RunSlowTurnR70"], 30f, 1f, this.animDB);
+				ABDefinition.ABLevel ablevel3 = new ABDefinition.ABLevel(0f, "topLevel");
+				ablevel3.AddNode(ablevel2);
+				ablevel3.AddNode(ablevel);
+				ABDefinition abdefinition = new ABDefinition(ablevel3, 6, true, "RunDefinition");
+				abdefinition.SetBlendParameterIndexes(new FastList<int>(0, FastListExpandMode.Exponential, 100)
+				{
+					0,
+					1
+				});
+				this.blendHelper.AddBlendDefinition(abdefinition);
+				return true;
+			}
+			return false;
+		}
+		case 4:
+		{
+			AnimationState animationState2 = this.anim["JogA"];
+			if (animationState2 != null)
+			{
+				ABDefinition.ABLevel ablevel4 = new ABDefinition.ABLevel(1f, "jogFast");
+				ablevel4.CreateAndAddNode(this.blendHelper, this.anim["JogTurnL70"], -50f, 1f, this.animDB);
+				ablevel4.CreateAndAddNode(this.blendHelper, animationState2, 0f, 1f, this.animDB);
+				ablevel4.CreateAndAddNode(this.blendHelper, this.anim["JogTurnR70"], 50f, 1f, this.animDB);
+				ABDefinition.ABLevel ablevel5 = new ABDefinition.ABLevel(0f, "jogSlow");
+				ablevel5.CreateAndAddNode(this.blendHelper, this.anim["JogTurnL70"], -50f, 0.6f, this.animDB);
+				ablevel5.CreateAndAddNode(this.blendHelper, animationState2, 0f, 0.6f, this.animDB);
+				ablevel5.CreateAndAddNode(this.blendHelper, this.anim["JogTurnR70"], 50f, 0.6f, this.animDB);
+				ABDefinition.ABLevel ablevel6 = new ABDefinition.ABLevel(0f, "topLevel");
+				ablevel6.AddNode(ablevel5);
+				ablevel6.AddNode(ablevel4);
+				ABDefinition abdefinition2 = new ABDefinition(ablevel6, 24, true, "JogDefinition");
+				abdefinition2.SetBlendParameterIndexes(new FastList<int>(0, FastListExpandMode.Exponential, 100)
+				{
+					0,
+					1
+				});
+				this.blendHelper.AddBlendDefinition(abdefinition2);
+				return true;
+			}
+			return false;
+		}
+		case 5:
+			this.CreateSingleAnimTransitionState("IdleAngryA", Hulv.HulvAnimationStates.Idle, false, 1f, false);
+			this.CreateSingleAnimTransitionState("IdleTwitchyA", Hulv.HulvAnimationStates.IdleTwitchy, false, 1f, false);
+			this.CreateSingleAnimTransitionState("IdleEating", Hulv.HulvAnimationStates.IdleEating, false, 1f, false);
+			this.CreateSingleAnimTransitionState("FallingA", Hulv.HulvAnimationStates.Falling, false, 1f, false);
+			this.CreateSingleAnimTransitionState("KillGuffeA", Hulv.HulvAnimationStates.IdleKillGuffe, false, 1f, false);
+			return true;
+		case 6:
+		{
+			AnimationState animationState3 = this.anim["IdleFuriousA"];
+			if (animationState3 != null)
+			{
+				ABDefinition.ABAdvancedRandomLevel abadvancedRandomLevel = new ABDefinition.ABAdvancedRandomLevel(0f, "IdleFuriousRandom");
+				abadvancedRandomLevel.randomMode = true;
+				abadvancedRandomLevel.reRandomizeMaxTime = 7f;
+				abadvancedRandomLevel.reRandomizeMinTime = 3f;
+				abadvancedRandomLevel.randomCrossBlend = 0.4f;
+				abadvancedRandomLevel.CreateAndAddNode(this.blendHelper, animationState3, 0f, Random.Range(0.9f, 1.1f), this.animDB);
+				float[] zones = new float[]
+				{
+					0.008f,
+					0.138f,
+					0.176f,
+					0.503f,
+					0.515f,
+					0.583f,
+					0.603f,
+					0.649f,
+					0.661f,
+					0.858f
+				};
+				abadvancedRandomLevel.AddSafeZones(zones, 0.08f);
+				abadvancedRandomLevel.CreateAndAddNode(this.blendHelper, this.anim["IdleFuriousB"], 0f, Random.Range(0.9f, 1.1f), this.animDB);
+				float[] zones2 = new float[]
+				{
+					0.01f,
+					0.05f,
+					0.128f,
+					0.154f,
+					0.313f,
+					0.355f,
+					0.633f,
+					0.659f,
+					0.719f,
+					0.76f,
+					0.84f,
+					0.864f,
+					0.92f,
+					0.948f
+				};
+				abadvancedRandomLevel.AddSafeZones(zones2, 0.08f);
+				ABDefinition definition = new ABDefinition(abadvancedRandomLevel, 3, false, "IdleFuriousRandom");
+				this.blendHelper.AddBlendDefinition(definition);
+				return true;
+			}
+			return false;
+		}
+		case 7:
+		{
+			AnimationState animationState4 = this.anim["IdleAtFenceFrustratedA"];
+			if (animationState4 != null)
+			{
+				ABDefinition.ABLevel ablevel7 = new ABDefinition.ABLevel(0f, "IdleFrustratedRandom");
+				ablevel7.randomMode = true;
+				ablevel7.reRandomizeMaxTime = 7f;
+				ablevel7.reRandomizeMinTime = 3f;
+				ablevel7.CreateAndAddNode(this.blendHelper, animationState4, 0f, Random.Range(0.9f, 1.1f), this.animDB);
+				ablevel7.CreateAndAddNode(this.blendHelper, this.anim["IdleAtFenceFrustratedB"], 0f, Random.Range(0.9f, 1.1f), this.animDB);
+				ABDefinition definition2 = new ABDefinition(ablevel7, 53, false, "IdleFrustratedRandom");
+				this.blendHelper.AddBlendDefinition(definition2);
+				return true;
+			}
+			return false;
+		}
+		case 8:
+			if (this.anim["JogStartA"] != null)
+			{
+				this.CreateSingleAnimTransitionState("JogStartA", Hulv.HulvAnimationStates.JogStart, false, 1f, false);
+				this.CreateSingleAnimTransitionState("JogStopA", Hulv.HulvAnimationStates.JogStop, false, 1f, false);
+				this.CreateSingleAnimTransitionState("JogTurnL180", Hulv.HulvAnimationStates.JogTurn180Left, false, 1f, false);
+				this.CreateSingleAnimTransitionState("JogTurnR180", Hulv.HulvAnimationStates.JogTurn180Right, false, 1f, false);
+				return true;
+			}
+			return false;
+		case 9:
+			this.CreateSingleAnimTransitionState("RunSlowTurnL180", Hulv.HulvAnimationStates.Turn180Left, false, 1f, false);
+			this.CreateSingleAnimTransitionState("RunSlowTurnL120", Hulv.HulvAnimationStates.Turn120Left, false, 1.3f, false);
+			this.CreateSingleAnimTransitionState("RunSlowTurnR180", Hulv.HulvAnimationStates.Turn180Right, false, 1f, false);
+			this.CreateSingleAnimTransitionState("RunSlowTurnR120", Hulv.HulvAnimationStates.Turn120Right, false, 1.3f, false);
+			return true;
+		case 10:
+			if (this.anim["Swim"] != null)
+			{
+				this.CreateSingleAnimTransitionState("JumpToWater", Hulv.HulvAnimationStates.JumpInPool, false, 1f, true);
+				this.CreateSingleAnimTransitionState("Swim", Hulv.HulvAnimationStates.Swimming, false, 1f, false);
+				this.CreateSingleAnimTransitionState("SwimChargeB", Hulv.HulvAnimationStates.SwimCharge, false, 1f, false);
+				this.CreateSingleAnimTransitionState("SwimChargeDownA", Hulv.HulvAnimationStates.SwimChargeDown, false, 1f, false);
+				this.CreateSingleAnimTransitionState("SwimCharge", Hulv.HulvAnimationStates.SwimChargeLoop, false, 1f, false);
+				this.CreateSingleAnimTransitionState("SwimTurn", Hulv.HulvAnimationStates.SwimTurn, false, 1f, false);
+				return true;
+			}
+			return false;
+		case 11:
+			if (this.anim["Swim"] != null)
+			{
+				this.CreateSingleAnimTransitionState("SwimConfusedB", Hulv.HulvAnimationStates.SwimConfused, false, 1f, false);
+				this.CreateSingleAnimTransitionState("SwimConfused", Hulv.HulvAnimationStates.SwimConfusedLoop, false, 1f, false);
+				this.CreateSingleAnimTransitionState("SwimGetUp", Hulv.HulvAnimationStates.SwimGetUp, false, 0.9f, true);
+				this.CreateSingleAnimTransitionState("SwimKillA", Hulv.HulvAnimationStates.SwimKillA, false, 1f, false);
+				this.CreateSingleAnimTransitionState("KillWaterDown", Hulv.HulvAnimationStates.SwimKillDown, false, 1f, false);
+				return true;
+			}
+			return false;
+		case 12:
+			this.CreateSingleAnimTransitionState("JumpA", Hulv.HulvAnimationStates.JumpAttack, false, 1f, false);
+			this.CreateSingleAnimTransitionState("KillJumpA", Hulv.HulvAnimationStates.KillJump, false, 1f, false);
+			this.CreateSingleAnimTransitionState("JumpC_Low", Hulv.HulvAnimationStates.JumpAttackLow, false, 1f, false);
+			this.CreateSingleAnimTransitionState("KillJumpC_Low", Hulv.HulvAnimationStates.KillJumpLow, false, 1f, false);
+			this.CreateSingleAnimTransitionState("KillEdgeA", Hulv.HulvAnimationStates.KillEdge, false, 1f, false);
+			return true;
+		case 13:
+			if (this.anim["JumpFence"] != null)
+			{
+				this.CreateSingleAnimTransitionState("JumpFence", Hulv.HulvAnimationStates.JumpFence, false, 1f, true);
+				this.CreateSingleAnimTransitionState("JumpFenceUpStraightBack", Hulv.HulvAnimationStates.JumpFenceUpStraightBack, false, 1f, true);
+				this.CreateSingleAnimTransitionState("JumpFenceUpStraightBackB", Hulv.HulvAnimationStates.JumpFenceUpStraightBackB, false, 1f, true);
+				this.CreateSingleAnimTransitionState("JumpFenceUpStraightBackC", Hulv.HulvAnimationStates.JumpFenceUpStraightBackC, false, 1f, true);
+				return true;
+			}
+			return false;
+		case 14:
+			if (this.anim["JumpFenceUp"] != null)
+			{
+				this.CreateSingleAnimTransitionState("JumpFenceUp", Hulv.HulvAnimationStates.JumpFenceUp, false, 0.9f, true);
+				this.CreateSingleAnimTransitionState("KillFence", Hulv.HulvAnimationStates.KillFence, false, 1f, false);
+				this.CreateSingleAnimTransitionState("JumpFenceBarkLowLoop", Hulv.HulvAnimationStates.JumpFenceBarkLowLoop, false, 1f, true);
+				this.CreateSingleAnimTransitionState("JumpFenceBarkLoop", Hulv.HulvAnimationStates.JumpFenceBarkLoop, false, 1f, true);
+				return true;
+			}
+			return false;
+		case 15:
+			this.CreateSingleAnimTransitionState("RunStopA", Hulv.HulvAnimationStates.RunStop, false, 1f, false);
+			this.CreateSingleAnimTransitionState("RunStartA", Hulv.HulvAnimationStates.RunStart, false, 1f, false);
+			this.CreateSingleAnimTransitionState("StopInstant", Hulv.HulvAnimationStates.StopInstant, false, 1f, false);
+			this.CreateSingleAnimTransitionState("TurnR90", Hulv.HulvAnimationStates.RotateRight, true, 1f, false);
+			this.CreateSingleAnimTransitionState("TurnL90", Hulv.HulvAnimationStates.RotateLeft, true, 1f, false);
+			return true;
+		case 16:
+		{
+			if (!(this.anim["RunStopForWater"] != null))
+			{
+				return false;
+			}
+			this.CreateSingleAnimTransitionState("RunStopForWater", Hulv.HulvAnimationStates.RunStopForWater, false, 1f, true);
+			this.CreateSingleAnimTransitionState("RunStopForWaterCritical", Hulv.HulvAnimationStates.RunStopWildAtLedge, false, 1f, true);
+			this.CreateSingleAnimTransitionState("IdleAtWater", Hulv.HulvAnimationStates.IdleAtWater, false, 1f, false);
+			AnimationState animationState5 = this.anim["IdleFuriousA"];
+			if (animationState5 != null)
+			{
+				ABDefinition.ABAdvancedRandomLevel abadvancedRandomLevel2 = new ABDefinition.ABAdvancedRandomLevel(0f, "IdleFuriousStraightRandom");
+				abadvancedRandomLevel2.randomMode = true;
+				abadvancedRandomLevel2.reRandomizeMaxTime = 7f;
+				abadvancedRandomLevel2.reRandomizeMinTime = 3f;
+				abadvancedRandomLevel2.randomCrossBlend = 0.4f;
+				abadvancedRandomLevel2.CreateAndAddNode(this.blendHelper, animationState5, 0f, Random.Range(0.9f, 1.1f), this.animDB);
+				abadvancedRandomLevel2.AddSafeZones(Hulv.idleFuriousASafeZones, 0.044048578f);
+				abadvancedRandomLevel2.CreateAndAddNode(this.blendHelper, this.anim["IdleFuriousB"], 0f, Random.Range(0.9f, 1.1f), this.animDB);
+				abadvancedRandomLevel2.AddSafeZones(Hulv.idleFuriousBSafeZones, 0.044048578f);
+				ABDefinition definition3 = new ABDefinition(abadvancedRandomLevel2, 67, false, "IdleFuriousStraightRandom");
+				this.blendHelper.AddBlendDefinition(definition3);
+				return true;
+			}
+			this.CreateSingleAnimTransitionState("IdleFuriousC_Up", Hulv.HulvAnimationStates.IdleAtWater_Up, false, 1f, false);
+			return true;
+		}
+		case 17:
+			if (this.anim["JumpBackA"] != null)
+			{
+				this.CreateSingleAnimTransitionState("JumpBackA", Hulv.HulvAnimationStates.JumpBack, false, 1f, false);
+				this.CreateSingleAnimTransitionState("JumpBackB", Hulv.HulvAnimationStates.JumpBackB, false, 1f, false);
+				this.CreateSingleAnimTransitionState("JumpBackD", Hulv.HulvAnimationStates.JumpBackC, false, 1f, false);
+				this.CreateSingleAnimTransitionState("JumpBackC", Hulv.HulvAnimationStates.JumpAndFlee, false, 1.1f, false);
+				return true;
+			}
+			return false;
+		case 18:
+			if (this.anim["TurnFastR90"] != null)
+			{
+				this.CreateSingleAnimTransitionState("TurnFastR90", Hulv.HulvAnimationStates.RotateRightFast, true, 1f, false);
+				this.CreateSingleAnimTransitionState("TurnFastL90", Hulv.HulvAnimationStates.RotateLeftFast, true, 1f, false);
+				this.CreateSingleAnimTransitionState("TrashedByHuddleA", Hulv.HulvAnimationStates.ThrashedByHuddle, false, 1f, false);
+				this.CreateSingleAnimTransitionState("TrashedByHuddleD_180", Hulv.HulvAnimationStates.ThrashedByHuddle_180_alt, false, 1f, false);
+				this.CreateSingleAnimTransitionState("TrashedByHuddleC_180", Hulv.HulvAnimationStates.ThrashedByHuddle_180, false, 1f, false);
+				return true;
+			}
+			return false;
+		case 19:
+			this.CreateSingleAnimTransitionState("SneakStart", Hulv.HulvAnimationStates.SneakStart, false, 1f, false);
+			this.CreateSingleAnimTransitionState("SneakStop", Hulv.HulvAnimationStates.SneakStop, false, 1f, false);
+			this.CreateSingleAnimTransitionState("FallingDie", Hulv.HulvAnimationStates.FallingDie, false, 1f, false);
+			this.CreateSingleAnimTransitionState("SwimGetUpKillBoy", Hulv.HulvAnimationStates.SwimGetUpKillBoy, false, 1f, true);
+			return true;
+		case 20:
+		{
+			AnimationState animationState6 = this.anim["IdleBoyFarAway"];
+			if (animationState6 != null)
+			{
+				this.CreateSingleAnimTransitionState("IdleBoyFarAway", Hulv.HulvAnimationStates.IdleBoyFar, false, 1f, false);
+				this.CreateSingleAnimTransitionState("IdleBoyFarAwaySitWait", Hulv.HulvAnimationStates.IdleBoyFarSitWait, false, 1f, false);
+				this.CreateSingleAnimTransitionState("IdleBoyFarAwayWalkAbout", Hulv.HulvAnimationStates.IdleBoyFarWalkAround, false, 1f, false);
+				return true;
+			}
+			return false;
+		}
+		case 21:
+			this.CreateSingleAnimTransitionState("IdleSniffTreeA", Hulv.HulvAnimationStates.IdleSniffTree, false, 1f, false);
+			this.CreateSingleAnimTransitionState("KillEdgeBoyFall", Hulv.HulvAnimationStates.KillEdgeBoyFall, false, 1f, false);
+			this.CreateSingleAnimTransitionState("IdleFastBarking", Hulv.HulvAnimationStates.IdleFastBarking, false, 1f, false);
+			this.blendHelper.SetBlendDefinition(1);
+			this.blendHelper.AllAnimsInitialized();
+			this.isReady = true;
+			return true;
+		default:
+			return true;
+		}
+	}
+
+	// Token: 0x06000538 RID: 1336 RVA: 0x00039E70 File Offset: 0x00038070
+	public bool PreAwake(int callcount)
+	{
+		while (!this.MyAwake(callcount + this.localPreAwakeOffset))
+		{
+			this.localPreAwakeOffset++;
+		}
+		return this.isReady;
+	}
+
+	// Token: 0x06000539 RID: 1337 RVA: 0x00039EAC File Offset: 0x000380AC
+	public float GetRunBlendSpeed()
+	{
+		return this.blendHelper.blendParameters[0];
+	}
+
+	// Token: 0x0600053A RID: 1338 RVA: 0x00039EC0 File Offset: 0x000380C0
+	public Hulv.HulvAnimationStates GetTopAnimationState()
+	{
+		if (this.blendHelper == null)
+		{
+			return Hulv.HulvAnimationStates.None;
+		}
+		return (Hulv.HulvAnimationStates)this.blendHelper.GetTopDefinitionID();
+	}
+
+	// Token: 0x0600053B RID: 1339 RVA: 0x00039EE0 File Offset: 0x000380E0
+	public bool IsInWater()
+	{
+		return this.isSwimming;
+	}
+
+	// Token: 0x0600053C RID: 1340 RVA: 0x00039EE8 File Offset: 0x000380E8
+	private void SetRandomAutoTransitionTime(Hulv.HulvAnimationStates animToSet)
+	{
+		if (animToSet == Hulv.HulvAnimationStates.IdleBoyFar)
+		{
+			this.autoTransitionTime = Random.Range(0.18f, 0.98f);
+			if (this.autoTransitionTime > 0.41f && this.autoTransitionTime < 0.86f)
+			{
+				this.autoTransitionTime = Random.Range(0.86f, 0.98f);
+			}
+		}
+	}
+
+	// Token: 0x0600053D RID: 1341 RVA: 0x00039F48 File Offset: 0x00038148
+	public void SetUniqueAnimation(Hulv.UniqueAnimations animToSet, GameObject initialAlignementPivot = null, bool linearPlacement = false, float customParameter = 0f, float overrideTransitTime = -1f, float overrideStartPos = -1f)
+	{
+		if ((animToSet == Hulv.UniqueAnimations.LeavePool || animToSet == Hulv.UniqueAnimations.JumpFenceUp) && Hulv.hulvKilledBoy == this)
+		{
+			return;
+		}
+		if (animToSet == Hulv.UniqueAnimations.RunStopForWater || animToSet == Hulv.UniqueAnimations.RunStopWildAtLedge)
+		{
+			int topDefinitionID = this.blendHelper.GetTopDefinitionID();
+			if (topDefinitionID == 36 || topDefinitionID == 67 || topDefinitionID == 68)
+			{
+				return;
+			}
+			this.hulvAI.SetChaseMode(HulvAI.ChaseMode.Idle);
+		}
+		this.SetRandomAutoTransitionTime((Hulv.HulvAnimationStates)animToSet);
+		if (animToSet == Hulv.UniqueAnimations.JumpFenceBarkLowLoop && initialAlignementPivot != null && (this.blendHelper.isDefActive(39) || this.blendHelper.isDefActive(60) || this.blendHelper.isDefActive(61)))
+		{
+			this.staticAnimBasePos = initialAlignementPivot.transform.position + this.wantedBasePosExtraOffset;
+		}
+		else
+		{
+			this.staticAnimBasePos = base.transform.position;
+		}
+		this.staticAnimBaseRot = MathUtils.FixAngles(base.transform.rotation.eulerAngles);
+		this.wantedBasePosExtraOffset = Vector3.zero;
+		this.staticAnimCustomParameter = customParameter;
+		if (initialAlignementPivot == null || animToSet == Hulv.UniqueAnimations.FallFromLog)
+		{
+			this.staticAnimWantedBasePos = base.transform.position;
+			this.staticAnimWantedBaseRot = MathUtils.FixAngles(base.transform.rotation.eulerAngles);
+			if (animToSet == Hulv.UniqueAnimations.FallFromLog)
+			{
+				this.staticAnimWantedBaseRot.x = 0f;
+			}
+		}
+		else
+		{
+			if (animToSet == Hulv.UniqueAnimations.LedgeGrabFallDie)
+			{
+				ABDefinition definitionFromIndex = this.blendHelper.GetDefinitionFromIndex((int)animToSet);
+				MovementData movementData = definitionFromIndex.GetMovementData();
+				this.staticAnimWantedBasePos = initialAlignementPivot.transform.TransformPoint(-movementData.totalMovement);
+			}
+			else if (linearPlacement)
+			{
+				Vector3 vector = initialAlignementPivot.transform.InverseTransformPoint(base.transform.position);
+				vector.z = 0f;
+				vector.y = 0f;
+				this.staticAnimWantedBasePos = initialAlignementPivot.transform.TransformPoint(vector);
+			}
+			else
+			{
+				this.staticAnimWantedBasePos = initialAlignementPivot.transform.position;
+			}
+			this.staticAnimWantedBaseRot = MathUtils.FixAngles(initialAlignementPivot.transform.rotation.eulerAngles);
+		}
+		float transitTime = 0.4f;
+		float startpos = 0f;
+		if (initialAlignementPivot != null)
+		{
+			BaseWaypoint component = initialAlignementPivot.GetComponent<BaseWaypoint>();
+			if (component != null && component.uniqueAnimDefID == (int)animToSet)
+			{
+				if (animToSet == Hulv.UniqueAnimations.JumpInPool)
+				{
+					this.hulvAI.SetLeaveWaterWaypoint(component.nextWaypoint);
+				}
+				if (component.uniqueOverrideStartPlayPos >= 0f)
+				{
+					startpos = component.uniqueOverrideStartPlayPos;
+				}
+				if (component.uniqueOverrideTransitTime >= 0f)
+				{
+					transitTime = component.uniqueOverrideTransitTime;
+				}
+			}
+		}
+		if (overrideStartPos >= 0f)
+		{
+			startpos = overrideStartPos;
+		}
+		if (overrideTransitTime >= 0f)
+		{
+			transitTime = overrideTransitTime;
+		}
+		if (animToSet == Hulv.UniqueAnimations.JumpFenceUp)
+		{
+			this.blendHelper.TransitToBlendDefinition((int)this.GetNextFenceStraightAnim(), transitTime, startpos);
+		}
+		else
+		{
+			this.blendHelper.TransitToBlendDefinition((int)animToSet, transitTime, startpos);
+		}
+		if (animToSet == Hulv.UniqueAnimations.JumpInPool)
+		{
+			this.blendHelper.SetStaticTopLayerPosition();
+		}
+	}
+
+	// Token: 0x0600053E RID: 1342 RVA: 0x0003A278 File Offset: 0x00038478
+	public void TrashedByHuddle(bool violent)
+	{
+		bool flag = false;
+		Hulv.HulvAnimationStates topDefinitionID = (Hulv.HulvAnimationStates)this.blendHelper.GetTopDefinitionID();
+		if (topDefinitionID != Hulv.HulvAnimationStates.ThrashedByHuddle)
+		{
+			float num = Mathf.Sign(ScriptGlobals.huddle.velocity.x);
+			this.thrashDir = new Vector3(num, 0f, -Mathf.Sign(ScriptGlobals.huddle.pos3.z - base.transform.position.z) * 0.2f);
+			this.thrashDir.Normalize();
+			if (violent)
+			{
+				if (topDefinitionID == Hulv.HulvAnimationStates.ThrashedByHuddle_180 || topDefinitionID == Hulv.HulvAnimationStates.ThrashedByHuddle_180_alt)
+				{
+					ABHelperData latestAnimData = this.GetLatestAnimData();
+					if (latestAnimData.normalizedAnimPos > 0.6f)
+					{
+						if (topDefinitionID == Hulv.HulvAnimationStates.ThrashedByHuddle_180)
+						{
+							flag = this.TransitIfPossible(Hulv.HulvAnimationStates.ThrashedByHuddle_180_alt, 0.2f, 0f);
+						}
+						else
+						{
+							flag = this.TransitIfPossible(Hulv.HulvAnimationStates.ThrashedByHuddle_180, 0.2f, 0f);
+						}
+					}
+				}
+				else
+				{
+					Hulv.HulvAnimationStates newState = Hulv.HulvAnimationStates.ThrashedByHuddle_180;
+					if (Hulv.next180Anim == 1)
+					{
+						newState = Hulv.HulvAnimationStates.ThrashedByHuddle_180_alt;
+					}
+					if (this.TransitIfPossible(newState, 0.2f, 0f))
+					{
+						flag = true;
+						Hulv.next180Anim = (Hulv.next180Anim + 1) % 2;
+					}
+				}
+			}
+			else
+			{
+				this.thrashDir = -this.thrashDir;
+				this.TransitIfPossible(Hulv.HulvAnimationStates.ThrashedByHuddle, 0.2f, 0f);
+			}
+		}
+		if (flag)
+		{
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightThenLeft, Random.Range(0.3f, 0.4f), 0.2f, 0, 0f);
+		}
+	}
+
+	// Token: 0x0600053F RID: 1343 RVA: 0x0003A3F8 File Offset: 0x000385F8
+	public float GetFenceSlam()
+	{
+		Hulv.HulvAnimationStates topDefinitionID = (Hulv.HulvAnimationStates)this.blendHelper.GetTopDefinitionID();
+		float normalizedAnimPos = this.blendHelper.GetLatestAnimData().normalizedAnimPos;
+		float num = Mathf.Sign(base.transform.TransformDirection(Vector3.forward).x);
+		if (topDefinitionID == Hulv.HulvAnimationStates.JumpFenceUpStraightBack || topDefinitionID == Hulv.HulvAnimationStates.JumpFenceUpStraightBackB || topDefinitionID == Hulv.HulvAnimationStates.JumpFenceUpStraightBackC)
+		{
+			if ((double)normalizedAnimPos > 0.07 && normalizedAnimPos < 0.08f)
+			{
+				return -num * 1f;
+			}
+			if ((double)normalizedAnimPos > 0.28 && normalizedAnimPos < 0.32f)
+			{
+				return -num * 0.3f;
+			}
+			if ((double)normalizedAnimPos > 0.45 && normalizedAnimPos < 0.51f)
+			{
+				return -num * 0.5f;
+			}
+		}
+		else if (topDefinitionID == Hulv.HulvAnimationStates.JumpFenceUp)
+		{
+			if ((normalizedAnimPos > 0.34f && normalizedAnimPos < 0.37f) || (normalizedAnimPos > 0.67f && normalizedAnimPos < 0.7f))
+			{
+				return -num * 0.5f;
+			}
+			if (((double)normalizedAnimPos > 0.42 && normalizedAnimPos < 0.5f) || (normalizedAnimPos > 0.21f && normalizedAnimPos < 0.26f) || (normalizedAnimPos > 0.12f && normalizedAnimPos < 0.18f))
+			{
+				return -num * 0.3f;
+			}
+		}
+		else if (topDefinitionID == Hulv.HulvAnimationStates.JumpFenceBarkLowLoop)
+		{
+			if ((double)normalizedAnimPos > 0.04 && normalizedAnimPos < 0.1f)
+			{
+				return -num * 1f;
+			}
+			if ((double)normalizedAnimPos > 0.67 && normalizedAnimPos < 0.72f)
+			{
+				return -num * 0.5f;
+			}
+			return 0f;
+		}
+		return 0f;
+	}
+
+	// Token: 0x06000540 RID: 1344 RVA: 0x0003A5B8 File Offset: 0x000387B8
+	public bool FollowingWaypoint()
+	{
+		return this.hulvAI.isFollowingAWaypoint();
+	}
+
+	// Token: 0x06000541 RID: 1345 RVA: 0x0003A5C8 File Offset: 0x000387C8
+	public void FollowWaypoint(GameObject wayPointToFollow)
+	{
+		if (this.hulvAI != null)
+		{
+			this.hulvAI.FollowWaypoint(wayPointToFollow);
+		}
+	}
+
+	// Token: 0x06000542 RID: 1346 RVA: 0x0003A5E8 File Offset: 0x000387E8
+	public void SetLeaveWaterWaypoint(GameObject leaveWaterWaypoint)
+	{
+		this.hulvAI.SetLeaveWaterWaypoint(leaveWaterWaypoint.GetComponent<HulvWaypoint>());
+	}
+
+	// Token: 0x06000543 RID: 1347 RVA: 0x0003A5FC File Offset: 0x000387FC
+	public void SetAttackFenceWaypoint(GameObject attackFenceWaypoint)
+	{
+		if (this.hulvAI != null)
+		{
+			this.hulvAI.SetAttackFenceWaypoint(attackFenceWaypoint);
+		}
+	}
+
+	// Token: 0x06000544 RID: 1348 RVA: 0x0003A61C File Offset: 0x0003881C
+	public void SetChaseMode(HulvAI.ChaseMode chaseMode)
+	{
+		if (this.hulvAI != null)
+		{
+			this.hulvAI.SetChaseMode(chaseMode);
+		}
+	}
+
+	// Token: 0x06000545 RID: 1349 RVA: 0x0003A63C File Offset: 0x0003883C
+	public HulvAI GetHulvAI()
+	{
+		return this.hulvAI;
+	}
+
+	// Token: 0x06000546 RID: 1350 RVA: 0x0003A644 File Offset: 0x00038844
+	public HulvAI.ChaseMode GetChaseMode()
+	{
+		return this.hulvAI.GetChaseMode();
+	}
+
+	// Token: 0x06000547 RID: 1351 RVA: 0x0003A654 File Offset: 0x00038854
+	public void ForceSetHulvAnimationState(Hulv.HulvAnimationStates stateToSet, float blendIn = 0.2f)
+	{
+		this.blendHelper.TransitToBlendDefinition((int)stateToSet, blendIn, 0f);
+	}
+
+	// Token: 0x06000548 RID: 1352 RVA: 0x0003A668 File Offset: 0x00038868
+	public ABHelperData GetLatestAnimData()
+	{
+		return this.blendHelper.GetLatestAnimData();
+	}
+
+	// Token: 0x06000549 RID: 1353 RVA: 0x0003A678 File Offset: 0x00038878
+	private bool GoToIdleState(float blendInTime = 0.2f)
+	{
+		Hulv.HulvAnimationStates newState = Hulv.HulvAnimationStates.Idle;
+		float startpos = 0f;
+		switch (this.controls.mood)
+		{
+		case Hulv.HulvControl.Mood.Normal:
+			newState = Hulv.HulvAnimationStates.Idle;
+			break;
+		case Hulv.HulvControl.Mood.Twitchy:
+			newState = Hulv.HulvAnimationStates.IdleTwitchy;
+			break;
+		case Hulv.HulvControl.Mood.Furious:
+		{
+			GameObject attackFenceWaypoint = this.hulvAI.GetAttackFenceWaypoint();
+			if (attackFenceWaypoint != null && (ScriptGlobals.boy.transform.position - base.transform.position).sqrMagnitude < 25f)
+			{
+				float num = Mathf.Sign(attackFenceWaypoint.transform.TransformDirection(Vector3.forward).x);
+				if (num * ScriptGlobals.boy.facing < 0f)
+				{
+					newState = Hulv.HulvAnimationStates.IdleAtFenceFrustrated;
+				}
+				else
+				{
+					startpos = 0.34f;
+					newState = Hulv.HulvAnimationStates.IdleFurious;
+				}
+			}
+			else
+			{
+				startpos = Random.Range(0f, 1f);
+				newState = Hulv.HulvAnimationStates.IdleFurious;
+			}
+			break;
+		}
+		case Hulv.HulvControl.Mood.Sneaky:
+			newState = Hulv.HulvAnimationStates.IdleSneak;
+			break;
+		case Hulv.HulvControl.Mood.Eating:
+			newState = Hulv.HulvAnimationStates.IdleEating;
+			break;
+		case Hulv.HulvControl.Mood.EatingFrenzy:
+			newState = Hulv.HulvAnimationStates.IdleKillGuffe;
+			break;
+		}
+		bool flag = this.TransitIfPossible(newState, blendInTime, startpos);
+		if (flag && this.controls.mood == Hulv.HulvControl.Mood.EatingFrenzy)
+		{
+			this.SetKillAudio();
+		}
+		return flag;
+	}
+
+	// Token: 0x0600054A RID: 1354 RVA: 0x0003A7B8 File Offset: 0x000389B8
+	private void TestAndStartTurnAnim(int animID, float angle)
+	{
+		if (!this.blendHelper.isDefActive(animID))
+		{
+			if (angle > 160f)
+			{
+				this.blendHelper.TransitToBlendDefinition(animID, 0.25f, 0.07f);
+			}
+			else if (angle > 110f)
+			{
+				this.blendHelper.TransitToBlendDefinition(animID, 0.35f, 0.16f);
+			}
+			else if (angle > 70f)
+			{
+				this.blendHelper.TransitToBlendDefinition(animID, 0.4f, 0.3f);
+			}
+			else
+			{
+				this.blendHelper.TransitToBlendDefinition(animID, 0.48f, 0.3f);
+			}
+		}
+	}
+
+	// Token: 0x0600054B RID: 1355 RVA: 0x0003A860 File Offset: 0x00038A60
+	private bool UpdateStartRunningTransition(ref ABHelperData animData, float inputSpeed, float angle, float rawAngle)
+	{
+		bool result = false;
+		if (inputSpeed > 0f)
+		{
+			if (this.controls.mood == Hulv.HulvControl.Mood.Sneaky)
+			{
+				this.TransitIfPossible(Hulv.HulvAnimationStates.SneakStart, 0.2f, 0f);
+			}
+			else
+			{
+				result = true;
+				if (FastMath.Abs(rawAngle) > 30f)
+				{
+					if (rawAngle < 0f)
+					{
+						if (this.controls.trotButton)
+						{
+							this.TestAndStartTurnAnim(47, -rawAngle);
+						}
+						else
+						{
+							this.TestAndStartTurnAnim(17, -rawAngle);
+						}
+					}
+					else if (this.controls.trotButton)
+					{
+						this.TestAndStartTurnAnim(48, rawAngle);
+					}
+					else
+					{
+						this.TestAndStartTurnAnim(15, rawAngle);
+					}
+				}
+				else if (this.controls.trotButton)
+				{
+					if (this.blendHelper.GetTopDefinitionID() != 44)
+					{
+						this.blendHelper.TransitToBlendDefinition(44, 0.2f, 0f);
+					}
+				}
+				else if (this.blendHelper.GetTopDefinitionID() != 8)
+				{
+					this.blendHelper.TransitToBlendDefinition(8, 0.2f, 0f);
+				}
+			}
+		}
+		return result;
+	}
+
+	// Token: 0x0600054C RID: 1356 RVA: 0x0003A988 File Offset: 0x00038B88
+	private bool TransitIfPossible(Hulv.HulvAnimationStates newState, float transitTime = 0.2f, float startpos = 0f)
+	{
+		if (!this.blendHelper.isDefActive((int)newState))
+		{
+			this.blendHelper.TransitToBlendDefinition((int)newState, transitTime, startpos);
+			return true;
+		}
+		return false;
+	}
+
+	// Token: 0x0600054D RID: 1357 RVA: 0x0003A9B8 File Offset: 0x00038BB8
+	public bool IsAnimStillActive(Hulv.HulvAnimationStates newState)
+	{
+		return this.blendHelper.isDefActive((int)newState);
+	}
+
+	// Token: 0x0600054E RID: 1358 RVA: 0x0003A9C8 File Offset: 0x00038BC8
+	private bool TestDistToBone(Rigidbody bone, Vector3 pos, float maxDist, bool isHeadBone = false, bool ySafety = false)
+	{
+		if (bone == null)
+		{
+			return false;
+		}
+		Vector3 vector = bone.transform.position - pos;
+		vector.z *= 0.3f;
+		Hulv.HulvAnimationStates topDefinitionID = (Hulv.HulvAnimationStates)this.blendHelper.GetTopDefinitionID();
+		if (topDefinitionID == Hulv.HulvAnimationStates.JumpFenceUpStraightBack || topDefinitionID == Hulv.HulvAnimationStates.JumpFenceBarkLoop || topDefinitionID == Hulv.HulvAnimationStates.JumpFenceUpStraightBackB || topDefinitionID == Hulv.HulvAnimationStates.JumpFenceUpStraightBackC || topDefinitionID == Hulv.HulvAnimationStates.JumpFenceBarkLowLoop)
+		{
+			vector.z = 0f;
+			vector.x *= 0.5f;
+		}
+		vector.y *= 0.8f;
+		if (isHeadBone && vector.y < 0f && vector.y > -1.5f)
+		{
+			vector.y = 0f;
+		}
+		if (ySafety)
+		{
+			vector.y *= 0.4f;
+		}
+		return vector.magnitude <= maxDist;
+	}
+
+	// Token: 0x0600054F RID: 1359 RVA: 0x0003AACC File Offset: 0x00038CCC
+	private bool TestAlwaysKill(Rigidbody bone, Vector3 pos)
+	{
+		if (bone == null)
+		{
+			return false;
+		}
+		Vector3 vector = bone.transform.position - pos;
+		return FastMath.Abs(vector.z) < 2f && vector.y < 2f && vector.y > -0.5f && FastMath.Abs(vector.x) < 0.3f;
+	}
+
+	// Token: 0x06000550 RID: 1360 RVA: 0x0003AB4C File Offset: 0x00038D4C
+	private void AttachBoneToJaw(Rigidbody bone, Vector3 ragdollVelocity)
+	{
+		Vector3 position = this.jawRigidBody.position;
+		this.rigidBodyOffset = this.jawRigidBody.transform.position - (bone.position + bone.velocity * Time.deltaTime);
+		this.jawRigidBody.transform.position = bone.position;
+		Vector3 velocity = this.velocity;
+		Vector3 vector = velocity - ragdollVelocity;
+		this.addBoyForce = true;
+		this.addBoyForceDir = vector;
+		this.jawRigidBody.GetComponent<ConfigurableJoint>().connectedBody = bone;
+		this.jawRigidBody.gameObject.SetActive(true);
+	}
+
+	// Token: 0x06000551 RID: 1361 RVA: 0x0003ABF4 File Offset: 0x00038DF4
+	private void SetKillAudio()
+	{
+		HulvPlayer component = base.gameObject.GetComponent<HulvPlayer>();
+		component.SetConfiguration(new HulvPlayer.Config
+		{
+			emotionOverride = HulvPlayer.Config.EmotionOverride.Angry,
+			manualBarking = true
+		});
+	}
+
+	// Token: 0x06000552 RID: 1362 RVA: 0x0003AC2C File Offset: 0x00038E2C
+	public void DisableKill(bool newVal)
+	{
+		this.killdisabled = newVal;
+	}
+
+	// Token: 0x06000553 RID: 1363 RVA: 0x0003AC38 File Offset: 0x00038E38
+	private void HandleBoyBiting(float deltaTime, ref Vector3 wantedPos, bool allBonesOk = false, bool forceKill = false, bool ragdollKill = false, bool usePrepKill = true, float overrideMinimumDist = -1f)
+	{
+		if (this.killdisabled)
+		{
+			return;
+		}
+		if (Hulv.hulvKilledBoy != null || ScriptGlobals.boy == null || ScriptGlobals.boy.visualBoy == null)
+		{
+			return;
+		}
+		if (this.fence != null && (ScriptGlobals.boy.pos.x - this.fence.position.x) * (base.transform.position.x - this.fence.position.x) < 0f)
+		{
+			return;
+		}
+		BoyRunState boyRunState = ScriptGlobals.boy.state as BoyRunState;
+		if (boyRunState != null && ScriptGlobals.boy.pos.y - wantedPos.y > 1.9f)
+		{
+			return;
+		}
+		bool flag = false;
+		VisualBoyJump visualBoyJump = ScriptGlobals.boy.visualBoy.state as VisualBoyJump;
+		if (visualBoyJump && visualBoyJump.GetHitWall())
+		{
+			flag = true;
+			allBonesOk = false;
+		}
+		bool flag2 = forceKill;
+		Vector3 vector;
+		if (this.jawUpperBone != null && this.jawLowerBone != null)
+		{
+			vector = this.jawUpperBone.transform.position * 0.5f + this.jawLowerBone.transform.position * 0.5f;
+		}
+		else if (this.headBone != null)
+		{
+			vector = this.headBone.transform.position;
+		}
+		else
+		{
+			vector = base.transform.position;
+		}
+		float num = 1f;
+		if (!allBonesOk && !flag)
+		{
+			vector += base.transform.TransformDirection(Vector3.forward) * 0.2f;
+		}
+		else
+		{
+			num = 0.8f;
+		}
+		Vector3 vector2 = ScriptGlobals.boy.velocity3 * 0.05f;
+		vector -= vector2;
+		RagdollSkeleton ragdoll = ScriptGlobals.boy.visualBoy.ragdoll;
+		Rigidbody rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.spineB];
+		if (allBonesOk)
+		{
+			rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.knees[0]];
+		}
+		if (flag)
+		{
+			rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.head];
+		}
+		Hulv.HulvAnimationStates topDefinitionID = (Hulv.HulvAnimationStates)this.blendHelper.GetTopDefinitionID();
+		bool flag3 = topDefinitionID == Hulv.HulvAnimationStates.JumpFenceUp || topDefinitionID == Hulv.HulvAnimationStates.JumpFenceUpStraightBack || topDefinitionID == Hulv.HulvAnimationStates.JumpFenceUpStraightBackB || topDefinitionID == Hulv.HulvAnimationStates.JumpFenceUpStraightBackC;
+		if (!this.TestDistToBone(rigidbody, vector, FastMath.Max(0.33f * num, overrideMinimumDist), true, false))
+		{
+			if (!allBonesOk)
+			{
+				flag2 |= this.TestAlwaysKill(rigidbody, vector);
+			}
+			rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.head];
+			if (allBonesOk)
+			{
+				rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.knees[1]];
+			}
+			if (!this.TestDistToBone(rigidbody, vector, FastMath.Max(0.28f * num, overrideMinimumDist), false, overrideMinimumDist >= 0f))
+			{
+				if (flag)
+				{
+					rigidbody = null;
+				}
+				else
+				{
+					if (!allBonesOk)
+					{
+						flag2 |= this.TestAlwaysKill(rigidbody, vector);
+					}
+					rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.spineRoot];
+					if (allBonesOk)
+					{
+						rigidbody = null;
+					}
+					if (!this.TestDistToBone(rigidbody, vector, FastMath.Max(0.4f, overrideMinimumDist), false, overrideMinimumDist >= 0f))
+					{
+						rigidbody = null;
+						if (!allBonesOk)
+						{
+							if (!flag)
+							{
+								rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.knees[1]];
+								Hulv.HulvAnimationStates topDefinitionID2 = (Hulv.HulvAnimationStates)this.blendHelper.GetTopDefinitionID();
+								bool ySafety = true;
+								float a = 0.4f;
+								if (this.isSwimming || topDefinitionID2 == Hulv.HulvAnimationStates.SwimGetUp)
+								{
+									ySafety = false;
+									a = 0.28f;
+								}
+								if (!this.TestDistToBone(rigidbody, vector, FastMath.Max(a, overrideMinimumDist), false, ySafety))
+								{
+									rigidbody = null;
+								}
+							}
+						}
+						else
+						{
+							RagdollSkeleton.BodyIndex bodyIndex = ragdoll.begin;
+							while (bodyIndex != ragdoll.end)
+							{
+								Rigidbody rigidbody2 = ragdoll[bodyIndex];
+								if (this.TestDistToBone(rigidbody2, vector, FastMath.Max(0.25f, overrideMinimumDist), false, overrideMinimumDist >= 0f))
+								{
+									rigidbody = rigidbody2;
+									break;
+								}
+								bodyIndex = ++bodyIndex;
+							}
+						}
+					}
+				}
+			}
+		}
+		if (flag && Mathf.Abs(ScriptGlobals.boy.velocity.x) > 0.3f)
+		{
+			flag2 = false;
+		}
+		if (rigidbody == null && flag2)
+		{
+			rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.head];
+			Vector3 vector3 = rigidbody.transform.position - vector;
+			float num2 = vector.y - rigidbody.transform.position.y;
+			if (FastMath.Abs(vector.x - rigidbody.transform.position.x) < 1f && num2 < 1.2f && num2 > -1f)
+			{
+				float sqrMagnitude = vector3.sqrMagnitude;
+				Rigidbody rigidbody3 = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.spineB];
+				float sqrMagnitude2 = (rigidbody3.transform.position - vector).sqrMagnitude;
+				if (sqrMagnitude2 < sqrMagnitude)
+				{
+					rigidbody = rigidbody3;
+				}
+			}
+			else
+			{
+				rigidbody = null;
+			}
+			if (rigidbody == null && this.blendHelper.GetTopDefinitionID() == 35)
+			{
+				rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.knees[0]];
+				Vector3 vector4 = rigidbody.transform.position - vector;
+				vector4.z = 0f;
+				if (FastMath.Abs(vector4.x) > 0.5f || FastMath.Abs(vector4.y) > 1f)
+				{
+					rigidbody = null;
+				}
+			}
+		}
+		if (rigidbody != null)
+		{
+			if (Hulv.hulvKilledBoy == null)
+			{
+				Hulv.hulvKilledBoy = this;
+			}
+			this.boyBoneToEat = rigidbody;
+			if (this.boyAnimPrepKill != null && !ragdollKill)
+			{
+				this.DoTheKillEffects();
+				if (usePrepKill)
+				{
+					this.boyPrepKillY = -10000f;
+					if (ScriptGlobals.boy.pos.y - 0.6f < base.transform.position.y)
+					{
+						if (this.isSwimming)
+						{
+							this.boyPrepKillY = base.transform.position.y - 1f;
+						}
+						else
+						{
+							this.boyPrepKillY = ScriptGlobals.boy.pos.y - 0.7f;
+						}
+						Vector3 position = this.boyAnimPrepKill.transform.position;
+						position.y = this.boyPrepKillY;
+						this.boyAnimPrepKill.transform.position = position;
+					}
+					this.usingPrepKill = true;
+					BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyAnimPrepKill, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+					if (this.secret != null)
+					{
+						this.secret.DisableSecret();
+					}
+				}
+			}
+			else
+			{
+				Hulv.HulvAnimationStates topDefinitionID3 = (Hulv.HulvAnimationStates)this.blendHelper.GetTopDefinitionID();
+				if (topDefinitionID3 == Hulv.HulvAnimationStates.IdleAtWater || topDefinitionID3 == Hulv.HulvAnimationStates.IdleAtWater_Straight || topDefinitionID3 == Hulv.HulvAnimationStates.IdleAtWater_Up || topDefinitionID3 == Hulv.HulvAnimationStates.RunStopForWater || topDefinitionID3 == Hulv.HulvAnimationStates.RunStopWildAtLedge)
+				{
+					bool flag4 = true;
+					if (ScriptGlobals.boy.state is BoyJumpState)
+					{
+						if (ScriptGlobals.boy.velocity.x * Mathf.Sign(base.transform.forward.x) > 0.5f)
+						{
+							flag4 = false;
+						}
+						else if (ScriptGlobals.boy.pos.y < base.transform.position.y)
+						{
+							flag4 = false;
+						}
+					}
+					if (flag4)
+					{
+						this.DoTheKillEffects();
+						if (this.bloodParticleSystem != null)
+						{
+							this.bloodParticleSystem.SetActive(true);
+						}
+						if (ScriptGlobals.boy.pos.y > base.transform.position.y)
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.KillEdge, 0.2f, 0f);
+							this.PlayKillAnim(this.boyAnimKillEdge, deltaTime);
+						}
+						else
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.KillEdgeBoyFall, 0.2f, 0f);
+							this.PlayKillAnim(this.boyAnimHangFall, deltaTime);
+						}
+					}
+					else if (Hulv.hulvKilledBoy == this)
+					{
+						Hulv.hulvKilledBoy = null;
+					}
+				}
+				else
+				{
+					this.DoTheKillEffects();
+					if (this.bloodParticleSystem != null)
+					{
+						this.bloodParticleSystem.SetActive(true);
+					}
+					ScriptGlobals.boy.Kill();
+					this.AttachBoneToJaw(rigidbody, ragdoll.GetVelocity());
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000554 RID: 1364 RVA: 0x0003B614 File Offset: 0x00039814
+	private void DoTheKillEffects()
+	{
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightThenLeft, Random.Range(0.3f, 0.4f), 0.2f, 0, 0f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightFadeOut, 0.2f, 0.2f, 0, 0.2f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightFadeOut, 0.5f, 0.1f, 0, 0.45f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.8f, 0.15f, 0, 0.6f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.5f, 0.6f, 0, 0.7f);
+		this.SetKillAudio();
+		this.hulvKilledBoySignal.Signal();
+	}
+
+	// Token: 0x06000555 RID: 1365 RVA: 0x0003B6C8 File Offset: 0x000398C8
+	private bool IsAttacking()
+	{
+		return this.blendHelper.isDefActive(14) || this.blendHelper.isDefActive(41);
+	}
+
+	// Token: 0x06000556 RID: 1366 RVA: 0x0003B6F8 File Offset: 0x000398F8
+	private bool ChooseAndActivateAttack()
+	{
+		bool flag;
+		if (ScriptGlobals.mainCharacter is Huddle)
+		{
+			flag = (Random.value >= 0.5f);
+		}
+		else
+		{
+			RagdollSkeleton ragdoll = ScriptGlobals.boy.visualBoy.ragdoll;
+			Rigidbody rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.head];
+			float num = rigidbody.transform.position.y - base.transform.position.y;
+			flag = (num > 0.85f);
+		}
+		if (flag)
+		{
+			this.TransitIfPossible(Hulv.HulvAnimationStates.JumpAttack, 0.2f, 0f);
+		}
+		else
+		{
+			this.TransitIfPossible(Hulv.HulvAnimationStates.JumpAttackLow, 0.2f, 0f);
+		}
+		HulvPlayer component = base.gameObject.GetComponent<HulvPlayer>();
+		component.KillBark();
+		return true;
+	}
+
+	// Token: 0x06000557 RID: 1367 RVA: 0x0003B7D4 File Offset: 0x000399D4
+	private void FenceSetOtherAttacker()
+	{
+	}
+
+	// Token: 0x06000558 RID: 1368 RVA: 0x0003B7D8 File Offset: 0x000399D8
+	private void PlayKillAnim(AnimClipNode killAnim, float deltaTime)
+	{
+		if (killAnim != null)
+		{
+			ScriptGlobals.boy.Kill(false);
+			this.currentBoyKillAnim = killAnim;
+			if (Hulv.hulvKilledBoy == null)
+			{
+				Hulv.hulvKilledBoy = this;
+			}
+			this.SetKillAudio();
+			this.killBlendIn = 1f;
+			this.currentBoyKillAnim.transform.parent = base.transform.parent;
+			if (this.usingPrepKill)
+			{
+				this.killBlendIn = 0f;
+				if (this.boyPrepKillY > -5000f && killAnim != this.boyAnimSwimKill)
+				{
+					Vector3 position = this.currentBoyKillAnim.transform.position;
+					position.y = this.boyPrepKillY;
+					this.currentBoyKillAnim.transform.position = position;
+				}
+			}
+			else
+			{
+				this.killBlendIn = 1f;
+				if (this.currentBoyKillAnim == this.boyAnimKillEdge)
+				{
+					this.killBlendIn = 0f;
+					this.currentBoyKillAnim.transform.position = base.transform.position + this.velocity * 0.1f;
+				}
+				this.UpdateBoyDeathAnimPos(deltaTime);
+			}
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.currentBoyKillAnim, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+		}
+	}
+
+	// Token: 0x06000559 RID: 1369 RVA: 0x0003B92C File Offset: 0x00039B2C
+	private void SafetyPlaceBoyRagdoll()
+	{
+		if (ScriptGlobals.boy.isDead)
+		{
+			RagdollSkeleton ragdoll = ScriptGlobals.boy.visualBoy.ragdoll;
+			if (ragdoll.IsRagdollEnabled() && ScriptGlobals.boy.pos.y > base.transform.position.y - 1f)
+			{
+				Rigidbody rigidbody = ragdoll[ScriptGlobals.boy.visualBoy.actor.specificBones.spineRoot];
+				Vector3 vector = base.transform.InverseTransformPoint(rigidbody.position);
+				vector.y = 0f;
+				vector.x = 0f;
+				vector.z -= 0.7f;
+				ragdoll.AddForce(base.transform.TransformDirection(-vector) * (10000f * Time.deltaTime), 5);
+			}
+		}
+	}
+
+	// Token: 0x0600055A RID: 1370 RVA: 0x0003BA1C File Offset: 0x00039C1C
+	private void DoBoyRagdollJerks()
+	{
+		if (ScriptGlobals.boy.isDead)
+		{
+			Vector3 vector = base.transform.TransformPoint(new Vector3(0f, 0f, 1f));
+			RagdollSkeleton ragdoll = ScriptGlobals.boy.visualBoy.ragdoll;
+			RagdollSkeleton.BodyIndex bodyIndex = ragdoll.begin;
+			while (bodyIndex != ragdoll.end)
+			{
+				Rigidbody rigidbody = ragdoll[bodyIndex];
+				if (!rigidbody.isKinematic && (rigidbody.transform.position - vector).sqrMagnitude < 0.5f)
+				{
+					this.ragdollJerkTimer = Random.Range(0f, 0.3f);
+					Vector3 vector2;
+					vector2..ctor(Random.Range(-0.7f, 0.7f), Random.Range(0f, 0.1f), Random.Range(-0.7f, 0.7f));
+					rigidbody.AddForce(2f * vector2 * rigidbody.mass, 1);
+				}
+				bodyIndex = ++bodyIndex;
+			}
+		}
+	}
+
+	// Token: 0x0600055B RID: 1371 RVA: 0x0003BB2C File Offset: 0x00039D2C
+	private Hulv.HuddleRelativeToHulv HuddleBehindYou()
+	{
+		if (!(ScriptGlobals.mainCharacter is Huddle))
+		{
+			return Hulv.HuddleRelativeToHulv.NA;
+		}
+		Vector3 vector = base.transform.InverseTransformPoint(ScriptGlobals.huddle.pos3);
+		if (vector.z >= 0f)
+		{
+			return Hulv.HuddleRelativeToHulv.InFront;
+		}
+		if (vector.x > 0f)
+		{
+			return Hulv.HuddleRelativeToHulv.BackRight;
+		}
+		return Hulv.HuddleRelativeToHulv.BackLeft;
+	}
+
+	// Token: 0x0600055C RID: 1372 RVA: 0x0003BB88 File Offset: 0x00039D88
+	private Hulv.HulvAnimationStates GetNextFenceStraightAnim()
+	{
+		Hulv.jumpFenceAnim = (Hulv.jumpFenceAnim + 1) % 3;
+		switch (Hulv.jumpFenceAnim)
+		{
+		case 0:
+			return Hulv.HulvAnimationStates.JumpFenceUpStraightBack;
+		case 1:
+			return Hulv.HulvAnimationStates.JumpFenceUpStraightBackB;
+		case 2:
+			return Hulv.HulvAnimationStates.JumpFenceUpStraightBackC;
+		default:
+			return Hulv.HulvAnimationStates.JumpFenceUpStraightBack;
+		}
+	}
+
+	// Token: 0x0600055D RID: 1373 RVA: 0x0003BBCC File Offset: 0x00039DCC
+	public bool IsHulvIdle()
+	{
+		return this.isIdle;
+	}
+
+	// Token: 0x0600055E RID: 1374 RVA: 0x0003BBD4 File Offset: 0x00039DD4
+	private void UpdateTransitions(ref ABHelperData animData, float inputSpeed, float angle, float rawAngle, float rawInputSpeed, float deltaTime, ref Vector3 wantedPos)
+	{
+		this.isStaticAnim = false;
+		this.doFootLifting = true;
+		this.isSwimming = false;
+		this.doInputCollision = false;
+		this.forceToGamePlane = false;
+		Hulv.HulvAnimationStates topDefinitionID = (Hulv.HulvAnimationStates)this.blendHelper.GetTopDefinitionID();
+		this.isStaticAnim = this.blendHelper.GetIsStaticDefinition((int)topDefinitionID);
+		this.isIdle = false;
+		switch (topDefinitionID)
+		{
+		case Hulv.HulvAnimationStates.Idle:
+		case Hulv.HulvAnimationStates.IdleSneak:
+		case Hulv.HulvAnimationStates.IdleFurious:
+		case Hulv.HulvAnimationStates.IdleTwitchy:
+		case Hulv.HulvAnimationStates.IdleEating:
+		case Hulv.HulvAnimationStates.IdleAtFenceFrustrated:
+			this.isIdle = true;
+			if (this.controls.jumpButton)
+			{
+				if (rawInputSpeed > this.stickDeadZone)
+				{
+					this.ChooseAndActivateAttack();
+				}
+				else if (!this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBack, 0.2f, 0f))
+				{
+					if (Random.Range(0f, 1f) > 0.5f)
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBackB, 0.3f, 0f);
+					}
+					else
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBackC, 0.3f, 0f);
+					}
+				}
+			}
+			else if (!this.UpdateStartRunningTransition(ref animData, inputSpeed, angle, rawAngle))
+			{
+				if (FastMath.Abs(this.angleTowardLookat) > 50f && this.controls.mood != Hulv.HulvControl.Mood.Sneaky)
+				{
+					if (this.angleTowardLookat > 0f)
+					{
+						if (this.angleTowardLookat > 100f && ScriptGlobals.mainCharacter is Huddle)
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.RotateRightFast, 0.2f, 0f);
+						}
+						else
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.RotateRight, 0.2f, 0f);
+						}
+					}
+					else if (this.angleTowardLookat < 0f)
+					{
+						if (this.angleTowardLookat < -100f && ScriptGlobals.mainCharacter is Huddle)
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.RotateLeftFast, 0.2f, 0f);
+						}
+						else
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.RotateLeft, 0.2f, 0f);
+						}
+					}
+				}
+				else
+				{
+					this.GoToIdleState(0.3f);
+				}
+			}
+			break;
+		case Hulv.HulvAnimationStates.Running:
+			this.doInputCollision = true;
+			if (this.controls.jumpButton && rawInputSpeed < this.stickDeadZone)
+			{
+				if (!this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBack, 0.3f, 0f))
+				{
+					if (Random.Range(0f, 1f) > 0.5f)
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBackB, 0.3f, 0f);
+					}
+					else
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBackC, 0.3f, 0f);
+					}
+				}
+				return;
+			}
+			if (this.controls.trotButton && inputSpeed > 0f)
+			{
+				this.blendHelper.TransitToBlendDefinition(24, 0.4f, animData.normalizedAnimPos);
+			}
+			else if (this.controls.mood == Hulv.HulvControl.Mood.Sneaky && inputSpeed > 0f)
+			{
+				this.blendHelper.TransitToBlendDefinition(19, 0.4f, animData.normalizedAnimPos);
+			}
+			else
+			{
+				bool flag = false;
+				float num = float.MaxValue;
+				float num2 = float.MaxValue;
+				HulvWaypoint hulvWaypoint = null;
+				GameObject currentWaypoint = this.hulvAI.GetCurrentWaypoint();
+				if (currentWaypoint != null)
+				{
+					hulvWaypoint = currentWaypoint.GetComponent<HulvWaypoint>();
+					if (hulvWaypoint != null && (hulvWaypoint.uniqueAnimation == Hulv.UniqueAnimations.RunStopForWater || hulvWaypoint.uniqueAnimation == Hulv.UniqueAnimations.RunStopWildAtLedge))
+					{
+						Vector3 vector = hulvWaypoint.transform.position - wantedPos;
+						vector = base.transform.InverseTransformDirection(vector);
+						if (FastMath.Abs(vector.y) < 2f)
+						{
+							vector.y = 0f;
+						}
+						vector.x = 0f;
+						num2 = FastMath.Abs(vector.z) / base.transform.lossyScale.z;
+						if (num2 < 5.4f)
+						{
+							flag = true;
+							Vector3 vector2 = ScriptGlobals.boy.pos3 - wantedPos;
+							vector2.y = 0f;
+							num = vector2.magnitude;
+						}
+					}
+				}
+				bool flag2 = false;
+				if (this.controls.jumpButton && rawInputSpeed > this.stickDeadZone && !this.IsAttacking())
+				{
+					if (flag)
+					{
+						float num3 = wantedPos.y - ScriptGlobals.boy.pos.y;
+						bool flag3 = num3 > 0.4f;
+						if ((num < 2.2f || (num < 2.3f && num2 < 0.6f)) && !flag3)
+						{
+							HulvPlayer component = base.gameObject.GetComponent<HulvPlayer>();
+							component.KillBark();
+							this.TransitIfPossible(Hulv.HulvAnimationStates.KillEdge, 0.2f, 0f);
+							this.PlayKillAnim(this.boyAnimKillEdge, deltaTime);
+							RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightThenLeft, Random.Range(0.3f, 0.4f), 0.1f, 0, 0f);
+							RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightFadeOut, 0.2f, 0.1f, 0, 0.05f);
+							RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.8f, 0.15f, 0, 0.25f);
+							RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.5f, 0.6f, 0, 0.35f);
+							flag2 = true;
+						}
+						else if (num2 < 0.35f && hulvWaypoint.CloseToWayPoint(base.transform))
+						{
+							this.SetUniqueAnimation(hulvWaypoint.uniqueAnimation, hulvWaypoint.gameObject, hulvWaypoint.arrivalLineMode, hulvWaypoint.uniqueAnimCustomParameter, -1f, -1f);
+							flag2 = true;
+						}
+					}
+					else
+					{
+						this.ChooseAndActivateAttack();
+					}
+				}
+				else if (flag && hulvWaypoint.CloseToWayPoint(base.transform) && num2 < 0.35f)
+				{
+					this.SetUniqueAnimation(hulvWaypoint.uniqueAnimation, hulvWaypoint.gameObject, hulvWaypoint.arrivalLineMode, hulvWaypoint.uniqueAnimCustomParameter, -1f, -1f);
+					this.hulvAI.endWithAnimation = false;
+					if (hulvWaypoint.nextWaypoint != null)
+					{
+						this.hulvAI.FollowWaypoint(hulvWaypoint.nextWaypoint.gameObject);
+					}
+					else
+					{
+						this.hulvAI.FollowWaypoint(null);
+					}
+					flag2 = true;
+				}
+				if (!flag2)
+				{
+					if (inputSpeed == 0f)
+					{
+						Hulv.HuddleRelativeToHulv huddleRelativeToHulv = this.HuddleBehindYou();
+						if (huddleRelativeToHulv == Hulv.HuddleRelativeToHulv.InFront || huddleRelativeToHulv == Hulv.HuddleRelativeToHulv.NA)
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.RunStop, 0.2f, 0f);
+						}
+						else if (huddleRelativeToHulv == Hulv.HuddleRelativeToHulv.BackLeft)
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.Turn120Left, 0.2f, 0f);
+						}
+						else
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.Turn120Right, 0.2f, 0f);
+						}
+					}
+					else if (FastMath.Abs(rawAngle) > 100f)
+					{
+						this.UpdateStartRunningTransition(ref animData, inputSpeed, angle, rawAngle);
+					}
+					else if (FastMath.Abs(rawAngle) > 70f)
+					{
+						if (rawAngle > 0f)
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.Turn120Right, 0.3f, 0f);
+						}
+						else
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.Turn120Left, 0.3f, 0f);
+						}
+					}
+				}
+			}
+			break;
+		case Hulv.HulvAnimationStates.RunStop:
+		case Hulv.HulvAnimationStates.StopInstant:
+		case Hulv.HulvAnimationStates.SneakStop:
+		case Hulv.HulvAnimationStates.JogStop:
+		{
+			if (this.controls.jumpButton && rawInputSpeed < this.stickDeadZone)
+			{
+				if (!this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBack, 0.3f, 0f))
+				{
+					if (Random.Range(0f, 1f) > 0.5f)
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBackB, 0.3f, 0f);
+					}
+					else
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBackC, 0.3f, 0f);
+					}
+				}
+				return;
+			}
+			float num4 = this.lookatAngleLastFrame;
+			if (animData.normalizedAnimPos > 0.4f)
+			{
+				num4 = this.angleTowardLookat;
+			}
+			if (FastMath.Abs(num4) > 40f && animData.totalPlayTime > 0.4f)
+			{
+				if (num4 > 0f)
+				{
+					if (num4 > 100f && ScriptGlobals.mainCharacter is Huddle)
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.RotateRightFast, 0.2f, 0f);
+					}
+					else
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.RotateRight, 0.2f, 0f);
+					}
+				}
+				else if (num4 < -100f && ScriptGlobals.mainCharacter is Huddle)
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.RotateLeftFast, 0.2f, 0f);
+				}
+				else
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.RotateLeft, 0.2f, 0f);
+				}
+				return;
+			}
+			if (inputSpeed > 0f && animData.totalPlayTime < 0.2f)
+			{
+				this.blendHelper.TransitToBlendDefinition(6, 0.2f, 0f);
+			}
+			if ((double)animData.normalizedAnimPos > 0.6)
+			{
+				this.UpdateStartRunningTransition(ref animData, inputSpeed, angle, rawAngle);
+			}
+			if (animData.normalizedAnimPos > 0.6f && (this.controls.mood == Hulv.HulvControl.Mood.Furious || this.controls.mood == Hulv.HulvControl.Mood.EatingFrenzy))
+			{
+				this.GoToIdleState(0.4f);
+				return;
+			}
+			if (animData.normalizedAnimPos > 0.99f)
+			{
+				this.GoToIdleState(0.2f);
+			}
+			break;
+		}
+		case Hulv.HulvAnimationStates.RunStart:
+		case Hulv.HulvAnimationStates.SneakStart:
+		case Hulv.HulvAnimationStates.JogStart:
+			this.doInputCollision = true;
+			animData.localRotationSpeed += new Vector3(0f, angle * 0.03f / deltaTime, 0f);
+			if (animData.normalizedAnimPos < 0.2f)
+			{
+				this.UpdateStartRunningTransition(ref animData, inputSpeed, angle, rawAngle);
+			}
+			if (animData.normalizedAnimPos > 0.9f)
+			{
+				if (this.controls.mood == Hulv.HulvControl.Mood.Sneaky)
+				{
+					this.blendHelper.TransitToBlendDefinition(19, 0.2f, 0f);
+				}
+				else
+				{
+					this.blendHelper.TransitToBlendDefinition(6, 0.2f, 0f);
+				}
+			}
+			else if (animData.normalizedAnimPos > 0.2f && this.controls.trotButton)
+			{
+				this.blendHelper.TransitToBlendDefinition(24, 0.4f, 0f);
+			}
+			break;
+		case Hulv.HulvAnimationStates.JumpBack:
+		case Hulv.HulvAnimationStates.JumpBackB:
+		case Hulv.HulvAnimationStates.JumpBackC:
+			if (this.controls.jumpButton && animData.normalizedAnimPos > 0.45f && !this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBack, 0.3f, 0f))
+			{
+				if (Random.Range(0f, 1f) > 0.5f)
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBackB, 0.3f, 0f);
+				}
+				else
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBackC, 0.3f, 0f);
+				}
+			}
+			if (animData.normalizedAnimPos > 0.8f)
+			{
+				this.GoToIdleState(0.4f);
+			}
+			break;
+		case Hulv.HulvAnimationStates.JumpAndFlee:
+			if (animData.normalizedAnimPos > 0.95f && inputSpeed == 0f)
+			{
+				this.blendHelper.TransitToBlendDefinition(7, 0.4f, 0f);
+			}
+			if (animData.normalizedAnimPos > 0.7f && inputSpeed > 0f)
+			{
+				this.blendHelper.TransitToBlendDefinition(6, 0.4f, 0.6f);
+			}
+			break;
+		case Hulv.HulvAnimationStates.JumpAttack:
+		case Hulv.HulvAnimationStates.JumpAttackLow:
+			if (!(ScriptGlobals.mainCharacter is Huddle))
+			{
+				if ((ScriptGlobals.boy.pos3 - wantedPos).sqrMagnitude < 4f)
+				{
+					this.forceToGamePlane = true;
+				}
+				if (this.lookAtPoint != null)
+				{
+					bool flag4 = false;
+					if (this.LedgeAttackPivot != null && !(ScriptGlobals.boy.state is BoySwimState))
+					{
+						Vector3 position = this.LedgeAttackPivot.transform.position;
+						if (ScriptGlobals.boy.pos.y > position.y + 0.1f)
+						{
+							Vector3 vector3 = wantedPos - this.LedgeAttackPivot.position;
+							vector3.y = 0f;
+							vector3.z *= 0.3f;
+							if (vector3.sqrMagnitude < 0.5f)
+							{
+								flag4 = true;
+							}
+						}
+					}
+					if (flag4)
+					{
+						this.HandleBoyBiting(deltaTime, ref wantedPos, false, false, false, false, -1f);
+						if (FastMath.Abs(ScriptGlobals.boy.pos.x - wantedPos.x) < 1.8f)
+						{
+							bool flag5 = true;
+							VisualBoyJump visualBoyJump = ScriptGlobals.boy.visualBoy.state as VisualBoyJump;
+							if (visualBoyJump != null)
+							{
+								if (ScriptGlobals.boy.pos.y - wantedPos.y > 1.5f)
+								{
+									flag5 = false;
+								}
+								else if (visualBoyJump.GetHitWall() && (FastMath.Abs(ScriptGlobals.boy.pos.x - wantedPos.x) > 1f || ScriptGlobals.boy.pos.y - wantedPos.y > 1f))
+								{
+									flag5 = false;
+								}
+							}
+							if (flag5)
+							{
+								Hulv.hulvKilledBoy = this;
+								this.SetKillAudio();
+							}
+						}
+					}
+					else
+					{
+						this.HandleBoyBiting(deltaTime, ref wantedPos, false, false, false, true, -1f);
+					}
+					bool flag6 = false;
+					if (Hulv.hulvKilledBoy == null && animData.normalizedAnimPos <= 0.45f)
+					{
+						Vector3 vector4 = ScriptGlobals.boy.pos3 - wantedPos;
+						if (FastMath.Abs(vector4.y) < 1f)
+						{
+							vector4.y = 0f;
+							if (vector4.sqrMagnitude < 0.6f)
+							{
+								Hulv.hulvKilledBoy = this;
+								this.SetKillAudio();
+								flag6 = true;
+							}
+						}
+					}
+					if (Hulv.hulvKilledBoy == this)
+					{
+						if (flag4)
+						{
+							if (this.LedgeAttackPivot.gameObject.GetComponent<HulvEdgePointForceAlign>() != null)
+							{
+								this.forceAlignToAttackPivot = true;
+							}
+							this.blendHelper.TransitToBlendDefinition(56, 0.3f, 0f);
+							this.PlayKillAnim(this.boyAnimKillEdge, deltaTime);
+						}
+						else if (animData.normalizedAnimPos > 0.45f || flag6)
+						{
+							if (topDefinitionID == Hulv.HulvAnimationStates.JumpAttack)
+							{
+								this.blendHelper.TransitToBlendDefinition(25, 0.3f, 0f);
+								this.neckBroken = false;
+								this.PlayKillAnim(this.boyAnimKillJumpA, deltaTime);
+							}
+							else
+							{
+								this.neckBroken = false;
+								this.onGround = false;
+								this.blendHelper.TransitToBlendDefinition(42, 0.3f, 0f);
+								this.PlayKillAnim(this.boyAnimKillLow, deltaTime);
+							}
+						}
+						if (this.ragdollJerkTimer <= 0f)
+						{
+							this.DoBoyRagdollJerks();
+						}
+						this.ragdollJerkTimer -= deltaTime;
+					}
+					else
+					{
+						if (animData.normalizedAnimPos > 0.15f)
+						{
+							if (ScriptGlobals.boy.state is BoySwimState)
+							{
+								this.HandleBoyBiting(deltaTime, ref wantedPos, false, false, false, true, -1f);
+							}
+							else
+							{
+								this.HandleBoyBiting(deltaTime, ref wantedPos, false, true, false, true, -1f);
+							}
+						}
+						if (animData.normalizedAnimPos < 0.34f && base.transform.InverseTransformPoint(ScriptGlobals.boy.pos3).z > 0.4f)
+						{
+							animData.localRotationSpeed = new Vector3(0f, rawAngle * 0.1f / deltaTime, 0f);
+						}
+					}
+				}
+			}
+			if (animData.normalizedAnimPos > 0.8f && inputSpeed == 0f)
+			{
+				Hulv.HuddleRelativeToHulv huddleRelativeToHulv2 = this.HuddleBehindYou();
+				if (huddleRelativeToHulv2 == Hulv.HuddleRelativeToHulv.NA || huddleRelativeToHulv2 == Hulv.HuddleRelativeToHulv.InFront)
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.RunStop, 0.2f, 0f);
+				}
+				else if (huddleRelativeToHulv2 == Hulv.HuddleRelativeToHulv.BackLeft)
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.Turn120Left, 0.2f, 0f);
+				}
+				else
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.Turn120Right, 0.2f, 0f);
+				}
+			}
+			if (animData.normalizedAnimPos > 0.6f && inputSpeed > 0f)
+			{
+				if (this.controls.trotButton)
+				{
+					this.blendHelper.TransitToBlendDefinition(24, 0.4f, 0f);
+				}
+				else
+				{
+					this.blendHelper.TransitToBlendDefinition(6, 0.4f, 0.6f);
+				}
+			}
+			break;
+		case Hulv.HulvAnimationStates.Turn180Right:
+		case Hulv.HulvAnimationStates.Turn120Right:
+		case Hulv.HulvAnimationStates.Turn180Left:
+		case Hulv.HulvAnimationStates.Turn120Left:
+		case Hulv.HulvAnimationStates.JogTurn180Left:
+		case Hulv.HulvAnimationStates.JogTurn180Right:
+		{
+			Hulv.HuddleRelativeToHulv huddleRelativeToHulv3 = this.HuddleBehindYou();
+			bool flag7 = huddleRelativeToHulv3 == Hulv.HuddleRelativeToHulv.InFront || huddleRelativeToHulv3 == Hulv.HuddleRelativeToHulv.NA || animData.normalizedAnimPos > 0.65f;
+			if (inputSpeed == 0f && flag7)
+			{
+				this.TransitIfPossible(Hulv.HulvAnimationStates.StopInstant, 0.4f, 0f);
+			}
+			else
+			{
+				if (this.controls.jumpButton && rawInputSpeed > this.stickDeadZone && !this.IsAttacking())
+				{
+					this.ChooseAndActivateAttack();
+					break;
+				}
+				if (animData.normalizedAnimPos > 0.85f || (animData.normalizedAnimPos > 0.3f && FastMath.Abs(rawAngle) < 20f && rawInputSpeed > this.stickDeadZone))
+				{
+					float startpos = 0.8f;
+					this.blendHelper.TransitToBlendDefinition(6, 0.4f, startpos);
+				}
+				else if (animData.normalizedAnimPos > 0.65f && (topDefinitionID == Hulv.HulvAnimationStates.Turn180Left || topDefinitionID == Hulv.HulvAnimationStates.Turn180Right || topDefinitionID == Hulv.HulvAnimationStates.JogTurn180Left || topDefinitionID == Hulv.HulvAnimationStates.JogTurn180Right))
+				{
+					if (this.controls.trotButton)
+					{
+						this.blendHelper.TransitToBlendDefinition(24, 0.4f, 0f);
+					}
+					else if (this.controls.mood == Hulv.HulvControl.Mood.Sneaky)
+					{
+						this.blendHelper.TransitToBlendDefinition(19, 0.4f, 0f);
+					}
+					float num5 = FastMath.Min(deltaTime * 15f * this.hulvAI.currentTurnFraction, 0.5f);
+					animData.localRotationSpeed = num5 * new Vector3(0f, Mathf.Clamp(angle, -30f, 30f) * 30f, 0f) + (1f - num5) * animData.localRotationSpeed;
+				}
+			}
+			if (animData.normalizedAnimPos > 0.65f)
+			{
+				this.magnitudeLastFrame = FastMath.Min(0.25f, this.magnitudeLastFrame);
+			}
+			break;
+		}
+		case Hulv.HulvAnimationStates.SneakIn:
+			if (inputSpeed == 0f)
+			{
+				this.TransitIfPossible(Hulv.HulvAnimationStates.SneakStop, 0.2f, 0f);
+			}
+			else if (this.controls.mood != Hulv.HulvControl.Mood.Sneaky)
+			{
+				this.blendHelper.TransitToBlendDefinition(6, 0.4f, animData.normalizedAnimPos);
+			}
+			break;
+		case Hulv.HulvAnimationStates.RotateRight:
+		case Hulv.HulvAnimationStates.RotateLeft:
+		case Hulv.HulvAnimationStates.RotateRightFast:
+		case Hulv.HulvAnimationStates.RotateLeftFast:
+			if (!this.UpdateStartRunningTransition(ref animData, inputSpeed, angle, rawAngle) && FastMath.Abs(this.angleTowardLookat) < 10f)
+			{
+				this.GoToIdleState(0.4f);
+			}
+			break;
+		case Hulv.HulvAnimationStates.Trotting:
+			this.doInputCollision = true;
+			if (inputSpeed == 0f)
+			{
+				this.blendHelper.TransitToBlendDefinition(45, 0.6f, 0f);
+			}
+			else if (!this.controls.trotButton)
+			{
+				this.blendHelper.TransitToBlendDefinition(6, 0.4f, animData.normalizedAnimPos);
+			}
+			break;
+		case Hulv.HulvAnimationStates.KillJump:
+		case Hulv.HulvAnimationStates.KillJumpLow:
+			this.forceToGamePlane = this.narrowLedgeKiller;
+			if (animData.normalizedAnimPos < 0.3f)
+			{
+				PersistentBehaviour<GameManager>.instance.deathManager.ResetTimeElapsed();
+			}
+			if (animData.normalizedAnimPos > 0.45f && animData.normalizedAnimPos < 0.76f)
+			{
+				if (this.ragdollJerkTimer <= 0f)
+				{
+					this.DoBoyRagdollJerks();
+				}
+				this.ragdollJerkTimer -= deltaTime;
+			}
+			if (!this.neckBroken)
+			{
+				if (topDefinitionID == Hulv.HulvAnimationStates.KillJump)
+				{
+					if (animData.normalizedAnimPos > 0.32f)
+					{
+						this.neckBroken = true;
+						SingletonBehaviour<BoyAudio>.instance.KillBoyWithEmotion(VoiceConfigProbe.Emotion.neckBroken, 0f, true, true);
+					}
+				}
+				else if (animData.normalizedAnimPos > 0.6f)
+				{
+					this.neckBroken = true;
+					SingletonBehaviour<BoyAudio>.instance.KillBoyWithEmotion(VoiceConfigProbe.Emotion.frantic, 0f, true, true);
+				}
+			}
+			break;
+		case Hulv.HulvAnimationStates.JumpFence:
+			if (animData.normalizedAnimPos > 0.73f)
+			{
+				this.wantedBasePosExtraOffset.y = this.wantedBasePosExtraOffset.y * (deltaTime * 3f);
+			}
+			else if ((double)animData.normalizedAnimPos > 0.1)
+			{
+				this.wantedBasePosExtraOffset.y = this.wantedBasePosExtraOffset.y + (this.staticAnimCustomParameter - this.wantedBasePosExtraOffset.y) * deltaTime * 7f;
+			}
+			if (animData.normalizedAnimPos > 0.95f && inputSpeed == 0f)
+			{
+				this.GoToIdleState(0.2f);
+			}
+			else if ((double)animData.normalizedAnimPos > 0.9 && inputSpeed != 0f)
+			{
+				this.UpdateStartRunningTransition(ref animData, inputSpeed, angle, rawAngle);
+			}
+			break;
+		case Hulv.HulvAnimationStates.JumpInPool:
+		{
+			this.doFootLifting = false;
+			bool isDead = ScriptGlobals.boy.isDead;
+			this.HandleBoyBiting(deltaTime, ref wantedPos, false, false, false, false, -1f);
+			if (!isDead && Hulv.hulvKilledBoy == this)
+			{
+				Vector3 position2 = this.boyAnimPrepKill.transform.position;
+				position2.y -= 0.7f;
+				this.boyAnimPrepKill.transform.position = position2;
+				this.boyAnimPrepKill.transform.parent = base.transform;
+				ScriptGlobals.boy.Kill(false);
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyAnimPrepKill, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+				if (animData.normalizedAnimPos < 0.7f)
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.JumpAttackLow, 0.2f, 0f);
+				}
+			}
+			if (animData.normalizedAnimPos > 0.75f)
+			{
+				this.wantedBasePosExtraOffset.y = this.wantedBasePosExtraOffset.y + (this.staticAnimCustomParameter - this.wantedBasePosExtraOffset.y) * deltaTime * 4f;
+			}
+			if (animData.normalizedAnimPos > 0.93f)
+			{
+				if (ScriptGlobals.boy.isDead && Hulv.hulvKilledBoy == this)
+				{
+					this.blendHelper.TransitToBlendDefinition(37, 0.2f, 0f);
+					Vector3 localPosition = this.boyAnimSwimKill.transform.localPosition;
+					localPosition.z -= 0.75f;
+					this.boyAnimSwimKill.transform.localPosition = localPosition;
+					this.PlayKillAnim(this.boyAnimSwimKill, deltaTime);
+				}
+				else
+				{
+					this.hulvAI.SetChaseMode(HulvAI.ChaseMode.SwimHunt);
+					this.blendHelper.TransitToBlendDefinition(28, 0.5f, 0f);
+				}
+			}
+			break;
+		}
+		case Hulv.HulvAnimationStates.Swimming:
+		case Hulv.HulvAnimationStates.SwimCharge:
+		case Hulv.HulvAnimationStates.SwimChargeLoop:
+		case Hulv.HulvAnimationStates.SwimConfused:
+		case Hulv.HulvAnimationStates.SwimConfusedLoop:
+		case Hulv.HulvAnimationStates.SwimChargeDown:
+		{
+			this.doFootLifting = false;
+			this.isSwimming = true;
+			animData.localRotationSpeed = new Vector3(0f, rawAngle * 0.05f / deltaTime, 0f);
+			float num6 = animData.topBlendWeight;
+			num6 *= num6;
+			float num7 = (1f + inputSpeed * 0.7f) * num6 + 1f * (1f - num6);
+			animData.localMoveSpeed *= num7;
+			if ((topDefinitionID == Hulv.HulvAnimationStates.SwimCharge || topDefinitionID == Hulv.HulvAnimationStates.SwimChargeDown) && Hulv.hulvKilledBoy == this && animData.normalizedAnimPos > 0.5f)
+			{
+				if (topDefinitionID == Hulv.HulvAnimationStates.SwimChargeDown)
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.SwimKillDown, 0.4f, 0f);
+					this.PlayKillAnim(this.boyAnimSwimKillDown, deltaTime);
+				}
+				else
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.SwimKillA, 0.3f, 0f);
+					this.PlayKillAnim(this.boyAnimSwimKill, deltaTime);
+				}
+				this.pullBackInWater = false;
+			}
+			else
+			{
+				float num8 = wantedPos.y - ScriptGlobals.boy.pos.y;
+				if ((rawAngle <= 90f && rawAngle >= -90f && (num8 <= 0.7f || (rawAngle <= 70f && rawAngle >= -70f))) || !(Hulv.hulvKilledBoy != this) || wantedPos.z - ScriptGlobals.boy.pos3.z >= 3f || !this.TransitIfPossible(Hulv.HulvAnimationStates.SwimTurn, 0.4f, 0f))
+				{
+					float num9 = FastMath.Abs(ScriptGlobals.boy.pos3.x - wantedPos.x);
+					float num10 = ScriptGlobals.boy.pos3.y - (this.headBone.transform.position.y - 0.5f);
+					float val = ScriptGlobals.boy.pos3.z - wantedPos.z;
+					if (num10 < -0.5f && Hulv.hulvKilledBoy != this && (num9 > 2f || num10 < -2f))
+					{
+						if (topDefinitionID != Hulv.HulvAnimationStates.SwimConfused && topDefinitionID != Hulv.HulvAnimationStates.SwimConfusedLoop)
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.SwimConfused, 0.2f, 0f);
+						}
+						else if (topDefinitionID == Hulv.HulvAnimationStates.SwimConfused && animData.normalizedAnimPos > 0.9f)
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.SwimConfusedLoop, 0.2f, 0f);
+						}
+						else if (topDefinitionID == Hulv.HulvAnimationStates.SwimConfusedLoop && num9 < 2f)
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.SwimConfused, 0.2f, 0f);
+						}
+					}
+					else
+					{
+						if (topDefinitionID == Hulv.HulvAnimationStates.SwimConfused || topDefinitionID == Hulv.HulvAnimationStates.SwimConfusedLoop)
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.Swimming, 0.2f, 0f);
+						}
+						if (num9 < 2f && FastMath.Abs(val) < 3f)
+						{
+							if (topDefinitionID == Hulv.HulvAnimationStates.Swimming && num10 > --0f)
+							{
+								this.TransitIfPossible(Hulv.HulvAnimationStates.SwimCharge, 0.2f, 0f);
+							}
+							else if ((topDefinitionID == Hulv.HulvAnimationStates.Swimming || topDefinitionID == Hulv.HulvAnimationStates.SwimChargeLoop) && num10 > -2f && ScriptGlobals.boy.state is BoySwimState)
+							{
+								this.TransitIfPossible(Hulv.HulvAnimationStates.SwimChargeDown, 0.2f, 0f);
+							}
+						}
+						else if ((double)num9 > 3.5)
+						{
+							if (topDefinitionID == Hulv.HulvAnimationStates.SwimCharge || topDefinitionID == Hulv.HulvAnimationStates.SwimChargeDown)
+							{
+								this.TransitIfPossible(Hulv.HulvAnimationStates.Swimming, 0.2f, 0f);
+							}
+							else if (topDefinitionID == Hulv.HulvAnimationStates.SwimChargeLoop)
+							{
+								this.TransitIfPossible(Hulv.HulvAnimationStates.Swimming, 0.2f, animData.normalizedAnimPos);
+							}
+						}
+						if ((topDefinitionID == Hulv.HulvAnimationStates.SwimCharge || topDefinitionID == Hulv.HulvAnimationStates.SwimChargeDown) && animData.normalizedAnimPos > 0.9f)
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.SwimChargeLoop, 0.2f, 0f);
+						}
+					}
+					bool flag8 = Hulv.hulvKilledBoy == this;
+					if (!flag8)
+					{
+						bool flag9 = ScriptGlobals.boy.state is BoyJumpState;
+						if (num9 < 2f && num10 > -0.5f && (num10 < 0.9f || (flag9 && num10 < 2.5f)))
+						{
+							if (flag9 && FastMath.Abs(val) < 3f && num10 > 0.9f)
+							{
+								this.HandleBoyBiting(deltaTime, ref wantedPos, true, true, false, false, -1f);
+							}
+							else
+							{
+								this.HandleBoyBiting(deltaTime, ref wantedPos, false, false, false, false, -1f);
+							}
+						}
+					}
+					if (Hulv.hulvKilledBoy == this)
+					{
+						if (!flag8)
+						{
+							this.hulvAI.SetChaseMode(HulvAI.ChaseMode.Idle);
+							if (ScriptGlobals.boy.pos3.y - wantedPos.y < 0f)
+							{
+								this.TransitIfPossible(Hulv.HulvAnimationStates.SwimKillDown, 0.3f, 0f);
+								this.PlayKillAnim(this.boyAnimSwimKillDown, deltaTime);
+							}
+							else
+							{
+								this.TransitIfPossible(Hulv.HulvAnimationStates.SwimKillA, 0.3f, 0f);
+								this.PlayKillAnim(this.boyAnimSwimKill, deltaTime);
+							}
+							this.pullBackInWater = false;
+						}
+						else if ((topDefinitionID != Hulv.HulvAnimationStates.SwimCharge && topDefinitionID != Hulv.HulvAnimationStates.SwimChargeDown) || animData.normalizedAnimPos > 0.7f)
+						{
+							this.TransitIfPossible(Hulv.HulvAnimationStates.SwimTurn, 0.3f, 0.1f);
+						}
+					}
+				}
+			}
+			break;
+		}
+		case Hulv.HulvAnimationStates.SwimTurn:
+		{
+			this.doFootLifting = false;
+			this.isSwimming = true;
+			if (animData.normalizedAnimPos > 0.95f)
+			{
+				this.TransitIfPossible(Hulv.HulvAnimationStates.Swimming, 0.2f, 0f);
+			}
+			if (ScriptGlobals.boy.isDead && animData.normalizedAnimPos > 0.8f)
+			{
+				this.TransitIfPossible(Hulv.HulvAnimationStates.Swimming, 0.2f, 0f);
+			}
+			bool flag8 = ScriptGlobals.boy.isDead;
+			if (!flag8)
+			{
+				this.HandleBoyBiting(deltaTime, ref wantedPos, false, false, false, true, -1f);
+			}
+			if ((ScriptGlobals.boy.isDead || Hulv.hulvKilledBoy == this) && !flag8)
+			{
+				this.TransitIfPossible(Hulv.HulvAnimationStates.SwimCharge, 0.2f, 0.2f);
+			}
+			break;
+		}
+		case Hulv.HulvAnimationStates.SwimGetUp:
+			this.doFootLifting = false;
+			if (!(ScriptGlobals.boy.state is BoySwimState))
+			{
+				Hulv hulv = Hulv.hulvKilledBoy;
+				this.HandleBoyBiting(deltaTime, ref wantedPos, false, false, false, false, -1f);
+				if (hulv == null && Hulv.hulvKilledBoy == this)
+				{
+					ScriptGlobals.boy.Kill(false);
+					this.currentBoyKillAnim = null;
+					float startFrameArg = 0f;
+					if (animData.normalizedAnimPos < 0.5f)
+					{
+						this.boyAnimKillClimbUpPool.transform.parent = base.transform.parent;
+						this.boyAnimKillClimbUpPool.transform.position = this.staticAnimWantedBasePos + this.wantedBasePosExtraOffset + Vector3.up * 0.04f + Vector3.right * 0.4f;
+						this.boyAnimKillClimbUpPool.transform.eulerAngles = this.staticAnimBaseRot;
+						BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyAnimKillClimbUpPool, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+						this.TransitIfPossible(Hulv.HulvAnimationStates.SwimGetUpKillBoy, 0.15f, 0f);
+						this.staticAnimBasePos = base.transform.position;
+						this.staticAnimWantedBasePos = this.LedgeAttackPivot.transform.position;
+						this.staticAnimWantedBasePos.z = base.transform.position.z;
+						this.staticAnimWantedBasePos.x = this.staticAnimWantedBasePos.x - 1.9f;
+						this.staticAnimWantedBasePos.y = this.staticAnimWantedBasePos.y - 0.23f;
+						this.ignoreLocalPosTime = 0.45f;
+					}
+					else
+					{
+						this.boyAnimKillClimbUpEdge.transform.parent = base.transform.parent;
+						this.boyAnimKillClimbUpEdge.transform.position = this.staticAnimWantedBasePos + this.wantedBasePosExtraOffset + Vector3.up * 0.04f + Vector3.right * 0.2f;
+						this.boyAnimKillClimbUpEdge.transform.eulerAngles = this.staticAnimBaseRot;
+						BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyAnimKillClimbUpEdge, new AnimClipNode.GotFocusArg(AnimClipNode.LoopingMode.None, startFrameArg), 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+					}
+				}
+			}
+			if (Hulv.hulvKilledBoy == this)
+			{
+				if (animData.normalizedAnimPos > 0.86f)
+				{
+					this.lastGoodPos = wantedPos;
+					this.TransitIfPossible(Hulv.HulvAnimationStates.IdleKillGuffe, 0.4f, 0f);
+				}
+			}
+			else
+			{
+				if (FastMath.Abs(ScriptGlobals.boy.pos3.x - wantedPos.x) < 0.5f)
+				{
+					this.hulvAI.SetChaseMode(HulvAI.ChaseMode.ChargeIn);
+				}
+				if (this.allowQuickAnimBreak && animData.normalizedAnimPos > 0.5f)
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.Running, 0.4f, 0f);
+				}
+				if (animData.normalizedAnimPos > 0.95f)
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.Running, 0.4f, 0f);
+				}
+			}
+			break;
+		case Hulv.HulvAnimationStates.RunStopForWater:
+		case Hulv.HulvAnimationStates.RunStopWildAtLedge:
+			this.HandleBoyBiting(deltaTime, ref wantedPos, true, false, true, true, 0.5f);
+			if (animData.normalizedAnimPos > 0.82f)
+			{
+				this.TransitIfPossible(Hulv.HulvAnimationStates.IdleAtWater, 0.5f, 0.4f);
+			}
+			if (topDefinitionID == Hulv.HulvAnimationStates.RunStopWildAtLedge)
+			{
+				this.doFootLifting = false;
+			}
+			break;
+		case Hulv.HulvAnimationStates.IdleAtWater:
+		case Hulv.HulvAnimationStates.IdleAtWater_Straight:
+		case Hulv.HulvAnimationStates.IdleAtWater_Up:
+		{
+			this.UpdateStartRunningTransition(ref animData, inputSpeed, angle, rawAngle);
+			this.HandleBoyBiting(deltaTime, ref wantedPos, false, false, true, true, -1f);
+			Hulv.HulvAnimationStates hulvAnimationStates = Hulv.HulvAnimationStates.IdleAtWater;
+			float val2 = ScriptGlobals.boy.pos.x - base.transform.position.x;
+			float num11 = ScriptGlobals.boy.pos.y - base.transform.position.y;
+			if (FastMath.Abs(val2) > 3f)
+			{
+				if (num11 > 0.7f)
+				{
+					hulvAnimationStates = Hulv.HulvAnimationStates.IdleAtWater_Up;
+				}
+				else if (num11 > -0.8f)
+				{
+					hulvAnimationStates = Hulv.HulvAnimationStates.IdleAtWater_Straight;
+				}
+			}
+			if (topDefinitionID != hulvAnimationStates)
+			{
+				this.TransitIfPossible(hulvAnimationStates, 0.3f, Random.Range(0f, 1f));
+			}
+			break;
+		}
+		case Hulv.HulvAnimationStates.SwimKillA:
+		case Hulv.HulvAnimationStates.SwimKillDown:
+			if (this.LedgeAttackPivot)
+			{
+				float num12 = Mathf.Sign(this.LedgeAttackPivot.right.x);
+				float num13 = (wantedPos.x - this.LedgeAttackPivot.position.x) * num12;
+				if (num13 < 0f)
+				{
+					wantedPos += FastMath.Min(-num13, 1f) * Time.deltaTime * 2f * Vector3.right * num12;
+				}
+				else if (this.pullBackInWater)
+				{
+					wantedPos += Time.deltaTime * 0.5f * Vector3.left;
+				}
+			}
+			this.isSwimming = true;
+			this.doFootLifting = false;
+			break;
+		case Hulv.HulvAnimationStates.JumpFenceUp:
+		case Hulv.HulvAnimationStates.JumpFenceUpStraightBack:
+		case Hulv.HulvAnimationStates.JumpFenceUpStraightBackB:
+		case Hulv.HulvAnimationStates.JumpFenceUpStraightBackC:
+			if (!ScriptGlobals.boy.isDead && animData.normalizedAnimPos < 0.55f)
+			{
+				float x = base.transform.TransformDirection(Vector3.forward).x;
+				if (x * ScriptGlobals.boy.facing > 0f || !(ScriptGlobals.boy.state is BoyLadderState))
+				{
+					this.HandleBoyBiting(deltaTime, ref wantedPos, true, false, false, false, -1f);
+				}
+			}
+			if (Hulv.hulvKilledBoy == this && this.TransitIfPossible(Hulv.HulvAnimationStates.KillFence, 0.2f, 0f))
+			{
+				this.PlayKillAnim(this.boyAnimKillFence, deltaTime);
+				this.hulvAI.SetChaseMode(HulvAI.ChaseMode.Idle);
+			}
+			else
+			{
+				if (topDefinitionID == Hulv.HulvAnimationStates.JumpFenceUp)
+				{
+					if (animData.normalizedAnimPos > 0.39f && animData.normalizedAnimPos < 0.43f && this.controls.jumpButton)
+					{
+						this.FenceSetOtherAttacker();
+						this.TransitIfPossible(this.GetNextFenceStraightAnim(), 0.4f, 0.13f);
+					}
+					else if (!this.controls.jumpButton && animData.normalizedAnimPos < 0.35f)
+					{
+						this.FenceSetOtherAttacker();
+						this.TransitIfPossible(this.GetNextFenceStraightAnim(), 0.4f, 0.5f);
+					}
+				}
+				else if (animData.normalizedAnimPos > 0.5f && animData.normalizedAnimPos > 0.55f && this.controls.jumpButton && Hulv.hulvKilledBoy == null)
+				{
+					this.FenceSetOtherAttacker();
+					if (base.transform.InverseTransformPoint(ScriptGlobals.boy.pos3).z < 0f)
+					{
+						this.GoToIdleState(0.3f);
+					}
+					else if (ScriptGlobals.boy.pos3.y - wantedPos.y < 1.2f)
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.JumpFenceBarkLowLoop, 0.5f, 0.03f);
+					}
+					else
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.JumpFenceUp, 0.5f, 0.03f);
+					}
+				}
+				if (animData.normalizedAnimPos > 0.9f)
+				{
+					this.GoToIdleState(0.3f);
+				}
+			}
+			break;
+		case Hulv.HulvAnimationStates.KillFence:
+			this.FenceSetOtherAttacker();
+			if (animData.normalizedAnimPos < 0.3f)
+			{
+				PersistentBehaviour<GameManager>.instance.deathManager.ResetTimeElapsed();
+			}
+			break;
+		case Hulv.HulvAnimationStates.Falling:
+			this.doFootLifting = false;
+			if (!this.dontReKillBoy)
+			{
+				Vector3 vector5 = ScriptGlobals.boy.pos3 - wantedPos;
+				if (FastMath.Abs(vector5.x) < 1.2f && FastMath.Abs(vector5.y) < 2f && FastMath.Abs(vector5.z) < 1.5f)
+				{
+					this.HandleBoyBiting(deltaTime, ref wantedPos, false, true, false, true, -1f);
+				}
+				else
+				{
+					this.HandleBoyBiting(deltaTime, ref wantedPos, false, false, false, true, -1f);
+				}
+				if (ScriptGlobals.boy.isDead && Hulv.hulvKilledBoy == this)
+				{
+					this.blendHelper.TransitToBlendDefinition(25, 0.3f, 0f);
+					this.neckBroken = false;
+				}
+			}
+			break;
+		case Hulv.HulvAnimationStates.IdleSniffTree:
+			if (animData.normalizedAnimPos >= 1f || this.hulvAI.GetCurrentMode() == HulvAI.AIMode.ChaseBoy)
+			{
+				this.GoToIdleState(0.2f);
+			}
+			break;
+		case Hulv.HulvAnimationStates.FallFromLog:
+			this.doFootLifting = false;
+			break;
+		case Hulv.HulvAnimationStates.LedgeGrabFallDie:
+			this.doFootLifting = false;
+			break;
+		case Hulv.HulvAnimationStates.JumpFenceBarkLowLoop:
+		{
+			bool flag10 = false;
+			if (base.transform.InverseTransformPoint(ScriptGlobals.boy.pos3).z < 0f || flag10 || rawInputSpeed > this.stickDeadZone || FastMath.Abs(ScriptGlobals.boy.pos.x - wantedPos.x) > 3f || ScriptGlobals.boy.isDead)
+			{
+				if (animData.normalizedAnimPos > 0.9f || animData.normalizedAnimPos < 0.4f)
+				{
+					this.GoToIdleState(0.2f);
+				}
+			}
+			else
+			{
+				if (!ScriptGlobals.boy.isDead)
+				{
+					float x2 = base.transform.TransformDirection(Vector3.forward).x;
+					if (x2 * ScriptGlobals.boy.facing > 0f || !(ScriptGlobals.boy.state is BoyLadderState))
+					{
+						this.HandleBoyBiting(deltaTime, ref wantedPos, true, false, false, false, -1f);
+					}
+				}
+				if (Hulv.hulvKilledBoy == this && this.TransitIfPossible(Hulv.HulvAnimationStates.KillFence, 0.2f, 0f))
+				{
+					this.PlayKillAnim(this.boyAnimKillFence, deltaTime);
+					this.hulvAI.SetChaseMode(HulvAI.ChaseMode.Idle);
+				}
+			}
+			break;
+		}
+		case Hulv.HulvAnimationStates.IdleKillGuffe:
+		{
+			if (this.controls.jumpButton)
+			{
+				if (rawInputSpeed > this.stickDeadZone)
+				{
+					if (Hulv.hulvKilledBoy != this && !ScriptGlobals.boy.isDead)
+					{
+						this.ChooseAndActivateAttack();
+					}
+				}
+				else if (!this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBack, 0.2f, 0f))
+				{
+					if (Random.Range(0f, 1f) > 0.5f)
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBackB, 0.3f, 0f);
+					}
+					else
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.JumpBackC, 0.3f, 0f);
+					}
+				}
+			}
+			if (Hulv.hulvKilledBoy != this && !this.UpdateStartRunningTransition(ref animData, inputSpeed, angle, rawAngle))
+			{
+				this.GoToIdleState(0.3f);
+			}
+			if (Hulv.hulvKilledBoy != this)
+			{
+				Vector3 vector6 = this.storedLookatPos - wantedPos;
+				float magnitude = vector6.magnitude;
+				if (magnitude > 0f && magnitude < 1f)
+				{
+					Vector3 vector7 = wantedPos;
+					vector7 -= deltaTime * 3f * (1f - magnitude) / magnitude * vector6;
+					wantedPos = vector7;
+				}
+				else if (magnitude > 1.2f && magnitude < 1.8f)
+				{
+					Vector3 vector8 = wantedPos;
+					vector8 += (magnitude - 1.2f) * vector6 * deltaTime;
+					wantedPos = vector8;
+				}
+			}
+			Vector3 eulerAngles = base.transform.eulerAngles;
+			eulerAngles.y += this.angleTowardLookat * deltaTime * 1f;
+			base.transform.eulerAngles = eulerAngles;
+			if (this.ragdollJerkTimer <= 0f)
+			{
+				this.DoBoyRagdollJerks();
+			}
+			this.ragdollJerkTimer -= deltaTime;
+			break;
+		}
+		case Hulv.HulvAnimationStates.FallingDie:
+			this.doFootLifting = false;
+			break;
+		case Hulv.HulvAnimationStates.KillEdge:
+		case Hulv.HulvAnimationStates.KillEdgeBoyFall:
+			if (!this.neckBroken && topDefinitionID == Hulv.HulvAnimationStates.KillEdge && animData.normalizedAnimPos > 0.35f)
+			{
+				this.neckBroken = true;
+				SingletonBehaviour<BoyAudio>.instance.KillBoyWithEmotion(VoiceConfigProbe.Emotion.neckBroken, 0f, true, true);
+			}
+			if (animData.normalizedAnimPos > 0.99f)
+			{
+				this.TransitIfPossible(Hulv.HulvAnimationStates.IdleKillGuffe, 0.5f, 0f);
+			}
+			else if (this.forceAlignToAttackPivot)
+			{
+				wantedPos.x += (this.LedgeAttackPivot.transform.position.x + 0.7f - wantedPos.x) * 5f * Time.deltaTime;
+			}
+			break;
+		case Hulv.HulvAnimationStates.ThrashedByHuddle:
+		case Hulv.HulvAnimationStates.ThrashedByHuddle_180_alt:
+		case Hulv.HulvAnimationStates.ThrashedByHuddle_180:
+		{
+			Vector3 vector9 = base.transform.InverseTransformDirection(-this.thrashDir);
+			float num14 = Mathf.Clamp((1f - vector9.z) * 5f, 0f, 1f);
+			float num15 = num14 * Mathf.Sign(vector9.x) * 300f * deltaTime;
+			base.transform.rotation = Quaternion.Euler(0f, num15, 0f) * base.transform.rotation;
+			if (animData.normalizedAnimPos >= 0.95f)
+			{
+				this.GoToIdleState(0.2f);
+			}
+			break;
+		}
+		case Hulv.HulvAnimationStates.IdleFastBarking:
+			if (animData.normalizedAnimPos > 0.95f)
+			{
+				this.GoToIdleState(0.3f);
+			}
+			break;
+		case Hulv.HulvAnimationStates.IdleBoyFarSitWait:
+			if (ScriptGlobals.boy.pos.x - wantedPos.x < 5f)
+			{
+				this.TransitIfPossible(Hulv.HulvAnimationStates.IdleAtWater_Straight, 0.55f, Random.Range(0f, 1f));
+			}
+			else if (animData.normalizedAnimPos > 0.98f)
+			{
+				if (Random.value < 0.5f)
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.IdleBoyFar, 0.3f, 0f);
+					this.SetRandomAutoTransitionTime(Hulv.HulvAnimationStates.IdleBoyFar);
+				}
+				else
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.IdleBoyFarWalkAround, 0.3f, 0f);
+				}
+			}
+			break;
+		case Hulv.HulvAnimationStates.IdleBoyFarWalkAround:
+			if (animData.normalizedAnimPos > 0.75f || (animData.normalizedAnimPos > 0.48f && animData.normalizedAnimPos < 0.52f))
+			{
+				if (ScriptGlobals.boy.pos.x - wantedPos.x < 5f)
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.IdleAtWater_Straight, 0.3f, Random.Range(0f, 1f));
+				}
+				else if (animData.normalizedAnimPos > 0.99f)
+				{
+					if (Random.value < 0.5f)
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.IdleBoyFar, 0.3f, 0f);
+						this.SetRandomAutoTransitionTime(Hulv.HulvAnimationStates.IdleBoyFar);
+					}
+					else
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.IdleBoyFarSitWait, 0.3f, 0f);
+					}
+				}
+			}
+			break;
+		case Hulv.HulvAnimationStates.IdleBoyFar:
+			if (ScriptGlobals.boy.pos.x - wantedPos.x < 5f)
+			{
+				float transitTime = 0.3f;
+				if (animData.totalPlayTime > 6.5f && animData.totalPlayTime < 12f)
+				{
+					transitTime = 0.55f;
+				}
+				this.TransitIfPossible(Hulv.HulvAnimationStates.IdleAtWater_Straight, transitTime, Random.Range(0f, 1f));
+			}
+			else if (animData.normalizedAnimPos > this.autoTransitionTime)
+			{
+				if (Random.value < 0.5f)
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.IdleBoyFarSitWait, 0.3f, 0f);
+				}
+				else
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.IdleBoyFarWalkAround, 0.3f, 0f);
+				}
+			}
+			break;
+		case Hulv.HulvAnimationStates.SwimGetUpKillBoy:
+			this.doFootLifting = false;
+			if (animData.normalizedAnimPos > 0.96f)
+			{
+				this.lastGoodPos = wantedPos;
+				this.TransitIfPossible(Hulv.HulvAnimationStates.IdleKillGuffe, 0.4f, 0f);
+			}
+			break;
+		}
+		if (!this.isStaticAnim)
+		{
+			this.allowQuickAnimBreak = false;
+		}
+	}
+
+	// Token: 0x0600055F RID: 1375 RVA: 0x0003EA2C File Offset: 0x0003CC2C
+	private ColInfo3 GetGroundCol(Vector3 lineStart, Vector3 lineEnd, FastList<Collider> colliders, ref float waterDist)
+	{
+		waterDist = 0f;
+		bool flag = false;
+		ColInfo3Buffer colInfo3Buffer = CollisionUtils.RayIsect(lineStart, lineEnd, colliders, true);
+		ColInfo3 colInfo = null;
+		for (int i = 0; i < colInfo3Buffer.size; i++)
+		{
+			ColInfo3 colInfo2 = colInfo3Buffer.raw[i];
+			if (!colInfo2.collider.isTrigger)
+			{
+				if (flag)
+				{
+					waterDist = FastMath.Min(colInfo2.distance - colInfo.distance, this.hulvSwimHeight);
+				}
+				else if (colInfo2.normal.y > 0.2f)
+				{
+					colInfo = colInfo2;
+				}
+				break;
+			}
+			if (!flag && colInfo2.collider.GetComponent<BoyWater>() != null)
+			{
+				waterDist = this.hulvSwimHeight;
+				colInfo = colInfo2;
+				flag = true;
+			}
+		}
+		if (colInfo != null)
+		{
+			colInfo = colInfo.Clone();
+		}
+		ColInfo3Buffer.Release(ref colInfo3Buffer);
+		return colInfo;
+	}
+
+	// Token: 0x06000560 RID: 1376 RVA: 0x0003EB0C File Offset: 0x0003CD0C
+	private void UpdateColliders()
+	{
+		this.colliders.Clear();
+		CollisionUtils.AddCollidersInSphere(base.transform.position, 3f, CollisionUtils.Type.All, this.colliders, 0, false, false);
+		int count = this.colliders.Count;
+		for (int i = count - 1; i >= 0; i--)
+		{
+			Collider collider = this.colliders[i];
+			if (collider.GetComponent<Collider>().isTrigger && collider.GetComponent<Collider>().GetComponent<BoyWater>() == null)
+			{
+				this.colliders.RemoveAt(i);
+			}
+		}
+	}
+
+	// Token: 0x06000561 RID: 1377 RVA: 0x0003EBA4 File Offset: 0x0003CDA4
+	public Collider GetGroundCollision()
+	{
+		return this.currentGround;
+	}
+
+	// Token: 0x06000562 RID: 1378 RVA: 0x0003EBAC File Offset: 0x0003CDAC
+	private bool UpdatePhysics(float deltaTime, ref Vector3 wantedPos)
+	{
+		if (this.noPhysics)
+		{
+			return true;
+		}
+		bool flag = false;
+		this.onStaticGround = false;
+		Vector3 vector = wantedPos;
+		Vector3 vector2 = base.transform.TransformDirection(Vector3.forward);
+		Vector3 vector3 = base.transform.TransformDirection(Vector3.down);
+		Vector3 vector4 = vector - vector3 * (0.5f + this.hulvSwimHeight) + vector2 * 0.4f;
+		Vector3 vector5 = vector - vector3 * (0.5f + this.hulvSwimHeight) - vector2 * 0.4f;
+		bool flag2 = this.onGround;
+		this.hindWaterDist = 0f;
+		this.UpdateColliders();
+		float num = 0.5f * (this.hindLegFallSpeed + this.foreLegFallSpeed);
+		if (num > 7f)
+		{
+			this.dieWhenLand = true;
+		}
+		ColInfo3 groundCol = this.GetGroundCol(vector5, vector5 + vector3 * (1f + this.hulvSwimHeight), this.colliders, ref this.hindWaterDist);
+		Vector3 vector6 = this.CalcLegPos(groundCol, vector - vector2 * 0.4f, deltaTime, ref this.hindLegFallSpeed, vector3, this.hindWaterDist);
+		this.shoulderWaterDist = 0f;
+		ColInfo3 groundCol2 = this.GetGroundCol(vector4, vector4 + vector3 * (1f + this.hulvSwimHeight), this.colliders, ref this.shoulderWaterDist);
+		Vector3 vector7 = this.CalcLegPos(groundCol2, vector + vector2 * 0.4f, deltaTime, ref this.foreLegFallSpeed, vector3, this.shoulderWaterDist);
+		this.onMovingGround = false;
+		Hulv.HulvAnimationStates topDefinitionID = (Hulv.HulvAnimationStates)this.blendHelper.GetTopDefinitionID();
+		this.bothLegsOnGround = false;
+		if (this.hindWaterDist == 0f && this.shoulderWaterDist == 0f && groundCol != null && groundCol2 != null)
+		{
+			this.bothLegsOnGround = true;
+		}
+		if (groundCol != null && groundCol2 != null)
+		{
+			this.currentGround = groundCol2.collider;
+			if (this.debugPosition)
+			{
+			}
+			this.onStaticGround = true;
+			Rigidbody attachedRigidbody = groundCol.collider.attachedRigidbody;
+			if (attachedRigidbody != null)
+			{
+				this.onStaticGround = false;
+				if (FastMath.Abs(attachedRigidbody.velocity.x) > 0.05f)
+				{
+					this.onMovingGround = true;
+				}
+			}
+			Rigidbody attachedRigidbody2 = groundCol2.collider.attachedRigidbody;
+			if (attachedRigidbody2 != null)
+			{
+				this.onStaticGround = false;
+				if (FastMath.Abs(attachedRigidbody2.velocity.x) > 0.05f)
+				{
+					this.onMovingGround = true;
+				}
+			}
+			if (topDefinitionID == Hulv.HulvAnimationStates.Falling)
+			{
+				this.footBlendIn = 0f;
+				if (this.dieWhenLand)
+				{
+					this.TransitIfPossible(Hulv.HulvAnimationStates.FallingDie, 0.15f, 0f);
+				}
+				else
+				{
+					this.GoToIdleState(0.5f);
+				}
+				this.dieWhenLand = false;
+			}
+			if (groundCol2.distance <= 0f || groundCol.distance <= 0f)
+			{
+				return false;
+			}
+			float num2 = groundCol.pos.y - vector6.y;
+			float num3 = groundCol2.pos.y - vector7.y;
+			if (num2 > 0.35f && num3 > 0.35f && !this.isSwimming)
+			{
+				if (topDefinitionID != Hulv.HulvAnimationStates.JumpInPool && topDefinitionID != Hulv.HulvAnimationStates.SwimGetUp && topDefinitionID != Hulv.HulvAnimationStates.SwimGetUpKillBoy)
+				{
+					if (!this.hulvAI.isFollowingAWaypoint())
+					{
+						this.hulvAI.SetChaseMode(HulvAI.ChaseMode.SwimHunt);
+					}
+					if (Hulv.hulvKilledBoy == this)
+					{
+						ScriptGlobals.boy.SpawnExternalState(new BoyRagdollState(ScriptGlobals.boy), Boy.AffectMode.Default);
+						Hulv.hulvKilledBoy = null;
+						this.HandleBoyBiting(deltaTime, ref wantedPos, true, true, false, false, -1f);
+						this.TransitIfPossible(Hulv.HulvAnimationStates.SwimKillA, 0.2f, 0f);
+						this.PlayKillAnim(this.boyAnimSwimKill, deltaTime);
+						this.pullBackInWater = false;
+					}
+					else
+					{
+						this.TransitIfPossible(Hulv.HulvAnimationStates.Swimming, 0.4f, 0f);
+					}
+				}
+			}
+			else if ((num2 < 0.44f || num3 < 0.44f) && this.isSwimming && topDefinitionID != Hulv.HulvAnimationStates.JumpInPool && topDefinitionID != Hulv.HulvAnimationStates.SwimGetUp && topDefinitionID != Hulv.HulvAnimationStates.SwimGetUpKillBoy)
+			{
+				bool flag3 = true;
+				if (topDefinitionID == Hulv.HulvAnimationStates.SwimKillA || topDefinitionID == Hulv.HulvAnimationStates.SwimKillDown)
+				{
+					this.pullBackInWater = true;
+					flag3 = false;
+				}
+				else if (this.LedgeAttackPivot != null && (wantedPos - this.LedgeAttackPivot.position).x < 2f)
+				{
+					flag3 = false;
+				}
+				if (flag3)
+				{
+					if (!this.hulvAI.isFollowingAWaypoint())
+					{
+						this.hulvAI.SetChaseMode(HulvAI.ChaseMode.ChargeIn);
+					}
+					this.TransitIfPossible(Hulv.HulvAnimationStates.Running, 0.4f, 0f);
+				}
+			}
+		}
+		if (groundCol == null && groundCol2 == null)
+		{
+			flag = true;
+			float num4 = 0.5f * (this.foreLegFallSpeed + this.hindLegFallSpeed);
+			if (topDefinitionID != Hulv.HulvAnimationStates.Falling && topDefinitionID != Hulv.HulvAnimationStates.JumpAttackLow && topDefinitionID != Hulv.HulvAnimationStates.KillJumpLow && topDefinitionID != Hulv.HulvAnimationStates.JumpAttack && Hulv.hulvKilledBoy != this)
+			{
+				this.onGround = false;
+				this.TransitIfPossible(Hulv.HulvAnimationStates.Falling, 0.6f, 0f);
+			}
+			else if (topDefinitionID != Hulv.HulvAnimationStates.Falling && num4 > 7f && this.TransitIfPossible(Hulv.HulvAnimationStates.Falling, 0.6f, 0f))
+			{
+				if (Hulv.hulvKilledBoy == this)
+				{
+					ScriptGlobals.boy.SpawnExternalState(new BoyRagdollState(ScriptGlobals.boy), Boy.AffectMode.AffectDeadBoy);
+					ScriptGlobals.boy.Kill();
+					Vector3 velocity = ScriptGlobals.boy.visualBoy.ragdoll.GetVelocity();
+					float num5 = -num4 - velocity.y;
+					this.addVelToBoyNextFixedUpdate = 3;
+					if (ScriptGlobals.boy.visualBoy.ragdoll[1].isKinematic)
+					{
+						velocity.y = num4;
+						ScriptGlobals.boy.visualBoy.ragdoll.SetRagdollEnabled(true, 1);
+					}
+					ScriptGlobals.boy.visualBoy.ragdoll.AddVelocity(new Vector3(0f, num5, 0f));
+				}
+				if (ScriptGlobals.boy.isDead)
+				{
+					this.dontReKillBoy = true;
+				}
+			}
+			if (num4 > 7f)
+			{
+				this.foreLegFallSpeed += (num4 - this.foreLegFallSpeed) * deltaTime * 2f;
+				this.hindLegFallSpeed += (num4 - this.hindLegFallSpeed) * deltaTime * 2f;
+			}
+		}
+		else
+		{
+			this.onGround = true;
+		}
+		if (topDefinitionID == Hulv.HulvAnimationStates.Falling && this.onGround)
+		{
+			this.GoToIdleState(0.2f);
+		}
+		if (this.debugPosition)
+		{
+		}
+		wantedPos = (vector6 + vector7) * 0.5f;
+		Vector3 vector8 = vector7 - vector6;
+		Vector3 vector9 = vector8;
+		vector9.y = 0f;
+		float num6 = this.wantedUpAngle;
+		this.wantedUpAngle = Vector3.Angle(vector8, vector9);
+		if (vector8.y > 0f)
+		{
+			this.wantedUpAngle = -this.wantedUpAngle;
+		}
+		float num7 = FastMath.Min(15f * deltaTime * this.hulvAI.currentTurnFraction, 0.5f);
+		this.wantedUpAngle = this.wantedUpAngle * num7 + num6 * (1f - num7);
+		return !flag;
+	}
+
+	// Token: 0x06000563 RID: 1379 RVA: 0x0003F340 File Offset: 0x0003D540
+	private Vector3 CalcLegPos(ColInfo3 ci, Vector3 logicLegPos, float deltaTime, ref float legFallSpeed, Vector3 localDown, float waterDist)
+	{
+		Vector3 vector = Vector3.zero;
+		if (ci != null)
+		{
+			if (ci.distance <= 0f)
+			{
+				return logicLegPos;
+			}
+			vector = ci.pos + localDown * waterDist;
+		}
+		if (ci != null && ci.distance < 0.5001f + this.hulvSwimHeight && logicLegPos.y <= vector.y + 0.005f)
+		{
+			legFallSpeed = 0f;
+			return vector;
+		}
+		legFallSpeed += 10f * deltaTime;
+		Vector3 result = logicLegPos + Vector3.down * legFallSpeed * deltaTime;
+		if (ci != null && result.y < vector.y)
+		{
+			legFallSpeed = 0f;
+			result = vector;
+		}
+		return result;
+	}
+
+	// Token: 0x06000564 RID: 1380 RVA: 0x0003F410 File Offset: 0x0003D610
+	private void StayAwayFromFence(ref Vector3 wantedPos)
+	{
+		if (!this.isStaticAnim)
+		{
+			if (this.secret != null)
+			{
+				Vector3 position = this.secret.lightHolder.transform.position;
+				Vector3 vector = wantedPos - position;
+				vector.y = 0f;
+				float num = vector.x * vector.x + vector.z * vector.z;
+				if (num < 1.21f)
+				{
+					float num2 = 1.1f / Mathf.Sqrt(num);
+					wantedPos.x = position.x + vector.x * num2;
+					wantedPos.z = position.z + vector.z * num2;
+				}
+			}
+			if (this.fence != null)
+			{
+				Vector3 position2 = this.fence.transform.position;
+				if (FastMath.Abs(wantedPos.z - position2.z) < 5f)
+				{
+					float num3 = wantedPos.x - position2.x;
+					if (FastMath.Abs(num3) < Hulv.minFenceDist)
+					{
+						wantedPos.x = position2.x + Mathf.Sign(num3) * Hulv.minFenceDist;
+					}
+				}
+			}
+			if (this.specialSafetyWallHelper != null && Hulv.hulvKilledBoy != this && wantedPos.z < this.specialSafetyWallZ)
+			{
+				Vector3 vector2 = this.specialSafetyWallHelper.InverseTransformPoint(wantedPos);
+				if (vector2.y < 1f && vector2.z > -0.7f && vector2.z < 0f)
+				{
+					vector2.z = 0f;
+					wantedPos = this.specialSafetyWallHelper.TransformPoint(vector2);
+				}
+			}
+			if (this.leftWallBlocker != null && !this.hulvAI.isFollowingAWaypoint())
+			{
+				float num4 = FastMath.Max(wantedPos.x, this.leftWallBlocker.position.x);
+				if (wantedPos.x < num4)
+				{
+					wantedPos.x = num4;
+					if (FastMath.Abs(ScriptGlobals.boy.pos.x - wantedPos.x) < 3f)
+					{
+						this.hulvAI.SetChaseMode(HulvAI.ChaseMode.ChargeToKill);
+					}
+					else
+					{
+						this.hulvAI.SetChaseMode(HulvAI.ChaseMode.ChargeIn);
+					}
+				}
+			}
+			if (this.rightWallBlocker != null && !this.hulvAI.isFollowingAWaypoint() && (ScriptGlobals.boy.pos.x < wantedPos.x || ScriptGlobals.boy.pos3.z - wantedPos.z < -3f) && !ScriptGlobals.boy.isDead && wantedPos.x > this.rightWallBlocker.position.x)
+			{
+				wantedPos.x += (this.rightWallBlocker.position.x - wantedPos.x) * Time.deltaTime;
+				if (this.hulvAI.GetChaseMode() == HulvAI.ChaseMode.RunAway)
+				{
+					this.hulvAI.SetChaseMode(HulvAI.ChaseMode.ChargeIn);
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000565 RID: 1381 RVA: 0x0003F75C File Offset: 0x0003D95C
+	private void UpdateInput(float deltaTime)
+	{
+		if (this.debugJoystickControl)
+		{
+			if (this.mController == null)
+			{
+				this.mController = new MixedGameController();
+			}
+			this.mController.Update(deltaTime);
+			if (this.mController.B)
+			{
+				this.controls.mood = Hulv.HulvControl.Mood.Sneaky;
+			}
+			this.controls.trotButton = this.mController.X;
+			this.controls.jumpButton = this.mController.A;
+			this.controls.stick = new Vector2(this.mController.LeftStick.x, this.mController.LeftStick.y);
+			if (this.mController.Start.Down)
+			{
+				this.controls.mood = (this.controls.mood + 1) % Hulv.HulvControl.Mood.Eating;
+			}
+		}
+		else
+		{
+			Vector3 zero = Vector3.zero;
+			this.hulvAI.UpdateInput(this.controls, deltaTime, ref zero);
+		}
+		if (this.onMovingGround)
+		{
+			this.controls.stick = Vector2.zero;
+			return;
+		}
+		if (this.doInputCollision && !this.controls.jumpButton)
+		{
+			Vector3 vector;
+			vector..ctor(this.controls.stick.x, 0f, this.controls.stick.y);
+			Vector3 startPos = base.transform.position + Vector3.up * 0.6f;
+			Vector3 vector2 = vector;
+			if (Hulv.hulvKilledBoy != this)
+			{
+				vector2 = this.CollideAndProject(startPos, vector, 2.5f, deltaTime);
+			}
+			this.controls.stick.x = vector2.x;
+			this.controls.stick.y = vector2.z;
+		}
+	}
+
+	// Token: 0x06000566 RID: 1382 RVA: 0x0003F940 File Offset: 0x0003DB40
+	private Vector3 AvoidHulvVector(Vector3 moveVector)
+	{
+		Vector3 vector = moveVector;
+		Hulv.HulvAnimationStates topDefinitionID = (Hulv.HulvAnimationStates)this.blendHelper.GetTopDefinitionID();
+		bool flag = topDefinitionID == Hulv.HulvAnimationStates.KillJump && topDefinitionID == Hulv.HulvAnimationStates.KillJumpLow;
+		float num = 0.6f;
+		if (this.velocity.sqrMagnitude < 0.7f || Hulv.hulvKilledBoy != null)
+		{
+			num = 0.4f;
+		}
+		int i = 0;
+		int count = this.avoidHulvList.Count;
+		while (i < count)
+		{
+			Hulv hulv = this.avoidHulvList[i];
+			bool flag2 = false;
+			if (flag)
+			{
+				flag2 = true;
+			}
+			if (hulv != null && !flag2)
+			{
+				Vector3 vector2 = base.transform.position - hulv.transform.position;
+				if (Vector3.Dot(vector, vector2) < 0f)
+				{
+					Vector3 vector3 = base.transform.InverseTransformDirection(vector2);
+					vector3.z *= 0.4f;
+					vector2 = base.transform.TransformDirection(vector3);
+					vector2.y = 0f;
+					float magnitude = vector2.magnitude;
+					float num2 = 1f * num;
+					if (magnitude < num2)
+					{
+						vector += vector2 * 12f * (num2 - magnitude) / num2;
+					}
+				}
+			}
+			i++;
+		}
+		return vector;
+	}
+
+	// Token: 0x06000567 RID: 1383 RVA: 0x0003FAA4 File Offset: 0x0003DCA4
+	private void UpdateBoyDeathAnimPos(float deltaTime)
+	{
+		if (this.currentBoyKillAnim != null)
+		{
+			this.killBlendIn = FastMath.Min(this.killBlendIn + deltaTime, 1f);
+			Quaternion identity = Quaternion.identity;
+			Vector3 topDefRootBonePos = this.blendHelper.GetTopDefRootBonePos(out identity);
+			Quaternion quaternion = base.transform.rotation * Quaternion.Inverse(identity);
+			Vector3 vector = base.transform.position - quaternion * topDefRootBonePos;
+			this.currentBoyKillAnim.transform.position = this.currentBoyKillAnim.transform.position * (1f - this.killBlendIn) + vector * this.killBlendIn;
+			this.currentBoyKillAnim.transform.rotation = Quaternion.Slerp(this.currentBoyKillAnim.transform.rotation, quaternion, this.killBlendIn);
+		}
+	}
+
+	// Token: 0x06000568 RID: 1384 RVA: 0x0003FB8C File Offset: 0x0003DD8C
+	private Vector3 CollideAndProject(Vector3 startPos, Vector3 rayToCastDir, float len, float deltaTime)
+	{
+		float magnitude = rayToCastDir.magnitude;
+		if (magnitude > 0f)
+		{
+			ColInfo3Buffer colInfo3Buffer = CollisionUtils.RayIsect(startPos, startPos + rayToCastDir * len / magnitude, this.colliders, true);
+			if (colInfo3Buffer.size > 0)
+			{
+				for (int i = 0; i < colInfo3Buffer.size; i++)
+				{
+					ColInfo3 colInfo = colInfo3Buffer.raw[i];
+					if (!colInfo.collider.isTrigger)
+					{
+						Vector3 normal = colInfo.normal;
+						Vector3 vector = rayToCastDir - Vector3.Dot(rayToCastDir, normal) * normal;
+						vector.y = 0f;
+						rayToCastDir = vector;
+						break;
+					}
+				}
+			}
+			ColInfo3Buffer.Release(ref colInfo3Buffer);
+		}
+		return rayToCastDir;
+	}
+
+	// Token: 0x06000569 RID: 1385 RVA: 0x0003FC48 File Offset: 0x0003DE48
+	private void LiftPawAboveGround(Transform pawTrans)
+	{
+		if (pawTrans != null)
+		{
+			Vector3 vector = base.transform.InverseTransformPoint(pawTrans.position);
+			if (vector.y < 0.02f)
+			{
+				vector.y = this.footBlendIn * 0.02f + (1f - this.footBlendIn) * vector.y;
+				pawTrans.position = base.transform.TransformPoint(vector);
+			}
+			Transform parent = pawTrans.parent;
+			vector = base.transform.InverseTransformPoint(parent.position);
+			if (vector.y < 0.02f)
+			{
+				vector.y = this.footBlendIn * 0.02f + (1f - this.footBlendIn) * vector.y;
+				parent.position = base.transform.TransformPoint(vector);
+			}
+		}
+	}
+
+	// Token: 0x0600056A RID: 1386 RVA: 0x0003FD24 File Offset: 0x0003DF24
+	public bool isLookatState()
+	{
+		Hulv.HulvAnimationStates topDefinitionID = (Hulv.HulvAnimationStates)this.blendHelper.GetTopDefinitionID();
+		Hulv.HulvAnimationStates hulvAnimationStates = topDefinitionID;
+		switch (hulvAnimationStates)
+		{
+		case Hulv.HulvAnimationStates.Idle:
+		case Hulv.HulvAnimationStates.IdleSneak:
+		case Hulv.HulvAnimationStates.IdleFurious:
+		case Hulv.HulvAnimationStates.IdleTwitchy:
+		case Hulv.HulvAnimationStates.StopInstant:
+		case Hulv.HulvAnimationStates.SneakIn:
+			break;
+		default:
+			if (hulvAnimationStates != Hulv.HulvAnimationStates.IdleAtFenceFrustrated)
+			{
+				return false;
+			}
+			break;
+		case Hulv.HulvAnimationStates.Running:
+		case Hulv.HulvAnimationStates.RunStop:
+		case Hulv.HulvAnimationStates.RunStart:
+		case Hulv.HulvAnimationStates.JumpBack:
+		case Hulv.HulvAnimationStates.JumpBackB:
+		case Hulv.HulvAnimationStates.JumpBackC:
+			return ScriptGlobals.mainCharacter is Huddle;
+		}
+		return true;
+	}
+
+	// Token: 0x0600056B RID: 1387 RVA: 0x0003FDB4 File Offset: 0x0003DFB4
+	private void HandleHeadLookAt()
+	{
+		if (this.headBone != null)
+		{
+			if (this.lookAtPoint != null && this.isLookatState())
+			{
+				this.wantedLookatYAngle = Mathf.Clamp(this.angleTowardLookatY, -30f, 30f);
+				this.wantedLookatAngle = Mathf.Clamp(this.angleTowardLookat, -45f, 45f);
+				this.wantedLookatAngle = this.lookatAngleLastFrame * (1f - Time.deltaTime * 4.5f) + this.wantedLookatAngle * Time.deltaTime * 4.5f;
+				this.wantedLookatYAngle = this.lookatYAngleLastFrame * (1f - Time.deltaTime * 4.5f) + this.wantedLookatYAngle * Time.deltaTime * 4.5f;
+			}
+			else
+			{
+				this.wantedLookatAngle = this.lookatAngleLastFrame * (1f - Time.deltaTime * 2.5f);
+				this.wantedLookatYAngle = this.lookatYAngleLastFrame * (1f - Time.deltaTime * 2.5f);
+			}
+			this.headBone.Rotate(0f, this.wantedLookatYAngle, 0f);
+			this.headBone.transform.rotation = Quaternion.Euler(0f, this.wantedLookatAngle, 0f) * this.headBone.transform.rotation;
+			this.lookatAngleLastFrame = this.wantedLookatAngle;
+			this.lookatYAngleLastFrame = this.wantedLookatYAngle;
+		}
+	}
+
+	// Token: 0x0600056C RID: 1388 RVA: 0x0003FF34 File Offset: 0x0003E134
+	private void SetLookatAngles()
+	{
+		if (this.lookAtPoint == null)
+		{
+			this.angleTowardLookat = 0f;
+			this.angleTowardLookatY = 0f;
+		}
+		else
+		{
+			Vector3 vector = this.lookAtPoint.transform.position;
+			bool flag = false;
+			if (this.lookAtPoint == ScriptGlobals.boy.gameObject)
+			{
+				if (ScriptGlobals.boy.state is BoyLadderState)
+				{
+					flag = true;
+				}
+				if (Hulv.GetHulvKilledBoy() != null)
+				{
+					flag = false;
+					vector = Hulv.GetHulvKilledBoy().transform.TransformPoint(Vector3.forward * 0.6f);
+				}
+			}
+			Vector3 vector2 = (!(this.headBone != null) || flag) ? base.transform.position : this.headBone.transform.position;
+			if (flag)
+			{
+				vector = ScriptGlobals.boy.pos3 + Vector3.right * ScriptGlobals.boy.facing * 0.4f;
+				vector.x += Mathf.Sign(vector.x - vector2.x);
+			}
+			this.storedLookatPos = vector;
+			Vector3 vector3 = vector - vector2;
+			Vector3 vector4 = base.transform.InverseTransformDirection(vector3);
+			float magnitude = vector4.magnitude;
+			float y = vector4.y;
+			vector4.y = 0f;
+			this.angleTowardLookat = 0f;
+			this.angleTowardLookatY = -Mathf.Asin(y / magnitude) * 57.29578f;
+			this.angleTowardLookat = Vector3.Angle(Vector3.forward, vector4);
+			if (vector4.x < 0f)
+			{
+				this.angleTowardLookat = -this.angleTowardLookat;
+			}
+			if (FastMath.Abs(this.angleTowardLookatY) > 70f)
+			{
+				this.angleTowardLookat = 0f;
+			}
+			if (Hulv.hulvKilledBoy == this)
+			{
+				this.angleTowardLookat = 0f;
+			}
+		}
+	}
+
+	// Token: 0x0600056D RID: 1389 RVA: 0x00040138 File Offset: 0x0003E338
+	private void SetBlendParameters(float deltaTime, ref float inputSpeed, ref float angle, ref float rawAngle, ref float rawInputMagnitude)
+	{
+		Vector2 vector = this.controls.stick;
+		bool flag = true;
+		float sqrMagnitude = vector.sqrMagnitude;
+		if (sqrMagnitude > 0.001f)
+		{
+			flag = false;
+		}
+		angle = this.angleLastFrame;
+		rawAngle = 0f;
+		if (!flag)
+		{
+			Vector3 vector2;
+			vector2..ctor(vector.x, 0f, vector.y);
+			vector2 = base.transform.InverseTransformDirection(vector2);
+			vector2.y = 0f;
+			angle = Vector3.Angle(Vector3.forward, vector2);
+			float animPos = this.blendHelper.GetAnimPos();
+			if (vector2.x < 0f)
+			{
+				angle = -angle;
+			}
+			rawAngle = angle;
+		}
+		else
+		{
+			angle = (1f - deltaTime) * angle;
+		}
+		float num = FastMath.Min(5f * deltaTime * this.hulvAI.currentTurnFraction, 0.3f);
+		if (FastMath.Abs(angle) < 20f)
+		{
+			angle = angle * num * 2f + this.angleLastFrame * (1f - num * 2f);
+		}
+		else if (FastMath.Abs(this.angleLastFrame) < FastMath.Abs(angle))
+		{
+			angle = angle * num * 1f + this.angleLastFrame * (1f - num * 1f);
+		}
+		else
+		{
+			angle = angle * num * 0.25f + this.angleLastFrame * (1f - num * 0.25f);
+		}
+		this.angleLastFrame = angle;
+		this.blendHelper.SetBlendParameter(1, angle);
+		if (vector.sqrMagnitude < this.stickDeadZone * this.stickDeadZone)
+		{
+			vector = Vector2.zero;
+		}
+		float num2 = vector.magnitude;
+		rawInputMagnitude = num2;
+		num2 = num2 * num * 2f + this.magnitudeLastFrame * (1f - num * 2f);
+		this.magnitudeLastFrame = num2;
+		inputSpeed = FastMath.Max(0f, (num2 - this.stickDeadZone) / (1f - this.stickDeadZone));
+		this.blendHelper.SetBlendParameter(0, inputSpeed);
+	}
+
+	// Token: 0x0600056E RID: 1390 RVA: 0x00040350 File Offset: 0x0003E550
+	private void LateUpdate()
+	{
+		if (this.doFootLifting)
+		{
+			this.footBlendIn = FastMath.Min(this.footBlendIn + 5f * Time.deltaTime, 1f);
+			this.LiftPawAboveGround(this.armLHand);
+			this.LiftPawAboveGround(this.armRHand);
+			this.LiftPawAboveGround(this.legLFoot);
+			this.LiftPawAboveGround(this.legRFoot);
+		}
+		this.HandleHeadLookAt();
+	}
+
+	// Token: 0x0600056F RID: 1391 RVA: 0x000403C0 File Offset: 0x0003E5C0
+	private void Update()
+	{
+		if (!this.isReady)
+		{
+			return;
+		}
+		float num;
+		for (num = Time.deltaTime; num > 0.05f; num -= 0.05f)
+		{
+			this.DoTheUpdate(0.05f);
+		}
+		this.DoTheUpdate(num);
+	}
+
+	// Token: 0x06000570 RID: 1392 RVA: 0x0004040C File Offset: 0x0003E60C
+	private void FixedUpdate()
+	{
+		if (!this.isReady)
+		{
+			return;
+		}
+		if (this.addVelToBoyNextFixedUpdate > 0)
+		{
+			this.addVelToBoyNextFixedUpdate--;
+			Vector3 velocity = ScriptGlobals.boy.visualBoy.ragdoll.GetVelocity();
+			float num = 0.5f * (this.foreLegFallSpeed + this.hindLegFallSpeed);
+			float num2 = -num - velocity.y;
+			ScriptGlobals.boy.visualBoy.ragdoll.AddVelocity(new Vector3(0f, num2, 0f));
+		}
+		if (this.probe != null && this.probePos != null)
+		{
+			this.probe.MovePosition(this.probePos.position);
+			this.probe.MoveRotation(this.probePos.rotation);
+		}
+		if (this.jawUpperBone != null && this.jawLowerBone != null && this.jawRigidBody != null)
+		{
+			Vector3 vector = this.jawUpperBone.position * 0.5f + this.jawLowerBone.position * 0.5f - this.rigidBodyOffset;
+			vector += base.transform.TransformDirection(Vector3.forward) * 0.07f + base.transform.TransformDirection(this.blendHelper.GetLatestAnimData().localMoveSpeed) * 0.03f;
+			Hulv.HulvAnimationStates topDefinitionID = (Hulv.HulvAnimationStates)this.blendHelper.GetTopDefinitionID();
+			if (topDefinitionID != Hulv.HulvAnimationStates.KillJump && topDefinitionID != Hulv.HulvAnimationStates.KillJumpLow)
+			{
+				vector += Vector3.down * 0.2f;
+			}
+			this.jawRigidBody.transform.position = vector;
+			this.jawRigidBody.transform.LookAt(base.transform.TransformPoint(Vector3.back * 4f + Vector3.up));
+			this.rigidBodyOffset *= 1f - Time.fixedDeltaTime * 15f;
+		}
+		if (this.addBoyForce)
+		{
+			RagdollSkeleton ragdoll = ScriptGlobals.boy.visualBoy.ragdoll;
+			RagdollSkeleton.BodyIndex bodyIndex = ragdoll.begin;
+			while (bodyIndex != ragdoll.end)
+			{
+				Rigidbody rigidbody = ragdoll[bodyIndex];
+				if (!rigidbody.isKinematic)
+				{
+					rigidbody.velocity += this.addBoyForceDir * 0.5f;
+					this.addBoyForce = false;
+				}
+				bodyIndex = ++bodyIndex;
+			}
+		}
+		if (Hulv.hulvKilledBoy == this)
+		{
+			this.SafetyPlaceBoyRagdoll();
+		}
+	}
+
+	// Token: 0x06000571 RID: 1393 RVA: 0x000406D8 File Offset: 0x0003E8D8
+	public bool GetBoyHasTorch()
+	{
+		return !(LevelGlobals.torch == null) && this.boyHasTorch && LevelGlobals.torch.GetFlameOn();
+	}
+
+	// Token: 0x06000572 RID: 1394 RVA: 0x00040710 File Offset: 0x0003E910
+	private void UpdateTorchInfo()
+	{
+		if (this.GetBoyHasTorch() && base.gameObject.activeInHierarchy)
+		{
+			Vector3 vector = ScriptGlobals.boy.transform.position - base.transform.position;
+			if (FastMath.Abs(vector.z) > 5f)
+			{
+				if (this.isNearTorch)
+				{
+					LevelGlobals.torch.HulvNearBy(-1);
+					this.isNearTorch = false;
+				}
+				return;
+			}
+			float num = FastMath.Abs(vector.x);
+			bool flag = Mathf.Sign(vector.x) != ScriptGlobals.boy.facing;
+			if (flag)
+			{
+				this.boyFaceAwayTimer = 0f;
+			}
+			else
+			{
+				this.boyFaceAwayTimer += Time.deltaTime;
+			}
+			bool flag2 = base.transform.InverseTransformPoint(ScriptGlobals.boy.pos3).z > 0f;
+			if (flag2)
+			{
+				this.hulvFaceAwayTimer = 0f;
+			}
+			else
+			{
+				this.hulvFaceAwayTimer += Time.deltaTime;
+			}
+			if (this.debugPosition)
+			{
+			}
+			if (!this.isNearTorch && num < 5f && flag2 && (flag || num < 4f))
+			{
+				LevelGlobals.torch.HulvNearBy(1);
+				this.isNearTorch = true;
+			}
+			else if (this.isNearTorch && (num > 7f || (this.boyFaceAwayTimer > 0.3f && num >= 4f) || this.hulvFaceAwayTimer > 0.5f))
+			{
+				LevelGlobals.torch.HulvNearBy(-1);
+				this.isNearTorch = false;
+			}
+		}
+		if (this.debugPosition)
+		{
+		}
+	}
+
+	// Token: 0x06000573 RID: 1395 RVA: 0x000408D8 File Offset: 0x0003EAD8
+	private void SetCullingType(AnimationCullingType type)
+	{
+		if (this.anim.cullingType != type)
+		{
+			this.anim.cullingType = type;
+		}
+	}
+
+	// Token: 0x06000574 RID: 1396 RVA: 0x000408F8 File Offset: 0x0003EAF8
+	private void DoTheUpdate(float deltaTime)
+	{
+		if (!this.hulvModel)
+		{
+			return;
+		}
+		if (deltaTime == 0f)
+		{
+			return;
+		}
+		if (this.isIdle)
+		{
+			this.SetCullingType(1);
+		}
+		else
+		{
+			this.SetCullingType(0);
+		}
+		this.UpdateTorchInfo();
+		this.UpdateInput(deltaTime);
+		Vector3 position = base.transform.position;
+		float num = this.wantedUpAngle;
+		bool flag = this.onGround;
+		if (!this.isStaticAnim && (!this.isIdle || !this.onStaticGround))
+		{
+			this.onGround = this.UpdatePhysics(deltaTime, ref position);
+		}
+		else
+		{
+			this.onGround = true;
+		}
+		this.StayAwayFromFence(ref position);
+		Hulv.HulvAnimationStates topDefinitionID = (Hulv.HulvAnimationStates)this.blendHelper.GetTopDefinitionID();
+		ABHelperData latestAnimData = this.blendHelper.GetLatestAnimData();
+		if (Hulv.hulvKilledBoy == this && this.LedgeAttackPivot != null && this.bothLegsOnGround)
+		{
+			HulvEdgePointForceAlign component = this.LedgeAttackPivot.gameObject.GetComponent<HulvEdgePointForceAlign>();
+			if (component)
+			{
+				Vector3 vector = position - (this.LedgeAttackPivot.position + component.extraOffset * this.LedgeAttackPivot.forward);
+				if (FastMath.Abs(vector.y) < 1f && this.LedgeAttackPivot.forward.x * vector.x > 0f && FastMath.Abs(vector.x) < 0.3f)
+				{
+					position.x -= vector.x * (6f * deltaTime);
+				}
+			}
+		}
+		if (Hulv.hulvKilledBoy == this && !this.bothLegsOnGround && this.lastBothLegsOnGround && !this.isSwimming)
+		{
+			if (topDefinitionID != Hulv.HulvAnimationStates.JumpAttackLow && (topDefinitionID != Hulv.HulvAnimationStates.KillJumpLow || latestAnimData.normalizedAnimPos >= 0.2f))
+			{
+				if (this.LedgeAttackPivot && FastMath.Abs(position.x - this.LedgeAttackPivot.transform.position.x) < 5f)
+				{
+					this.lastGoodPos -= this.LedgeAttackPivot.forward * (2f * Time.deltaTime);
+				}
+				Vector3 vector2 = position - this.lastGoodPos;
+				this.onGround = true;
+				position = this.lastGoodPos;
+				this.bothLegsOnGround = true;
+				this.foreLegFallSpeed = 0f;
+				this.hindLegFallSpeed = 0f;
+				this.wantedUpAngle = num;
+				if (this.currentBoyKillAnim != null && !this.isSwimming)
+				{
+					this.currentBoyKillAnim.transform.position -= vector2;
+				}
+			}
+		}
+		else
+		{
+			this.lastGoodPos = position;
+		}
+		this.lastBothLegsOnGround = this.bothLegsOnGround;
+		this.SetLookatAngles();
+		float inputSpeed = 0f;
+		float angle = 0f;
+		float rawAngle = 0f;
+		float rawInputSpeed = 0f;
+		this.SetBlendParameters(deltaTime, ref inputSpeed, ref angle, ref rawAngle, ref rawInputSpeed);
+		ABHelperData abhelperData = this.blendHelper.UpdateAnimationBlends(deltaTime);
+		this.UpdateTransitions(ref abhelperData, inputSpeed, angle, rawAngle, rawInputSpeed, deltaTime, ref position);
+		if (abhelperData != null)
+		{
+			if (this.debugPosition)
+			{
+			}
+			Vector3 vector3 = position;
+			if (!this.isStaticAnim)
+			{
+				if (topDefinitionID == Hulv.HulvAnimationStates.Running)
+				{
+					this.wantedBasePosExtraOffset = Vector3.zero;
+				}
+				Vector3 vector4 = base.transform.TransformDirection(abhelperData.localMoveSpeed);
+				if (this.debugPosition)
+				{
+				}
+				if (this.forceToGamePlane)
+				{
+					float num2 = ScriptGlobals.boy.playfield.posz - position.z;
+					vector4.z += num2 * 3f;
+				}
+				if (Hulv.hulvKilledBoy != this)
+				{
+					vector4 = this.AvoidHulvVector(vector4);
+				}
+				this.mHulvVelocity = vector4;
+				vector4 *= deltaTime;
+				if (this.debugPosition)
+				{
+				}
+				float magnitude = vector4.magnitude;
+				Vector3 vector5 = position + Vector3.up * 0.6f + base.transform.TransformDirection(Vector3.forward) * 0.4f;
+				float num3 = 0.6f;
+				if (Hulv.hulvKilledBoy == this)
+				{
+					vector5 += base.transform.TransformDirection(Vector3.forward) * 0.2f;
+				}
+				Vector3 vector6 = this.CollideAndProject(vector5, vector4, num3 + magnitude, deltaTime);
+				if (this.debugPosition)
+				{
+				}
+				float sqrMagnitude = (position + vector6 - vector3).sqrMagnitude;
+				if ((!this.isIdle && (double)sqrMagnitude > 1E-05) || sqrMagnitude > 0.0001f || !this.onGround)
+				{
+					if (this.debugPosition)
+					{
+					}
+					base.transform.position = position + vector6;
+				}
+				if (!this.isIdle || sqrMagnitude > 0.0001f)
+				{
+					Vector3 localRotationSpeed = abhelperData.localRotationSpeed;
+					Vector3 localEulerAngles = base.transform.localEulerAngles;
+					if (FastMath.Abs(this.wantedUpAngle - localEulerAngles.x) > 0.001f || FastMath.Abs(localRotationSpeed.y) > 0.001f)
+					{
+						localEulerAngles.x = this.wantedUpAngle;
+						localEulerAngles.y += localRotationSpeed.y * deltaTime;
+						localEulerAngles.z = 0f;
+						base.transform.localEulerAngles = localEulerAngles;
+					}
+				}
+				this.ignoreLocalPosTime = 0f;
+			}
+			else
+			{
+				if (topDefinitionID == Hulv.HulvAnimationStates.LedgeGrabFallDie)
+				{
+					this.staticAnimBasePos += (this.staticAnimWantedBasePos + this.wantedBasePosExtraOffset - this.staticAnimBasePos) * deltaTime * 2.2f;
+				}
+				else
+				{
+					this.staticAnimBasePos += (this.staticAnimWantedBasePos + this.wantedBasePosExtraOffset - this.staticAnimBasePos) * deltaTime * 7f;
+				}
+				this.staticAnimBaseRot += (this.staticAnimWantedBaseRot - this.staticAnimBaseRot) * deltaTime * 7f;
+				Vector3 vector7 = abhelperData.localPosition;
+				if (this.ignoreLocalPosTime > 0f)
+				{
+					this.ignoreLocalPosTime = Mathf.Max(this.ignoreLocalPosTime - Time.deltaTime, 0f);
+					if (this.ignoreLocalPosTime >= 0.3f)
+					{
+						vector7 = Vector3.zero;
+					}
+					else
+					{
+						float num4 = 1f - this.ignoreLocalPosTime / 0.3f;
+						vector7 *= num4;
+					}
+				}
+				base.transform.position = this.staticAnimBasePos + Quaternion.Euler(this.staticAnimBaseRot) * vector7;
+				this.mHulvVelocity = (vector3 - base.transform.position) / deltaTime;
+				base.transform.eulerAngles = this.staticAnimBaseRot + abhelperData.localRotation;
+			}
+			if (Hulv.hulvKilledBoy == this)
+			{
+				this.UpdateBoyDeathAnimPos(deltaTime);
+			}
+			if (this.boyPrepKillY > -5000f)
+			{
+				Vector3 position2 = this.boyAnimPrepKill.transform.position;
+				position2.y = this.boyPrepKillY;
+				this.boyAnimPrepKill.transform.position = position2;
+			}
+			if (this.debugPosition)
+			{
+				Debug.DrawLine(vector3 + Vector3.up * 0.1f, base.transform.position + Vector3.up * 0.1f, this.debugColor, 1000f);
+				Debug.DrawLine(base.transform.position, base.transform.position + Vector3.up, this.debugColor, 1000f);
+			}
+		}
+		if (this.boyKillRagdollSafety && Hulv.hulvKilledBoy == this)
+		{
+			BoyRagdollState boyRagdollState = ScriptGlobals.boy.state as BoyRagdollState;
+			if (boyRagdollState != null)
+			{
+				this.boyRagdollTime += deltaTime;
+				if (this.boyRagdollTime < 0.2f && ScriptGlobals.boy.pos.y > base.transform.position.y - 1f)
+				{
+					float num5 = FastMath.Min(deltaTime * 30f, 1f);
+					float num6 = 1f - this.boyRagdollTime / 0.2f;
+					RagdollSkeleton ragdoll = ScriptGlobals.boy.visualBoy.ragdoll;
+					RagdollSkeleton.BodyIndex bodyIndex = ragdoll.begin;
+					while (bodyIndex != ragdoll.end)
+					{
+						Rigidbody rigidbody = ragdoll[bodyIndex];
+						if (rigidbody != null)
+						{
+							rigidbody.AddForce(-num6 * num5 * rigidbody.velocity, 2);
+						}
+						bodyIndex = ++bodyIndex;
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x040008A0 RID: 2208
+	private const float idleFuriousDuration = 16.633f;
+
+	// Token: 0x040008A1 RID: 2209
+	private const float barkDuration_normTime = 0.02f;
+
+	// Token: 0x040008A2 RID: 2210
+	private const float idleFuriousSafeZoneCrossFadeDuration = 0.4f;
+
+	// Token: 0x040008A3 RID: 2211
+	private const float idleFuriousSafeZoneDuration_normTime = 0.044048578f;
+
+	// Token: 0x040008A4 RID: 2212
+	private static readonly float[] idleFuriousASafeZones = new float[]
+	{
+		0f,
+		0.11399999f,
+		0.152f,
+		0.47900003f,
+		0.491f,
+		0.559f,
+		0.579f,
+		0.625f,
+		0.637f,
+		0.834f,
+		0.984f
+	};
+
+	// Token: 0x040008A5 RID: 2213
+	private static readonly float[] idleFuriousBSafeZones = new float[]
+	{
+		0f,
+		0.026f,
+		0.104f,
+		0.13f,
+		0.289f,
+		0.331f,
+		0.609f,
+		0.635f,
+		0.695f,
+		0.736f,
+		0.816f,
+		0.84000003f,
+		0.896f,
+		0.924f,
+		0.986f
+	};
+
+	// Token: 0x040008A6 RID: 2214
+	public SignalOut HulvScaredAwaySignal;
+
+	// Token: 0x040008A7 RID: 2215
+	private SignalOut hulvKilledBoySignal;
+
+	// Token: 0x040008A8 RID: 2216
+	private SignalIn BoyHasTorch;
+
+	// Token: 0x040008A9 RID: 2217
+	private SignalIn BoyHasNoTorch;
+
+	// Token: 0x040008AA RID: 2218
+	private SignalIn AllowQuickAnimBreak;
+
+	// Token: 0x040008AB RID: 2219
+	private SignalIn BreakChase;
+
+	// Token: 0x040008AC RID: 2220
+	private static int jumpFenceAnim = 0;
+
+	// Token: 0x040008AD RID: 2221
+	public GameObject moveToPoint;
+
+	// Token: 0x040008AE RID: 2222
+	public GameObject lookAtPoint;
+
+	// Token: 0x040008AF RID: 2223
+	public bool boyHasTorch;
+
+	// Token: 0x040008B0 RID: 2224
+	private bool allowQuickAnimBreak;
+
+	// Token: 0x040008B1 RID: 2225
+	public float stopDist = 2f;
+
+	// Token: 0x040008B2 RID: 2226
+	public Transform legLFoot;
+
+	// Token: 0x040008B3 RID: 2227
+	public Transform legRFoot;
+
+	// Token: 0x040008B4 RID: 2228
+	public Transform armLHand;
+
+	// Token: 0x040008B5 RID: 2229
+	public Transform armRHand;
+
+	// Token: 0x040008B6 RID: 2230
+	public Transform headBone;
+
+	// Token: 0x040008B7 RID: 2231
+	public Transform jawUpperBone;
+
+	// Token: 0x040008B8 RID: 2232
+	public Transform jawLowerBone;
+
+	// Token: 0x040008B9 RID: 2233
+	public Rigidbody probe;
+
+	// Token: 0x040008BA RID: 2234
+	public Transform probePos;
+
+	// Token: 0x040008BB RID: 2235
+	public Rigidbody jawRigidBody;
+
+	// Token: 0x040008BC RID: 2236
+	private Vector3 rigidBodyOffset;
+
+	// Token: 0x040008BD RID: 2237
+	public GameObject bloodParticleSystem;
+
+	// Token: 0x040008BE RID: 2238
+	public List<Hulv> avoidHulvList = new List<Hulv>();
+
+	// Token: 0x040008BF RID: 2239
+	public bool narrowLedgeKiller;
+
+	// Token: 0x040008C0 RID: 2240
+	public AnimClipNode boyAnimKillClimbUpEdge;
+
+	// Token: 0x040008C1 RID: 2241
+	public AnimClipNode boyAnimKillEdge;
+
+	// Token: 0x040008C2 RID: 2242
+	public AnimClipNode boyAnimKillJumpA;
+
+	// Token: 0x040008C3 RID: 2243
+	public AnimClipNode boyAnimKillFence;
+
+	// Token: 0x040008C4 RID: 2244
+	public AnimClipNode boyAnimKillLow;
+
+	// Token: 0x040008C5 RID: 2245
+	public AnimClipNode boyAnimKillJumpDown;
+
+	// Token: 0x040008C6 RID: 2246
+	public AnimClipNode boyAnimPrepKill;
+
+	// Token: 0x040008C7 RID: 2247
+	public AnimClipNode boyAnimSwimKill;
+
+	// Token: 0x040008C8 RID: 2248
+	public AnimClipNode boyAnimSwimKillDown;
+
+	// Token: 0x040008C9 RID: 2249
+	public AnimClipNode boyAnimHangFall;
+
+	// Token: 0x040008CA RID: 2250
+	public AnimClipNode boyAnimKillClimbUpPool;
+
+	// Token: 0x040008CB RID: 2251
+	private AnimClipNode currentBoyKillAnim;
+
+	// Token: 0x040008CC RID: 2252
+	public bool debugJoystickControl;
+
+	// Token: 0x040008CD RID: 2253
+	public bool debugPosition;
+
+	// Token: 0x040008CE RID: 2254
+	public Color debugColor = Color.red;
+
+	// Token: 0x040008CF RID: 2255
+	public AnimationBlendHelper blendHelper;
+
+	// Token: 0x040008D0 RID: 2256
+	public HulvAI hulvAI;
+
+	// Token: 0x040008D1 RID: 2257
+	private Vector3 lastMovementLocalPos;
+
+	// Token: 0x040008D2 RID: 2258
+	private float lastMovementPivotLocalRotY;
+
+	// Token: 0x040008D3 RID: 2259
+	private GameObject hulvModel;
+
+	// Token: 0x040008D4 RID: 2260
+	private AnimationMovementInfo animDB;
+
+	// Token: 0x040008D5 RID: 2261
+	public Transform fence;
+
+	// Token: 0x040008D6 RID: 2262
+	public Transform LedgeAttackPivot;
+
+	// Token: 0x040008D7 RID: 2263
+	public bool noPhysics;
+
+	// Token: 0x040008D8 RID: 2264
+	public bool shortDistBoyKill;
+
+	// Token: 0x040008D9 RID: 2265
+	private bool forceAlignToAttackPivot;
+
+	// Token: 0x040008DA RID: 2266
+	public Transform leftWallBlocker;
+
+	// Token: 0x040008DB RID: 2267
+	public Transform rightWallBlocker;
+
+	// Token: 0x040008DC RID: 2268
+	public SecretPod secret;
+
+	// Token: 0x040008DD RID: 2269
+	public float swimSpeedFactor = 1f;
+
+	// Token: 0x040008DE RID: 2270
+	public Transform specialSafetyWallHelper;
+
+	// Token: 0x040008DF RID: 2271
+	public float specialSafetyWallZ = 12f;
+
+	// Token: 0x040008E0 RID: 2272
+	private Hulv.HulvControl controls = new Hulv.HulvControl();
+
+	// Token: 0x040008E1 RID: 2273
+	private float stickDeadZone = 0.2f;
+
+	// Token: 0x040008E2 RID: 2274
+	private float angleLastFrame;
+
+	// Token: 0x040008E3 RID: 2275
+	private float magnitudeLastFrame;
+
+	// Token: 0x040008E4 RID: 2276
+	private float fallspeed;
+
+	// Token: 0x040008E5 RID: 2277
+	private float lastTimeStep = -1f;
+
+	// Token: 0x040008E6 RID: 2278
+	private float startUpCountdown;
+
+	// Token: 0x040008E7 RID: 2279
+	private float continueCountdown;
+
+	// Token: 0x040008E8 RID: 2280
+	private float angleTowardLookat;
+
+	// Token: 0x040008E9 RID: 2281
+	private Vector3 storedLookatPos = Vector3.zero;
+
+	// Token: 0x040008EA RID: 2282
+	private float angleTowardLookatY;
+
+	// Token: 0x040008EB RID: 2283
+	private Rigidbody boyBoneToEat;
+
+	// Token: 0x040008EC RID: 2284
+	private GameObject staticAnimAlignPoint;
+
+	// Token: 0x040008ED RID: 2285
+	private Vector3 staticAnimBasePos = Vector3.zero;
+
+	// Token: 0x040008EE RID: 2286
+	private Vector3 staticAnimBaseRot = Vector3.zero;
+
+	// Token: 0x040008EF RID: 2287
+	private Vector3 staticAnimWantedBasePos = Vector3.zero;
+
+	// Token: 0x040008F0 RID: 2288
+	private Vector3 wantedBasePosExtraOffset = Vector3.zero;
+
+	// Token: 0x040008F1 RID: 2289
+	private float staticAnimCustomParameter;
+
+	// Token: 0x040008F2 RID: 2290
+	private Vector3 staticAnimWantedBaseRot = Vector3.zero;
+
+	// Token: 0x040008F3 RID: 2291
+	private GameController mController;
+
+	// Token: 0x040008F4 RID: 2292
+	private bool isStaticAnim;
+
+	// Token: 0x040008F5 RID: 2293
+	private bool doFootLifting;
+
+	// Token: 0x040008F6 RID: 2294
+	private bool forceToGamePlane;
+
+	// Token: 0x040008F7 RID: 2295
+	private bool isSwimming;
+
+	// Token: 0x040008F8 RID: 2296
+	private bool doInputCollision;
+
+	// Token: 0x040008F9 RID: 2297
+	private float boyPrepKillY = -10000f;
+
+	// Token: 0x040008FA RID: 2298
+	private float hulvSwimHeight = 0.63f;
+
+	// Token: 0x040008FB RID: 2299
+	private Vector3 mHulvVelocity = Vector3.zero;
+
+	// Token: 0x040008FC RID: 2300
+	private bool addBoyForce;
+
+	// Token: 0x040008FD RID: 2301
+	private Vector3 addBoyForceDir = Vector3.zero;
+
+	// Token: 0x040008FE RID: 2302
+	private bool onGround = true;
+
+	// Token: 0x040008FF RID: 2303
+	private bool dontReKillBoy;
+
+	// Token: 0x04000900 RID: 2304
+	private int addVelToBoyNextFixedUpdate;
+
+	// Token: 0x04000901 RID: 2305
+	public bool boyKillRagdollSafety;
+
+	// Token: 0x04000902 RID: 2306
+	private float killBlendIn;
+
+	// Token: 0x04000903 RID: 2307
+	private bool usingPrepKill;
+
+	// Token: 0x04000904 RID: 2308
+	private float autoTransitionTime;
+
+	// Token: 0x04000905 RID: 2309
+	private bool timeSliceStart;
+
+	// Token: 0x04000906 RID: 2310
+	private static long stopWatchTime = 0L;
+
+	// Token: 0x04000907 RID: 2311
+	private static long stopWatchCloneTime = 0L;
+
+	// Token: 0x04000908 RID: 2312
+	[HideInInspector]
+	[SerializeField]
+	private SkinnedMeshRenderer hulvRender;
+
+	// Token: 0x04000909 RID: 2313
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x0400090A RID: 2314
+	private bool isReady;
+
+	// Token: 0x0400090B RID: 2315
+	private Animation anim;
+
+	// Token: 0x0400090C RID: 2316
+	private int localPreAwakeOffset;
+
+	// Token: 0x0400090D RID: 2317
+	private Vector3 thrashDir = Vector3.zero;
+
+	// Token: 0x0400090E RID: 2318
+	private static int next180Anim = 0;
+
+	// Token: 0x0400090F RID: 2319
+	private static Hulv hulvKilledBoy = null;
+
+	// Token: 0x04000910 RID: 2320
+	private bool killdisabled;
+
+	// Token: 0x04000911 RID: 2321
+	private float ragdollJerkTimer;
+
+	// Token: 0x04000912 RID: 2322
+	private bool isIdle;
+
+	// Token: 0x04000913 RID: 2323
+	private float ignoreLocalPosTime;
+
+	// Token: 0x04000914 RID: 2324
+	private bool neckBroken;
+
+	// Token: 0x04000915 RID: 2325
+	private float hindLegFallSpeed;
+
+	// Token: 0x04000916 RID: 2326
+	private float foreLegFallSpeed;
+
+	// Token: 0x04000917 RID: 2327
+	private float wantedUpAngle;
+
+	// Token: 0x04000918 RID: 2328
+	private float hindWaterDist;
+
+	// Token: 0x04000919 RID: 2329
+	private float shoulderWaterDist;
+
+	// Token: 0x0400091A RID: 2330
+	private float footBlendIn = 1f;
+
+	// Token: 0x0400091B RID: 2331
+	private bool onMovingGround;
+
+	// Token: 0x0400091C RID: 2332
+	[NonSerialized]
+	private FastList<Collider> colliders = new FastList<Collider>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x0400091D RID: 2333
+	private bool pullBackInWater;
+
+	// Token: 0x0400091E RID: 2334
+	private bool dieWhenLand;
+
+	// Token: 0x0400091F RID: 2335
+	private bool bothLegsOnGround = true;
+
+	// Token: 0x04000920 RID: 2336
+	private bool onStaticGround;
+
+	// Token: 0x04000921 RID: 2337
+	private Collider currentGround;
+
+	// Token: 0x04000922 RID: 2338
+	private static float minFenceDist = 0.8f;
+
+	// Token: 0x04000923 RID: 2339
+	private float lookatAngleLastFrame;
+
+	// Token: 0x04000924 RID: 2340
+	private float lookatYAngleLastFrame;
+
+	// Token: 0x04000925 RID: 2341
+	private float wantedLookatAngle;
+
+	// Token: 0x04000926 RID: 2342
+	private float wantedLookatYAngle;
+
+	// Token: 0x04000927 RID: 2343
+	private bool isNearTorch;
+
+	// Token: 0x04000928 RID: 2344
+	private float hulvFaceAwayTimer;
+
+	// Token: 0x04000929 RID: 2345
+	private float boyFaceAwayTimer;
+
+	// Token: 0x0400092A RID: 2346
+	private Vector3 lastGoodPos = Vector3.zero;
+
+	// Token: 0x0400092B RID: 2347
+	private bool lastBothLegsOnGround;
+
+	// Token: 0x0400092C RID: 2348
+	private float boyRagdollTime;
+
+	// Token: 0x020000A1 RID: 161
+	private enum HulvBlendProperties
+	{
+		// Token: 0x0400092E RID: 2350
+		RunSpeed,
+		// Token: 0x0400092F RID: 2351
+		Turn
+	}
+
+	// Token: 0x020000A2 RID: 162
+	public enum HulvAnimationStates
+	{
+		// Token: 0x04000931 RID: 2353
+		None,
+		// Token: 0x04000932 RID: 2354
+		Idle,
+		// Token: 0x04000933 RID: 2355
+		IdleSneak,
+		// Token: 0x04000934 RID: 2356
+		IdleFurious,
+		// Token: 0x04000935 RID: 2357
+		IdleTwitchy,
+		// Token: 0x04000936 RID: 2358
+		IdleEating,
+		// Token: 0x04000937 RID: 2359
+		Running,
+		// Token: 0x04000938 RID: 2360
+		RunStop,
+		// Token: 0x04000939 RID: 2361
+		RunStart,
+		// Token: 0x0400093A RID: 2362
+		StopInstant,
+		// Token: 0x0400093B RID: 2363
+		JumpBack,
+		// Token: 0x0400093C RID: 2364
+		JumpBackB,
+		// Token: 0x0400093D RID: 2365
+		JumpBackC,
+		// Token: 0x0400093E RID: 2366
+		JumpAndFlee,
+		// Token: 0x0400093F RID: 2367
+		JumpAttack,
+		// Token: 0x04000940 RID: 2368
+		Turn180Right,
+		// Token: 0x04000941 RID: 2369
+		Turn120Right,
+		// Token: 0x04000942 RID: 2370
+		Turn180Left,
+		// Token: 0x04000943 RID: 2371
+		Turn120Left,
+		// Token: 0x04000944 RID: 2372
+		SneakIn,
+		// Token: 0x04000945 RID: 2373
+		SneakStart,
+		// Token: 0x04000946 RID: 2374
+		SneakStop,
+		// Token: 0x04000947 RID: 2375
+		RotateRight,
+		// Token: 0x04000948 RID: 2376
+		RotateLeft,
+		// Token: 0x04000949 RID: 2377
+		Trotting,
+		// Token: 0x0400094A RID: 2378
+		KillJump,
+		// Token: 0x0400094B RID: 2379
+		JumpFence,
+		// Token: 0x0400094C RID: 2380
+		JumpInPool,
+		// Token: 0x0400094D RID: 2381
+		Swimming,
+		// Token: 0x0400094E RID: 2382
+		SwimTurn,
+		// Token: 0x0400094F RID: 2383
+		SwimCharge,
+		// Token: 0x04000950 RID: 2384
+		SwimChargeLoop,
+		// Token: 0x04000951 RID: 2385
+		SwimConfused,
+		// Token: 0x04000952 RID: 2386
+		SwimConfusedLoop,
+		// Token: 0x04000953 RID: 2387
+		SwimGetUp,
+		// Token: 0x04000954 RID: 2388
+		RunStopForWater,
+		// Token: 0x04000955 RID: 2389
+		IdleAtWater,
+		// Token: 0x04000956 RID: 2390
+		SwimKillA,
+		// Token: 0x04000957 RID: 2391
+		JumpFenceUp,
+		// Token: 0x04000958 RID: 2392
+		JumpFenceUpStraightBack,
+		// Token: 0x04000959 RID: 2393
+		KillFence,
+		// Token: 0x0400095A RID: 2394
+		JumpAttackLow,
+		// Token: 0x0400095B RID: 2395
+		KillJumpLow,
+		// Token: 0x0400095C RID: 2396
+		Falling,
+		// Token: 0x0400095D RID: 2397
+		JogStart,
+		// Token: 0x0400095E RID: 2398
+		JogStop,
+		// Token: 0x0400095F RID: 2399
+		IdleSniffTree,
+		// Token: 0x04000960 RID: 2400
+		JogTurn180Left,
+		// Token: 0x04000961 RID: 2401
+		JogTurn180Right,
+		// Token: 0x04000962 RID: 2402
+		FallFromLog,
+		// Token: 0x04000963 RID: 2403
+		LedgeGrabFallDie,
+		// Token: 0x04000964 RID: 2404
+		JumpFenceBarkLoop,
+		// Token: 0x04000965 RID: 2405
+		JumpFenceBarkLowLoop,
+		// Token: 0x04000966 RID: 2406
+		IdleAtFenceFrustrated,
+		// Token: 0x04000967 RID: 2407
+		IdleKillGuffe,
+		// Token: 0x04000968 RID: 2408
+		FallingDie,
+		// Token: 0x04000969 RID: 2409
+		KillEdge,
+		// Token: 0x0400096A RID: 2410
+		SwimChargeDown,
+		// Token: 0x0400096B RID: 2411
+		SwimKillDown,
+		// Token: 0x0400096C RID: 2412
+		KillEdgeBoyFall,
+		// Token: 0x0400096D RID: 2413
+		JumpFenceUpStraightBackB,
+		// Token: 0x0400096E RID: 2414
+		JumpFenceUpStraightBackC,
+		// Token: 0x0400096F RID: 2415
+		RotateRightFast,
+		// Token: 0x04000970 RID: 2416
+		RotateLeftFast,
+		// Token: 0x04000971 RID: 2417
+		ThrashedByHuddle,
+		// Token: 0x04000972 RID: 2418
+		ThrashedByHuddle_180_alt,
+		// Token: 0x04000973 RID: 2419
+		ThrashedByHuddle_180,
+		// Token: 0x04000974 RID: 2420
+		IdleAtWater_Straight,
+		// Token: 0x04000975 RID: 2421
+		IdleAtWater_Up,
+		// Token: 0x04000976 RID: 2422
+		RunStopWildAtLedge,
+		// Token: 0x04000977 RID: 2423
+		IdleFastBarking,
+		// Token: 0x04000978 RID: 2424
+		IdleBoyFarSitWait,
+		// Token: 0x04000979 RID: 2425
+		IdleBoyFarWalkAround,
+		// Token: 0x0400097A RID: 2426
+		IdleBoyFar,
+		// Token: 0x0400097B RID: 2427
+		SwimGetUpKillBoy
+	}
+
+	// Token: 0x020000A3 RID: 163
+	public enum UniqueAnimations
+	{
+		// Token: 0x0400097D RID: 2429
+		None,
+		// Token: 0x0400097E RID: 2430
+		JumpFence = 26,
+		// Token: 0x0400097F RID: 2431
+		JumpInPool,
+		// Token: 0x04000980 RID: 2432
+		LeavePool = 34,
+		// Token: 0x04000981 RID: 2433
+		RunStopForWater,
+		// Token: 0x04000982 RID: 2434
+		JumpFenceUp = 39,
+		// Token: 0x04000983 RID: 2435
+		SniffTree = 46,
+		// Token: 0x04000984 RID: 2436
+		FallFromLog = 49,
+		// Token: 0x04000985 RID: 2437
+		LedgeGrabFallDie,
+		// Token: 0x04000986 RID: 2438
+		JumpFenceBarkLowLoop = 52,
+		// Token: 0x04000987 RID: 2439
+		KillEdge = 56,
+		// Token: 0x04000988 RID: 2440
+		JumpAttack = 14,
+		// Token: 0x04000989 RID: 2441
+		RunStopWildAtLedge = 69,
+		// Token: 0x0400098A RID: 2442
+		Idle = 1,
+		// Token: 0x0400098B RID: 2443
+		IdleFastBarking = 70,
+		// Token: 0x0400098C RID: 2444
+		IdleBoyFar = 73
+	}
+
+	// Token: 0x020000A4 RID: 164
+	public class HulvControl : AnimcontrolledCharacter.AnimControl
+	{
+		// Token: 0x0400098D RID: 2445
+		public bool jumpButton;
+
+		// Token: 0x0400098E RID: 2446
+		public bool trotButton;
+
+		// Token: 0x0400098F RID: 2447
+		public Hulv.HulvControl.Mood mood;
+
+		// Token: 0x04000990 RID: 2448
+		public float turnFactor;
+
+		// Token: 0x020000A5 RID: 165
+		public enum Mood
+		{
+			// Token: 0x04000992 RID: 2450
+			Normal,
+			// Token: 0x04000993 RID: 2451
+			Twitchy,
+			// Token: 0x04000994 RID: 2452
+			Furious,
+			// Token: 0x04000995 RID: 2453
+			Sneaky,
+			// Token: 0x04000996 RID: 2454
+			Eating,
+			// Token: 0x04000997 RID: 2455
+			EatingFrenzy
+		}
+	}
+
+	// Token: 0x020000A6 RID: 166
+	private enum HuddleRelativeToHulv
+	{
+		// Token: 0x04000999 RID: 2457
+		NA,
+		// Token: 0x0400099A RID: 2458
+		BackLeft,
+		// Token: 0x0400099B RID: 2459
+		BackRight,
+		// Token: 0x0400099C RID: 2460
+		InFront
+	}
+}

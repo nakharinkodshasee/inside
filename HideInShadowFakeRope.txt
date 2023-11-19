@@ -1,0 +1,43 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000530 RID: 1328
+public class HideInShadowFakeRope : MonoBehaviour
+{
+	// Token: 0x060022A0 RID: 8864 RVA: 0x00122BBC File Offset: 0x00120DBC
+	private void Start()
+	{
+		this.line = base.GetComponent<LineRenderer>();
+	}
+
+	// Token: 0x060022A1 RID: 8865 RVA: 0x00122BCC File Offset: 0x00120DCC
+	private void Update()
+	{
+		if (!this.materialSet)
+		{
+			LineRenderer component = this.ropeToCopyMaterialFrom.GetComponent<LineRenderer>();
+			if (component != null)
+			{
+				this.line.material = component.material;
+				this.materialSet = true;
+			}
+		}
+		if (this.line != null && this.topRopePart != null)
+		{
+			this.line.SetPosition(0, this.topRopePart.position);
+			this.line.SetPosition(1, this.topRopePart.position + Vector3.up * 20f);
+		}
+	}
+
+	// Token: 0x040040AE RID: 16558
+	public GameObject ropeToCopyMaterialFrom;
+
+	// Token: 0x040040AF RID: 16559
+	public Transform topRopePart;
+
+	// Token: 0x040040B0 RID: 16560
+	private LineRenderer line;
+
+	// Token: 0x040040B1 RID: 16561
+	private bool materialSet;
+}

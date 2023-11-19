@@ -1,0 +1,85 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000491 RID: 1169
+public class GirlRopeCamera : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001EB7 RID: 7863 RVA: 0x001074D0 File Offset: 0x001056D0
+	public bool PreAwake(int callcount)
+	{
+		this.ropeMoving = SignalIn.Create("ropeMoving", base.gameObject, delegate
+		{
+			this.ropeIsMoving = true;
+		});
+		this.ropeStopped = SignalIn.Create("ropeStopped", base.gameObject, delegate
+		{
+			this.ropeIsMoving = false;
+		});
+		return true;
+	}
+
+	// Token: 0x06001EB8 RID: 7864 RVA: 0x00107524 File Offset: 0x00105724
+	private void Start()
+	{
+		this.blendBox = base.GetComponent<CameraBlendBox>();
+		this.startAimX = this.blendBox.positionAim.x;
+	}
+
+	// Token: 0x06001EB9 RID: 7865 RVA: 0x00107554 File Offset: 0x00105754
+	private void UpdateCloseToSurfaceCam()
+	{
+		float num = this.border.positionCamera.y;
+		if (ScriptGlobals.boy.state is BoyRopeState && this.ropeIsMoving)
+		{
+			num = Mathf.MoveTowards(num, -1.3f, Time.deltaTime * 0.5f);
+		}
+		else
+		{
+			num = Mathf.MoveTowards(num, 0f, Time.deltaTime * 0.5f);
+		}
+		Vector3 positionCamera = this.border.positionCamera;
+		positionCamera.y = num;
+		this.border.positionCamera = positionCamera;
+		Vector3 positionAim = this.border.positionAim;
+		positionAim.y = num * 0.5f;
+		this.border.positionAim = positionAim;
+	}
+
+	// Token: 0x06001EBA RID: 7866 RVA: 0x0010760C File Offset: 0x0010580C
+	private void UpdateGirlAimX()
+	{
+		float num = this.girl.position.x - ScriptGlobals.boy.transform.position.x;
+		float num2 = Mathf.InverseLerp(-5f, 5f, num);
+		Vector3 positionAim = this.blendBox.positionAim;
+		positionAim.x = Mathf.Lerp(this.startAimX, -this.startAimX, num2);
+		this.blendBox.positionAim = positionAim;
+	}
+
+	// Token: 0x06001EBB RID: 7867 RVA: 0x0010768C File Offset: 0x0010588C
+	private void Update()
+	{
+		this.UpdateCloseToSurfaceCam();
+		this.UpdateGirlAimX();
+	}
+
+	// Token: 0x040038EE RID: 14574
+	public CameraBorder border;
+
+	// Token: 0x040038EF RID: 14575
+	public Transform girl;
+
+	// Token: 0x040038F0 RID: 14576
+	private SignalIn ropeMoving;
+
+	// Token: 0x040038F1 RID: 14577
+	private SignalIn ropeStopped;
+
+	// Token: 0x040038F2 RID: 14578
+	private bool ropeIsMoving;
+
+	// Token: 0x040038F3 RID: 14579
+	private CameraBlendBox blendBox;
+
+	// Token: 0x040038F4 RID: 14580
+	private float startAimX;
+}

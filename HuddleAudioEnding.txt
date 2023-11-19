@@ -1,0 +1,213 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000463 RID: 1123
+public class HuddleAudioEnding : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001D85 RID: 7557 RVA: 0x000FEA58 File Offset: 0x000FCC58
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.happyHuddle = new RTPC("rtpc_huddle_happyHuddle", false);
+	}
+
+	// Token: 0x06001D86 RID: 7558 RVA: 0x000FEA8C File Offset: 0x000FCC8C
+	public bool PreAwake(int callcount)
+	{
+		this.start100toZero = SignalIn.Create("start100toZero", base.gameObject, new Action(this.SetDecreasingState));
+		this.startZeroToHundred = SignalIn.Create("startZeroToHundred", base.gameObject, new Action(this.SetIncreasingState));
+		return true;
+	}
+
+	// Token: 0x06001D87 RID: 7559 RVA: 0x000FEAE0 File Offset: 0x000FCCE0
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.decreaseDist = (this.target1.position - this.target2.position).magnitude;
+		this.increaseDist = (this.target3.position - this.target4.position).magnitude;
+		this.decreaseDistNoX = this.target2.position.y - this.target1.position.y;
+		this.state = HuddleAudioEnding.State.None;
+	}
+
+	// Token: 0x06001D88 RID: 7560 RVA: 0x000FEB7C File Offset: 0x000FCD7C
+	private void SetRTPC(float newRTPC)
+	{
+		SoundEngine.RTPCs.puzzleTransition.SetFast(newRTPC, AudioKeyObject.AkGameObjs.global, 0f);
+		this.happyHuddle.SetFast(newRTPC, AudioKeyObject.AkGameObjs.huddle, 0f);
+	}
+
+	// Token: 0x06001D89 RID: 7561 RVA: 0x000FEBAC File Offset: 0x000FCDAC
+	private void SetDecreasingState()
+	{
+		if (this.state == HuddleAudioEnding.State.None)
+		{
+			this.state = HuddleAudioEnding.State.Decreasing;
+		}
+	}
+
+	// Token: 0x06001D8A RID: 7562 RVA: 0x000FEBC0 File Offset: 0x000FCDC0
+	private void DecreasingState()
+	{
+		Vector3 pos = ScriptGlobals.huddle.pos3;
+		float magnitude = (this.target2.position - pos).magnitude;
+		float num = Mathf.InverseLerp(3f, this.decreaseDist, magnitude - 3f) * 100f;
+		Vector3 position = this.target2.position;
+		position.x = 0f;
+		pos.x = 0f;
+		float magnitude2 = (position - pos).magnitude;
+		float num2 = Mathf.InverseLerp(0f, this.decreaseDistNoX, magnitude2) * 100f;
+		if (num < this.RTPC)
+		{
+			this.RTPC = num;
+			this.SetRTPC(this.RTPC);
+			if ((double)this.RTPC <= 0.1)
+			{
+				this.SetZeroState();
+			}
+		}
+		else if (num2 < this.RTPC)
+		{
+			this.RTPC = num2;
+			this.SetRTPC(this.RTPC);
+			if ((double)this.RTPC <= 0.1)
+			{
+				this.SetZeroState();
+			}
+		}
+	}
+
+	// Token: 0x06001D8B RID: 7563 RVA: 0x000FECDC File Offset: 0x000FCEDC
+	private void SetZeroState()
+	{
+		this.RTPC = 0f;
+		this.SetRTPC(this.RTPC);
+		this.state = HuddleAudioEnding.State.Zero;
+	}
+
+	// Token: 0x06001D8C RID: 7564 RVA: 0x000FECFC File Offset: 0x000FCEFC
+	private void ZeroState()
+	{
+	}
+
+	// Token: 0x06001D8D RID: 7565 RVA: 0x000FED00 File Offset: 0x000FCF00
+	private void SetIncreasingState()
+	{
+		this.state = HuddleAudioEnding.State.Increasing;
+	}
+
+	// Token: 0x06001D8E RID: 7566 RVA: 0x000FED0C File Offset: 0x000FCF0C
+	private void IncreasingState()
+	{
+		Vector3 pos = ScriptGlobals.huddle.pos3;
+		float magnitude = (this.target4.position - pos).magnitude;
+		float num = Mathf.InverseLerp(this.increaseDist, 3f, magnitude - 3f) * 100f;
+		if (num > this.RTPC)
+		{
+			this.RTPC = num;
+			this.SetRTPC(this.RTPC);
+			if ((double)this.RTPC >= 99.9)
+			{
+				this.SetFinishedState();
+			}
+		}
+	}
+
+	// Token: 0x06001D8F RID: 7567 RVA: 0x000FED98 File Offset: 0x000FCF98
+	private void SetFinishedState()
+	{
+		this.RTPC = 100f;
+		this.SetRTPC(this.RTPC);
+		this.state = HuddleAudioEnding.State.Finished;
+	}
+
+	// Token: 0x06001D90 RID: 7568 RVA: 0x000FEDB8 File Offset: 0x000FCFB8
+	private void FinishedState()
+	{
+	}
+
+	// Token: 0x06001D91 RID: 7569 RVA: 0x000FEDBC File Offset: 0x000FCFBC
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case HuddleAudioEnding.State.Zero:
+			this.ZeroState();
+			break;
+		case HuddleAudioEnding.State.Increasing:
+			this.IncreasingState();
+			break;
+		case HuddleAudioEnding.State.Decreasing:
+			this.DecreasingState();
+			break;
+		case HuddleAudioEnding.State.Finished:
+			this.FinishedState();
+			break;
+		}
+	}
+
+	// Token: 0x04003648 RID: 13896
+	public Transform target1;
+
+	// Token: 0x04003649 RID: 13897
+	public Transform target2;
+
+	// Token: 0x0400364A RID: 13898
+	public Transform target3;
+
+	// Token: 0x0400364B RID: 13899
+	public Transform target4;
+
+	// Token: 0x0400364C RID: 13900
+	private SignalIn start100toZero;
+
+	// Token: 0x0400364D RID: 13901
+	private SignalIn startZeroToHundred;
+
+	// Token: 0x0400364E RID: 13902
+	private float RTPC = 100f;
+
+	// Token: 0x0400364F RID: 13903
+	private float rtpcLastFrame = 100f;
+
+	// Token: 0x04003650 RID: 13904
+	private float decreaseDist;
+
+	// Token: 0x04003651 RID: 13905
+	private float decreaseDistNoX;
+
+	// Token: 0x04003652 RID: 13906
+	private float increaseDist;
+
+	// Token: 0x04003653 RID: 13907
+	private HuddleAudioEnding.State state;
+
+	// Token: 0x04003654 RID: 13908
+	[SerializeField]
+	[HideInInspector]
+	private RTPC happyHuddle;
+
+	// Token: 0x04003655 RID: 13909
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x02000464 RID: 1124
+	private enum State
+	{
+		// Token: 0x04003657 RID: 13911
+		None,
+		// Token: 0x04003658 RID: 13912
+		Zero,
+		// Token: 0x04003659 RID: 13913
+		Increasing,
+		// Token: 0x0400365A RID: 13914
+		Decreasing,
+		// Token: 0x0400365B RID: 13915
+		Finished
+	}
+}

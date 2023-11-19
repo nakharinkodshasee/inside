@@ -1,0 +1,1225 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200048C RID: 1164
+public class GirlDrownLogic : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001E7D RID: 7805 RVA: 0x00104FF8 File Offset: 0x001031F8
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObjGirl = AudioUtils.EnsureAkGameObj(this.girlAudio, null);
+		this.audioGrabBoy = new AudioEventSimpleLocal(this.audioPrefix + "grabBoy", this.akGameObjGirl);
+		this.audioStruggle = new AudioEventSimpleLocal(this.audioPrefix + "struggle", this.akGameObjGirl);
+		this.audioLastStruggle = new AudioEventSimpleLocal(this.audioPrefix + "lastStruggle", this.akGameObjGirl);
+		this.audioCalmGirl = new AudioEventSimpleLocal(this.audioPrefix + "calmGirl", this.akGameObjGirl);
+		this.audioWireAttach = new AudioEventSimpleLocal(this.audioPrefix + "wireAttach", this.akGameObjGirl);
+		this.audioWireDetach = new AudioEventSimpleLocal(this.audioPrefix + "wireDetach", this.akGameObjGirl);
+		this.audioGirlLeave = new AudioEventSimpleLocal(this.audioPrefix + "girlLeave", this.akGameObjGirl);
+		this.audioHitFloor = new AudioEventSimpleLocal(this.audioPrefix + "hitFloor", this.akGameObjGirl);
+		this.audioWakeUp = new AudioEventSimpleLocal(this.audioPrefix + "wakeUp", this.akGameObjGirl);
+	}
+
+	// Token: 0x06001E7E RID: 7806 RVA: 0x00105154 File Offset: 0x00103354
+	public bool PreAwake(int callcount)
+	{
+		this.girlLeave = SignalIn.Create("girlLeave", base.gameObject, new Action(this.OnGirlLeave));
+		this.startDrowning = SignalIn.Create("startDrowning", base.gameObject, new Action(this.OnStartDrowning));
+		this.decelerate = SignalIn.Create("decelerate", base.gameObject, new Action(this.OnDecelerate));
+		this.detach = SignalIn.Create("detach", base.gameObject, new Action(this.OnDetach));
+		this.startWire = SignalIn.Create("startWire", base.gameObject, new Action(this.OnStartWire));
+		this.boyAwake = SignalOut.Create("boyAwake", base.gameObject);
+		this.wireDetach = SignalOut.Create("wireDetach", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001E7F RID: 7807 RVA: 0x00105238 File Offset: 0x00103438
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.animMid = this.childClips[0];
+		this.animGirlMidState = this.SetupGirlState(this.animGirlMid, 0);
+		this.animGirlLeftState = this.SetupGirlState(this.animGirlLeft, 1);
+		this.animGirlRightState = this.SetupGirlState(this.animGirlRight, 2);
+		this.animGirlUpState = this.SetupGirlState(this.animGirlUp, 3);
+		this.animGirlAttemptUpState = this.SetupGirlAttemptState(this.animGirlAttemptUp);
+		this.animGirlAttemptDownState = this.SetupGirlAttemptState(this.animGirlAttemptDown);
+		this.animGirlAttemptLeftState = this.SetupGirlAttemptState(this.animGirlAttemptLeft);
+		this.animGirlAttemptRightState = this.SetupGirlAttemptState(this.animGirlAttemptRight);
+		this.animGirlAttemptUpLeftState = this.SetupGirlAttemptState(this.animGirlAttemptUpLeft);
+		this.animGirlAttemptUpRightState = this.SetupGirlAttemptState(this.animGirlAttemptUpRight);
+		this.animGirlIntroPositionState = this.animGirl[this.animGirlIntroPosition.name];
+		this.animGirlIntroPositionState.layer = 5;
+		this.animGirl.Play(this.animGirlIntroPositionState.name);
+		this.animGirlIntroState = this.animGirl[this.animGirlIntro.name];
+		this.animGirlIntroState.layer = 5;
+		this.animGirlLastStruggleState = this.animGirl[this.animGirlLastStruggle.name];
+		this.animGirlLastStruggleState.layer = 5;
+		this.animGirlFloatPulledState = this.animGirl[this.animGirlFloatPulled.name];
+		this.animGirlFloatPulledState.layer = 5;
+		this.animWireCloserState = this.animWire[this.animWireCloser.name];
+		this.animWireStretchState = this.animWire[this.animWireStretch.name];
+		this.girl.SetActive(false);
+	}
+
+	// Token: 0x06001E80 RID: 7808 RVA: 0x0010540C File Offset: 0x0010360C
+	private void OnEnable()
+	{
+		if (this.state == GirlDrownLogic.State.None && this.animGirlIntroPositionState)
+		{
+			this.animGirl.Play(this.animGirlIntroPositionState.name);
+		}
+	}
+
+	// Token: 0x06001E81 RID: 7809 RVA: 0x0010544C File Offset: 0x0010364C
+	private void SetIntroState()
+	{
+		this.boy = ScriptGlobals.boy;
+		this.girl.SetActive(true);
+		this.headBone = this.boy.visualBoy.actor.bones[this.boy.visualBoy.actor.GetBone("Head")];
+		this.headBoneTransform = this.headBone.transform;
+		this.startPos = this.drownHolder.transform.position;
+		this.startPos.x = this.boy.pos3.x;
+		this.startPos.z = 0f;
+		this.drownHolder.transform.position = this.startPos;
+		this.targetSinkSpeed = 0f;
+		BoyUtils.StartCustomAnim(this.boy, this.animIntro, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.animGirl.Play(this.animGirlIntro.name);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.5f, 0.15f, 0, 0f);
+		this.state = GirlDrownLogic.State.Intro;
+	}
+
+	// Token: 0x06001E82 RID: 7810 RVA: 0x00105578 File Offset: 0x00103778
+	private void IntroState()
+	{
+		if (this.rumbleIntro && this.animIntro.frame > 62f)
+		{
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.3f, 0.2f, 0, 0f);
+			this.audioGrabBoy.PostFast();
+			this.rumbleIntro = false;
+		}
+		if (this.animIntro.frame >= this.animIntro.numFrames - this.animIntro.defaultfps * 0.2f)
+		{
+			this.attemptsBlendingOut.Add(this.animGirlIntroState);
+			this.SetDrownState();
+		}
+	}
+
+	// Token: 0x06001E83 RID: 7811 RVA: 0x00105618 File Offset: 0x00103818
+	private void SetCatchState()
+	{
+		BoyUtils.StartCustomAnim(this.boy, this.animKillBack, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.animGirl.CrossFade(this.animGirlKillBack.name);
+		this.state = GirlDrownLogic.State.Catch;
+	}
+
+	// Token: 0x06001E84 RID: 7812 RVA: 0x0010565C File Offset: 0x0010385C
+	private void CatchState()
+	{
+		if (this.animKillBack.frame > this.animKillBack.numFrames - this.animKillBack.defaultfps * 0.2f)
+		{
+			this.attemptsBlendingOut.Add(this.animGirlIntroState);
+			this.SetDrownState();
+		}
+	}
+
+	// Token: 0x06001E85 RID: 7813 RVA: 0x001056B0 File Offset: 0x001038B0
+	private void SetDrownState()
+	{
+		BoyUtils.StartCustomAnim(this.boy, this.animBlendVertical, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.targetSinkSpeed = this.drownSinkSpeed;
+		BoyWater water = this.boy.status.water;
+		if (water)
+		{
+			water.infiniteAir = true;
+		}
+		if (this.waterMiddle)
+		{
+			this.waterMiddle.infiniteAir = true;
+		}
+		this.state = GirlDrownLogic.State.Drown;
+	}
+
+	// Token: 0x06001E86 RID: 7814 RVA: 0x00105728 File Offset: 0x00103928
+	private void DrownState()
+	{
+		this.struggleTimer += Time.deltaTime;
+		this.targetSinkSpeed = this.drownSinkSpeed;
+		if (this.struggleTimer >= this.struggleDuration)
+		{
+			this.SetLastStruggleState();
+			return;
+		}
+		this.struggleLimitFraction = this.struggleCurve.Evaluate(this.struggleTimer / this.struggleDuration);
+		this.struggleLimitFraction = Mathf.Clamp01(this.struggleLimitFraction);
+		this.limitAnimationSpeed = (this.struggleLimitFraction + 1f) * 0.5f;
+		if (!this.debug || EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+		}
+		this.stick = this.boy.input.stick;
+		this.stickMagnitude = this.stick.magnitude;
+		this.normalizedMainTimer += Time.deltaTime / this.mainTimerDuration * this.limitAnimationSpeed;
+		this.normalizedMainTimer -= Mathf.Floor(this.normalizedMainTimer);
+		this.mainTimer = this.normalizedMainTimer * this.mainTimerDuration;
+		if (!this.currentlyAttempting)
+		{
+			float num = this.stickMagnitude;
+			float num2 = this.stick.x;
+			if (this.stick.y < 0f)
+			{
+				num *= Mathf.Abs(this.stick.x);
+				num2 = Mathf.Sign(this.stick.x);
+			}
+			num = Mathf.Clamp(num, -this.struggleLimitFraction, this.struggleLimitFraction);
+			num2 = Mathf.Clamp(num2, -this.struggleLimitFraction, this.struggleLimitFraction);
+			this.currentBlendVertical += (num - this.currentBlendVertical) * Time.deltaTime * this.blendSpeedMain;
+			this.currentBlendHorizontal += (num2 - this.currentBlendHorizontal) * Time.deltaTime * this.blendSpeedMain;
+			this.animBlendVertical.currentBlendValue = this.currentBlendVertical;
+			this.animBlendHorizontal.currentBlendValue = this.currentBlendHorizontal;
+			int i = 0;
+			int num3 = this.childClips.Length;
+			while (i < num3)
+			{
+				AnimClipNode animClipNode = this.childClips[i];
+				animClipNode.frame = this.mainTimer * animClipNode.defaultfps;
+				i++;
+			}
+		}
+		this.AnimateGirl(this.currentBlendHorizontal, this.currentBlendVertical);
+		this.attemptsBlendingOut.RemoveAll((AnimationState x) => x == null || x.weight <= 0f);
+		int j = 0;
+		int count = this.attemptsBlendingOut.Count;
+		while (j < count)
+		{
+			this.attemptsBlendingOut[j].weight -= Time.deltaTime * 5f;
+			j++;
+		}
+		this.AttemptCheck();
+		this.targetHorizontalSink = this.stick.x * this.horizontalOffsetMax * this.struggleLimitFraction;
+	}
+
+	// Token: 0x06001E87 RID: 7815 RVA: 0x00105A04 File Offset: 0x00103C04
+	private void SetLastStruggleState()
+	{
+		if (this.effectsHolder)
+		{
+			if (this.headBoneTransform == null)
+			{
+				this.headBoneTransform = this.boy.visualBoy.actor.bones[this.boy.visualBoy.actor.GetBone("Head")].transform;
+			}
+			this.effectsHolder.position = this.headBoneTransform.position;
+			this.effectsHolder.rotation = this.headBoneTransform.rotation;
+			if (this.lastStruggleEffect)
+			{
+				this.lastStruggleEffect.Play();
+			}
+		}
+		this.targetHorizontalSink = 0f;
+		BoyUtils.StartCustomAnim(this.boy, this.animLastStruggle, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.animGirl.CrossFade(this.animGirlLastStruggleState.name);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.4f, 0.2f, 0, 0f);
+		this.audioLastStruggle.PostFast();
+		this.waterMiddle.infiniteAir = true;
+		this.state = GirlDrownLogic.State.LastStruggle;
+	}
+
+	// Token: 0x06001E88 RID: 7816 RVA: 0x00105B30 File Offset: 0x00103D30
+	private void LastStruggleState()
+	{
+		if (this.animWireCloserState.time >= this.animWireCloserState.length)
+		{
+			BoyUtils.StartCustomAnim(this.boy, this.animAttach, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.animWire.Play(this.animWireAttach.name);
+			this.animWire.CrossFadeQueued(this.animWireLoopInBelly.name);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.5f, 0.2f, 0, 0f);
+			this.audioWireAttach.PostFast();
+		}
+		if (this.animGirl.IsPlaying(this.animGirlLastStruggleState.name))
+		{
+			float normalizedTime = this.animGirlLastStruggleState.normalizedTime;
+			if (!this.girlCalm && normalizedTime > 0.43f)
+			{
+				this.audioCalmGirl.PostFast();
+				this.girlCalm = true;
+			}
+			if (normalizedTime >= 1f)
+			{
+				this.animGirl.Play(this.animGirlFloatPulledState.name);
+			}
+		}
+	}
+
+	// Token: 0x06001E89 RID: 7817 RVA: 0x00105C38 File Offset: 0x00103E38
+	private void SetFloatState()
+	{
+		this.targetSinkSpeed = this.floatSinkSpeed;
+		this.targetHorizontalSink = 0f;
+		this.audioGirlLeave.PostFast();
+		this.state = GirlDrownLogic.State.Float;
+	}
+
+	// Token: 0x06001E8A RID: 7818 RVA: 0x00105C70 File Offset: 0x00103E70
+	private void FloatState()
+	{
+		BoyCustomAnimState boyCustomAnimState = this.boy.state as BoyCustomAnimState;
+		if (boyCustomAnimState == null || (boyCustomAnimState.anim == this.animAttach && this.animAttach.frame >= this.animAttach.numFrames))
+		{
+			BoyUtils.StartCustomAnim(this.boy, this.animFloatPulled, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		if (!this.wireDetached && this.animWireStretchState.time >= this.animWireStretchState.length)
+		{
+			this.animWire.CrossFade(this.animWireDetach.name);
+			this.animWire.transform.parent = base.transform;
+			this.wireVelocity = this.wireDetachVelocity;
+			this.wireDetach.Signal();
+			BoyUtils.StartCustomAnim(this.boy, this.animDetach, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.3f, 0.2f, 0, 0f);
+			this.audioWireDetach.PostFast();
+			this.wireDetached = true;
+		}
+		BoyCustomAnimState boyCustomAnimState2 = this.boy.state as BoyCustomAnimState;
+		if (boyCustomAnimState2 != null && boyCustomAnimState2.anim == this.animDetach && this.animDetach.frame >= this.animDetach.numFrames)
+		{
+			BoyUtils.StartCustomAnim(this.boy, this.animDetachFloat, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		float num = this.drownHolder.position.y - this.target.position.y;
+		if (num < this.floatFadeDistance)
+		{
+			float num2 = 1f - num / this.floatFadeDistance;
+			this.targetSinkSpeed = this.floatFadeOut.Evaluate(num2) * this.floatSinkSpeed;
+		}
+		if (num <= 0f)
+		{
+			this.SetHitFloorState();
+		}
+	}
+
+	// Token: 0x06001E8B RID: 7819 RVA: 0x00105E60 File Offset: 0x00104060
+	private void SetHitFloorState()
+	{
+		BoyUtils.StartCustomAnim(this.boy, this.animHitFloor, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.currentSinkSpeed = (this.targetSinkSpeed = 0f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.FadeOut, 0.1f, 0.4f, 0, 0.3f);
+		this.audioHitFloor.PostFast();
+		this.state = GirlDrownLogic.State.HitFloor;
+	}
+
+	// Token: 0x06001E8C RID: 7820 RVA: 0x00105EC8 File Offset: 0x001040C8
+	private void HitFloorState()
+	{
+		this.wakeupTimeout -= Time.deltaTime;
+		if (this.animHitFloor.frame > 75f && (this.wakeupTimeout <= 0f || this.boy.input.action || this.boy.input.jump || this.boy.input.stick.magnitude > 0.4f))
+		{
+			this.SetCompleteState();
+		}
+	}
+
+	// Token: 0x06001E8D RID: 7821 RVA: 0x00105F60 File Offset: 0x00104160
+	private void SetCompleteState()
+	{
+		BoyUtils.StartCustomAnim(this.boy, this.animWakeUp, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		if (this.wakeUpEffect)
+		{
+			this.wakeUpEffect.Play();
+		}
+		this.audioWakeUp.PostFast();
+		this.boyAwake.Signal();
+		this.currentSinkSpeed = (this.targetSinkSpeed = 0f);
+		this.girl.SetActive(false);
+		this.state = GirlDrownLogic.State.Complete;
+	}
+
+	// Token: 0x06001E8E RID: 7822 RVA: 0x00105FE0 File Offset: 0x001041E0
+	private void CompleteState()
+	{
+		if (!(this.boy.state is BoyCustomAnimState))
+		{
+			this.state = GirlDrownLogic.State.None;
+		}
+	}
+
+	// Token: 0x06001E8F RID: 7823 RVA: 0x0010600C File Offset: 0x0010420C
+	private void FixedUpdate()
+	{
+		if (this.state != GirlDrownLogic.State.None)
+		{
+			if (this.headBoneTransform && this.effectsHolder)
+			{
+				this.effectsHolder.position = this.headBoneTransform.position;
+				this.effectsHolder.rotation = this.headBoneTransform.rotation;
+			}
+			switch (this.state)
+			{
+			case GirlDrownLogic.State.Intro:
+				this.IntroState();
+				break;
+			case GirlDrownLogic.State.Catch:
+				this.CatchState();
+				break;
+			case GirlDrownLogic.State.Drown:
+				this.DrownState();
+				break;
+			case GirlDrownLogic.State.LastStruggle:
+				this.LastStruggleState();
+				break;
+			case GirlDrownLogic.State.Float:
+				this.FloatState();
+				break;
+			case GirlDrownLogic.State.HitFloor:
+				this.HitFloorState();
+				break;
+			case GirlDrownLogic.State.Complete:
+				this.CompleteState();
+				break;
+			}
+			this.Sink();
+			if (this.headBone != null)
+			{
+				SoundEngine.RTPCs.girlHeadSpeed.SetClamped100Fast(this.headBone.velocity.magnitude, this.akGameObjGirl);
+			}
+		}
+	}
+
+	// Token: 0x06001E90 RID: 7824 RVA: 0x00106120 File Offset: 0x00104320
+	private void LateUpdate()
+	{
+		if (this.state != GirlDrownLogic.State.None)
+		{
+			if (!this.wireDetached)
+			{
+				this.animWire.transform.position = this.drownHolder.position;
+			}
+			else if (this.wireVelocity > 0.01f)
+			{
+				this.wireVelocity -= this.wireVelocity * Time.deltaTime * this.wireFriction;
+				Vector3 position = this.animWire.transform.position;
+				position.y -= this.wireVelocity * Time.deltaTime;
+				this.animWire.transform.position = position;
+			}
+		}
+		if (this.headBoneTransform && this.effectsHolder)
+		{
+			this.effectsHolder.position = this.headBoneTransform.position;
+			this.effectsHolder.rotation = this.headBoneTransform.rotation;
+		}
+	}
+
+	// Token: 0x06001E91 RID: 7825 RVA: 0x0010621C File Offset: 0x0010441C
+	private void Sink()
+	{
+		if (this.currentSinkSpeed != this.targetSinkSpeed)
+		{
+			this.currentSinkSpeed += (this.targetSinkSpeed - this.currentSinkSpeed) * Time.deltaTime * 2f;
+		}
+		Vector3 localPosition = this.drownHolder.localPosition;
+		localPosition.x += (this.targetHorizontalSink - localPosition.x) * Time.deltaTime * this.horizontalSinkBlend;
+		localPosition.y -= Time.deltaTime * this.currentSinkSpeed;
+		if (localPosition.y < this.target.position.y)
+		{
+			localPosition.y = this.target.position.y;
+		}
+		this.drownHolder.GetComponent<Rigidbody>().MovePosition(base.transform.position + localPosition);
+	}
+
+	// Token: 0x06001E92 RID: 7826 RVA: 0x0010630C File Offset: 0x0010450C
+	private void AnimateGirl(float horizontal, float vertical)
+	{
+		int i = 0;
+		int count = this.animGirlStates.Count;
+		while (i < count)
+		{
+			AnimationState animationState = this.animGirlStates[i];
+			animationState.time = this.mainTimer;
+			i++;
+		}
+		float num = 1f - Mathf.Abs(horizontal);
+		float num2 = num * vertical;
+		this.animGirlUpState.weight = num2;
+		float weight = (vertical - num2) / (1f - num2);
+		if (horizontal >= 0f)
+		{
+			this.animGirlRightState.weight = weight;
+			this.animGirlLeftState.weight = 0f;
+		}
+		else
+		{
+			this.animGirlRightState.weight = 0f;
+			this.animGirlLeftState.weight = weight;
+		}
+		this.animGirlMidState.weight = 1f;
+	}
+
+	// Token: 0x06001E93 RID: 7827 RVA: 0x001063DC File Offset: 0x001045DC
+	private void StopAttempt()
+	{
+		this.animBlendHorizontal.currentBlendValue = (this.currentBlendHorizontal = this.nextHorizontalBlend);
+		this.animBlendVertical.currentBlendValue = (this.currentBlendVertical = 1f);
+		BoyUtils.StartCustomAnim(this.boy, this.animBlendVertical, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		if (this.currentGirlAttemptState && !this.attemptsBlendingOut.Contains(this.currentGirlAttemptState))
+		{
+			this.attemptsBlendingOut.Add(this.currentGirlAttemptState);
+			this.currentGirlAttemptState = null;
+		}
+		this.normalizedMainTimer = 0f;
+		this.mainTimer = 0f;
+		int i = 0;
+		int num = this.childClips.Length;
+		while (i < num)
+		{
+			this.childClips[i].frame = 0f;
+			i++;
+		}
+		int j = 0;
+		int count = this.animGirlStates.Count;
+		while (j < count)
+		{
+			this.animGirlStates[j].normalizedTime = 0f;
+			j++;
+		}
+		this.currentlyAttempting = false;
+	}
+
+	// Token: 0x06001E94 RID: 7828 RVA: 0x001064F8 File Offset: 0x001046F8
+	private void MakeAttempt(GirlDrownLogic.InputDirection dir)
+	{
+		this.nextHorizontalBlend = 0f;
+		if (dir == GirlDrownLogic.InputDirection.Up)
+		{
+			this.currentAttemptAnim = this.animAttemptUp;
+			this.currentGirlAttemptState = this.animGirlAttemptUpState;
+		}
+		else if (dir == GirlDrownLogic.InputDirection.Down)
+		{
+			this.currentAttemptAnim = this.animAttemptDown;
+			this.currentGirlAttemptState = this.animGirlAttemptDownState;
+		}
+		else if (dir == GirlDrownLogic.InputDirection.Right)
+		{
+			this.currentAttemptAnim = this.animAttemptRight;
+			this.nextHorizontalBlend = 1f;
+			this.currentGirlAttemptState = this.animGirlAttemptRightState;
+		}
+		else if (dir == GirlDrownLogic.InputDirection.Left)
+		{
+			this.currentAttemptAnim = this.animAttemptLeft;
+			this.nextHorizontalBlend = -1f;
+			this.currentGirlAttemptState = this.animGirlAttemptLeftState;
+		}
+		else if (dir == GirlDrownLogic.InputDirection.UpLeft)
+		{
+			this.currentAttemptAnim = this.animAttemptUpLeft;
+			this.nextHorizontalBlend = -0.5f;
+			this.currentGirlAttemptState = this.animGirlAttemptUpLeftState;
+		}
+		else if (dir == GirlDrownLogic.InputDirection.UpRight)
+		{
+			this.currentAttemptAnim = this.animAttemptUpRight;
+			this.nextHorizontalBlend = 0.5f;
+			this.currentGirlAttemptState = this.animGirlAttemptUpRightState;
+		}
+		if (this.audioAttemptIntervalTimer <= 0f)
+		{
+			this.audioAttemptIntervalTimer = Random.Range(this.audioStruggleCooldownMin, this.audioStruggleCooldownMax);
+			this.audioStruggle.PostFast();
+		}
+		BoyUtils.StartCustomAnim(this.boy, this.currentAttemptAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.currentAttemptAnim.fps = this.currentAttemptAnim.defaultfps * this.limitAnimationSpeed;
+		this.currentGirlAttemptState = this.animGirl.CrossFadeQueued(this.currentGirlAttemptState.name, 0.2f, 2);
+		this.currentGirlAttemptState.layer = 4;
+		this.currentGirlAttemptState.speed = this.limitAnimationSpeed;
+		this.attemptIntervalTimer = this.attemptInterval;
+		this.lastAttemptDir = dir;
+		this.attemptTimer = 0f;
+		this.currentlyAttempting = true;
+	}
+
+	// Token: 0x06001E95 RID: 7829 RVA: 0x001066DC File Offset: 0x001048DC
+	private void AttemptCheck()
+	{
+		if (!(this.boy.state is BoyCustomAnimState) || (this.currentlyAttempting && this.currentAttemptAnim.frame >= this.currentAttemptAnim.numFrames - 6f))
+		{
+			this.StopAttempt();
+		}
+		GirlDrownLogic.InputDirection inputDir = this.GetInputDir();
+		if (inputDir == GirlDrownLogic.InputDirection.Center)
+		{
+			this.lastAttemptDir = GirlDrownLogic.InputDirection.Center;
+			this.attemptTimer = this.attemptSpeed;
+			if (this.currentlyAttempting && this.currentAttemptAnim && this.currentAttemptAnim.frame > 10f)
+			{
+				this.StopAttempt();
+			}
+		}
+		if (this.audioAttemptIntervalTimer > 0f)
+		{
+			if (inputDir == GirlDrownLogic.InputDirection.Center)
+			{
+				this.audioAttemptIntervalTimer -= Time.deltaTime * this.audioStruggleRegainFactor;
+			}
+			else
+			{
+				this.audioAttemptIntervalTimer -= Time.deltaTime;
+			}
+		}
+		if (this.attemptIntervalTimer > 0f)
+		{
+			this.attemptIntervalTimer -= Time.deltaTime;
+		}
+		else if (this.attemptTimer > 0f)
+		{
+			this.attemptTimer -= Time.deltaTime;
+			if (this.struggleLimitFraction > 0.5f && inputDir != this.lastAttemptDir && this.stickMagnitude > 0.7f)
+			{
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.5f, 0.15f, 0, 0f);
+				this.MakeAttempt(inputDir);
+				if (this.attemptStruggleEffect)
+				{
+					this.attemptStruggleEffect.Play();
+				}
+			}
+		}
+	}
+
+	// Token: 0x06001E96 RID: 7830 RVA: 0x00106880 File Offset: 0x00104A80
+	private GirlDrownLogic.InputDirection GetInputDir()
+	{
+		if (this.stickMagnitude < 0.4f)
+		{
+			return GirlDrownLogic.InputDirection.Center;
+		}
+		Vector2 vector;
+		vector.x = this.stick.x;
+		vector.y = this.stick.y;
+		float num = Vector2.Dot(vector, Vector2.up);
+		if (num < -0.5f)
+		{
+			return GirlDrownLogic.InputDirection.Down;
+		}
+		if (num > 0.67f)
+		{
+			return GirlDrownLogic.InputDirection.Up;
+		}
+		if (vector.x < 0f)
+		{
+			return (num <= 0.33f) ? GirlDrownLogic.InputDirection.Left : GirlDrownLogic.InputDirection.UpLeft;
+		}
+		return (num <= 0.33f) ? GirlDrownLogic.InputDirection.Right : GirlDrownLogic.InputDirection.UpRight;
+	}
+
+	// Token: 0x06001E97 RID: 7831 RVA: 0x00106920 File Offset: 0x00104B20
+	private void SetLimitInput(float value)
+	{
+		if (this.limitInput)
+		{
+			this.limitInput.activateScript();
+			this.limitInput.negCapX = value;
+			this.limitInput.posCapX = value;
+			this.limitInput.negCapY = value;
+			this.limitInput.posCapY = value;
+		}
+	}
+
+	// Token: 0x06001E98 RID: 7832 RVA: 0x00106978 File Offset: 0x00104B78
+	private AnimationState SetupGirlState(AnimationClip clip, int layer)
+	{
+		AnimationState animationState = this.animGirl[clip.name];
+		animationState.speed = 0f;
+		animationState.layer = layer;
+		this.animGirl.Play(animationState.name);
+		this.animGirlStates.Add(animationState);
+		return animationState;
+	}
+
+	// Token: 0x06001E99 RID: 7833 RVA: 0x001069C8 File Offset: 0x00104BC8
+	private AnimationState SetupGirlAttemptState(AnimationClip clip)
+	{
+		AnimationState animationState = this.animGirl[clip.name];
+		animationState.layer = 4;
+		return animationState;
+	}
+
+	// Token: 0x06001E9A RID: 7834 RVA: 0x001069F0 File Offset: 0x00104BF0
+	private void OnStartDrowning()
+	{
+		if (this.state == GirlDrownLogic.State.None)
+		{
+			this.SetIntroState();
+		}
+	}
+
+	// Token: 0x06001E9B RID: 7835 RVA: 0x00106A04 File Offset: 0x00104C04
+	private void OnGirlLeave()
+	{
+		if (this.state == GirlDrownLogic.State.Drown || this.state == GirlDrownLogic.State.LastStruggle)
+		{
+			this.SetFloatState();
+		}
+	}
+
+	// Token: 0x06001E9C RID: 7836 RVA: 0x00106A24 File Offset: 0x00104C24
+	private void OnDecelerate()
+	{
+		if (this.state == GirlDrownLogic.State.Float)
+		{
+			BoyUtils.StartCustomAnim(this.boy, this.animDecelerate, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+	}
+
+	// Token: 0x06001E9D RID: 7837 RVA: 0x00106A4C File Offset: 0x00104C4C
+	private void OnDetach()
+	{
+		if (this.state == GirlDrownLogic.State.Float)
+		{
+			this.animWire.CrossFade(this.animWireStretch.name, this.wireStrechBlendTime);
+		}
+	}
+
+	// Token: 0x06001E9E RID: 7838 RVA: 0x00106A84 File Offset: 0x00104C84
+	private void OnStartWire()
+	{
+		if (!this.animWire.IsPlaying(this.animWireCloser.name))
+		{
+			this.animWire.Play(this.animWireCloser.name);
+		}
+	}
+
+	// Token: 0x06001E9F RID: 7839 RVA: 0x00106AC4 File Offset: 0x00104CC4
+	private void OnDrawGizmos()
+	{
+		if (!this.debug || !EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			return;
+		}
+		Vector3 position = base.transform.position;
+		position.y = this.target.position.y;
+		Vector3 vector = position + Vector3.up * this.floatFadeDistance;
+		Gizmos.color = Color.green;
+		Gizmos.DrawLine(vector + Vector3.right * 2f, vector + Vector3.right * -2f);
+		Vector3 vector2 = position + Vector3.up * this.completeDistance;
+		Gizmos.color = Color.yellow;
+		Gizmos.DrawLine(vector2 + Vector3.right * 2f, vector2 + Vector3.right * -2f);
+		Gizmos.color = Color.red;
+		Gizmos.DrawSphere(position, 0.25f);
+		if (this.target && this.girl)
+		{
+			float num = this.girl.transform.position.y - this.target.position.y;
+			Gizmos.color = Color.cyan;
+			Gizmos.DrawLine(position, position + Vector3.up * num);
+		}
+	}
+
+	// Token: 0x0400381E RID: 14366
+	public AnimBlendNode animBlendVertical;
+
+	// Token: 0x0400381F RID: 14367
+	public AnimBlendNode animBlendHorizontal;
+
+	// Token: 0x04003820 RID: 14368
+	public AnimClipNode animAttemptUp;
+
+	// Token: 0x04003821 RID: 14369
+	public AnimClipNode animAttemptDown;
+
+	// Token: 0x04003822 RID: 14370
+	public AnimClipNode animAttemptLeft;
+
+	// Token: 0x04003823 RID: 14371
+	public AnimClipNode animAttemptRight;
+
+	// Token: 0x04003824 RID: 14372
+	public AnimClipNode animAttemptUpLeft;
+
+	// Token: 0x04003825 RID: 14373
+	public AnimClipNode animAttemptUpRight;
+
+	// Token: 0x04003826 RID: 14374
+	public AnimClipNode[] childClips;
+
+	// Token: 0x04003827 RID: 14375
+	public AnimClipNode animIntro;
+
+	// Token: 0x04003828 RID: 14376
+	public AnimClipNode animLastStruggle;
+
+	// Token: 0x04003829 RID: 14377
+	public AnimClipNode animFloatPulled;
+
+	// Token: 0x0400382A RID: 14378
+	public AnimClipNode animFloat;
+
+	// Token: 0x0400382B RID: 14379
+	public AnimClipNode animWakeUp;
+
+	// Token: 0x0400382C RID: 14380
+	public AnimClipNode animKillBack;
+
+	// Token: 0x0400382D RID: 14381
+	public AnimClipNode animHitFloor;
+
+	// Token: 0x0400382E RID: 14382
+	public AnimClipNode animAttach;
+
+	// Token: 0x0400382F RID: 14383
+	public AnimClipNode animDecelerate;
+
+	// Token: 0x04003830 RID: 14384
+	public AnimClipNode animDetach;
+
+	// Token: 0x04003831 RID: 14385
+	public AnimClipNode animDetachFloat;
+
+	// Token: 0x04003832 RID: 14386
+	[Space(5f)]
+	[Space(5f)]
+	[Header("--- Girl Animations ---")]
+	public Animation animGirl;
+
+	// Token: 0x04003833 RID: 14387
+	public AnimationClip animGirlMid;
+
+	// Token: 0x04003834 RID: 14388
+	public AnimationClip animGirlLeft;
+
+	// Token: 0x04003835 RID: 14389
+	public AnimationClip animGirlRight;
+
+	// Token: 0x04003836 RID: 14390
+	public AnimationClip animGirlUp;
+
+	// Token: 0x04003837 RID: 14391
+	public AnimationClip animGirlAttemptUp;
+
+	// Token: 0x04003838 RID: 14392
+	public AnimationClip animGirlAttemptDown;
+
+	// Token: 0x04003839 RID: 14393
+	public AnimationClip animGirlAttemptLeft;
+
+	// Token: 0x0400383A RID: 14394
+	public AnimationClip animGirlAttemptRight;
+
+	// Token: 0x0400383B RID: 14395
+	public AnimationClip animGirlAttemptUpLeft;
+
+	// Token: 0x0400383C RID: 14396
+	public AnimationClip animGirlAttemptUpRight;
+
+	// Token: 0x0400383D RID: 14397
+	public AnimationClip animGirlIntro;
+
+	// Token: 0x0400383E RID: 14398
+	public AnimationClip animGirlLastStruggle;
+
+	// Token: 0x0400383F RID: 14399
+	public AnimationClip animGirlFloatPulled;
+
+	// Token: 0x04003840 RID: 14400
+	public AnimationClip animGirlIntroPosition;
+
+	// Token: 0x04003841 RID: 14401
+	public AnimationClip animGirlKillBack;
+
+	// Token: 0x04003842 RID: 14402
+	private AnimationState animGirlMidState;
+
+	// Token: 0x04003843 RID: 14403
+	private AnimationState animGirlUpState;
+
+	// Token: 0x04003844 RID: 14404
+	private AnimationState animGirlLeftState;
+
+	// Token: 0x04003845 RID: 14405
+	private AnimationState animGirlRightState;
+
+	// Token: 0x04003846 RID: 14406
+	private AnimationState animGirlAttemptUpState;
+
+	// Token: 0x04003847 RID: 14407
+	private AnimationState animGirlAttemptDownState;
+
+	// Token: 0x04003848 RID: 14408
+	private AnimationState animGirlAttemptLeftState;
+
+	// Token: 0x04003849 RID: 14409
+	private AnimationState animGirlAttemptRightState;
+
+	// Token: 0x0400384A RID: 14410
+	private AnimationState animGirlAttemptUpLeftState;
+
+	// Token: 0x0400384B RID: 14411
+	private AnimationState animGirlAttemptUpRightState;
+
+	// Token: 0x0400384C RID: 14412
+	private AnimationState currentGirlAttemptState;
+
+	// Token: 0x0400384D RID: 14413
+	private AnimationState animGirlIntroState;
+
+	// Token: 0x0400384E RID: 14414
+	private AnimationState animGirlLastStruggleState;
+
+	// Token: 0x0400384F RID: 14415
+	private AnimationState animGirlFloatPulledState;
+
+	// Token: 0x04003850 RID: 14416
+	private AnimationState animGirlIntroPositionState;
+
+	// Token: 0x04003851 RID: 14417
+	private AnimationState animGirlKillBackState;
+
+	// Token: 0x04003852 RID: 14418
+	[Header("--- Wire Animations ---")]
+	[Space(5f)]
+	[Space(5f)]
+	public Animation animWire;
+
+	// Token: 0x04003853 RID: 14419
+	public AnimationClip animWireCloser;
+
+	// Token: 0x04003854 RID: 14420
+	public AnimationClip animWireAttach;
+
+	// Token: 0x04003855 RID: 14421
+	public AnimationClip animWireLoopInBelly;
+
+	// Token: 0x04003856 RID: 14422
+	public AnimationClip animWireStretch;
+
+	// Token: 0x04003857 RID: 14423
+	public AnimationClip animWireDetach;
+
+	// Token: 0x04003858 RID: 14424
+	private AnimationState animWireCloserState;
+
+	// Token: 0x04003859 RID: 14425
+	private AnimationState animWireStretchState;
+
+	// Token: 0x0400385A RID: 14426
+	[Space(5f)]
+	[Space(5f)]
+	[Header("--- Settings ---")]
+	public float blendSpeedMain = 5f;
+
+	// Token: 0x0400385B RID: 14427
+	public float attemptSpeed = 0.3f;
+
+	// Token: 0x0400385C RID: 14428
+	public float attemptInterval = 0.3f;
+
+	// Token: 0x0400385D RID: 14429
+	public Transform drownHolder;
+
+	// Token: 0x0400385E RID: 14430
+	public Transform target;
+
+	// Token: 0x0400385F RID: 14431
+	public Transform effectsHolder;
+
+	// Token: 0x04003860 RID: 14432
+	public BoyWater waterMiddle;
+
+	// Token: 0x04003861 RID: 14433
+	public ParticleSystem lastStruggleEffect;
+
+	// Token: 0x04003862 RID: 14434
+	public ParticleSystem attemptStruggleEffect;
+
+	// Token: 0x04003863 RID: 14435
+	public ParticleSystem wakeUpEffect;
+
+	// Token: 0x04003864 RID: 14436
+	public GameObject girl;
+
+	// Token: 0x04003865 RID: 14437
+	public float impactOffsetY = 5f;
+
+	// Token: 0x04003866 RID: 14438
+	public float drownSinkSpeed = 2f;
+
+	// Token: 0x04003867 RID: 14439
+	public float floatSinkSpeed = 1f;
+
+	// Token: 0x04003868 RID: 14440
+	public float floatFadeDistance = 10f;
+
+	// Token: 0x04003869 RID: 14441
+	public float completeDistance = 2f;
+
+	// Token: 0x0400386A RID: 14442
+	public float horizontalOffsetMax = 0.85f;
+
+	// Token: 0x0400386B RID: 14443
+	public float horizontalSinkBlend = 0.3f;
+
+	// Token: 0x0400386C RID: 14444
+	public BoySetInput limitInput;
+
+	// Token: 0x0400386D RID: 14445
+	public AnimationCurve floatFadeOut;
+
+	// Token: 0x0400386E RID: 14446
+	public float struggleDuration = 15f;
+
+	// Token: 0x0400386F RID: 14447
+	public AnimationCurve struggleCurve;
+
+	// Token: 0x04003870 RID: 14448
+	public float wireFriction = 0.5f;
+
+	// Token: 0x04003871 RID: 14449
+	public float wireDetachVelocity = 2.5f;
+
+	// Token: 0x04003872 RID: 14450
+	public float wireStrechBlendTime = 1.33f;
+
+	// Token: 0x04003873 RID: 14451
+	public GameObject girlAudio;
+
+	// Token: 0x04003874 RID: 14452
+	public float audioStruggleCooldownMin = 2f;
+
+	// Token: 0x04003875 RID: 14453
+	public float audioStruggleCooldownMax = 3f;
+
+	// Token: 0x04003876 RID: 14454
+	public float audioStruggleRegainFactor = 5f;
+
+	// Token: 0x04003877 RID: 14455
+	public string audioPrefix;
+
+	// Token: 0x04003878 RID: 14456
+	public bool debug;
+
+	// Token: 0x04003879 RID: 14457
+	private SignalIn startDrowning;
+
+	// Token: 0x0400387A RID: 14458
+	private SignalIn girlLeave;
+
+	// Token: 0x0400387B RID: 14459
+	private SignalIn startWire;
+
+	// Token: 0x0400387C RID: 14460
+	private SignalIn decelerate;
+
+	// Token: 0x0400387D RID: 14461
+	private SignalIn detach;
+
+	// Token: 0x0400387E RID: 14462
+	private SignalOut boyAwake;
+
+	// Token: 0x0400387F RID: 14463
+	private SignalOut wireDetach;
+
+	// Token: 0x04003880 RID: 14464
+	private Boy boy;
+
+	// Token: 0x04003881 RID: 14465
+	private vector2f stick;
+
+	// Token: 0x04003882 RID: 14466
+	private Vector3 startPos;
+
+	// Token: 0x04003883 RID: 14467
+	private float stickMagnitude;
+
+	// Token: 0x04003884 RID: 14468
+	private float currentBlendVertical;
+
+	// Token: 0x04003885 RID: 14469
+	private float currentBlendHorizontal;
+
+	// Token: 0x04003886 RID: 14470
+	private float attemptTimer;
+
+	// Token: 0x04003887 RID: 14471
+	private float attemptIntervalTimer;
+
+	// Token: 0x04003888 RID: 14472
+	private float normalizedMainTimer;
+
+	// Token: 0x04003889 RID: 14473
+	private float mainTimerDuration = 3.3f;
+
+	// Token: 0x0400388A RID: 14474
+	private float mainTimer;
+
+	// Token: 0x0400388B RID: 14475
+	private float nextHorizontalBlend;
+
+	// Token: 0x0400388C RID: 14476
+	private float targetHorizontalSink;
+
+	// Token: 0x0400388D RID: 14477
+	private float currentSinkSpeed;
+
+	// Token: 0x0400388E RID: 14478
+	private float targetSinkSpeed;
+
+	// Token: 0x0400388F RID: 14479
+	private float completeTimer;
+
+	// Token: 0x04003890 RID: 14480
+	private float completeStartSinkSpeed;
+
+	// Token: 0x04003891 RID: 14481
+	private float fadeY = 4f;
+
+	// Token: 0x04003892 RID: 14482
+	private float struggleTimer;
+
+	// Token: 0x04003893 RID: 14483
+	private float struggleLimitFraction = 1f;
+
+	// Token: 0x04003894 RID: 14484
+	private float audioAttemptIntervalTimer;
+
+	// Token: 0x04003895 RID: 14485
+	private float limitAnimationSpeed;
+
+	// Token: 0x04003896 RID: 14486
+	private bool currentlyAttempting;
+
+	// Token: 0x04003897 RID: 14487
+	private bool isBoyAwake;
+
+	// Token: 0x04003898 RID: 14488
+	private bool wireDetached;
+
+	// Token: 0x04003899 RID: 14489
+	private bool rumbleIntro = true;
+
+	// Token: 0x0400389A RID: 14490
+	private bool girlCalm;
+
+	// Token: 0x0400389B RID: 14491
+	private float wireVelocity;
+
+	// Token: 0x0400389C RID: 14492
+	private float wakeupTimeout = 10f;
+
+	// Token: 0x0400389D RID: 14493
+	private GirlDrownLogic.InputDirection lastAttemptDir;
+
+	// Token: 0x0400389E RID: 14494
+	private AnimClipNode currentAttemptAnim;
+
+	// Token: 0x0400389F RID: 14495
+	private AnimClipNode animMid;
+
+	// Token: 0x040038A0 RID: 14496
+	private List<AnimationState> animGirlStates = new List<AnimationState>();
+
+	// Token: 0x040038A1 RID: 14497
+	private List<AnimationState> attemptsBlendingOut = new List<AnimationState>();
+
+	// Token: 0x040038A2 RID: 14498
+	private Actor.Bone headBone;
+
+	// Token: 0x040038A3 RID: 14499
+	private Transform headBoneTransform;
+
+	// Token: 0x040038A4 RID: 14500
+	private GirlDrownLogic.State state;
+
+	// Token: 0x040038A5 RID: 14501
+	[SerializeField]
+	[HideInInspector]
+	private AkGameObj akGameObjGirl;
+
+	// Token: 0x040038A6 RID: 14502
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioGrabBoy;
+
+	// Token: 0x040038A7 RID: 14503
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStruggle;
+
+	// Token: 0x040038A8 RID: 14504
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioLastStruggle;
+
+	// Token: 0x040038A9 RID: 14505
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioCalmGirl;
+
+	// Token: 0x040038AA RID: 14506
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioWireAttach;
+
+	// Token: 0x040038AB RID: 14507
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioWireDetach;
+
+	// Token: 0x040038AC RID: 14508
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioGirlLeave;
+
+	// Token: 0x040038AD RID: 14509
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioHitFloor;
+
+	// Token: 0x040038AE RID: 14510
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioWakeUp;
+
+	// Token: 0x040038AF RID: 14511
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x0200048D RID: 1165
+	private enum InputDirection
+	{
+		// Token: 0x040038B2 RID: 14514
+		Left,
+		// Token: 0x040038B3 RID: 14515
+		UpLeft,
+		// Token: 0x040038B4 RID: 14516
+		Up,
+		// Token: 0x040038B5 RID: 14517
+		UpRight,
+		// Token: 0x040038B6 RID: 14518
+		Right,
+		// Token: 0x040038B7 RID: 14519
+		Down,
+		// Token: 0x040038B8 RID: 14520
+		Center
+	}
+
+	// Token: 0x0200048E RID: 1166
+	private enum State
+	{
+		// Token: 0x040038BA RID: 14522
+		None,
+		// Token: 0x040038BB RID: 14523
+		Intro,
+		// Token: 0x040038BC RID: 14524
+		Catch,
+		// Token: 0x040038BD RID: 14525
+		Drown,
+		// Token: 0x040038BE RID: 14526
+		LastStruggle,
+		// Token: 0x040038BF RID: 14527
+		Float,
+		// Token: 0x040038C0 RID: 14528
+		HitFloor,
+		// Token: 0x040038C1 RID: 14529
+		Complete
+	}
+}

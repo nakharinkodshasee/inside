@@ -1,0 +1,103 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020005C1 RID: 1473
+public class GuardUnderWater : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x0600257D RID: 9597 RVA: 0x00132D58 File Offset: 0x00130F58
+	public bool PreAwake(int callcount)
+	{
+		this.alertGuard = SignalOut.Create("alertGuard", base.gameObject);
+		this.boyClose = SignalOut.Create("boyClose", base.gameObject);
+		this.swapBoxes = SignalIn.Create("swapBoxes", base.gameObject, new Action(this.doSwapBoxes));
+		return true;
+	}
+
+	// Token: 0x0600257E RID: 9598 RVA: 0x00132DB4 File Offset: 0x00130FB4
+	private void Start()
+	{
+		this.fakeBox.SetActive(false);
+		this.recycleEvents = this.floorDetectionTrigger.AddComponent<CollisionEvents>();
+		this.recycleEvents.enterTrigger.Register(this, ref this.recycleTriggerEnterHandle);
+	}
+
+	// Token: 0x0600257F RID: 9599 RVA: 0x00132DF8 File Offset: 0x00130FF8
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.recycleEvents.enterTrigger)
+		{
+			this.OtherTriggerEntered(collider);
+		}
+	}
+
+	// Token: 0x06002580 RID: 9600 RVA: 0x00132E14 File Offset: 0x00131014
+	private void doSwapBoxes()
+	{
+		this.fakeBox.transform.position = this.boxInWater.transform.position;
+		this.fakeBox.transform.rotation = this.boxInWater.transform.rotation;
+		this.boxInWater.SetActive(false);
+		this.fakeBox.SetActive(true);
+		this.fakeBox.transform.parent = this.Guard.transform;
+	}
+
+	// Token: 0x06002581 RID: 9601 RVA: 0x00132E94 File Offset: 0x00131094
+	private void OtherTriggerEntered(Collider coll)
+	{
+		if (this.colliders.Contains(coll))
+		{
+			this.targetToMove.transform.position = coll.transform.position - new Vector3(0f, coll.transform.localScale.y * 0.5f, 0f);
+			this.alertGuard.Signal();
+		}
+	}
+
+	// Token: 0x06002582 RID: 9602 RVA: 0x00132F08 File Offset: 0x00131108
+	private void Update()
+	{
+		if (!this.signalSend)
+		{
+			float magnitude = (this.Guard.transform.position - ScriptGlobals.boy.pos3).magnitude;
+			if (magnitude < 3.5f)
+			{
+				this.boyClose.Signal();
+				this.signalSend = true;
+			}
+		}
+	}
+
+	// Token: 0x0400448B RID: 17547
+	public GameObject floorDetectionTrigger;
+
+	// Token: 0x0400448C RID: 17548
+	public GameObject targetToMove;
+
+	// Token: 0x0400448D RID: 17549
+	public List<Collider> colliders;
+
+	// Token: 0x0400448E RID: 17550
+	public GameObject Guard;
+
+	// Token: 0x0400448F RID: 17551
+	public GameObject boxInWater;
+
+	// Token: 0x04004490 RID: 17552
+	public GameObject fakeBox;
+
+	// Token: 0x04004491 RID: 17553
+	private SignalOut alertGuard;
+
+	// Token: 0x04004492 RID: 17554
+	private SignalIn swapBoxes;
+
+	// Token: 0x04004493 RID: 17555
+	private SignalOut boyClose;
+
+	// Token: 0x04004494 RID: 17556
+	private bool signalSend;
+
+	// Token: 0x04004495 RID: 17557
+	private int recycleTriggerEnterHandle = -1;
+
+	// Token: 0x04004496 RID: 17558
+	private CollisionEvents recycleEvents;
+}

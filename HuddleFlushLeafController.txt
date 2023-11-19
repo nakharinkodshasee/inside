@@ -1,0 +1,29 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003DF RID: 991
+public class HuddleFlushLeafController : MonoBehaviour
+{
+	// Token: 0x06001A81 RID: 6785 RVA: 0x000E8174 File Offset: 0x000E6374
+	private void Update()
+	{
+		this.time += Time.deltaTime * Time.timeScale;
+		float num = this.rotationSpeed.Evaluate(this.time) * Time.deltaTime * Time.timeScale;
+		foreach (object obj in base.transform)
+		{
+			Transform transform = (Transform)obj;
+			float num2 = Vector3.Distance(transform.position, base.transform.position);
+			transform.RotateAround(base.transform.position, Vector3.up, -num / num2 * this.multiplier);
+		}
+	}
+
+	// Token: 0x04002FE2 RID: 12258
+	public AnimationCurve rotationSpeed;
+
+	// Token: 0x04002FE3 RID: 12259
+	public float multiplier = 10f;
+
+	// Token: 0x04002FE4 RID: 12260
+	private float time;
+}
+

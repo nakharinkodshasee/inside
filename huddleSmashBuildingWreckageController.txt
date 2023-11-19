@@ -1,0 +1,124 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200047C RID: 1148
+public class huddleSmashBuildingWreckageController : MonoBehaviour
+{
+	// Token: 0x06001E25 RID: 7717 RVA: 0x001028A0 File Offset: 0x00100AA0
+	private void Start()
+	{
+		this.crateStartPos = this.Crate.transform.position;
+	}
+
+	// Token: 0x06001E26 RID: 7718 RVA: 0x001028B8 File Offset: 0x00100AB8
+	private void FixedUpdate()
+	{
+		if (this.waitTimer > -5f)
+		{
+			this.waitTimer -= Time.deltaTime;
+		}
+		float magnitude = (this.crateStartPos - this.Crate.transform.position).magnitude;
+		float magnitude2 = this.Crate.GetComponent<Rigidbody>().velocity.magnitude;
+		if (magnitude >= this.dist1 && !this.snap1)
+		{
+			this.beamCol1.SetActive(false);
+			this.beamAnim1.Play();
+			this.emitter1.SetActive(true);
+			this.snap1 = true;
+			this.ropePart1.GetComponent<Rigidbody>().isKinematic = false;
+			this.waitTimer = this.waitBetweenBreaks;
+		}
+		else if (magnitude >= this.dist2 && !this.snap2 && this.waitTimer <= 0f)
+		{
+			this.beamCol2.SetActive(false);
+			this.beamAnim2.Play();
+			this.emitter2.SetActive(true);
+			this.snap2 = true;
+			this.ropePart2.GetComponent<Rigidbody>().isKinematic = false;
+			this.waitTimer = this.waitBetweenBreaks;
+		}
+		else if (magnitude >= this.dist3 && !this.snap3 && this.waitTimer <= 0f)
+		{
+			this.beamCol3.SetActive(false);
+			this.beamAnim3.Play();
+			this.emitter3.SetActive(true);
+			Joint component = this.ropeEnd.GetComponent<Joint>();
+			component.connectedBody = this.beamChip.GetComponent<Rigidbody>();
+			this.beamChip.GetComponent<Rigidbody>().isKinematic = false;
+			this.beamChip.GetComponent<Rigidbody>().AddForce(new Vector3(0f, -5f, 0f), 1);
+			Joint component2 = this.Crate.GetComponent<Joint>();
+			component2.breakForce = 0f;
+			component2.breakTorque = 0f;
+			this.snap3 = true;
+		}
+	}
+
+	// Token: 0x0400376E RID: 14190
+	public GameObject Crate;
+
+	// Token: 0x0400376F RID: 14191
+	public GameObject beamCol1;
+
+	// Token: 0x04003770 RID: 14192
+	public GameObject beamCol2;
+
+	// Token: 0x04003771 RID: 14193
+	public GameObject beamCol3;
+
+	// Token: 0x04003772 RID: 14194
+	public Animation beamAnim1;
+
+	// Token: 0x04003773 RID: 14195
+	public Animation beamAnim2;
+
+	// Token: 0x04003774 RID: 14196
+	public Animation beamAnim3;
+
+	// Token: 0x04003775 RID: 14197
+	public GameObject emitter1;
+
+	// Token: 0x04003776 RID: 14198
+	public GameObject emitter2;
+
+	// Token: 0x04003777 RID: 14199
+	public GameObject emitter3;
+
+	// Token: 0x04003778 RID: 14200
+	public GameObject ropePart1;
+
+	// Token: 0x04003779 RID: 14201
+	public GameObject ropePart2;
+
+	// Token: 0x0400377A RID: 14202
+	public float dist1;
+
+	// Token: 0x0400377B RID: 14203
+	public float dist2;
+
+	// Token: 0x0400377C RID: 14204
+	public float dist3;
+
+	// Token: 0x0400377D RID: 14205
+	public GameObject beamChip;
+
+	// Token: 0x0400377E RID: 14206
+	public GameObject ropeEnd;
+
+	// Token: 0x0400377F RID: 14207
+	public float waitBetweenBreaks = 2f;
+
+	// Token: 0x04003780 RID: 14208
+	private Vector3 crateStartPos;
+
+	// Token: 0x04003781 RID: 14209
+	private bool snap1;
+
+	// Token: 0x04003782 RID: 14210
+	private bool snap2;
+
+	// Token: 0x04003783 RID: 14211
+	private bool snap3;
+
+	// Token: 0x04003784 RID: 14212
+	private float waitTimer;
+}

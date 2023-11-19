@@ -1,0 +1,23 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000599 RID: 1433
+public class GravityManager : MonoBehaviour
+{
+	// Token: 0x060024BB RID: 9403 RVA: 0x0012E6E8 File Offset: 0x0012C8E8
+	private void Start()
+	{
+		this.gravityInfluences = (Object.FindObjectsOfType(typeof(pointOfGravity)) as pointOfGravity[]);
+	}
+
+	// Token: 0x060024BC RID: 9404 RVA: 0x0012E704 File Offset: 0x0012C904
+	private void FixedUpdate()
+	{
+	}
+
+	// Token: 0x04004369 RID: 17257
+	public pointOfGravity[] gravityInfluences;
+
+	// Token: 0x0400436A RID: 17258
+	private float orgGravity = -9.81f;
+}

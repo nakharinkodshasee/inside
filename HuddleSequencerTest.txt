@@ -1,0 +1,135 @@
+using System;
+using Playback;
+using Playback.Session;
+using UnityEngine;
+
+// Token: 0x020005FF RID: 1535
+public class HuddleSequencerTest : PersistentBehaviour<HuddleSequencerTest>
+{
+	// Token: 0x06002683 RID: 9859 RVA: 0x001382A8 File Offset: 0x001364A8
+	protected override void Initialize()
+	{
+		this.tests = new HuddleSequencerTest.Test[]
+		{
+			new HuddleSequencerTest.Test(HuddleSequencerTypeToggle.Mode.Script),
+			new HuddleSequencerTest.Test(HuddleSequencerTypeToggle.Mode.Script),
+			new HuddleSequencerTest.Test(HuddleSequencerTypeToggle.Mode.Script)
+		};
+	}
+
+	// Token: 0x06002684 RID: 9860 RVA: 0x001382D4 File Offset: 0x001364D4
+	protected override void Shutdown()
+	{
+	}
+
+	// Token: 0x06002685 RID: 9861 RVA: 0x001382D8 File Offset: 0x001364D8
+	private void Update()
+	{
+		if (this.isPlaying && !SessionManager.IsReplaying())
+		{
+			this.OnReplayStopped();
+			this.testIndex++;
+			this.RunTest();
+		}
+	}
+
+	// Token: 0x06002686 RID: 9862 RVA: 0x0013830C File Offset: 0x0013650C
+	private void RunTest()
+	{
+		if (this.tests[this.testIndex].mode == HuddleSequencerTypeToggle.Mode.FSM)
+		{
+			this.StartReplayWithFSM();
+		}
+		if (this.tests[this.testIndex].mode == HuddleSequencerTypeToggle.Mode.Script)
+		{
+			this.StartReplayWithScript();
+		}
+	}
+
+	// Token: 0x06002687 RID: 9863 RVA: 0x00138358 File Offset: 0x00136558
+	private void StartReplayWithScript()
+	{
+		this.mode = HuddleSequencerTypeToggle.Mode.Script;
+		SessionManager.StartReplay(new FreePlayReload());
+		this.isPlaying = true;
+	}
+
+	// Token: 0x06002688 RID: 9864 RVA: 0x00138374 File Offset: 0x00136574
+	private void StartReplayWithFSM()
+	{
+		this.mode = HuddleSequencerTypeToggle.Mode.FSM;
+		SessionManager.StartReplay(new FreePlayReload());
+		this.isPlaying = true;
+	}
+
+	// Token: 0x06002689 RID: 9865 RVA: 0x00138390 File Offset: 0x00136590
+	private void OnLevelWasLoaded(int level)
+	{
+		if (this.isPlaying)
+		{
+			base.GetComponent<HuddleSequencerTypeToggle>().UpdateMode(this.mode);
+			SoundEngine.StartOutputCapture(string.Concat(new object[]
+			{
+				"../../../../HuddleSequenceTest-",
+				this.testIndex,
+				"-",
+				this.mode,
+				".wav"
+			}));
+		}
+	}
+
+	// Token: 0x0600268A RID: 9866 RVA: 0x00138400 File Offset: 0x00136600
+	private void OnReplayStopped()
+	{
+		SoundEngine.StopOutputCapture();
+		this.isPlaying = false;
+	}
+
+	// Token: 0x0600268B RID: 9867 RVA: 0x00138410 File Offset: 0x00136610
+	private void OnGUI()
+	{
+		using (PDGUI.Enabled(!this.isPlaying))
+		{
+			if (GUILayout.Button("Start Replay sequence", new GUILayoutOption[0]))
+			{
+				this.RunTest();
+			}
+		}
+		int i = 0;
+		int num = this.tests.Length;
+		while (i < num)
+		{
+			using (PDGUI.Color((this.testIndex != i) ? Color.black : Color.green))
+			{
+				GUILayout.Label(string.Format("{0}. {1}", i, this.tests[i].mode), new GUILayoutOption[0]);
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x040045D3 RID: 17875
+	private bool isPlaying;
+
+	// Token: 0x040045D4 RID: 17876
+	private HuddleSequencerTypeToggle.Mode mode;
+
+	// Token: 0x040045D5 RID: 17877
+	private HuddleSequencerTest.Test[] tests;
+
+	// Token: 0x040045D6 RID: 17878
+	private int testIndex;
+
+	// Token: 0x02000600 RID: 1536
+	private class Test
+	{
+		// Token: 0x0600268C RID: 9868 RVA: 0x00138500 File Offset: 0x00136700
+		public Test(HuddleSequencerTypeToggle.Mode mode)
+		{
+			this.mode = mode;
+		}
+
+		// Token: 0x040045D7 RID: 17879
+		public HuddleSequencerTypeToggle.Mode mode;
+	}
+}

@@ -1,0 +1,84 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000179 RID: 377
+public class HuddleSqueezeThroughGround : MonoBehaviour
+{
+	// Token: 0x06000B1F RID: 2847 RVA: 0x0006DAB0 File Offset: 0x0006BCB0
+	private void FixedUpdate()
+	{
+		if (this.noOfHuddleProbes > 0 && ScriptGlobals.huddle.input.stick.y < -0.5f)
+		{
+			Vector3 position = base.transform.position;
+			Huddle huddle = ScriptGlobals.huddle;
+			float num = huddle.pos.y - position.y;
+			if (!(huddle.state is HuddleRagdollState))
+			{
+				if (num < 1f)
+				{
+					HuddleUtils.SpawnFallState(ScriptGlobals.huddle, 0f, 0.4f);
+				}
+			}
+			if (huddle.velocity.y > -0.2f)
+			{
+				this.chargeUp = Mathf.Min(this.chargeUp + Time.deltaTime * 1f, 1.5f);
+			}
+			else
+			{
+				this.chargeUp = Mathf.Max(this.chargeUp - Time.deltaTime * 3f, 0f);
+			}
+			HuddleCloth.ClothBone[] bones = huddle.cloth.bones;
+			int i = 0;
+			int num2 = bones.Length;
+			while (i < num2)
+			{
+				Rigidbody body = bones[i].body;
+				Vector3 vector = Vector3.down;
+				float num3;
+				if (body.position.y > position.y + 0.2f)
+				{
+					vector = (position - body.position).normalized;
+					num3 = Mathf.Clamp(1f - (body.position.y - position.y) * 0.5f, 0.4f, 1f) * 1.5f;
+				}
+				else
+				{
+					num3 = Mathf.Clamp(1f - (position.y - body.position.y) * 0.5f, 0f, 1f) * 3f;
+				}
+				if (body.velocity.y > -0.5f)
+				{
+					num3 *= 1.4f;
+				}
+				vector.y *= num3;
+				body.AddForce(vector * this.suckFactor * (1f + this.chargeUp) * Time.deltaTime, 2);
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x06000B20 RID: 2848 RVA: 0x0006DD08 File Offset: 0x0006BF08
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<HuddleProbe>())
+		{
+			this.noOfHuddleProbes++;
+		}
+	}
+
+	// Token: 0x06000B21 RID: 2849 RVA: 0x0006DD28 File Offset: 0x0006BF28
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<HuddleProbe>())
+		{
+			this.noOfHuddleProbes--;
+		}
+	}
+
+	// Token: 0x0400134D RID: 4941
+	public float suckFactor = 5f;
+
+	// Token: 0x0400134E RID: 4942
+	private int noOfHuddleProbes;
+
+	// Token: 0x0400134F RID: 4943
+	private float chargeUp;
+}

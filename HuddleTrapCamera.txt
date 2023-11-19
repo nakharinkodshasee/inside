@@ -1,0 +1,27 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200017A RID: 378
+public class HuddleTrapCamera : MonoBehaviour
+{
+	// Token: 0x06000B23 RID: 2851 RVA: 0x0006DD50 File Offset: 0x0006BF50
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000B24 RID: 2852 RVA: 0x0006DD54 File Offset: 0x0006BF54
+	private void Update()
+	{
+		float num = Mathf.Abs(ScriptGlobals.huddle.pos.x - base.transform.position.x);
+		float num2 = Mathf.InverseLerp(20f, 0f, num);
+		Vector3 cameraLock = this.blendBox.cameraLock;
+		cameraLock.x = Mathf.Lerp(1f, 0.8f, num2);
+		this.blendBox.cameraLock = cameraLock;
+		Vector3 aimLock = this.blendBox.aimLock;
+		aimLock.x = Mathf.Lerp(1f, 0.8f, num2);
+		this.blendBox.aimLock = aimLock;
+	}
+
+	// Token: 0x04001350 RID: 4944
+	public CameraBlendBox blendBox;
+}

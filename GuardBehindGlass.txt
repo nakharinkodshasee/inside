@@ -1,0 +1,123 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005C0 RID: 1472
+public class GuardBehindGlass : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002575 RID: 9589 RVA: 0x00132B0C File Offset: 0x00130D0C
+	public bool PreAwake(int callcount)
+	{
+		this.outOfSight = SignalIn.Create("outOfSight", base.gameObject, delegate
+		{
+			this.boyVisible = false;
+		});
+		this.inSight = SignalIn.Create("inSight", base.gameObject, delegate
+		{
+			this.boyVisible = true;
+		});
+		this.guardAlerted = SignalOut.Create("guardAlerted", base.gameObject);
+		this.moveRight = SignalOut.Create("moveRight", base.gameObject);
+		this.moveLeft = SignalOut.Create("moveLeft", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06002576 RID: 9590 RVA: 0x00132BA0 File Offset: 0x00130DA0
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy.transform;
+		this.guard = this.guardProbe.transform;
+	}
+
+	// Token: 0x06002577 RID: 9591 RVA: 0x00132BC4 File Offset: 0x00130DC4
+	private void sendDirSignal()
+	{
+		float num = this.button.position.x - this.guard.position.x;
+		if (num > 0f)
+		{
+			this.moveRight.Signal();
+		}
+		else
+		{
+			this.moveLeft.Signal();
+		}
+	}
+
+	// Token: 0x06002578 RID: 9592 RVA: 0x00132C20 File Offset: 0x00130E20
+	private void sendAlertSignal()
+	{
+		this.count++;
+		this.guardAlerted.Signal();
+		this.sendDirSignal();
+		this.scriptActive = false;
+	}
+
+	// Token: 0x06002579 RID: 9593 RVA: 0x00132C54 File Offset: 0x00130E54
+	private void FixedUpdate()
+	{
+		if (this.boyVisible && this.scriptActive)
+		{
+			float x = this.guardProbe.forward.x;
+			float num = this.boy.position.x - this.guard.position.x;
+			if (x > 0f && num > 0f)
+			{
+				if (Mathf.Abs(num) < this.frontAware)
+				{
+					this.sendAlertSignal();
+				}
+			}
+			else if (x < 0f && num < 0f)
+			{
+				if (Mathf.Abs(num) < this.frontAware)
+				{
+					this.sendAlertSignal();
+				}
+			}
+			else if (Mathf.Abs(num) < this.behindAware)
+			{
+				this.sendAlertSignal();
+			}
+		}
+	}
+
+	// Token: 0x0400447D RID: 17533
+	public Boy guardProbe;
+
+	// Token: 0x0400447E RID: 17534
+	public float frontAware;
+
+	// Token: 0x0400447F RID: 17535
+	public float behindAware;
+
+	// Token: 0x04004480 RID: 17536
+	public Transform button;
+
+	// Token: 0x04004481 RID: 17537
+	private SignalIn outOfSight;
+
+	// Token: 0x04004482 RID: 17538
+	private SignalIn inSight;
+
+	// Token: 0x04004483 RID: 17539
+	private SignalOut guardAlerted;
+
+	// Token: 0x04004484 RID: 17540
+	private SignalOut moveRight;
+
+	// Token: 0x04004485 RID: 17541
+	private SignalOut moveLeft;
+
+	// Token: 0x04004486 RID: 17542
+	private Transform boy;
+
+	// Token: 0x04004487 RID: 17543
+	private Transform guard;
+
+	// Token: 0x04004488 RID: 17544
+	private bool boyVisible;
+
+	// Token: 0x04004489 RID: 17545
+	private bool scriptActive = true;
+
+	// Token: 0x0400448A RID: 17546
+	private int count;
+}

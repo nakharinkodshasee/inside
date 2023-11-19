@@ -1,0 +1,75 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001BA RID: 442
+public class HuddleGrabJetCrate : DefaultBoyInput, IFastEventListener
+{
+	// Token: 0x17000048 RID: 72
+	// (get) Token: 0x06000D04 RID: 3332 RVA: 0x0007C874 File Offset: 0x0007AA74
+	public override bool grab
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x06000D05 RID: 3333 RVA: 0x0007C878 File Offset: 0x0007AA78
+	private void Start()
+	{
+		JetCrate component = base.GetComponent<JetCrate>();
+		component.jetCrateForceActive.Register(this, ref this.jetCrateForceActiveHandle);
+	}
+
+	// Token: 0x06000D06 RID: 3334 RVA: 0x0007C8A0 File Offset: 0x0007AAA0
+	public void OnFastEvent(FastEvent sender)
+	{
+		ScriptGlobals.huddle.input = this;
+		this.resetInputTimer = 1f;
+		this.oldThrowStrength = base.GetComponent<HuddleThrow>().strength;
+		if (ScriptGlobals.huddle.grabState.body == base.GetComponent<Rigidbody>())
+		{
+			base.GetComponent<HuddleThrow>().strength = 0f;
+			this.setVelocityNextFrame = true;
+			this.setVelocityTimer = 0.1f;
+		}
+	}
+
+	// Token: 0x06000D07 RID: 3335 RVA: 0x0007C918 File Offset: 0x0007AB18
+	private void FixedUpdate()
+	{
+		this.setVelocityTimer -= Time.deltaTime;
+		if (this.setVelocityNextFrame && this.setVelocityTimer < 0f)
+		{
+			base.GetComponent<Rigidbody>().velocity = new Vector3(ScriptGlobals.huddle.velocity.x, base.GetComponent<Rigidbody>().velocity.y, 0f);
+			this.setVelocityNextFrame = false;
+		}
+		if (ScriptGlobals.huddle.input == this)
+		{
+			this.resetInputTimer -= Time.deltaTime;
+			if (this.resetInputTimer <= 0f)
+			{
+				ScriptGlobals.huddle.input = null;
+				base.GetComponent<HuddleThrow>().strength = this.oldThrowStrength;
+			}
+		}
+	}
+
+	// Token: 0x040016E0 RID: 5856
+	private int jetCrateForceActiveHandle = -1;
+
+	// Token: 0x040016E1 RID: 5857
+	private float resetInputTimer;
+
+	// Token: 0x040016E2 RID: 5858
+	private float oldThrowStrength;
+
+	// Token: 0x040016E3 RID: 5859
+	private bool setVelocityNextFrame;
+
+	// Token: 0x040016E4 RID: 5860
+	private float setVelocityTimer = 0.1f;
+
+	// Token: 0x040016E5 RID: 5861
+	private float timer;
+}

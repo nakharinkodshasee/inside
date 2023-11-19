@@ -1,0 +1,69 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000489 RID: 1161
+public class GetJetFreeJetSliderSoundManager : MonoBehaviour
+{
+	// Token: 0x06001E69 RID: 7785 RVA: 0x00104978 File Offset: 0x00102B78
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioJetCrateFree = new AudioEventSimple("env_lab_getJetCrateFree_jetCrateFree");
+		this.audioJetCrateConstrained = new AudioEventSimple("env_lab_getJetCrateFree_jetCrateConstrained");
+	}
+
+	// Token: 0x06001E6A RID: 7786 RVA: 0x001049B0 File Offset: 0x00102BB0
+	private void Start()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x06001E6B RID: 7787 RVA: 0x001049B8 File Offset: 0x00102BB8
+	private void OnTriggerEnter(Collider coll)
+	{
+		JetCrate component = coll.GetComponent<JetCrate>();
+		if (component && !this.jetEntered)
+		{
+			AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(component.gameObject, this);
+			this.audioJetCrateFree.PostFast(akGameObj);
+			component.sliderAudio.GetComponent<AudioMove>().EnableOverideValue(0f);
+			this.jetEntered = true;
+		}
+	}
+
+	// Token: 0x06001E6C RID: 7788 RVA: 0x00104A18 File Offset: 0x00102C18
+	private void OnTriggerExit(Collider coll)
+	{
+		JetCrate component = coll.GetComponent<JetCrate>();
+		if (component && this.jetEntered)
+		{
+			AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(component.gameObject, this);
+			this.audioJetCrateConstrained.PostFast(akGameObj);
+			component.sliderAudio.GetComponent<AudioMove>().DisableOverideValue();
+			this.jetEntered = false;
+		}
+	}
+
+	// Token: 0x0400380B RID: 14347
+	private bool jetEntered;
+
+	// Token: 0x0400380C RID: 14348
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioJetCrateFree;
+
+	// Token: 0x0400380D RID: 14349
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioJetCrateConstrained;
+
+	// Token: 0x0400380E RID: 14350
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

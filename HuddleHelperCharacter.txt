@@ -1,0 +1,623 @@
+using System;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x0200009E RID: 158
+public class HuddleHelperCharacter : AnimcontrolledCharacterBase, IPreAwake
+{
+	// Token: 0x0600051C RID: 1308 RVA: 0x00037358 File Offset: 0x00035558
+	public bool PreAwake(int callcount)
+	{
+		this.crateHitButton = SignalIn.Create("crateHitButton", base.gameObject, new Action(this.OnCrateHitButton));
+		return true;
+	}
+
+	// Token: 0x0600051D RID: 1309 RVA: 0x00037380 File Offset: 0x00035580
+	private void Start()
+	{
+		if (!this.initialized)
+		{
+			this.Init();
+		}
+		if (this.stopModeVisualization)
+		{
+			this.stopModeVisualization.SetActive(false);
+		}
+		this.wantedZ = this.animChar.transform.position.z;
+		this.defLastFrame = this.idleDef;
+	}
+
+	// Token: 0x0600051E RID: 1310 RVA: 0x000373E4 File Offset: 0x000355E4
+	public override void Init()
+	{
+		base.Init();
+		SkinnedMeshRenderer[] componentsInChildren = this.animChar.GetComponentsInChildren<SkinnedMeshRenderer>();
+		foreach (SkinnedMeshRenderer skinnedMeshRenderer in componentsInChildren)
+		{
+			if (skinnedMeshRenderer.name.CompareTo("mesh") == 0)
+			{
+				skinnedMeshRenderer.sharedMaterial = this.dudeMaterial;
+				skinnedMeshRenderer.gameObject.layer = CollisionUtils.Layers.reflection;
+			}
+		}
+		this.idleDef = this.blendHelper.GetDefinition("Idle", true);
+		this.pushDef = this.blendHelper.GetDefinition("Gen_JetCrateDude_PushA", true);
+		this.pullHandleDef = this.blendHelper.GetDefinition("Gen_JetCrateDude_Activate", true);
+		this.alignToCrate = this.blendHelper.GetDefinition("Gen_JetCrateDude_StopAtCratePushA", true);
+		this.pushOverLedge = this.blendHelper.GetDefinition("Gen_JetCrateDude_LetGoA", true);
+		this.pushOverLedgePoint = this.blendHelper.GetDefinition("Gen_JetCrateDude_LetGoB_Point", true);
+		this.stepBack = this.blendHelper.GetDefinition("Gen_JetCrateDude_StepBackA", true);
+		this.turnLookUp = this.blendHelper.GetDefinition("Gen_JetCrateDude_TurnWalk_LookUp", true);
+		this.stepBackClose = this.blendHelper.GetDefinition("Gen_JetCrateDude_StepBackClose", true);
+		this.stepBackClose_Annoyed = this.blendHelper.GetDefinition("Gen_JetCrateDude_StepBackClose_Annoyed", true);
+		this.stepBackGently = this.blendHelper.GetDefinition("Gen_JetCrateDude_StepBackA_Gently", true);
+		this.tellHuddleGo = this.blendHelper.GetDefinition("Gen_JetCrateDude_TellHuddleGo", true);
+		this.blendHelper.TransitToBlendDefinition(this.idleDef, 0.2f, 0f);
+		if (this.helmet)
+		{
+			Transform transform = this.animChar.transform.Find("bones/Logic/Root/SpineA/SpineB/SpineC/Neck/Head");
+			if (transform)
+			{
+				this.helmet.transform.parent = transform;
+				this.helmet.transform.localEulerAngles = Vector3.zero;
+				this.helmet.transform.localPosition = Vector3.zero;
+			}
+		}
+		this.akGameObjJetCrate = AudioUtils.EnsureAkGameObj(this.jetCrate.gameObject, null);
+		this.audioSlideStart = new AudioEventSimpleLocal("phy_mechanisms_jetCrate_slide", this.akGameObjJetCrate);
+		this.audioSlideStop = new AudioEventSimpleLocal("phy_mechanisms_jetCrate_slide_stop", this.akGameObjJetCrate);
+		this.initialized = true;
+	}
+
+	// Token: 0x0600051F RID: 1311 RVA: 0x00037638 File Offset: 0x00035838
+	private void OnCrateHitButton()
+	{
+		this.blendHelper.TransitToBlendDefinition(this.tellHuddleGo, 0.2f, 0f);
+	}
+
+	// Token: 0x06000520 RID: 1312 RVA: 0x00037658 File Offset: 0x00035858
+	private float GetJetTopPos()
+	{
+		float y = this.jetCrate.GetComponent<Rigidbody>().velocity.y;
+		float y2 = this.jetCrate.transform.position.y;
+		if (y <= 0f)
+		{
+			return y2;
+		}
+		float num = y2 + 0.5f * y * y / 9.8f;
+		this.jetCrate.transform.position.y = num;
+		return num;
+	}
+
+	// Token: 0x06000521 RID: 1313 RVA: 0x000376D4 File Offset: 0x000358D4
+	private float GetJetLandPos()
+	{
+		Vector3 velocity = this.jetCrate.GetComponent<Rigidbody>().velocity;
+		Vector3 position = this.jetCrate.transform.position;
+		float y = velocity.y;
+		float num = position.y - (this.animChar.transform.position.y + 0.5f);
+		float num2 = 5.8f;
+		float num3 = Mathf.Sqrt(y * y + 4f * num2 * num);
+		float num4 = (y + num3) / (2f * num2);
+		if (num4 > 1.5f)
+		{
+			return float.MaxValue;
+		}
+		return position.x + velocity.x * num4;
+	}
+
+	// Token: 0x06000522 RID: 1314 RVA: 0x00037784 File Offset: 0x00035984
+	private HuddleHelperCharacter.CrateHitMode GettingHitByCrate()
+	{
+		if (this.jetCrate.GetComponent<Rigidbody>().velocity.sqrMagnitude < 1f)
+		{
+			return HuddleHelperCharacter.CrateHitMode.NoHit;
+		}
+		Vector3 position = this.jetCrate.transform.position;
+		Vector3 position2 = this.animChar.transform.position;
+		if (position.y > position2.y + 0.5f && position.y < position2.y + 8f && (position.y <= position2.y + 5f || this.jetCrate.GetComponent<Rigidbody>().velocity.y <= 0.5f))
+		{
+			float num = Mathf.Sign(this.animChar.transform.forward.x);
+			float x = position2.x;
+			if (position.x < x + 3f && position.x > x - 1f)
+			{
+				float jetLandPos = this.GetJetLandPos();
+				float num2 = jetLandPos + this.jetCrate.GetComponent<Rigidbody>().velocity.x * 0.25f;
+				if (num2 < x - 2.5f)
+				{
+					if (jetLandPos > x - 1.5f)
+					{
+						return HuddleHelperCharacter.CrateHitMode.FlyThrough;
+					}
+					float jetTopPos = this.GetJetTopPos();
+					if (jetTopPos < position2.y + 1.95f)
+					{
+						return HuddleHelperCharacter.CrateHitMode.FlyThrough;
+					}
+					return HuddleHelperCharacter.CrateHitMode.FlyOver;
+				}
+				else
+				{
+					if (num2 < x - 2f && num > 0f)
+					{
+						return HuddleHelperCharacter.CrateHitMode.FlyThrough;
+					}
+					if (position.y - position2.y > 1.3f && num2 < x + 1.5f)
+					{
+						return HuddleHelperCharacter.CrateHitMode.LandOn;
+					}
+				}
+			}
+		}
+		return HuddleHelperCharacter.CrateHitMode.NoHit;
+	}
+
+	// Token: 0x06000523 RID: 1315 RVA: 0x00037944 File Offset: 0x00035B44
+	private float GetSpeedParameter()
+	{
+		if (this.jetCrate == null)
+		{
+			return 0f;
+		}
+		if (this.crateIsReadyToPush)
+		{
+			return 0f;
+		}
+		Vector3 position = this.jetCrate.transform.position;
+		Vector3 velocity = this.jetCrate.GetComponent<Rigidbody>().velocity;
+		if (this.animChar.transform.forward.x < 0f && this.blendHelper.GetTopDefinition() == this.idleDef && position.x > this.animChar.transform.position.x + 1f)
+		{
+			return -1f;
+		}
+		if (position.x > this.edge.position.x + 0.2f)
+		{
+			return 0f;
+		}
+		if (position.x < this.leftEdge.position.x && this.animChar.transform.position.x < this.leftEdge.position.x + 0.7f)
+		{
+			return 0f;
+		}
+		if (velocity.y > 0.2f && position.x > this.animChar.transform.position.x)
+		{
+			return 0f;
+		}
+		Vector3 vector = this.animChar.transform.position + Vector3.up * 0.7f - this.jetCrate.transform.position;
+		if ((velocity.y < -0.2f || vector.y < -7f) && Mathf.Abs(vector.x) < 0.9f)
+		{
+			return 0f;
+		}
+		if (vector.y > 0.2f)
+		{
+			return 0f;
+		}
+		if ((Mathf.Abs(this.jetCrate.GetComponent<Rigidbody>().velocity.y) > 0.1f || Mathf.Abs(this.jetCrate.GetComponent<Rigidbody>().velocity.x) > 1f) && position.x > this.animChar.transform.position.x)
+		{
+			return 0f;
+		}
+		float num = (position.x - this.animChar.transform.position.x) * Mathf.Sign(this.animChar.transform.forward.x);
+		if (num > 0.5f && (this.jetCrate.IsJetting() || this.jetCrate.GetTimeToJet() < 100f))
+		{
+			num = 0.4f;
+		}
+		return num;
+	}
+
+	// Token: 0x06000524 RID: 1316 RVA: 0x00037C50 File Offset: 0x00035E50
+	private void SetBlendParameters()
+	{
+		this.blendHelper.SetBlendParameter(1, this.GetSpeedParameter());
+		Vector3 vector = this.animChar.transform.position - this.jetCrate.transform.position;
+		float value = vector.x;
+		if (Mathf.Abs(vector.y) > 1f || this.jetCrate.GetComponent<Rigidbody>().velocity.magnitude > 0.4f)
+		{
+			value = 1000f;
+		}
+		if (this.jetCrate.IsJetting() || this.jetCrate.GetTimeToJet() < 100f)
+		{
+			value = 1000f;
+		}
+		if (this.crateIsReadyToPush)
+		{
+			value = 1000f;
+		}
+		this.blendHelper.SetBlendParameter(8, value);
+		this.blendHelper.SetBlendParameter(3, Mathf.Sign(this.animChar.transform.forward.x));
+		if (this.crateIsReadyToPush)
+		{
+			this.blendHelper.SetBlendParameter(9, ScriptGlobals.huddle.pos.x - this.edge.transform.position.x);
+		}
+		else
+		{
+			Vector3 vector2 = ScriptGlobals.huddle.pos - this.edge.transform.position;
+			if (vector.y > 0.2f && vector2.x < 0f)
+			{
+				this.blendHelper.SetBlendParameter(9, vector2.x);
+			}
+			else
+			{
+				this.blendHelper.SetBlendParameter(9, 0f);
+			}
+		}
+		this.blendHelper.SetBlendParameter(10, this.jetCrate.transform.position.y - this.animChar.transform.position.y);
+	}
+
+	// Token: 0x06000525 RID: 1317 RVA: 0x00037E48 File Offset: 0x00036048
+	public Vector3 GetLastMoveSpeed()
+	{
+		ABHelperData latestAnimData = this.blendHelper.GetLatestAnimData();
+		if (latestAnimData != null)
+		{
+			Vector3 localMoveSpeed = latestAnimData.localMoveSpeed;
+			Vector3 localScale = this.animChar.transform.localScale;
+			localMoveSpeed.x *= localScale.x;
+			localMoveSpeed.y *= localScale.y;
+			localMoveSpeed.z *= localScale.z;
+			return this.animChar.transform.TransformDirection(localMoveSpeed);
+		}
+		return Vector3.zero;
+	}
+
+	// Token: 0x06000526 RID: 1318 RVA: 0x00037ED8 File Offset: 0x000360D8
+	private void Update()
+	{
+		float deltaTime = Time.deltaTime;
+		if (deltaTime > 0f)
+		{
+			Vector3 vector = this.animChar.transform.position;
+			ABDefinition topDefinition = this.blendHelper.GetTopDefinition();
+			this.SetBlendParameters();
+			this.blendHelper.SetBlendParameter(4, this.blendHelper.GetAnimPos());
+			ABHelperData abhelperData = this.blendHelper.UpdateAnimationBlends(deltaTime);
+			this.blendHelper.SetBlendParameter(4, abhelperData.normalizedAnimPos);
+			this.blendHelper.SetBlendParameter(5, abhelperData.totalPlayTime);
+			this.blendHelper.SetBlendParameter(6, abhelperData.topBlendWeight);
+			Vector3 lastMoveSpeed = this.GetLastMoveSpeed();
+			vector += lastMoveSpeed * deltaTime;
+			Vector3 localRotationSpeed = abhelperData.localRotationSpeed;
+			float num = localRotationSpeed.y * deltaTime;
+			Vector3 localEulerAngles = this.animChar.transform.localEulerAngles;
+			localEulerAngles.x = 0f;
+			localEulerAngles.y += num;
+			localEulerAngles.z = 0f;
+			if (topDefinition == this.pushOverLedge && this.totalTries >= 2 && this.blendHelper.GetLatestAnimData().normalizedAnimPos < 0.2f)
+			{
+				this.blendHelper.TransitToBlendDefinition(this.pushOverLedgePoint, 0.2f, 0f);
+			}
+			if (topDefinition.alignmentRotateSpeed > 0f)
+			{
+				if (localEulerAngles.y > 90f && localEulerAngles.y < 270f)
+				{
+					localEulerAngles.y += (180f - localEulerAngles.y) * Mathf.Min(deltaTime * topDefinition.alignmentRotateSpeed, 1f);
+				}
+				else if (localEulerAngles.y >= 270f)
+				{
+					localEulerAngles.y += (360f - localEulerAngles.y) * Mathf.Min(deltaTime * topDefinition.alignmentRotateSpeed, 1f);
+				}
+				else
+				{
+					localEulerAngles.y *= 1f - Mathf.Min(deltaTime * topDefinition.alignmentRotateSpeed, 1f);
+				}
+				vector.z += (this.wantedZ - vector.z) * Mathf.Min(deltaTime * topDefinition.alignmentRotateSpeed, 1f);
+			}
+			if (topDefinition == this.idleDef && this.crateIsReadyToPush && ScriptGlobals.huddle.pos.x - this.edge.transform.position.x > -0.5f)
+			{
+				this.blendHelper.TransitToBlendDefinition(this.pullHandleDef, 0.2f, 0f);
+				this.crateIsReadyToPush = false;
+			}
+			if (topDefinition == this.pushDef)
+			{
+				float num2 = this.animChar.transform.position.x - this.edge.position.x;
+				if (Mathf.Abs(num2) < 0.8f)
+				{
+					this.pullTimer = this.maxPullTime;
+					this.crateIsReadyToPush = true;
+					if (ScriptGlobals.huddle.pos.x - this.edge.transform.position.x < -1f)
+					{
+						this.blendHelper.TransitToBlendDefinition(this.idleDef, 0.2f, 0f);
+					}
+					else
+					{
+						this.blendHelper.TransitToBlendDefinition(this.pullHandleDef, 0.2f, 0f);
+						this.crateIsReadyToPush = false;
+					}
+				}
+				else if (localEulerAngles.y >= 180f)
+				{
+					localEulerAngles.y += (360f - localEulerAngles.y) * Mathf.Min(deltaTime * 2f, 1f);
+				}
+				else if (localEulerAngles.y < 180f)
+				{
+					localEulerAngles.y += (0f - localEulerAngles.y) * Mathf.Min(deltaTime * 2f, 1f);
+				}
+				float num3 = this.jetCrate.transform.position.x - this.animChar.transform.position.x;
+				if (this.pushDefBlendIn < 0.9f)
+				{
+					vector.x += (num3 - 0.05f) * Mathf.Min(deltaTime * 8f, 1f);
+				}
+			}
+			if (topDefinition == this.pullHandleDef)
+			{
+				float num4 = this.jetCrate.transform.position.y - this.animChar.transform.position.y;
+				if ((double)num4 < 0.5)
+				{
+					this.blendHelper.TransitToBlendDefinition(this.idleDef, 0.2f, 0f);
+				}
+				else
+				{
+					this.pushAlignCalculated = false;
+					if (!this.handlePulled && this.blendHelper.GetLatestAnimData().normalizedAnimPos > 0.37f)
+					{
+						this.handlePulled = true;
+						this.jetCrate.FakeAPull();
+					}
+				}
+			}
+			else
+			{
+				this.handlePulled = false;
+			}
+			if (topDefinition == this.alignToCrate)
+			{
+				this.pushAlignCalculated = false;
+				float normalizedAnimPos = this.blendHelper.GetLatestAnimData().normalizedAnimPos;
+				float num5 = 0.25f;
+				if (normalizedAnimPos > num5)
+				{
+					float num6 = this.jetCrate.transform.position.x - 0.05f;
+					float num7 = (normalizedAnimPos - num5) / (1f - num5);
+					vector.x += (num6 - vector.x) * num7;
+				}
+				num5 = 0.75f;
+				if (normalizedAnimPos > num5)
+				{
+					float num8 = (normalizedAnimPos - num5) / (1f - num5);
+					if (localEulerAngles.y >= 180f)
+					{
+						localEulerAngles.y += (360f - localEulerAngles.y) * num8;
+					}
+					else if (localEulerAngles.y < 180f)
+					{
+						localEulerAngles.y += (0f - localEulerAngles.y) * num8;
+					}
+				}
+			}
+			if (topDefinition != this.pushDef && topDefinition != this.pullHandleDef && topDefinition != this.pushOverLedge && topDefinition != this.turnLookUp && topDefinition != this.stepBack && topDefinition != this.stepBackClose && topDefinition != this.stepBackGently && topDefinition != this.stepBackClose_Annoyed && topDefinition != this.pushOverLedgePoint && this.animChar.transform.position.z > this.wantedZ - 0.25f)
+			{
+				HuddleHelperCharacter.CrateHitMode crateHitMode = this.GettingHitByCrate();
+				if (crateHitMode != HuddleHelperCharacter.CrateHitMode.NoHit)
+				{
+					if (crateHitMode == HuddleHelperCharacter.CrateHitMode.FlyOver)
+					{
+						float timeToJet = this.jetCrate.GetTimeToJet();
+						if (timeToJet > 0.1f && timeToJet < 3.4028235E+38f)
+						{
+							this.blendHelper.TransitToBlendDefinition(this.stepBackClose_Annoyed, 0.2f, 0f);
+						}
+						else
+						{
+							this.blendHelper.TransitToBlendDefinition(this.turnLookUp, 0.2f, 0f);
+						}
+					}
+					else if (this.jetCrate.IsJetting())
+					{
+						if (this.jetCrate.transform.position.y - base.transform.position.y < 2f)
+						{
+							this.blendHelper.TransitToBlendDefinition(this.stepBackGently, 0.2f, 0f);
+						}
+					}
+					else if (crateHitMode == HuddleHelperCharacter.CrateHitMode.FlyThrough)
+					{
+						float timeToJet2 = this.jetCrate.GetTimeToJet();
+						if (timeToJet2 > 0.1f && timeToJet2 < 3.4028235E+38f)
+						{
+							this.blendHelper.TransitToBlendDefinition(this.stepBackClose_Annoyed, 0.2f, 0f);
+						}
+						else
+						{
+							this.blendHelper.TransitToBlendDefinition(this.stepBack, 0.2f, 0f);
+						}
+					}
+					else
+					{
+						this.blendHelper.TransitToBlendDefinition(this.stepBackClose, 0.2f, 0f);
+					}
+				}
+			}
+			vector.x = Mathf.Min(vector.x, this.edge.transform.position.x - 0.2f);
+			this.animChar.transform.position = vector;
+			this.animChar.transform.localEulerAngles = localEulerAngles;
+			if (this.transitionManager != null)
+			{
+				AnimcontrolStateInfo.TransitionData newDef = this.transitionManager.TestTransitions(topDefinition, this.blendHelper);
+				base.DoTransition(newDef, topDefinition, abhelperData.normalizedAnimPos);
+			}
+		}
+		this.helmet.transform.position = this.helmet.transform.parent.position;
+	}
+
+	// Token: 0x06000527 RID: 1319 RVA: 0x000387D0 File Offset: 0x000369D0
+	private void FixedUpdate()
+	{
+		ABDefinition topDefinition = this.blendHelper.GetTopDefinition();
+		if (topDefinition != this.pushDef && this.defLastFrame == this.pushDef)
+		{
+			this.audioSlideStop.PostFast();
+		}
+		if (topDefinition == this.pushDef)
+		{
+			if (this.defLastFrame != this.pushDef)
+			{
+				this.audioSlideStart.PostFast();
+			}
+			float x = this.GetLastMoveSpeed().x;
+			if (!this.pushAlignCalculated)
+			{
+				this.jetCrateAlign = this.jetCrate.transform.position.x - this.animChar.transform.position.x;
+				this.pushAlignCalculated = true;
+			}
+			Vector3 position = this.jetCrate.transform.position;
+			float x2 = position.x;
+			this.pushDefBlendIn = Mathf.Min(this.pushDefBlendIn + 4f * Time.deltaTime, 1f);
+			float num = Mathf.Max(this.pushDefBlendIn - 0.4f, 0f) / 0.6f;
+			float num2 = (1f - num) * this.jetCrateAlign + num * 0.05f;
+			if (num > 0f)
+			{
+				position.x = (1f - this.pushDefBlendIn) * x2 + this.pushDefBlendIn * (this.animChar.transform.position.x + x * Time.deltaTime + num2);
+				this.jetCrate.GetComponent<Rigidbody>().MovePosition(position);
+				float num3 = Mathf.InverseLerp(0f, 2.1f, x);
+				float value = Mathf.Lerp(0f, 40f, num3);
+				SoundEngine.RTPCs.phySlide.SetFast(value, this.akGameObjJetCrate, 0f);
+			}
+			this.pullTimer = 0f;
+		}
+		else
+		{
+			this.pushDefBlendIn = 0f;
+		}
+		if (this.pullTimer > 0f)
+		{
+			this.pullTimer -= Time.deltaTime;
+			Vector3 position2 = this.jetCrate.transform.position;
+			float num4 = this.edge.transform.position.x - position2.x;
+			if (num4 > 0.3f)
+			{
+				float num5 = 1f - (this.maxPullTime - this.pullTimer) / this.maxPullTime;
+				num5 *= num5;
+				position2.x += Time.deltaTime * 1.2f * num5;
+				this.jetCrate.GetComponent<Rigidbody>().MovePosition(position2);
+			}
+		}
+		if ((topDefinition == this.pushOverLedge || topDefinition == this.pushOverLedgePoint) && !this.pushAlignCalculated)
+		{
+			if (this.jetCrate.transform.position.y > this.animChar.transform.position.y)
+			{
+				float x3 = this.jetCrate.GetComponent<Rigidbody>().velocity.x;
+				if (x3 < 3f)
+				{
+					this.jetCrate.GetComponent<Rigidbody>().AddForce(Mathf.Min(Time.deltaTime * 14f, 1f) * Vector3.right, 2);
+				}
+			}
+			else
+			{
+				this.pushAlignCalculated = true;
+				this.totalTries++;
+			}
+		}
+		this.defLastFrame = topDefinition;
+	}
+
+	// Token: 0x0400087B RID: 2171
+	public GameObject stopModeVisualization;
+
+	// Token: 0x0400087C RID: 2172
+	public Material dudeMaterial;
+
+	// Token: 0x0400087D RID: 2173
+	public JetCrate jetCrate;
+
+	// Token: 0x0400087E RID: 2174
+	public Transform edge;
+
+	// Token: 0x0400087F RID: 2175
+	public Transform leftEdge;
+
+	// Token: 0x04000880 RID: 2176
+	public GameObject helmet;
+
+	// Token: 0x04000881 RID: 2177
+	public SignalIn crateHitButton;
+
+	// Token: 0x04000882 RID: 2178
+	private float jetCrateAlign = 0.05f;
+
+	// Token: 0x04000883 RID: 2179
+	private ABDefinition idleDef;
+
+	// Token: 0x04000884 RID: 2180
+	private ABDefinition pushDef;
+
+	// Token: 0x04000885 RID: 2181
+	private ABDefinition pullHandleDef;
+
+	// Token: 0x04000886 RID: 2182
+	private ABDefinition alignToCrate;
+
+	// Token: 0x04000887 RID: 2183
+	private ABDefinition pushOverLedge;
+
+	// Token: 0x04000888 RID: 2184
+	private ABDefinition pushOverLedgePoint;
+
+	// Token: 0x04000889 RID: 2185
+	private ABDefinition stepBack;
+
+	// Token: 0x0400088A RID: 2186
+	private ABDefinition turnLookUp;
+
+	// Token: 0x0400088B RID: 2187
+	private ABDefinition stepBackClose;
+
+	// Token: 0x0400088C RID: 2188
+	private ABDefinition stepBackClose_Annoyed;
+
+	// Token: 0x0400088D RID: 2189
+	private ABDefinition stepBackGently;
+
+	// Token: 0x0400088E RID: 2190
+	private ABDefinition tellHuddleGo;
+
+	// Token: 0x0400088F RID: 2191
+	private ABDefinition defLastFrame;
+
+	// Token: 0x04000890 RID: 2192
+	private float wantedZ;
+
+	// Token: 0x04000891 RID: 2193
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioSlideStart;
+
+	// Token: 0x04000892 RID: 2194
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioSlideStop;
+
+	// Token: 0x04000893 RID: 2195
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObjJetCrate;
+
+	// Token: 0x04000894 RID: 2196
+	private bool handlePulled;
+
+	// Token: 0x04000895 RID: 2197
+	private bool pushAlignCalculated;
+
+	// Token: 0x04000896 RID: 2198
+	private float maxPullTime = 0.4f;
+
+	// Token: 0x04000897 RID: 2199
+	private bool crateIsReadyToPush;
+
+	// Token: 0x04000898 RID: 2200
+	private float pullTimer;
+
+	// Token: 0x04000899 RID: 2201
+	private float pushDefBlendIn;
+
+	// Token: 0x0400089A RID: 2202
+	private int totalTries;
+
+	// Token: 0x0200009F RID: 159
+	private enum CrateHitMode
+	{
+		// Token: 0x0400089C RID: 2204
+		NoHit,
+		// Token: 0x0400089D RID: 2205
+		FlyOver,
+		// Token: 0x0400089E RID: 2206
+		FlyThrough,
+		// Token: 0x0400089F RID: 2207
+		LandOn
+	}
+}

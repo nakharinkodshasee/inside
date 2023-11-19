@@ -1,0 +1,78 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000506 RID: 1286
+[ExecuteInEditMode]
+public class HuddleFloodAnim : MonoBehaviour
+{
+	// Token: 0x060021A3 RID: 8611 RVA: 0x00119C2C File Offset: 0x00117E2C
+	private void Update()
+	{
+		base.transform.localPosition = new Vector3(0f, this.lowPos * this.scaleY, 0f);
+		base.transform.localScale = Vector3.Lerp(this.startScale, this.finishScale, this.finish);
+		if (Camera.main != null && this.enableCull)
+		{
+			float num = Camera.main.transform.position.y - base.transform.position.y;
+			float num2 = base.transform.position.x - Camera.main.transform.position.x - this.windowPos;
+			this.outsideRefraction.SetActive(num > 0f || num2 > 0f);
+			this.outsideFog.SetActive(num > 0f || num2 > 0f);
+			this.insideRenderGroup.SetActive(num < this.insideCullY && num2 < this.insideCullX);
+		}
+		SkinnedMeshRenderer[] componentsInChildren = this.outsideRenderGroup.GetComponentsInChildren<SkinnedMeshRenderer>();
+		for (int i = 0; i < componentsInChildren.Length; i++)
+		{
+			componentsInChildren[i].SetBlendShapeWeight(0, (this.preBreak + this.finish) * 100f);
+			componentsInChildren[i].SetBlendShapeWeight(1, this.scaleX * 100f * (1f - this.finish));
+			componentsInChildren[i].SetBlendShapeWeight(2, this.scaleY * 100f * (1f - this.finish));
+		}
+	}
+
+	// Token: 0x04003E85 RID: 16005
+	public GameObject outsideRenderGroup;
+
+	// Token: 0x04003E86 RID: 16006
+	public GameObject outsideRefraction;
+
+	// Token: 0x04003E87 RID: 16007
+	public GameObject outsideFog;
+
+	// Token: 0x04003E88 RID: 16008
+	public GameObject insideRenderGroup;
+
+	// Token: 0x04003E89 RID: 16009
+	[Range(0f, 1f)]
+	public float scaleX;
+
+	// Token: 0x04003E8A RID: 16010
+	[Range(0f, 1f)]
+	public float scaleY;
+
+	// Token: 0x04003E8B RID: 16011
+	[Range(0f, 1f)]
+	public float preBreak;
+
+	// Token: 0x04003E8C RID: 16012
+	[Range(0f, 1f)]
+	public float finish;
+
+	// Token: 0x04003E8D RID: 16013
+	public float lowPos;
+
+	// Token: 0x04003E8E RID: 16014
+	public Vector3 startScale;
+
+	// Token: 0x04003E8F RID: 16015
+	public Vector3 finishScale;
+
+	// Token: 0x04003E90 RID: 16016
+	public bool enableCull;
+
+	// Token: 0x04003E91 RID: 16017
+	public float windowPos;
+
+	// Token: 0x04003E92 RID: 16018
+	public float insideCullX;
+
+	// Token: 0x04003E93 RID: 16019
+	public float insideCullY;
+}

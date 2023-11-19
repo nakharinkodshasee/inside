@@ -1,0 +1,73 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000170 RID: 368
+public class HuddleGoLowTrigger : DefaultBoyInput, IPreAwake
+{
+	// Token: 0x06000AE6 RID: 2790 RVA: 0x0006C510 File Offset: 0x0006A710
+	public bool PreAwake(int callcount)
+	{
+		this.disableTrigger = SignalIn.Create("disableTrigger", base.gameObject, new Action(this.OnDisableTrigger));
+		return true;
+	}
+
+	// Token: 0x06000AE7 RID: 2791 RVA: 0x0006C538 File Offset: 0x0006A738
+	private void OnDisableTrigger()
+	{
+		this.isEnabled = false;
+		if (ScriptGlobals.huddle.input == this)
+		{
+			ScriptGlobals.huddle.input = null;
+		}
+	}
+
+	// Token: 0x1700003F RID: 63
+	// (get) Token: 0x06000AE8 RID: 2792 RVA: 0x0006C564 File Offset: 0x0006A764
+	public override vector2f stick
+	{
+		get
+		{
+			if (ScriptGlobals.huddle.velocity.x > -2f)
+			{
+				return base.stick;
+			}
+			float num = Mathf.InverseLerp(-2f, -5f, ScriptGlobals.huddle.velocity.x);
+			return new vector2f(base.stick.x * Mathf.Lerp(0.8f, 0.3f, num), -1f);
+		}
+	}
+
+	// Token: 0x06000AE9 RID: 2793 RVA: 0x0006C5E0 File Offset: 0x0006A7E0
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (this.isEnabled && coll.GetComponent<HuddleProbe>())
+		{
+			this.noOfCharacterProbesInside++;
+			if (this.noOfCharacterProbesInside == 1)
+			{
+				ScriptGlobals.huddle.input = this;
+			}
+		}
+	}
+
+	// Token: 0x06000AEA RID: 2794 RVA: 0x0006C630 File Offset: 0x0006A830
+	private void OnTriggerExit(Collider coll)
+	{
+		if (this.isEnabled && coll.GetComponent<HuddleProbe>())
+		{
+			this.noOfCharacterProbesInside--;
+			if (this.noOfCharacterProbesInside == 0 && ScriptGlobals.huddle.input == this)
+			{
+				ScriptGlobals.huddle.input = null;
+			}
+		}
+	}
+
+	// Token: 0x040012F0 RID: 4848
+	private SignalIn disableTrigger;
+
+	// Token: 0x040012F1 RID: 4849
+	private bool isEnabled = true;
+
+	// Token: 0x040012F2 RID: 4850
+	private int noOfCharacterProbesInside;
+}

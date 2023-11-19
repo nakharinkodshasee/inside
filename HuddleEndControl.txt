@@ -1,0 +1,1041 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200016B RID: 363
+public class HuddleEndControl : DefaultHuddleInput, IPreAwake
+{
+	// Token: 0x06000AA3 RID: 2723 RVA: 0x00067EA8 File Offset: 0x000660A8
+	public bool PreAwake(int callcount)
+	{
+		this.playingDead = SignalOut.Create("playingDead", base.gameObject);
+		this.startingBirth = SignalOut.Create("startingBirth", base.gameObject);
+		this.allDone = SignalOut.Create("allDone", base.gameObject);
+		this.startBirthMinigame = SignalIn.Create("startBirthMinigame", base.gameObject, new Action(this.OnStartBirthMinigame));
+		return true;
+	}
+
+	// Token: 0x06000AA4 RID: 2724 RVA: 0x00067F1C File Offset: 0x0006611C
+	private void Awake()
+	{
+		this.orgStrength = ScriptGlobals.huddle.cloth.skinning.strength;
+	}
+
+	// Token: 0x06000AA5 RID: 2725 RVA: 0x00067F38 File Offset: 0x00066138
+	public void OnStartBirthMinigame()
+	{
+		this.huddleEndState = HuddleEndControl.HuddleEndState.PreBirthMiniGame;
+	}
+
+	// Token: 0x1700003B RID: 59
+	// (get) Token: 0x06000AA6 RID: 2726 RVA: 0x00067F44 File Offset: 0x00066144
+	public override vector2f stick
+	{
+		get
+		{
+			if (this.huddleEndState == HuddleEndControl.HuddleEndState.Running)
+			{
+				if (this.controlTaken)
+				{
+					return vector2f.right * this.endStickFactor;
+				}
+				HuddleRagdollState huddleRagdollState = ScriptGlobals.huddle.state as HuddleRagdollState;
+				if (huddleRagdollState != null && huddleRagdollState.sphereTarget && ScriptGlobals.huddle.velocity.x > 2.5f)
+				{
+					huddleRagdollState.stunTimeRemaining = 0.8f;
+					return vector2f.zero;
+				}
+				return base.stick * this.stickFactor;
+			}
+			else
+			{
+				if (this.huddleEndState != HuddleEndControl.HuddleEndState.FinalCrawling)
+				{
+					return vector2f.zero;
+				}
+				if (this.controlTaken)
+				{
+					return vector2f.right * this.endStickFactor;
+				}
+				vector2f result = base.stick * this.stickFactor;
+				result.y = 0f;
+				return result;
+			}
+		}
+	}
+
+	// Token: 0x06000AA7 RID: 2727 RVA: 0x00068028 File Offset: 0x00066228
+	private void OnTriggerEnter(Collider coll)
+	{
+		HuddleFootProbe component = coll.GetComponent<HuddleFootProbe>();
+		if (component != null)
+		{
+			component.huddle.input = this;
+		}
+	}
+
+	// Token: 0x06000AA8 RID: 2728 RVA: 0x00068054 File Offset: 0x00066254
+	private void OnTriggerExit(Collider coll)
+	{
+		HuddleFootProbe component = coll.GetComponent<HuddleFootProbe>();
+		if (component != null)
+		{
+			component.huddle.input = null;
+		}
+	}
+
+	// Token: 0x06000AA9 RID: 2729 RVA: 0x00068080 File Offset: 0x00066280
+	private void SetRagState()
+	{
+		HuddleRagdollState huddleRagdollState = new HuddleRagdollState(ScriptGlobals.huddle, true);
+		float num = ScriptGlobals.huddle.pos.x - this.crawlPosition.transform.position.x;
+		if (num > 0f)
+		{
+			huddleRagdollState.stunTimeRemaining = Random.Range(0.7f, 1f) + Mathf.Min(num * 0.3f, 2f);
+		}
+		else
+		{
+			huddleRagdollState.stunTimeRemaining = Random.Range(1f, 1.5f);
+		}
+		ScriptGlobals.huddle.SpawnState(huddleRagdollState);
+	}
+
+	// Token: 0x06000AAA RID: 2730 RVA: 0x0006811C File Offset: 0x0006631C
+	private void StretchOutHuddle(float blendin, bool start = true)
+	{
+		Vector3 pos = ScriptGlobals.huddle.pos;
+		float num = 0.5f * Mathf.Min(ScriptGlobals.huddle.cloth.absoluteRightmostBone.pos.x - ScriptGlobals.huddle.cloth.absoluteLeftmostBone.pos.x, 1.5f);
+		float num2 = Mathf.Max(2.8f - num, 0f);
+		float boneMass = ScriptGlobals.huddle.cloth.boneMass;
+		float num3 = 18f;
+		float x = ScriptGlobals.huddle.velocity.x;
+		int i = 0;
+		int num4 = ScriptGlobals.huddle.cloth.bones.Length;
+		while (i < num4)
+		{
+			HuddleCloth.ClothBone clothBone = ScriptGlobals.huddle.cloth.bones[i];
+			float num5 = clothBone.pos.x - pos.x;
+			float num6 = pos.y - clothBone.pos.y;
+			if (!start && num5 * x > 0f)
+			{
+				num5 *= 1f + (1f - blendin) * 0.3f;
+			}
+			if (num5 * x < 0f)
+			{
+				num6 = -1f;
+			}
+			clothBone.ApplyImpulse(new Vector3(num5, num6, 0f) * (num2 * boneMass * blendin * num3 * Time.deltaTime));
+			i++;
+		}
+	}
+
+	// Token: 0x06000AAB RID: 2731 RVA: 0x0006828C File Offset: 0x0006648C
+	private void AddCrawlRagdollVelocity(Vector3 velocityToAdd)
+	{
+		float x = ScriptGlobals.huddle.cloth.absoluteLeftmostBone.pos.x;
+		float x2 = ScriptGlobals.huddle.cloth.absoluteRightmostBone.pos.x;
+		float num = Mathf.Min(x2 - x, 1.5f);
+		float num2 = x;
+		if (velocityToAdd.x < 0f)
+		{
+			num2 = x2;
+		}
+		float num3 = Mathf.Sign(velocityToAdd.x);
+		float boneMass = ScriptGlobals.huddle.cloth.boneMass;
+		int i = 0;
+		int num4 = ScriptGlobals.huddle.cloth.bones.Length;
+		while (i < num4)
+		{
+			HuddleCloth.ClothBone clothBone = ScriptGlobals.huddle.cloth.bones[i];
+			float num5 = 3f * Mathf.Abs(clothBone.pos.x - num2) / num - 1.1f;
+			bool flag = false;
+			if (num5 > 0f && num3 * (clothBone.velocity.x + num5 * velocityToAdd.x) > this.maxForwardSpeed)
+			{
+				flag = true;
+				clothBone.ApplyImpulse(new Vector3((this.maxForwardSpeed - Mathf.Abs(clothBone.velocity.x)) * boneMass * num3, 0f, 0f));
+			}
+			if (!flag)
+			{
+				clothBone.ApplyImpulse(velocityToAdd * num5 * boneMass);
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06000AAC RID: 2732 RVA: 0x000683F8 File Offset: 0x000665F8
+	private void AddLiftHeadRagdollVelocity(Vector3 velocityToAdd)
+	{
+		float num = Mathf.Sign(velocityToAdd.x);
+		float x = ScriptGlobals.huddle.pos.x;
+		float x2 = ScriptGlobals.huddle.cloth.absoluteLeftmostBone.pos.x;
+		float x3 = ScriptGlobals.huddle.cloth.absoluteRightmostBone.pos.x;
+		float num2 = 0.5f * (x3 - x2);
+		float boneMass = ScriptGlobals.huddle.cloth.boneMass;
+		int i = 0;
+		int num3 = ScriptGlobals.huddle.cloth.bones.Length;
+		while (i < num3)
+		{
+			HuddleCloth.ClothBone clothBone = ScriptGlobals.huddle.cloth.bones[i];
+			if (clothBone.velocity.sqrMagnitude <= 64f)
+			{
+				float num4 = ((clothBone.pos.x - x) / num2 + 0.1f) * num;
+				if (num4 < 0f)
+				{
+					num4 *= 0.5f;
+				}
+				else if (clothBone.velocity.y + velocityToAdd.y > this.maxLiftHeadSpeed)
+				{
+					velocityToAdd.y = Mathf.Max(0f, this.maxLiftHeadSpeed - clothBone.velocity.y);
+				}
+				clothBone.ApplyImpulse(velocityToAdd * num4 * boneMass);
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06000AAD RID: 2733 RVA: 0x00068560 File Offset: 0x00066760
+	private void AddHuddleAngularVel(float deltaAngVel)
+	{
+		float z = ScriptGlobals.huddle.angularVelocity.z;
+		if (Mathf.Abs(z + deltaAngVel) < 20f)
+		{
+			ScriptGlobals.huddle.AddAngularImpulse(new Vector3(0f, 0f, deltaAngVel));
+		}
+	}
+
+	// Token: 0x06000AAE RID: 2734 RVA: 0x000685AC File Offset: 0x000667AC
+	private void MoveTowardsEndPoint()
+	{
+		float num = this.endPosition.transform.position.x - ScriptGlobals.huddle.pos.x;
+		float num2 = num * 3f;
+		float num3 = num2 - ScriptGlobals.huddle.velocity.x;
+		ScriptGlobals.huddle.AddVelocity(num3 * Time.deltaTime * 5f * Vector3.right);
+	}
+
+	// Token: 0x06000AAF RID: 2735 RVA: 0x00068628 File Offset: 0x00066828
+	private void UpdateFinalCrawling()
+	{
+		if (Time.deltaTime <= 0f)
+		{
+			return;
+		}
+		HuddleRagdollState huddleRagdollState = ScriptGlobals.huddle.state as HuddleRagdollState;
+		if (huddleRagdollState != null)
+		{
+			huddleRagdollState.stunTimeRemaining = 50f;
+		}
+		else
+		{
+			this.huddleEndState = HuddleEndControl.HuddleEndState.Running;
+		}
+		if (this.doingOneFakeCrawl > 0)
+		{
+			if (ScriptGlobals.huddle.transform.position.x >= this.crawlPosition.transform.position.x)
+			{
+				this.doingOneFakeCrawl = 0;
+			}
+			else if (this.fakeCrawlInitWait < 2.3f)
+			{
+				if (this.fakeCrawlInitWait > 0.8f)
+				{
+					float num = Mathf.Min((this.fakeCrawlInitWait - 0.8f) * 2f, 1f);
+					this.AddHuddleAngularVel(-ScriptGlobals.huddle.angularVelocity.z * Mathf.Min(Time.deltaTime * num * 12f, 1f));
+					Vector3 velocity = ScriptGlobals.huddle.velocity3;
+					velocity.y = 0f;
+					velocity.z = 0f;
+					ScriptGlobals.huddle.AddVelocity(-velocity * Mathf.Min(6f * num * Time.deltaTime, 1f));
+				}
+				this.fakeCrawlInitWait += Time.deltaTime;
+				return;
+			}
+		}
+		else
+		{
+			ScriptGlobals.huddle.visualHuddle.legs.huddleFinished = true;
+		}
+		ScriptGlobals.huddle.cloth.skinning.strength = this.orgStrength * Mathf.Clamp(this.skinningStrength.Evaluate(1f), 0f, 1f);
+		if (this.crawling)
+		{
+			this.finalCrawlTimer += Time.deltaTime;
+			if (this.finalCrawlTimer < this.liftHeadReleaseTime)
+			{
+				float num2 = 1f - Mathf.Min(this.finalCrawlTimer * this.liftHeadTimeScale, 1f);
+				num2 = 1f - num2 * num2 * num2;
+				num2 = MathUtils.SmoothFraction(2f * num2);
+				this.AddLiftHeadRagdollVelocity(Time.deltaTime * new Vector3(0.2f * num2 * this.liftScale * this.crawlDir, num2 * this.liftScale, 0f));
+			}
+			float num3 = Mathf.Max(0f, this.finalCrawlTimer - this.pushForwardStartTime);
+			num3 *= this.pushForwardTimeScale;
+			if (num3 < 1f)
+			{
+				float num4 = MathUtils.SmoothFraction(2f * num3);
+				Vector3 vector = Vector3.right * this.crawlDir + Vector3.up * 0.1f;
+				vector *= Time.deltaTime * this.pushScale;
+				this.AddCrawlRagdollVelocity(vector);
+			}
+			float num5 = Mathf.Max(0f, this.finalCrawlTimer - this.pushForwardStartTime);
+			num5 *= this.stretchTimeScale;
+			if (num5 < 1f)
+			{
+				bool start = num5 <= 0.5f;
+				num5 = 1f - Mathf.Min(num5, 1f);
+				float blendin = MathUtils.SmoothFraction(2f * num5 * num5);
+				this.StretchOutHuddle(blendin, start);
+			}
+		}
+		if ((this.crawlDir > 0f && ScriptGlobals.huddle.velocity.x < 0f) || (this.crawlDir < 0f && ScriptGlobals.huddle.velocity.x > 0f))
+		{
+			ScriptGlobals.huddle.AddVelocity(Vector3.left * (ScriptGlobals.huddle.velocity.x * Mathf.Min(Time.deltaTime * 20f, 1f)));
+		}
+		if (this.finalCrawlTimer > this.rotateDampStart)
+		{
+			float num6 = Mathf.Min(this.finalCrawlTimer - this.rotateDampStart, 1f);
+			this.AddHuddleAngularVel(-ScriptGlobals.huddle.angularVelocity.z * Mathf.Min(Time.deltaTime * num6 * this.rotateDampFactor, 1f));
+		}
+		else if (this.finalCrawlTimer > this.pushForwardStartTime)
+		{
+			this.AddHuddleAngularVel(this.crawlDir * this.counterRotationForce * Time.deltaTime);
+		}
+		if (this.finalCrawlTimer > this.moveDampStart - 0.05f)
+		{
+			float num7 = Mathf.Min(this.finalCrawlTimer - this.moveDampStart + 0.05f, 1f);
+			Vector3 velocity2 = ScriptGlobals.huddle.velocity3;
+			velocity2.y = 0f;
+			velocity2.z = 0f;
+			ScriptGlobals.huddle.AddVelocity(-velocity2 * Mathf.Min(num7 * Time.deltaTime * 10f, 1f));
+		}
+		float num8 = this.endPosition.transform.position.x - ScriptGlobals.huddle.pos.x;
+		if (num8 < this.finalEndDistance)
+		{
+			this.extraStretch = Mathf.Min(this.extraStretch + Time.deltaTime * 0.3f, 0.18f);
+			this.StretchOutHuddle(this.extraStretch, true);
+			this.MoveTowardsEndPoint();
+		}
+		float num9 = ScriptGlobals.huddle.input.looseDir.x;
+		if (this.finalCrawlTimer > this.nextRestartTime || (this.finalCrawlTimer > 1.5f && this.crawlDir * num9 == -1f))
+		{
+			if (num8 > this.takeControlDistance + 2f && num9 < 0f)
+			{
+				num9 = 0f;
+			}
+			if (num8 < this.finalEndDistance)
+			{
+				(ScriptGlobals.huddle.state as HuddleRagdollState).stunTimeRemaining = 100f;
+				if (this.extraStretch >= 0.18f)
+				{
+					this.huddleEndState = HuddleEndControl.HuddleEndState.StoppingAndCrouching;
+				}
+			}
+			else
+			{
+				this.crawling = false;
+				if (this.doingOneFakeCrawl > 0 && this.doingOneFakeCrawl != 2)
+				{
+					this.finalCrawlTimer = 0f;
+					this.doingOneFakeCrawl--;
+					huddleRagdollState.stunTimeRemaining = -0.1f;
+					this.huddleEndState = HuddleEndControl.HuddleEndState.Running;
+					huddleRagdollState.ForceGetUpNow();
+					return;
+				}
+				if (num9 != 0f)
+				{
+					this.doingOneFakeCrawl--;
+					this.crawling = true;
+					this.crawlDir = num9;
+					float num10 = Mathf.Max(ScriptGlobals.huddle.transform.position.x - this.crawlPosition.transform.position.x - 2f, 0f);
+					this.nextRestartTime = 1.3f + num10 * 0.2f + Random.Range(0f, 0.7f);
+					if (this.doingOneFakeCrawl > 0)
+					{
+						this.nextRestartTime += 0.5f;
+					}
+					this.finalCrawlTimer = 0f;
+					Vector3 startPos = ScriptGlobals.huddle.cloth.absoluteRightmostBone.pos + Vector3.right * 1.3f;
+					if (num9 < 0f)
+					{
+						startPos = ScriptGlobals.huddle.cloth.absoluteLeftmostBone.pos + Vector3.left * 1.3f;
+					}
+					RaycastHit raycastHit = default(RaycastHit);
+					if (CollisionUtils.SimpleLineCheck(startPos, Vector3.down, 3f, ref raycastHit))
+					{
+						this.dummyCollider.transform.position = raycastHit.point + Vector3.up * 0.07f;
+						ScriptGlobals.huddle.visualHuddle.arms2.ReachOutFor(this.dummyCollider, false);
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000AB0 RID: 2736 RVA: 0x00068E18 File Offset: 0x00067018
+	private void UpdateRunning()
+	{
+		if (Time.deltaTime <= 0f)
+		{
+			return;
+		}
+		float num = this.endPosition.transform.position.x - ScriptGlobals.huddle.pos.x;
+		float num2 = num - this.endStickDistance;
+		float num3 = this.endPosition.transform.position.x - base.GetComponent<Collider>().bounds.min.x - this.endStickDistance;
+		float num4 = 1f - Mathf.Clamp(num2 / num3, 0f, 1f);
+		float num5 = this.stickReduction.Evaluate(num4);
+		this.stickFactor = 1f - num5 + num5 * this.endStickFactor;
+		this.nextGravityReductionTimer -= Time.deltaTime;
+		if (this.nextGravityReductionTimer < 0f)
+		{
+			float num6 = this.gravityReduction.Evaluate(num4);
+			this.wantedGravityReduction = Random.Range(Mathf.Max(num6 - 0.4f, 0f), num6);
+			this.nextGravityReductionTimer = Random.Range(0.3f, 1.2f);
+		}
+		this.reduceGravityScale += (this.wantedGravityReduction - this.reduceGravityScale) * Time.deltaTime * 4f;
+		ScriptGlobals.huddle.bellyState.legImpulses.OverrideReduceGravityScale(this.reduceGravityScale);
+		float intensity = this.weakenCurve.Evaluate(num4) * 0.9f;
+		ScriptGlobals.huddle.SetWeakenened(intensity, 0f);
+		FakeRagdollJointManager.aliveFactor = Mathf.Clamp(this.ragdollStrength.Evaluate(num4), 0f, 1f);
+		ScriptGlobals.huddle.cloth.skinning.strength = this.orgStrength * Mathf.Clamp(this.skinningStrength.Evaluate(num4), 0f, 1f);
+		float num7 = Mathf.Abs(num);
+		bool flag = false;
+		if (num7 < this.takeControlDistance && ScriptGlobals.huddle.velocity.x > 1.4f)
+		{
+			this.controlTaken = true;
+		}
+		if (num7 < this.clampSpeedDist)
+		{
+			float x = ScriptGlobals.huddle.velocity.x;
+			float num8 = num / this.clampSpeedDist;
+			num8 = this.endSpeedClamp.Evaluate(1f - num8);
+			float num9 = num8 * 3f;
+			if (num9 < 1.4f)
+			{
+				if (num9 > 0.8f)
+				{
+					num9 = 1.4f;
+				}
+				else
+				{
+					num9 = Mathf.Max(1.4f * num9 / 0.8f, 0.7f);
+				}
+			}
+			if (x > num9)
+			{
+				Vector3 deltaVelocity = (num9 - x) * Vector3.right * Mathf.Min(Time.deltaTime * 10f, 1f);
+				ScriptGlobals.huddle.AddVelocity(deltaVelocity);
+			}
+		}
+		if (num4 > 0.17f)
+		{
+			float num10 = 0.8f;
+			float num11 = 0.4f;
+			bool flag2 = ScriptGlobals.huddle.transform.position.x >= this.crawlPosition.transform.position.x;
+			if (!flag2)
+			{
+				num10 = 10f;
+				num11 = 6f + (1f - Mathf.Max(num4, 0.6f)) * 20f + -this.reduceGravityScale * 10f;
+			}
+			HuddleRagdollState huddleRagdollState = ScriptGlobals.huddle.state as HuddleRagdollState;
+			if (num4 > 0.8f && huddleRagdollState != null)
+			{
+				flag = true;
+				if (num7 < this.clampSpeedDist)
+				{
+					if (this.doingOneFakeCrawl > 0)
+					{
+						this.nextRestartTime = 2.5f;
+						this.fakeCrawlInitWait = 0f;
+						this.huddleEndState = HuddleEndControl.HuddleEndState.FinalCrawling;
+						this.crawling = true;
+					}
+					else
+					{
+						if (this.ragdollTimer == 0f)
+						{
+							huddleRagdollState.stunTimeRemaining = Random.Range(0.7f, 1.4f);
+						}
+						this.ragdollTimer = Mathf.Max(-2f, this.ragdollTimer - Time.deltaTime);
+						if (this.crawlPosition.transform.position.x - ScriptGlobals.huddle.transform.position.x < 2.5f)
+						{
+							float num12 = Mathf.Max(2.5f - ScriptGlobals.huddle.velocity.x, 0f);
+							float num13 = Mathf.Max(-0.2f - ScriptGlobals.huddle.velocity.y, 0f);
+							ScriptGlobals.huddle.AddVelocity(new Vector3(num12 * Time.deltaTime * 2f, num13 * 5f * Time.deltaTime, 0f));
+							ScriptGlobals.huddle.AddAngularImpulse(new Vector3(0f, 0f, -Time.deltaTime * 10f));
+						}
+						if (this.ragdollTimer > 0f)
+						{
+							float num14 = MathUtils.SmoothFraction(2f * this.ragdollTimer / 0.7f);
+							float num15 = Time.deltaTime * (10f - 10f * num14);
+							if ((ScriptGlobals.huddle.input.looseDir.x > 0f || this.controlTaken) && ScriptGlobals.huddle.velocity.x < 2.5f)
+							{
+								this.AddCrawlRagdollVelocity(Vector3.right * num15);
+							}
+						}
+						else if ((ScriptGlobals.huddle.input.looseDir.x > 0f || this.controlTaken) && ScriptGlobals.huddle.velocity.x < 0f)
+						{
+							ScriptGlobals.huddle.AddVelocity(Vector3.left * ScriptGlobals.huddle.velocity.x * Time.deltaTime * 6f);
+						}
+						if (this.ragdollTimer > -0.5f)
+						{
+							ScriptGlobals.huddle.AddAngularImpulse(new Vector3(0f, 0f, -ScriptGlobals.huddle.angularVelocity.z * MathUtils.SmoothFraction(Mathf.Clamp(this.ragdollTimer * 1.3f + 0.5f, 0f, 1f))));
+						}
+						else if (flag2)
+						{
+							this.crawling = true;
+							this.nextRestartTime = 4.5f;
+							this.doingOneFakeCrawl = 0;
+							this.huddleEndState = HuddleEndControl.HuddleEndState.FinalCrawling;
+							huddleRagdollState.stunTimeRemaining = 50f;
+						}
+					}
+				}
+			}
+			else
+			{
+				this.ragdollTimer = 0f;
+			}
+			HuddleGetupState huddleGetupState = ScriptGlobals.huddle.state as HuddleGetupState;
+			if (huddleGetupState != null)
+			{
+				this.allowReach = true;
+				if (num7 < this.clampSpeedDist && num4 > 0.8f)
+				{
+					this.getUpTimer += Time.deltaTime;
+					ScriptGlobals.huddle.AddAngularImpulse(new Vector3(0f, 0f, -ScriptGlobals.huddle.angularVelocity.z) * Time.deltaTime * 1f);
+					if ((ScriptGlobals.huddle.input.looseDir.x > 0f || this.controlTaken) && ScriptGlobals.huddle.velocity.x < 0.8f)
+					{
+						this.AddCrawlRagdollVelocity(Vector3.right * Time.deltaTime * 2f);
+					}
+					bool flag3 = this.crawlPosition.transform.position.x - ScriptGlobals.huddle.transform.position.x > 5f || flag2;
+					if (this.getUpTimer > num11 && flag3)
+					{
+						this.SetRagState();
+						this.ragdollTimer = 0.8f;
+						this.getUpTimer = 0f;
+					}
+				}
+			}
+			else
+			{
+				this.getUpTimer = 0f;
+			}
+			HuddleRunState huddleRunState = ScriptGlobals.huddle.state as HuddleRunState;
+			if (huddleRunState != null)
+			{
+				if ((ScriptGlobals.huddle.input.looseDir.x > 0f || this.controlTaken) && ScriptGlobals.huddle.velocity.x < 0.8f)
+				{
+					this.AddCrawlRagdollVelocity(Vector3.right * Time.deltaTime * 1f);
+				}
+				this.runTimer += Time.deltaTime;
+				bool flag4 = this.crawlPosition.transform.position.x - ScriptGlobals.huddle.transform.position.x > 5f || flag2;
+				if (flag4)
+				{
+					if ((this.runTimer > num11 || ScriptGlobals.huddle.velocity.x > num10) && (flag2 || this.reduceGravityScale > 0.4f || num7 > this.clampSpeedDist))
+					{
+						this.SetRagState();
+						this.ragdollTimer = 0.8f;
+					}
+					if (flag2)
+					{
+						ScriptGlobals.huddle.AddAngularImpulse(new Vector3(0f, 0f, -Time.deltaTime * 10f * Mathf.Sign(ScriptGlobals.huddle.input.looseDir.x)));
+					}
+				}
+			}
+			else
+			{
+				this.runTimer = 0f;
+			}
+		}
+		if (num7 < this.finalEndDistance && flag)
+		{
+			(ScriptGlobals.huddle.state as HuddleRagdollState).stunTimeRemaining = 100f;
+			this.huddleEndState = HuddleEndControl.HuddleEndState.StoppingAndCrouching;
+		}
+	}
+
+	// Token: 0x06000AB1 RID: 2737 RVA: 0x00069830 File Offset: 0x00067A30
+	private void DampRagdollMovement()
+	{
+		this.AddHuddleAngularVel(-ScriptGlobals.huddle.angularVelocity.z * Time.deltaTime);
+		Vector3 velocity = ScriptGlobals.huddle.velocity3;
+		velocity.y = 0f;
+		velocity.z = 0f;
+		ScriptGlobals.huddle.AddVelocity(-velocity * Mathf.Min(Time.deltaTime * 1f, 1f));
+	}
+
+	// Token: 0x06000AB2 RID: 2738 RVA: 0x000698AC File Offset: 0x00067AAC
+	private void StartBirthingState()
+	{
+		this.bestBone = ScriptGlobals.huddle.cloth.absoluteRightmostBone;
+		Vector3 position = this.bestBone.pos + Vector3.right * this.finalBoyAnimOffsetX + Vector3.up * this.finalBoyAnimOffsetY;
+		this.finalBoyBirthAnim.transform.position = position;
+		this.finalBoyBirthAnim.gameObject.SetActive(true);
+		this.huddleEndState = HuddleEndControl.HuddleEndState.Birthing;
+		this.startingBirth.Signal();
+	}
+
+	// Token: 0x06000AB3 RID: 2739 RVA: 0x00069938 File Offset: 0x00067B38
+	private void UpdateStoppingAndCrouching()
+	{
+		this.DoDeathParameters(false, 0.5f);
+		this.StretchOutHuddle(0.18f, true);
+		if (Mathf.Abs(ScriptGlobals.huddle.velocity.x) < 0.3f)
+		{
+			float num = this.stoppingTime + Time.deltaTime;
+			if (this.stoppingTime > 0.5f && num >= this.boyBirthWait)
+			{
+				this.playingDead.Signal();
+				this.huddleEndState = HuddleEndControl.HuddleEndState.PlayingDead;
+			}
+			this.stoppingTime = num;
+		}
+	}
+
+	// Token: 0x06000AB4 RID: 2740 RVA: 0x000699C0 File Offset: 0x00067BC0
+	private void DoBirthingJerk(float jerkTime, float nextTime, float prevTime, float force)
+	{
+		if (nextTime >= jerkTime && prevTime < jerkTime)
+		{
+			ScriptGlobals.huddle.cloth.StartBoneJerk(ScriptGlobals.huddle.cloth.absoluteRightmostBone, force * this.birthingJerkScale, true);
+		}
+	}
+
+	// Token: 0x06000AB5 RID: 2741 RVA: 0x00069A04 File Offset: 0x00067C04
+	private void DoDeathParameters(bool doMoveRestrict = false, float weakenFactor = 1f)
+	{
+		HuddleRagdollState huddleRagdollState = ScriptGlobals.huddle.state as HuddleRagdollState;
+		if (huddleRagdollState != null)
+		{
+			huddleRagdollState.stunTimeRemaining = 100f;
+		}
+		float intensity = this.weakenCurve.Evaluate(1f) * weakenFactor;
+		ScriptGlobals.huddle.SetWeakenened(intensity, 0f);
+		if (doMoveRestrict)
+		{
+			float num = huddleRagdollState.removeVelocityFactor;
+			num += Time.deltaTime * 0.2f;
+			num = Mathf.Min(num, 1f);
+			huddleRagdollState.removeVelocityFactor = num;
+		}
+		else
+		{
+			huddleRagdollState.removeVelocityFactor = 0f;
+		}
+	}
+
+	// Token: 0x06000AB6 RID: 2742 RVA: 0x00069A94 File Offset: 0x00067C94
+	private void UpdateBirthing()
+	{
+		this.DoDeathParameters(false, 0f);
+		this.StretchOutHuddle(0.18f, true);
+		float nextTime = this.birthingTime + Time.deltaTime;
+		this.DoBirthingJerk(0.2f, nextTime, this.birthingTime, 0.4f);
+		this.DoBirthingJerk(1.6f, nextTime, this.birthingTime, 0.3f);
+		this.DoBirthingJerk(2.6f, nextTime, this.birthingTime, 0.6f);
+		this.DoBirthingJerk(4.6f, nextTime, this.birthingTime, 1f);
+		this.birthingTime = nextTime;
+		if (this.birthingTime < 4.7f)
+		{
+			Vector3 position = this.bestBone.pos + Vector3.right * this.finalBoyAnimOffsetX + Vector3.up * this.finalBoyAnimOffsetY;
+			this.finalBoyBirthAnim.transform.position = position;
+		}
+		else if (this.birthingTime < 5f && this.finalBoyRestPosition != null)
+		{
+			Vector3 vector = this.bestBone.pos + Vector3.right * this.finalBoyAnimOffsetX + Vector3.up * this.finalBoyAnimOffsetY;
+			float num = MathUtils.SmoothFraction((this.birthingTime - 4.7f) / 0.3f);
+			this.finalBoyBirthAnim.transform.position = vector * (1f - num) + this.finalBoyRestPosition.transform.position * num;
+		}
+		HuddleRagdollState huddleRagdollState = ScriptGlobals.huddle.state as HuddleRagdollState;
+		if (this.birthingTime > 5f && huddleRagdollState != null)
+		{
+			float num2 = huddleRagdollState.removeVelocityFactor;
+			num2 += Time.deltaTime * 0.2f;
+			num2 = Mathf.Min(num2, 1f);
+			huddleRagdollState.removeVelocityFactor = num2;
+		}
+		if (this.birthingTime > 5f + this.signalDelayAfterBirth)
+		{
+			this.GotoDone();
+		}
+	}
+
+	// Token: 0x06000AB7 RID: 2743 RVA: 0x00069CA4 File Offset: 0x00067EA4
+	private void GotoDone()
+	{
+		this.huddleEndState = HuddleEndControl.HuddleEndState.Done;
+		this.allDone.Signal();
+	}
+
+	// Token: 0x06000AB8 RID: 2744 RVA: 0x00069CB8 File Offset: 0x00067EB8
+	private void Update()
+	{
+		if (ScriptGlobals.huddle == null || ScriptGlobals.huddle.spine == null)
+		{
+			return;
+		}
+		HuddleEndControl.HuddleEndState huddleEndState = this.huddleEndState;
+		if (huddleEndState == HuddleEndControl.HuddleEndState.Birthing)
+		{
+			this.UpdateBirthing();
+		}
+	}
+
+	// Token: 0x06000AB9 RID: 2745 RVA: 0x00069D0C File Offset: 0x00067F0C
+	private HuddleCloth.ClothBone GetBestBone(Vector3 boneDir)
+	{
+		HuddleCloth.ClothBone result = null;
+		float num = -100f;
+		Vector3 pos = ScriptGlobals.huddle.pos3;
+		int i = 0;
+		int num2 = ScriptGlobals.huddle.cloth.silhouette.Length;
+		while (i < num2)
+		{
+			HuddleCloth.ClothBone clothBone = ScriptGlobals.huddle.cloth.silhouette[i];
+			Vector3 vector = clothBone.pos - pos;
+			vector.z = 0f;
+			float num3 = Vector3.Dot(vector, boneDir);
+			if (num3 > num)
+			{
+				num = num3;
+				result = clothBone;
+			}
+			i++;
+		}
+		return result;
+	}
+
+	// Token: 0x06000ABA RID: 2746 RVA: 0x00069D9C File Offset: 0x00067F9C
+	private void UpdatePreBirthMinigame()
+	{
+		this.StretchOutHuddle(0.18f, true);
+		this.DoDeathParameters(this.birthShaking < 0f, 0.5f);
+		this.birthShaking -= Time.deltaTime;
+		if (this.currentBirthAngleIndex < this.birthMinigameAngles.Count)
+		{
+			Vector3 vector = Quaternion.Euler(0f, 0f, this.birthMinigameAngles[this.currentBirthAngleIndex]) * Vector3.right;
+			Vector3 vector2 = MathUtils.v3(GameInput.stick, 0f);
+			float num = Vector3.Angle(vector, vector2);
+			if (num < this.birthMinigameAngleRange)
+			{
+				this.curCorrectTime += Time.deltaTime;
+			}
+			else
+			{
+				this.curCorrectTime = 0f;
+				if (num < this.birthMinigameAngleRange + 20f)
+				{
+					RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftSpike, 0.02f, Time.fixedDeltaTime, 0, 0f);
+				}
+			}
+			if (this.spikeDeadzone > 0f)
+			{
+				this.spikeDeadzone -= Time.deltaTime;
+			}
+			if (this.curCorrectTime > 0f)
+			{
+				if (this.curCorrectTime <= 0.1f && this.spikeDeadzone <= 0f)
+				{
+					RumbleManager.instance.RemoveAllRumbleEffects();
+					RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.5f, 0.15f, 0, 0f);
+					this.spikeDeadzone = 0.5f;
+				}
+				else
+				{
+					RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.01f + Mathf.Min(this.curCorrectTime * 0.5f, 0.1f), Time.fixedDeltaTime, 0, 0f);
+				}
+				if (this.curCorrectTime > 0.7f)
+				{
+					this.birthShaking = 0.5f;
+					HuddleCloth.ClothBone startBone = this.GetBestBone(vector);
+					ScriptGlobals.huddle.cloth.StartBoneJerk(startBone, 1.5f, true);
+					RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightThenLeft, 1f, 0.3f, 0, 0f);
+					this.currentBirthAngleIndex++;
+					if (this.currentBirthAngleIndex >= this.birthMinigameAngles.Count)
+					{
+						this.StartBirthingState();
+					}
+				}
+			}
+		}
+		else
+		{
+			this.GotoDone();
+		}
+	}
+
+	// Token: 0x06000ABB RID: 2747 RVA: 0x00069FD8 File Offset: 0x000681D8
+	private void FixedUpdate()
+	{
+		if (ScriptGlobals.huddle == null || ScriptGlobals.huddle.spine == null)
+		{
+			return;
+		}
+		switch (this.huddleEndState)
+		{
+		case HuddleEndControl.HuddleEndState.Running:
+			this.UpdateRunning();
+			break;
+		case HuddleEndControl.HuddleEndState.FinalCrawling:
+			this.UpdateFinalCrawling();
+			break;
+		case HuddleEndControl.HuddleEndState.StoppingAndCrouching:
+			this.UpdateStoppingAndCrouching();
+			this.MoveTowardsEndPoint();
+			break;
+		case HuddleEndControl.HuddleEndState.PlayingDead:
+			this.DoDeathParameters(true, 1f);
+			this.StretchOutHuddle(0.18f, true);
+			this.MoveTowardsEndPoint();
+			if (this.playDeadTime >= 0f)
+			{
+				this.playDeadTimer += Time.deltaTime;
+				if (this.playDeadTimer >= this.playDeadTime)
+				{
+					this.OnStartBirthMinigame();
+				}
+			}
+			break;
+		case HuddleEndControl.HuddleEndState.PreBirthMiniGame:
+			this.UpdatePreBirthMinigame();
+			this.MoveTowardsEndPoint();
+			break;
+		case HuddleEndControl.HuddleEndState.Birthing:
+			this.MoveTowardsEndPoint();
+			break;
+		case HuddleEndControl.HuddleEndState.Done:
+		{
+			HuddleRagdollState huddleRagdollState = ScriptGlobals.huddle.state as HuddleRagdollState;
+			if (huddleRagdollState != null)
+			{
+				this.StretchOutHuddle(0.18f, true);
+				huddleRagdollState.stunTimeRemaining = 100f;
+				float num = huddleRagdollState.removeVelocityFactor;
+				num += Time.deltaTime * 0.2f;
+				num = Mathf.Min(num, 1f);
+				huddleRagdollState.removeVelocityFactor = num;
+				this.MoveTowardsEndPoint();
+			}
+			break;
+		}
+		}
+	}
+
+	// Token: 0x04001254 RID: 4692
+	private const float endExtraStretch = 0.18f;
+
+	// Token: 0x04001255 RID: 4693
+	public GameObject endPosition;
+
+	// Token: 0x04001256 RID: 4694
+	public float endStickFactor = 0.4f;
+
+	// Token: 0x04001257 RID: 4695
+	public float endStickDistance = 4f;
+
+	// Token: 0x04001258 RID: 4696
+	public float takeControlDistance = 4f;
+
+	// Token: 0x04001259 RID: 4697
+	public float finalEndDistance = 1f;
+
+	// Token: 0x0400125A RID: 4698
+	public float boyBirthWait = 5f;
+
+	// Token: 0x0400125B RID: 4699
+	public float signalDelayAfterBirth = 2f;
+
+	// Token: 0x0400125C RID: 4700
+	public Animation finalBoyBirthAnim;
+
+	// Token: 0x0400125D RID: 4701
+	public float finalBoyAnimOffsetX = 1.5f;
+
+	// Token: 0x0400125E RID: 4702
+	public float finalBoyAnimOffsetY = -0.5f;
+
+	// Token: 0x0400125F RID: 4703
+	public GameObject finalBoyRestPosition;
+
+	// Token: 0x04001260 RID: 4704
+	public GameObject crawlPosition;
+
+	// Token: 0x04001261 RID: 4705
+	public Collider dummyCollider;
+
+	// Token: 0x04001262 RID: 4706
+	public float clampSpeedDist = 15f;
+
+	// Token: 0x04001263 RID: 4707
+	private bool controlTaken;
+
+	// Token: 0x04001264 RID: 4708
+	public AnimationCurve gravityReduction;
+
+	// Token: 0x04001265 RID: 4709
+	public AnimationCurve stickReduction;
+
+	// Token: 0x04001266 RID: 4710
+	public AnimationCurve weakenCurve;
+
+	// Token: 0x04001267 RID: 4711
+	public AnimationCurve endSpeedClamp;
+
+	// Token: 0x04001268 RID: 4712
+	public AnimationCurve ragdollStrength;
+
+	// Token: 0x04001269 RID: 4713
+	public AnimationCurve skinningStrength;
+
+	// Token: 0x0400126A RID: 4714
+	public float liftHeadTimeScale = 0.7f;
+
+	// Token: 0x0400126B RID: 4715
+	public float liftHeadReleaseTime = 0.7f;
+
+	// Token: 0x0400126C RID: 4716
+	public float liftScale = 30f;
+
+	// Token: 0x0400126D RID: 4717
+	public float maxLiftHeadSpeed = 2.5f;
+
+	// Token: 0x0400126E RID: 4718
+	public float pushForwardStartTime = 0.4f;
+
+	// Token: 0x0400126F RID: 4719
+	public float pushForwardTimeScale = 1.4f;
+
+	// Token: 0x04001270 RID: 4720
+	public float pushScale = 3f;
+
+	// Token: 0x04001271 RID: 4721
+	public float maxForwardSpeed = 3f;
+
+	// Token: 0x04001272 RID: 4722
+	public float stretchTimeScale = 1f;
+
+	// Token: 0x04001273 RID: 4723
+	public float rotateDampStart = 1.5f;
+
+	// Token: 0x04001274 RID: 4724
+	public float rotateDampFactor = 2f;
+
+	// Token: 0x04001275 RID: 4725
+	public float moveDampStart = 2f;
+
+	// Token: 0x04001276 RID: 4726
+	public float counterRotationForce = 13f;
+
+	// Token: 0x04001277 RID: 4727
+	public float birthingJerkScale = 1f;
+
+	// Token: 0x04001278 RID: 4728
+	public float playDeadTime = -1f;
+
+	// Token: 0x04001279 RID: 4729
+	private float playDeadTimer;
+
+	// Token: 0x0400127A RID: 4730
+	private SignalOut playingDead;
+
+	// Token: 0x0400127B RID: 4731
+	private SignalOut startingBirth;
+
+	// Token: 0x0400127C RID: 4732
+	private SignalOut allDone;
+
+	// Token: 0x0400127D RID: 4733
+	private SignalIn startBirthMinigame;
+
+	// Token: 0x0400127E RID: 4734
+	public List<float> birthMinigameAngles;
+
+	// Token: 0x0400127F RID: 4735
+	public float birthMinigameAngleRange = 15f;
+
+	// Token: 0x04001280 RID: 4736
+	private int currentBirthAngleIndex;
+
+	// Token: 0x04001281 RID: 4737
+	private HuddleEndControl.HuddleEndState huddleEndState;
+
+	// Token: 0x04001282 RID: 4738
+	private float orgStrength;
+
+	// Token: 0x04001283 RID: 4739
+	private float stickFactor = 0.5f;
+
+	// Token: 0x04001284 RID: 4740
+	private float finalCrawlTimer;
+
+	// Token: 0x04001285 RID: 4741
+	private float nextRestartTime = 4.5f;
+
+	// Token: 0x04001286 RID: 4742
+	private bool crawling = true;
+
+	// Token: 0x04001287 RID: 4743
+	private float crawlDir = 1f;
+
+	// Token: 0x04001288 RID: 4744
+	private float extraStretch;
+
+	// Token: 0x04001289 RID: 4745
+	private int doingOneFakeCrawl = 3;
+
+	// Token: 0x0400128A RID: 4746
+	private float fakeCrawlInitWait;
+
+	// Token: 0x0400128B RID: 4747
+	private float reduceGravityScale;
+
+	// Token: 0x0400128C RID: 4748
+	private float wantedGravityReduction;
+
+	// Token: 0x0400128D RID: 4749
+	private float nextGravityReductionTimer = 2f;
+
+	// Token: 0x0400128E RID: 4750
+	private float getUpTimer;
+
+	// Token: 0x0400128F RID: 4751
+	private float runTimer;
+
+	// Token: 0x04001290 RID: 4752
+	private float ragdollTimer;
+
+	// Token: 0x04001291 RID: 4753
+	private bool allowReach = true;
+
+	// Token: 0x04001292 RID: 4754
+	private float stoppingTime;
+
+	// Token: 0x04001293 RID: 4755
+	private float birthingTime;
+
+	// Token: 0x04001294 RID: 4756
+	private HuddleCloth.ClothBone bestBone;
+
+	// Token: 0x04001295 RID: 4757
+	private float curCorrectTime;
+
+	// Token: 0x04001296 RID: 4758
+	private float spikeDeadzone;
+
+	// Token: 0x04001297 RID: 4759
+	private float birthShaking;
+
+	// Token: 0x0200016C RID: 364
+	private enum HuddleEndState
+	{
+		// Token: 0x04001299 RID: 4761
+		Running,
+		// Token: 0x0400129A RID: 4762
+		FinalCrawling,
+		// Token: 0x0400129B RID: 4763
+		StoppingAndCrouching,
+		// Token: 0x0400129C RID: 4764
+		PlayingDead,
+		// Token: 0x0400129D RID: 4765
+		PreBirthMiniGame,
+		// Token: 0x0400129E RID: 4766
+		Birthing,
+		// Token: 0x0400129F RID: 4767
+		Done
+	}
+}

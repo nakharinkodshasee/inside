@@ -1,0 +1,122 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200050D RID: 1293
+public class HuddleSphereSuckMachine : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060021BC RID: 8636 RVA: 0x0011AD24 File Offset: 0x00118F24
+	public bool PreAwake(int callcount)
+	{
+		this.chargeUp = SignalIn.Create("chargeUp", base.gameObject, delegate
+		{
+			this.chargingUp = true;
+		});
+		this.decharge = SignalIn.Create("decharge", base.gameObject, delegate
+		{
+			this.chargingUp = false;
+		});
+		this.fullyCharged = SignalOut.Create("fullyCharged", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060021BD RID: 8637 RVA: 0x0011AD8C File Offset: 0x00118F8C
+	private void Start()
+	{
+		for (int i = 0; i < this.lights.Count; i++)
+		{
+			this.startIntensities.Add(this.lights[i].intensity);
+		}
+		for (int j = 0; j < this.renderers.Count; j++)
+		{
+			MaterialInstance component = this.renderers[j].gameObject.GetComponent<MaterialInstance>();
+			this.startColors.Add(component.GetColorValue("_Color"));
+		}
+	}
+
+	// Token: 0x060021BE RID: 8638 RVA: 0x0011AE1C File Offset: 0x0011901C
+	private void OnValidate()
+	{
+		for (int i = this.lights.Count - 1; i >= 0; i--)
+		{
+			if (this.lights[i] == null)
+			{
+				this.lights.RemoveAt(i);
+			}
+		}
+		for (int j = this.renderers.Count - 1; j >= 0; j--)
+		{
+			if (this.renderers[j] == null)
+			{
+				this.renderers.RemoveAt(j);
+			}
+		}
+	}
+
+	// Token: 0x060021BF RID: 8639 RVA: 0x0011AEAC File Offset: 0x001190AC
+	private void Update()
+	{
+		if (this.chargingUp)
+		{
+			this.timer = Mathf.Min(this.chargeTime, this.timer + Time.deltaTime);
+		}
+		else
+		{
+			this.timer = Mathf.Max(0f, this.timer - Time.deltaTime * this.dechargeTimeScale);
+		}
+		float num = this.timer / this.chargeTime;
+		int i = 0;
+		int count = this.lights.Count;
+		while (i < count)
+		{
+			this.lights[i].intensity = this.startIntensities[i] * num;
+			i++;
+		}
+		int j = 0;
+		int count2 = this.renderers.Count;
+		while (j < count2)
+		{
+			Color value = Color.Lerp(Color.black, this.startColors[j], num);
+			MaterialInstance component = this.renderers[j].gameObject.GetComponent<MaterialInstance>();
+			MaterialInstance.ColorProperty colorProperty = component.GetColorProperty("_Color");
+			component.SetColorProperty(colorProperty, value);
+			j++;
+		}
+	}
+
+	// Token: 0x04003ED2 RID: 16082
+	private const string colorTintPropertyName = "_Color";
+
+	// Token: 0x04003ED3 RID: 16083
+	public float chargeTime = 5f;
+
+	// Token: 0x04003ED4 RID: 16084
+	public float dechargeTimeScale = 2.5f;
+
+	// Token: 0x04003ED5 RID: 16085
+	public List<Light> lights = new List<Light>();
+
+	// Token: 0x04003ED6 RID: 16086
+	public List<Renderer> renderers = new List<Renderer>();
+
+	// Token: 0x04003ED7 RID: 16087
+	private List<float> startIntensities = new List<float>();
+
+	// Token: 0x04003ED8 RID: 16088
+	private List<Color> startColors = new List<Color>();
+
+	// Token: 0x04003ED9 RID: 16089
+	private SignalIn chargeUp;
+
+	// Token: 0x04003EDA RID: 16090
+	private SignalIn decharge;
+
+	// Token: 0x04003EDB RID: 16091
+	private SignalOut fullyCharged;
+
+	// Token: 0x04003EDC RID: 16092
+	private bool chargingUp;
+
+	// Token: 0x04003EDD RID: 16093
+	private float timer;
+}

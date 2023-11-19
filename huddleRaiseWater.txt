@@ -1,0 +1,67 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200058B RID: 1419
+public class huddleRaiseWater : MonoBehaviour
+{
+	// Token: 0x06002464 RID: 9316 RVA: 0x0012C374 File Offset: 0x0012A574
+	private void Start()
+	{
+		this.huddle = ScriptGlobals.huddle;
+		this.bones = this.huddle.cloth.bones;
+		this.totalBodies = this.bones.Length;
+		this.fluidVolume = base.GetComponent<FluidVolume>();
+	}
+
+	// Token: 0x06002465 RID: 9317 RVA: 0x0012C3B4 File Offset: 0x0012A5B4
+	private void FixedUpdate()
+	{
+		Bounds bounds = base.gameObject.GetComponent<Collider>().bounds;
+		this.bodiesSubmerged = 0;
+		foreach (HuddleCloth.ClothBone clothBone in this.bones)
+		{
+			if (bounds.Contains(clothBone.pos))
+			{
+				this.bodiesSubmerged++;
+			}
+		}
+		this.percentageSubmerged = (float)this.bodiesSubmerged / ((float)this.totalBodies * 1f);
+		this.volumeGoal = this.percentageSubmerged * this.totalVolumeAddition;
+		this.add = (this.volumeAdded - this.volumeGoal) * Time.deltaTime * -1f * this.adjustmentSpeed;
+		this.fluidVolume.AddVolume(this.add);
+		this.volumeAdded += this.add;
+	}
+
+	// Token: 0x040042C2 RID: 17090
+	private Huddle huddle;
+
+	// Token: 0x040042C3 RID: 17091
+	private HuddleCloth.ClothBone[] bones;
+
+	// Token: 0x040042C4 RID: 17092
+	public float totalVolumeAddition = 40f;
+
+	// Token: 0x040042C5 RID: 17093
+	public float adjustmentSpeed = 9f;
+
+	// Token: 0x040042C6 RID: 17094
+	public int bodiesSubmerged;
+
+	// Token: 0x040042C7 RID: 17095
+	private int totalBodies;
+
+	// Token: 0x040042C8 RID: 17096
+	private float volumeAdded;
+
+	// Token: 0x040042C9 RID: 17097
+	private float volumeGoal;
+
+	// Token: 0x040042CA RID: 17098
+	private float percentageSubmerged;
+
+	// Token: 0x040042CB RID: 17099
+	private FluidVolume fluidVolume;
+
+	// Token: 0x040042CC RID: 17100
+	private float add;
+}

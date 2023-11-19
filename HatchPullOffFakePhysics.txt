@@ -1,0 +1,70 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200025D RID: 605
+public class HatchPullOffFakePhysics : MonoBehaviour
+{
+	// Token: 0x060012A7 RID: 4775 RVA: 0x000AF70C File Offset: 0x000AD90C
+	private void Start()
+	{
+	}
+
+	// Token: 0x060012A8 RID: 4776 RVA: 0x000AF710 File Offset: 0x000AD910
+	public void StartFlyingOff(Vector3 initVelToSet, Transform newParent)
+	{
+		base.transform.parent = newParent;
+		base.gameObject.SetActive(true);
+		this.velocity = initVelToSet;
+		Vector3 normalized = initVelToSet.normalized;
+		base.transform.rotation = Quaternion.LookRotation(Vector3.forward, normalized);
+	}
+
+	// Token: 0x060012A9 RID: 4777 RVA: 0x000AF75C File Offset: 0x000AD95C
+	private Quaternion GetSpeedRotation()
+	{
+		Vector3 vector = this.objectToKeepDistanceTo.position - base.transform.position;
+		vector.Normalize();
+		Vector3 vector2 = this.velocity;
+		float magnitude = this.velocity.magnitude;
+		if (magnitude > 1f)
+		{
+			vector2 *= 1f / magnitude;
+		}
+		vector += vector2 * 0.5f;
+		vector.Normalize();
+		Vector3 vector3 = Vector3.Cross(Vector3.forward, vector);
+		Vector3 vector4 = Vector3.Cross(vector, vector3);
+		return Quaternion.LookRotation(vector4, vector);
+	}
+
+	// Token: 0x060012AA RID: 4778 RVA: 0x000AF7F0 File Offset: 0x000AD9F0
+	private void Update()
+	{
+		float deltaTime = Time.deltaTime;
+		Vector3 vector = base.transform.position + this.velocity * deltaTime;
+		this.velocity *= 1f - this.drag * deltaTime;
+		Quaternion speedRotation = this.GetSpeedRotation();
+		base.transform.rotation = Quaternion.Slerp(base.transform.rotation, speedRotation, deltaTime * 4f);
+		Vector3 vector2 = this.objectToKeepDistanceTo.position - vector;
+		float magnitude = vector2.magnitude;
+		if (magnitude > this.maxDistance)
+		{
+			float num = magnitude - this.maxDistance;
+			this.velocity += vector2 * (num / magnitude * 5f * deltaTime);
+		}
+		base.transform.position = vector;
+	}
+
+	// Token: 0x04002266 RID: 8806
+	public Transform objectToKeepDistanceTo;
+
+	// Token: 0x04002267 RID: 8807
+	public float maxDistance = 10f;
+
+	// Token: 0x04002268 RID: 8808
+	private Vector3 velocity;
+
+	// Token: 0x04002269 RID: 8809
+	public float drag = 0.4f;
+}
+

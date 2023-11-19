@@ -1,0 +1,9 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000AC RID: 172
+public class HulvEdgePointForceAlign : MonoBehaviour
+{
+	// Token: 0x040009D8 RID: 2520
+	public float extraOffset;
+}

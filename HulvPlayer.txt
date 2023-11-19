@@ -1,0 +1,710 @@
+using System;
+using System.Collections.Generic;
+using Emotion;
+using UnityEngine;
+
+// Token: 0x02000128 RID: 296
+public class HulvPlayer : MonoBehaviour, IUnityAnimEventPreprocessed, IPreAwake, IUnityAnimEventHandler, IUnityAnimEventComponent
+{
+	// Token: 0x060008F4 RID: 2292 RVA: 0x0005D2FC File Offset: 0x0005B4FC
+	private void Awake()
+	{
+		this.PreprocessingRegister();
+		if (this.startDeactivated)
+		{
+			base.enabled = false;
+		}
+	}
+
+	// Token: 0x060008F5 RID: 2293 RVA: 0x0005D318 File Offset: 0x0005B518
+	private void Start()
+	{
+		AkGameObjUmbrella.PrepareAkGameObj(this.audioProbe.akGameObj);
+	}
+
+	// Token: 0x060008F6 RID: 2294 RVA: 0x0005D32C File Offset: 0x0005B52C
+	[EarlyProcessBuild(0)]
+	public void PreprocessingRegister()
+	{
+		if (!this.isRegistered && !this.preprocessed)
+		{
+			AnimEventPreprocessManager.Register(this);
+			this.isRegistered = true;
+		}
+	}
+
+	// Token: 0x060008F7 RID: 2295 RVA: 0x0005D354 File Offset: 0x0005B554
+	public void Preprocess()
+	{
+		if (this.preprocessed)
+		{
+			return;
+		}
+		string switchGroupName = "watchdog_mood";
+		string switchGroupName2 = "watchdog_movement";
+		string eventName = this.prefix + "_bark";
+		string eventName2 = this.prefix + "_bark_restart";
+		this.moodSwitch = new Switch(switchGroupName, typeof(HulvPlayer.Config.EmotionOverride), false, true);
+		this.movementSwitch = new Switch(switchGroupName2, typeof(HulvPlayer.MovementState), false, false);
+		this.barkNoCallbacks = new AudioEventSimple(eventName);
+		this.barkNoCallbacks.Initialize();
+		this.barkRestart = new AudioEventSimple(eventName2);
+		this.killBark = new AudioEventSimple(this.prefix + "_killBark");
+		this.killBark.Initialize();
+		this.defaultConfig = HulvPlayer.Config.CreateDefaultConfig();
+		this.audioProbeTransform = this.audioProbe.transform;
+		if (this.hulv == null)
+		{
+			this.hulv = base.GetComponent<Hulv>();
+		}
+		if (this.hulv != null)
+		{
+			this.ai = this.hulv.hulvAI;
+		}
+		else
+		{
+			this.ai = null;
+		}
+		this.idMap = new AnimEventAkIDMap(this.prefix, base.gameObject);
+		this.preprocessed = true;
+	}
+
+	// Token: 0x060008F8 RID: 2296 RVA: 0x0005D49C File Offset: 0x0005B69C
+	public bool PreAwake(int callcount)
+	{
+		switch (callcount)
+		{
+		case 0:
+			this.soundQueue = new HulvPlayer.TimedActionQueueFast(this);
+			return false;
+		case 1:
+			this.player = new RangedSoundPlayer(null);
+			this.emotionAnger = new Anger(0.6f, 0.1f, 0.1f);
+			this.emotionFrustration = new Frustration(this.ai, 2f, 0.2f, 0.1f);
+			this.emotionNormal = new Normal();
+			return false;
+		case 2:
+			this.strongestEmotion = HulvPlayer.Config.EmotionOverride.Normal;
+			this.timeSinceSpeedUpdate = (float)(Time.fixedTimeDbl % 0.5);
+			this.timeSinceSpeedUpdateOld = this.timeSinceSpeedUpdate;
+			this.audioProbeTransform = this.audioProbe.transform;
+			this.position = this.audioProbeTransform.position;
+			this.positionOld = this.position;
+			this.startHulvSound = SignalIn.Create("startHulvSound", base.gameObject, delegate
+			{
+				base.enabled = true;
+			});
+			this.stopHulvSound = SignalIn.Create("stopHulvSound", base.gameObject, delegate
+			{
+				base.enabled = false;
+			});
+			return true;
+		default:
+			return true;
+		}
+	}
+
+	// Token: 0x060008F9 RID: 2297 RVA: 0x0005D5C4 File Offset: 0x0005B7C4
+	private void OnDisable()
+	{
+		if (this.player.GetIsStarted())
+		{
+			this.player.OnDisable(this.audioProbe.akGameObj, this.prefix);
+		}
+	}
+
+	// Token: 0x060008FA RID: 2298 RVA: 0x0005D600 File Offset: 0x0005B800
+	private void OnDestroy()
+	{
+		this.player.OnDestroy();
+	}
+
+	// Token: 0x060008FB RID: 2299 RVA: 0x0005D610 File Offset: 0x0005B810
+	private void FixedUpdate()
+	{
+		this.player.PostRangeEventsAndDistanceRTPC(this.audioProbe.akGameObj, ref this.position, this.prefix, this.maxRange, true, true);
+		this.UpdateState(this.currentConfig);
+		if (this.movementState != this.movementStateOld)
+		{
+			this.movementSwitch.SetFast((int)this.movementState, this.audioProbe.akGameObj);
+		}
+		if (this.strongestEmotion != this.strongestEmotionOld)
+		{
+			this.moodSwitch.SetFast((int)this.strongestEmotion, this.audioProbe.akGameObj);
+		}
+		switch (this.strongestEmotion)
+		{
+		case HulvPlayer.Config.EmotionOverride.Normal:
+			this.emotionNormal.HandleStrongestEmotion(this.currentConfig, this.animationFlags);
+			break;
+		case HulvPlayer.Config.EmotionOverride.Angry:
+			this.emotionAnger.HandleStrongestEmotion(this.currentConfig, this.animationFlags);
+			break;
+		case HulvPlayer.Config.EmotionOverride.Frustrated:
+			this.emotionFrustration.HandleStrongestEmotion(this.currentConfig, this.animationFlags);
+			break;
+		}
+		if (this.shouldBarkImmediately)
+		{
+			this.TryBark(this.strongestEmotionLevel, true);
+			this.shouldBarkImmediately = false;
+		}
+		else if (this.strongestEmotion == HulvPlayer.Config.EmotionOverride.Angry || this.strongestEmotion == HulvPlayer.Config.EmotionOverride.Frustrated)
+		{
+			this.TryBark(this.strongestEmotionLevel, this.shouldBarkImmediately);
+		}
+		this.soundQueue.TryExecuteAction(Time.fixedTimeDbl);
+		this.movementStateOld = this.movementState;
+		this.strongestEmotionOld = this.strongestEmotion;
+	}
+
+	// Token: 0x060008FC RID: 2300 RVA: 0x0005D798 File Offset: 0x0005B998
+	public void SetConfiguration(HulvPlayer.Config config)
+	{
+		this.currentConfig = config;
+		if (this.soundQueue != null)
+		{
+			this.soundQueue.Clear();
+		}
+		this.SetEmotionOverride(config.emotionOverride, config.barkImmediately);
+		if (config.barkImmediately)
+		{
+			if (config.manualBarking)
+			{
+			}
+			this.shouldBarkImmediately = true;
+		}
+	}
+
+	// Token: 0x060008FD RID: 2301 RVA: 0x0005D7F8 File Offset: 0x0005B9F8
+	public void SetDefaultConfiguration()
+	{
+		this.currentConfig = this.defaultConfig;
+		if (this.soundQueue != null)
+		{
+			this.soundQueue.Clear();
+		}
+	}
+
+	// Token: 0x060008FE RID: 2302 RVA: 0x0005D828 File Offset: 0x0005BA28
+	public void Bark()
+	{
+		double fixedTimeDbl = Time.fixedTimeDbl;
+		float num = (float)(fixedTimeDbl - this.lastSoundTime);
+		if (num > 0.1f)
+		{
+			this.player.StopPlayback(0.01f);
+			this.barkRestart.PostFast(this.audioProbe.akGameObj);
+			this.lastSoundTime = fixedTimeDbl;
+			switch (this.strongestEmotion)
+			{
+			case HulvPlayer.Config.EmotionOverride.Angry:
+				this.emotionAnger.HandleBark();
+				break;
+			case HulvPlayer.Config.EmotionOverride.Frustrated:
+				this.emotionFrustration.HandleBark();
+				break;
+			}
+		}
+	}
+
+	// Token: 0x060008FF RID: 2303 RVA: 0x0005D8C8 File Offset: 0x0005BAC8
+	public void KillBark()
+	{
+		this.player.StopPlayback(0.2f);
+		this.killBark.PostFast(this.audioProbe.akGameObj);
+	}
+
+	// Token: 0x06000900 RID: 2304 RVA: 0x0005D8FC File Offset: 0x0005BAFC
+	private void UpdateState(HulvPlayer.Config config)
+	{
+		float fixedDeltaTime = Time.fixedDeltaTime;
+		this.timeSinceSpeedUpdate = (float)(Time.fixedTimeDbl % 0.5);
+		float num = this.timeSinceSpeedUpdate - this.timeSinceSpeedUpdateOld;
+		if (num < 0f)
+		{
+			Vector3 vector = this.position;
+			this.position = this.audioProbeTransform.position;
+			this.speed = (this.position - vector).magnitude / 0.5f;
+		}
+		this.movementState = ((this.speed <= 3.7f) ? HulvPlayer.MovementState.Idle : HulvPlayer.MovementState.Running);
+		if (config.emotionOverride == HulvPlayer.Config.EmotionOverride.Frustrated)
+		{
+			this.strongestEmotion = HulvPlayer.Config.EmotionOverride.Frustrated;
+			this.emotionFrustration.Update(this.audioProbe.gameObject, this.speed, ref this.position);
+			this.strongestEmotionLevel = this.emotionFrustration.level;
+		}
+		else
+		{
+			this.emotionAnger.Update(this.audioProbe.gameObject, this.speed, ref this.position);
+			if (this.emotionAnger.strength > 0.2f)
+			{
+				this.strongestEmotion = HulvPlayer.Config.EmotionOverride.Angry;
+				this.strongestEmotionLevel = this.emotionAnger.level;
+			}
+			else
+			{
+				this.strongestEmotion = HulvPlayer.Config.EmotionOverride.Normal;
+				this.strongestEmotionLevel = this.emotionNormal.level;
+			}
+		}
+		this.timeSinceSpeedUpdateOld = this.timeSinceSpeedUpdate;
+	}
+
+	// Token: 0x06000901 RID: 2305 RVA: 0x0005DA58 File Offset: 0x0005BC58
+	private void SetEmotionOverride(HulvPlayer.Config.EmotionOverride emotionOverride, bool setFullEmotionLevel = false)
+	{
+		this.overrideEmotion = emotionOverride;
+		if (emotionOverride != HulvPlayer.Config.EmotionOverride.Angry)
+		{
+			if (emotionOverride == HulvPlayer.Config.EmotionOverride.Frustrated)
+			{
+				if (setFullEmotionLevel)
+				{
+					this.emotionFrustration.level = 1f;
+				}
+			}
+		}
+		else if (setFullEmotionLevel)
+		{
+			this.emotionAnger.level = 3f;
+		}
+	}
+
+	// Token: 0x06000902 RID: 2306 RVA: 0x0005DAB8 File Offset: 0x0005BCB8
+	private void TryBark(float emotionLevel, bool forceBark)
+	{
+		bool flag = false;
+		if (forceBark)
+		{
+			flag = true;
+		}
+		else
+		{
+			bool flag2 = this.soundQueue.GetTimeSinceCompletion(Time.fixedTimeDbl) > 1f;
+			if (flag2 && !this.currentConfig.manualBarking && (this.animationFlags & UnityAnimEvent.Flags.Manual) == UnityAnimEvent.Flags.None)
+			{
+				flag = (emotionLevel > 1f || Random.value < emotionLevel * Time.fixedDeltaTime);
+			}
+		}
+		if (flag)
+		{
+			int count = Random.Range(3, 5);
+			this.soundQueue.ScheduleActionSequence(Time.fixedTimeDbl, 0.29f, 0.05f, count);
+		}
+	}
+
+	// Token: 0x06000903 RID: 2307 RVA: 0x0005DB5C File Offset: 0x0005BD5C
+	public void HandleAnimEvent(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent)
+	{
+		if (animEvent.isAudioEvent)
+		{
+			if (this.hulv != null)
+			{
+				Collider groundCollision = this.hulv.GetGroundCollision();
+				if (groundCollision != this.lastEventGroundCollider)
+				{
+					EffectMaterial.Material value = EffectMaterial.Material.Concrete;
+					if (groundCollision != null)
+					{
+						EffectMaterial component = groundCollision.GetComponent<EffectMaterial>();
+						if (component != null)
+						{
+							value = component.material;
+						}
+					}
+					SoundEngine.Switches.material.Set((int)value, this.audioProbe.akGameObj);
+					this.lastEventGroundCollider = groundCollision;
+				}
+			}
+			switch (animEvent.type)
+			{
+			case UnityAnimEvent.AudioType.Debug:
+			case UnityAnimEvent.AudioType.Footstep:
+			case UnityAnimEvent.AudioType.Custom:
+				if (animEvent.audioEvent.eventID == this.barkNoCallbacks.eventID)
+				{
+					this.Bark();
+				}
+				else
+				{
+					string eventName;
+					uint eventID = this.idMap.GetEventID(animEvent, out eventName);
+					AkGameObjUmbrella.UpdateTransform(this.audioProbe.akGameObj, true);
+					SoundEngine.PostEventByIDFast(eventID, eventName, this.audioProbe.akGameObj);
+				}
+				break;
+			case UnityAnimEvent.AudioType.Voice:
+				this.Bark();
+				break;
+			case UnityAnimEvent.AudioType.Flags:
+			{
+				bool flag = (this.animationFlags & UnityAnimEvent.Flags.Manual) == UnityAnimEvent.Flags.None;
+				bool flag2 = (animEvent.flags & UnityAnimEvent.Flags.Manual) == UnityAnimEvent.Flags.None;
+				this.animationFlags = animEvent.flags;
+				bool flag3 = flag != flag2 && !flag2;
+				if (flag3 && this.soundQueue.actionsLeft > 0)
+				{
+					this.soundQueue.Clear();
+				}
+				break;
+			}
+			}
+		}
+	}
+
+	// Token: 0x06000904 RID: 2308 RVA: 0x0005DCE8 File Offset: 0x0005BEE8
+	public void HandleAnimEventEditor(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent)
+	{
+		if (animEvent.isAudioEvent)
+		{
+			string eventName = AudioEventNames.GetEventName(animEvent, this.prefix, null);
+			if (!string.IsNullOrEmpty(eventName))
+			{
+				EditorAudio.PostEvent(eventName);
+			}
+		}
+	}
+
+	// Token: 0x06000905 RID: 2309 RVA: 0x0005DD20 File Offset: 0x0005BF20
+	public void HandleAnimationChange(IUnityAnimEventTrigger trigger, Object oldAnim, Object newAnim)
+	{
+		this.animationFlags = UnityAnimEvent.Flags.None;
+	}
+
+	// Token: 0x06000906 RID: 2310 RVA: 0x0005DD2C File Offset: 0x0005BF2C
+	public void HandleContinuousAnimEvent(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent, bool isActive)
+	{
+	}
+
+	// Token: 0x06000907 RID: 2311 RVA: 0x0005DD30 File Offset: 0x0005BF30
+	public AnimEventAkIDMap GetAnimEventAkIDMap()
+	{
+		return this.idMap;
+	}
+
+	// Token: 0x06000908 RID: 2312 RVA: 0x0005DD38 File Offset: 0x0005BF38
+	public void PreprocessUnityAnimEvents(int animID, List<UnityAnimEvent> events)
+	{
+		this.idMap.PreprocessUnityAnimEvents(animID, events);
+	}
+
+	// Token: 0x0600090B RID: 2315 RVA: 0x0005DD60 File Offset: 0x0005BF60
+	virtual bool get_enabled()
+	{
+		return base.enabled;
+	}
+
+	// Token: 0x0600090C RID: 2316 RVA: 0x0005DD68 File Offset: 0x0005BF68
+	virtual GameObject get_gameObject()
+	{
+		return base.gameObject;
+	}
+
+	// Token: 0x0600090D RID: 2317 RVA: 0x0005DD70 File Offset: 0x0005BF70
+	virtual GameObject get_gameObject()
+	{
+		return base.gameObject;
+	}
+
+	// Token: 0x04000F0C RID: 3852
+	public const float barkPeriod = 0.29f;
+
+	// Token: 0x04000F0D RID: 3853
+	public const float emotionThreshold = 0.2f;
+
+	// Token: 0x04000F0E RID: 3854
+	private const float runSpeed = 3.7f;
+
+	// Token: 0x04000F0F RID: 3855
+	public const int maxBarksInSequence = 5;
+
+	// Token: 0x04000F10 RID: 3856
+	private const float barkTimingVariation = 0.1f;
+
+	// Token: 0x04000F11 RID: 3857
+	private const float speedUpdateRate = 0.5f;
+
+	// Token: 0x04000F12 RID: 3858
+	private const float audioEventRestartFadeTime = 0.01f;
+
+	// Token: 0x04000F13 RID: 3859
+	public const float barkFrustrationReduction = 2f;
+
+	// Token: 0x04000F14 RID: 3860
+	public const float frustrationUpdateFrequency = 0.2f;
+
+	// Token: 0x04000F15 RID: 3861
+	public const float barkAngerReduction = 0.6f;
+
+	// Token: 0x04000F16 RID: 3862
+	public const float angerDistanceFalloffSteepness = 0.1f;
+
+	// Token: 0x04000F17 RID: 3863
+	public const float fullRageLevel = 3f;
+
+	// Token: 0x04000F18 RID: 3864
+	public float maxRange = 100f;
+
+	// Token: 0x04000F19 RID: 3865
+	public string prefix = "watchdog";
+
+	// Token: 0x04000F1A RID: 3866
+	public bool startDeactivated;
+
+	// Token: 0x04000F1B RID: 3867
+	public AudioProbe audioProbe;
+
+	// Token: 0x04000F1C RID: 3868
+	private SignalIn startHulvSound;
+
+	// Token: 0x04000F1D RID: 3869
+	private SignalIn stopHulvSound;
+
+	// Token: 0x04000F1E RID: 3870
+	private HulvPlayer.MovementState movementState;
+
+	// Token: 0x04000F1F RID: 3871
+	private HulvPlayer.MovementState movementStateOld;
+
+	// Token: 0x04000F20 RID: 3872
+	private UnityAnimEvent.Flags animationFlags;
+
+	// Token: 0x04000F21 RID: 3873
+	private Vector3 position;
+
+	// Token: 0x04000F22 RID: 3874
+	private Vector3 positionOld;
+
+	// Token: 0x04000F23 RID: 3875
+	private bool shouldBarkImmediately;
+
+	// Token: 0x04000F24 RID: 3876
+	private Collider lastEventGroundCollider;
+
+	// Token: 0x04000F25 RID: 3877
+	private GameObject jaw;
+
+	// Token: 0x04000F26 RID: 3878
+	private double lastSoundTime = -1.0;
+
+	// Token: 0x04000F27 RID: 3879
+	private HulvPlayer.Config.EmotionOverride strongestEmotion;
+
+	// Token: 0x04000F28 RID: 3880
+	private HulvPlayer.Config.EmotionOverride strongestEmotionOld;
+
+	// Token: 0x04000F29 RID: 3881
+	private float timeSinceSpeedUpdate;
+
+	// Token: 0x04000F2A RID: 3882
+	private float timeSinceSpeedUpdateOld;
+
+	// Token: 0x04000F2B RID: 3883
+	private float speed;
+
+	// Token: 0x04000F2C RID: 3884
+	private float strongestEmotionLevel;
+
+	// Token: 0x04000F2D RID: 3885
+	private HulvPlayer.Config.EmotionOverride overrideEmotion;
+
+	// Token: 0x04000F2E RID: 3886
+	private RangedSoundPlayer player;
+
+	// Token: 0x04000F2F RID: 3887
+	private HulvPlayer.TimedActionQueueFast soundQueue;
+
+	// Token: 0x04000F30 RID: 3888
+	private Normal emotionNormal;
+
+	// Token: 0x04000F31 RID: 3889
+	private Anger emotionAnger;
+
+	// Token: 0x04000F32 RID: 3890
+	private Frustration emotionFrustration;
+
+	// Token: 0x04000F33 RID: 3891
+	[SerializeField]
+	private bool preprocessed;
+
+	// Token: 0x04000F34 RID: 3892
+	[SerializeField]
+	public Hulv hulv;
+
+	// Token: 0x04000F35 RID: 3893
+	[SerializeField]
+	private HulvAI ai;
+
+	// Token: 0x04000F36 RID: 3894
+	[SerializeField]
+	private HulvPlayer.Config currentConfig;
+
+	// Token: 0x04000F37 RID: 3895
+	[SerializeField]
+	private HulvPlayer.Config defaultConfig;
+
+	// Token: 0x04000F38 RID: 3896
+	[SerializeField]
+	private Switch moodSwitch;
+
+	// Token: 0x04000F39 RID: 3897
+	[SerializeField]
+	private Switch movementSwitch;
+
+	// Token: 0x04000F3A RID: 3898
+	[SerializeField]
+	private AudioEventSimple killBark;
+
+	// Token: 0x04000F3B RID: 3899
+	[SerializeField]
+	private AudioEventSimple barkRestart;
+
+	// Token: 0x04000F3C RID: 3900
+	[SerializeField]
+	private AudioEventSimple barkNoCallbacks;
+
+	// Token: 0x04000F3D RID: 3901
+	[SerializeField]
+	private Transform audioProbeTransform;
+
+	// Token: 0x04000F3E RID: 3902
+	[SerializeField]
+	private AnimEventAkIDMap idMap;
+
+	// Token: 0x04000F3F RID: 3903
+	private bool isRegistered;
+
+	// Token: 0x02000129 RID: 297
+	public enum MovementState
+	{
+		// Token: 0x04000F41 RID: 3905
+		Idle,
+		// Token: 0x04000F42 RID: 3906
+		Running
+	}
+
+	// Token: 0x0200012A RID: 298
+	[Serializable]
+	public struct Config
+	{
+		// Token: 0x0600090E RID: 2318 RVA: 0x0005DD78 File Offset: 0x0005BF78
+		public static HulvPlayer.Config CreateDefaultConfig()
+		{
+			return default(HulvPlayer.Config);
+		}
+
+		// Token: 0x0600090F RID: 2319 RVA: 0x0005DD90 File Offset: 0x0005BF90
+		public string ToDebugString()
+		{
+			return string.Concat(new object[]
+			{
+				"HulvPlayer.Config\n - manualBarking   : ",
+				this.manualBarking,
+				"\n - barkImmediately : ",
+				this.barkImmediately,
+				"\n - emotionOverride : ",
+				this.emotionOverride
+			});
+		}
+
+		// Token: 0x04000F43 RID: 3907
+		public bool manualBarking;
+
+		// Token: 0x04000F44 RID: 3908
+		public bool barkImmediately;
+
+		// Token: 0x04000F45 RID: 3909
+		public HulvPlayer.Config.EmotionOverride emotionOverride;
+
+		// Token: 0x0200012B RID: 299
+		public enum EmotionOverride
+		{
+			// Token: 0x04000F47 RID: 3911
+			None,
+			// Token: 0x04000F48 RID: 3912
+			Normal,
+			// Token: 0x04000F49 RID: 3913
+			Angry,
+			// Token: 0x04000F4A RID: 3914
+			Frustrated
+		}
+	}
+
+	// Token: 0x0200012C RID: 300
+	public class TimedActionQueueFast
+	{
+		// Token: 0x06000910 RID: 2320 RVA: 0x0005DDEC File Offset: 0x0005BFEC
+		public TimedActionQueueFast(HulvPlayer parent)
+		{
+			this.parent = parent;
+		}
+
+		// Token: 0x06000911 RID: 2321 RVA: 0x0005DE44 File Offset: 0x0005C044
+		public void ScheduleActionSequence(double startTime, float period, float variation, int count)
+		{
+			this.nextActionTime = startTime + (double)(Random.value * variation);
+			this.isCompleted = false;
+			this.completedTime = -1.0;
+			this.actionsLeft = count;
+			this.period = period;
+			this.variation = variation;
+		}
+
+		// Token: 0x06000912 RID: 2322 RVA: 0x0005DE90 File Offset: 0x0005C090
+		public void TryExecuteAction(double currentTime)
+		{
+			if (!this.isCompleted && this.nextActionTime <= currentTime)
+			{
+				this.parent.Bark();
+				this.actionsLeft--;
+				if (this.actionsLeft > 0)
+				{
+					this.nextActionTime += (double)(this.period + Random.value * this.variation);
+				}
+				else
+				{
+					this.completedTime = currentTime;
+					this.isCompleted = true;
+				}
+			}
+		}
+
+		// Token: 0x06000913 RID: 2323 RVA: 0x0005DF10 File Offset: 0x0005C110
+		public void Clear()
+		{
+			this.isCompleted = true;
+		}
+
+		// Token: 0x06000914 RID: 2324 RVA: 0x0005DF1C File Offset: 0x0005C11C
+		public float GetTimeSinceCompletion(double currentTime)
+		{
+			if (this.isCompleted)
+			{
+				return (float)(currentTime - this.completedTime);
+			}
+			return -1f;
+		}
+
+		// Token: 0x04000F4B RID: 3915
+		public bool isCompleted = true;
+
+		// Token: 0x04000F4C RID: 3916
+		private double completedTime = -1.0;
+
+		// Token: 0x04000F4D RID: 3917
+		private double nextActionTime = -1.0;
+
+		// Token: 0x04000F4E RID: 3918
+		private float period = -1f;
+
+		// Token: 0x04000F4F RID: 3919
+		private float variation = -1f;
+
+		// Token: 0x04000F50 RID: 3920
+		public int actionsLeft;
+
+		// Token: 0x04000F51 RID: 3921
+		private HulvPlayer parent;
+	}
+}

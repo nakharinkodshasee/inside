@@ -1,0 +1,306 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000504 RID: 1284
+public class HuddleChamberDude : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002195 RID: 8597 RVA: 0x00119544 File Offset: 0x00117744
+	public bool PreAwake(int callcount)
+	{
+		this.intro = SignalIn.Create("intro", base.gameObject, new Action(this.OnIntro));
+		this.customAnim = SignalIn.Create("customAnim", base.gameObject, new Action(this.OnCustomAnim));
+		return true;
+	}
+
+	// Token: 0x06002196 RID: 8598 RVA: 0x00119598 File Offset: 0x00117798
+	private void Start()
+	{
+		if (this.animSpeedVariation != 0f)
+		{
+			this.animSpeed += Random.Range(-this.animSpeedVariation, this.animSpeedVariation);
+		}
+		this.animIdleUpState = this.anim[this.animIdleUp.name];
+		this.animIdleStraightState = this.anim[this.animIdleStraight.name];
+		this.animIdleDownState = this.anim[this.animIdleDown.name];
+		this.animIdleUpState.layer = 3;
+		this.animIdleStraightState.layer = 2;
+		this.animIdleDownState.layer = 4;
+		this.animIdleUpState.speed = this.animSpeed;
+		this.animIdleStraightState.speed = this.animSpeed;
+		this.animIdleDownState.speed = this.animSpeed;
+		if (this.animCustom)
+		{
+			this.animCustomState = this.anim[this.animCustom.name];
+			this.animCustomState.layer = 5;
+			this.animCustomState.speed = this.animSpeed;
+		}
+		if (this.animIntro)
+		{
+			this.animIntroState = this.anim[this.animIntro.name];
+			this.animIntroState.speed = this.animSpeed;
+		}
+		if (this.animIntroIdle)
+		{
+			this.animIntroIdleState = this.anim[this.animIntroIdle.name];
+			this.animIntroIdleState.speed = this.animSpeed;
+		}
+		if (this.animIntro || this.animIntroIdle)
+		{
+			this.SetIntroIdleState();
+		}
+		else
+		{
+			this.SetLookState();
+		}
+	}
+
+	// Token: 0x06002197 RID: 8599 RVA: 0x00119774 File Offset: 0x00117974
+	private void OnEnable()
+	{
+		if (this.state != HuddleChamberDude.State.None)
+		{
+			if (this.state == HuddleChamberDude.State.IntroIdle)
+			{
+				this.SetIntroIdleState();
+			}
+			else if (this.state == HuddleChamberDude.State.Look)
+			{
+				this.SetLookState();
+			}
+		}
+	}
+
+	// Token: 0x06002198 RID: 8600 RVA: 0x001197B8 File Offset: 0x001179B8
+	private void SetIntroIdleState()
+	{
+		if (this.animIntroIdle)
+		{
+			this.anim.Play(this.animIntroIdleState.name);
+		}
+		else if (this.animIntro)
+		{
+			this.anim.Play(this.animIntroState.name);
+			this.animIntroState.speed = 0f;
+		}
+		this.state = HuddleChamberDude.State.IntroIdle;
+	}
+
+	// Token: 0x06002199 RID: 8601 RVA: 0x00119830 File Offset: 0x00117A30
+	private void IntroIdleState()
+	{
+	}
+
+	// Token: 0x0600219A RID: 8602 RVA: 0x00119834 File Offset: 0x00117A34
+	private void SetIntroState()
+	{
+		if (this.animIntroState.speed == 0f)
+		{
+			this.animIntroState.speed = this.animSpeed;
+		}
+		else
+		{
+			this.anim.CrossFade(this.animIntroState.name);
+		}
+		this.state = HuddleChamberDude.State.Intro;
+	}
+
+	// Token: 0x0600219B RID: 8603 RVA: 0x0011988C File Offset: 0x00117A8C
+	private void IntroState()
+	{
+		if (this.animIntroState.time >= this.animIntroState.length - 0.2f)
+		{
+			this.SetLookState();
+		}
+	}
+
+	// Token: 0x0600219C RID: 8604 RVA: 0x001198B8 File Offset: 0x00117AB8
+	private void SetLookState()
+	{
+		this.anim.Play(this.animIdleUpState.name);
+		this.anim.Play(this.animIdleStraightState.name);
+		this.anim.Play(this.animIdleDownState.name);
+		this.animIdleUpState.weight = 0f;
+		this.animIdleStraightState.weight = 1f;
+		this.animIdleDownState.weight = 0f;
+		if (this.animRandomStartFrame)
+		{
+			float value = Random.value;
+			this.animIdleUpState.normalizedTime = value;
+			this.animIdleStraightState.normalizedTime = value;
+			this.animIdleDownState.normalizedTime = value;
+		}
+		this.state = HuddleChamberDude.State.Look;
+	}
+
+	// Token: 0x0600219D RID: 8605 RVA: 0x00119978 File Offset: 0x00117B78
+	private void LookState()
+	{
+		Transform head = HuddleChamberDude.GetHead();
+		if (!head)
+		{
+			return;
+		}
+		Vector3 position = base.transform.position;
+		position.y += this.eyesHeight;
+		float num = Vector3.Dot(Vector3.up, head.position - position);
+		this.lookTarget = num * this.lookSensitivity;
+		this.lookTarget = Mathf.Clamp(this.lookTarget, -1f, 1f);
+		if (this.currentLook != this.lookTarget)
+		{
+			float num2 = this.lookTarget - this.currentLook;
+			float num3 = Mathf.Sign(num2);
+			this.currentLook += num2 * Time.deltaTime * this.blendSpeed;
+			if ((num3 == 1f && this.currentLook > this.lookTarget) || (num3 == -1f && this.currentLook < this.lookTarget))
+			{
+				this.currentLook = this.lookTarget;
+			}
+		}
+		if (this.currentLook >= 0f)
+		{
+			this.animIdleUpState.weight = this.currentLook;
+			this.animIdleDownState.weight = 0f;
+		}
+		else
+		{
+			this.animIdleUpState.weight = 0f;
+			this.animIdleDownState.weight = Mathf.Abs(this.currentLook);
+		}
+		this.animIdleStraightState.weight = 1f;
+	}
+
+	// Token: 0x0600219E RID: 8606 RVA: 0x00119AEC File Offset: 0x00117CEC
+	private void Update()
+	{
+		switch (this.state)
+		{
+		case HuddleChamberDude.State.IntroIdle:
+			this.IntroIdleState();
+			break;
+		case HuddleChamberDude.State.Intro:
+			this.IntroState();
+			break;
+		case HuddleChamberDude.State.Look:
+			this.LookState();
+			break;
+		}
+	}
+
+	// Token: 0x0600219F RID: 8607 RVA: 0x00119B3C File Offset: 0x00117D3C
+	public static Transform GetHead()
+	{
+		if (!HuddleChamberDude.boyHead && ScriptGlobals.boy.visualBoy)
+		{
+			HuddleChamberDude.boyHead = ScriptGlobals.boy.visualBoy.actor.bones[ScriptGlobals.boy.visualBoy.actor.GetBone("Head")].transform;
+		}
+		return HuddleChamberDude.boyHead;
+	}
+
+	// Token: 0x060021A0 RID: 8608 RVA: 0x00119BB0 File Offset: 0x00117DB0
+	private void OnCustomAnim()
+	{
+		if (this.anim && this.animCustomState && !this.anim.IsPlaying(this.animCustomState.name))
+		{
+			this.anim.CrossFade(this.animCustomState.name);
+		}
+	}
+
+	// Token: 0x060021A1 RID: 8609 RVA: 0x00119C10 File Offset: 0x00117E10
+	private void OnIntro()
+	{
+		if (this.state == HuddleChamberDude.State.IntroIdle)
+		{
+			this.SetIntroState();
+		}
+	}
+
+	// Token: 0x04003E66 RID: 15974
+	public Animation anim;
+
+	// Token: 0x04003E67 RID: 15975
+	public AnimationClip animIntroIdle;
+
+	// Token: 0x04003E68 RID: 15976
+	public AnimationClip animIntro;
+
+	// Token: 0x04003E69 RID: 15977
+	public AnimationClip animCustom;
+
+	// Token: 0x04003E6A RID: 15978
+	public AnimationClip animIdleUp;
+
+	// Token: 0x04003E6B RID: 15979
+	public AnimationClip animIdleStraight;
+
+	// Token: 0x04003E6C RID: 15980
+	public AnimationClip animIdleDown;
+
+	// Token: 0x04003E6D RID: 15981
+	public float lookSensitivity = 0.5f;
+
+	// Token: 0x04003E6E RID: 15982
+	public float eyesHeight = 2f;
+
+	// Token: 0x04003E6F RID: 15983
+	public float blendSpeed = 1f;
+
+	// Token: 0x04003E70 RID: 15984
+	public float animSpeedVariation = 0.1f;
+
+	// Token: 0x04003E71 RID: 15985
+	public bool animRandomStartFrame = true;
+
+	// Token: 0x04003E72 RID: 15986
+	public bool debug;
+
+	// Token: 0x04003E73 RID: 15987
+	private SignalIn intro;
+
+	// Token: 0x04003E74 RID: 15988
+	private SignalIn customAnim;
+
+	// Token: 0x04003E75 RID: 15989
+	private HuddleChamberDude.State state;
+
+	// Token: 0x04003E76 RID: 15990
+	private AnimationState animIntroState;
+
+	// Token: 0x04003E77 RID: 15991
+	private AnimationState animIntroIdleState;
+
+	// Token: 0x04003E78 RID: 15992
+	private AnimationState animCustomState;
+
+	// Token: 0x04003E79 RID: 15993
+	private AnimationState animIdleUpState;
+
+	// Token: 0x04003E7A RID: 15994
+	private AnimationState animIdleStraightState;
+
+	// Token: 0x04003E7B RID: 15995
+	private AnimationState animIdleDownState;
+
+	// Token: 0x04003E7C RID: 15996
+	private float lookTarget;
+
+	// Token: 0x04003E7D RID: 15997
+	private float currentLook;
+
+	// Token: 0x04003E7E RID: 15998
+	private float animSpeed = 1f;
+
+	// Token: 0x04003E7F RID: 15999
+	private static Transform boyHead;
+
+	// Token: 0x02000505 RID: 1285
+	private enum State
+	{
+		// Token: 0x04003E81 RID: 16001
+		None,
+		// Token: 0x04003E82 RID: 16002
+		IntroIdle,
+		// Token: 0x04003E83 RID: 16003
+		Intro,
+		// Token: 0x04003E84 RID: 16004
+		Look
+	}
+}

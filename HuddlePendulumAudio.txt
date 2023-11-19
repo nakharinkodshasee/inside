@@ -1,0 +1,142 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200046C RID: 1132
+public class HuddlePendulumAudio : MonoBehaviour
+{
+	// Token: 0x06001DBB RID: 7611 RVA: 0x00100190 File Offset: 0x000FE390
+	private void OnDisable()
+	{
+		if (this.lastFrameGrabbing)
+		{
+			ThemeUtils.DisableOverrideHuddleEngagement();
+		}
+	}
+
+	// Token: 0x06001DBC RID: 7612 RVA: 0x001001A4 File Offset: 0x000FE3A4
+	private void Start()
+	{
+		this.pendulum = base.gameObject.GetComponent<Rigidbody>();
+		this.startPos = this.pendulum.transform.position;
+		this.strainFilter = new AttackReleaseFilter(this.filterAttack, this.filterRelease);
+	}
+
+	// Token: 0x06001DBD RID: 7613 RVA: 0x001001F0 File Offset: 0x000FE3F0
+	private void AddStrain(float strainAdd)
+	{
+		this.strain += strainAdd * this.strainMultiplier;
+	}
+
+	// Token: 0x06001DBE RID: 7614 RVA: 0x00100208 File Offset: 0x000FE408
+	private void SubstractStrain()
+	{
+		this.strain -= 2f;
+	}
+
+	// Token: 0x06001DBF RID: 7615 RVA: 0x0010021C File Offset: 0x000FE41C
+	private void ManageStrain()
+	{
+		this.strain = Mathf.Clamp(this.strain, 0f, 100f);
+		float num = this.strainFilter.Filter(this.strain);
+		float num2 = Mathf.InverseLerp(0f, 100f, num);
+		int num3 = (int)Mathf.Lerp(0f, 3f, num2);
+		ThemeUtils.OverrideHuddleEngagement(HuddleEffectState.Engagement.Engaged, num3);
+	}
+
+	// Token: 0x06001DC0 RID: 7616 RVA: 0x00100280 File Offset: 0x000FE480
+	private void ManageInput()
+	{
+		float x = this.pendulum.velocity.x;
+		float x2 = ScriptGlobals.huddle.input.stick.x;
+		float magnitude = (this.startPos - this.pendulum.transform.position).magnitude;
+		if (this.changeDirTime < 0f && magnitude >= 3f && Mathf.Abs(x) < 1.5f)
+		{
+			this.changeDirTime = 1.5f;
+		}
+		else
+		{
+			this.changeDirTime -= Time.deltaTime;
+		}
+		if ((double)magnitude <= 0.5)
+		{
+			this.changeDirTime = 0f;
+		}
+		bool hasFoothold = ScriptGlobals.huddle.status.hasFoothold;
+		this.movingRight = (x > 0f);
+		if (Mathf.Abs(x) < 4f && Mathf.Abs(x2) > 0.5f && hasFoothold)
+		{
+			this.AddStrain(1.7f);
+		}
+		else if (this.changeDirTime > 0f && Mathf.Abs(x) < 3f && !hasFoothold && ((!this.movingRight && x2 < -0.25f) || (this.movingRight && x2 > 0.25f)))
+		{
+			this.AddStrain(3f);
+		}
+		else if (Mathf.Abs(x) > 3f && hasFoothold && ((x2 > 0f && x < 0f) || (x2 < 0f && x > 0f)))
+		{
+			this.AddStrain(1.7f);
+		}
+		else
+		{
+			this.SubstractStrain();
+		}
+	}
+
+	// Token: 0x06001DC1 RID: 7617 RVA: 0x00100458 File Offset: 0x000FE658
+	private void FixedUpdate()
+	{
+		HuddleGrabState grabState = ScriptGlobals.huddle.grabState;
+		this.isGrabbing = (grabState != null && grabState.collider == this.huddleGrabColl);
+		if (this.lastFrameGrabbing && !this.isGrabbing)
+		{
+			ThemeUtils.DisableOverrideHuddleEngagement();
+		}
+		this.lastFrameGrabbing = this.isGrabbing;
+		if (this.isGrabbing)
+		{
+			this.ManageStrain();
+			this.ManageInput();
+		}
+	}
+
+	// Token: 0x040036AB RID: 13995
+	public float strainMultiplier = 10f;
+
+	// Token: 0x040036AC RID: 13996
+	public int filterAttack;
+
+	// Token: 0x040036AD RID: 13997
+	public int filterRelease = 8;
+
+	// Token: 0x040036AE RID: 13998
+	public Collider huddleGrabColl;
+
+	// Token: 0x040036AF RID: 13999
+	private Rigidbody pendulum;
+
+	// Token: 0x040036B0 RID: 14000
+	private bool isGrabbing;
+
+	// Token: 0x040036B1 RID: 14001
+	private bool lastFrameGrabbing;
+
+	// Token: 0x040036B2 RID: 14002
+	private bool customStrainActive;
+
+	// Token: 0x040036B3 RID: 14003
+	private float strain;
+
+	// Token: 0x040036B4 RID: 14004
+	private Vector3 startPos;
+
+	// Token: 0x040036B5 RID: 14005
+	private bool movingRight;
+
+	// Token: 0x040036B6 RID: 14006
+	private bool changedDir = true;
+
+	// Token: 0x040036B7 RID: 14007
+	private float changeDirTime;
+
+	// Token: 0x040036B8 RID: 14008
+	private AttackReleaseFilter strainFilter;
+}

@@ -1,0 +1,247 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200047E RID: 1150
+public class huddleTeasing : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001E2B RID: 7723 RVA: 0x00102C60 File Offset: 0x00100E60
+	public bool PreAwake(int callcount)
+	{
+		this.startTeasing = SignalIn.Create("startTeasing", base.gameObject, new Action(this.StartTeasing));
+		this.openHatch = SignalOut.Create("openHatch", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001E2C RID: 7724 RVA: 0x00102CA8 File Offset: 0x00100EA8
+	private void Start()
+	{
+		this.startCamAim = this.cameraZoneAtTrap.positionAim;
+	}
+
+	// Token: 0x06001E2D RID: 7725 RVA: 0x00102CBC File Offset: 0x00100EBC
+	private void StartTeasing()
+	{
+		if (!this.teaseIsActive)
+		{
+			this.teaseIsActive = true;
+			this.timeActive = 0f;
+		}
+	}
+
+	// Token: 0x06001E2E RID: 7726 RVA: 0x00102CDC File Offset: 0x00100EDC
+	private void Update()
+	{
+		if (ScriptGlobals.huddle == null)
+		{
+			return;
+		}
+		Vector3 positionAim = this.cameraZoneAtTrap.positionAim;
+		positionAim.y = Mathf.Lerp(0.75f, this.startCamAim.y, Mathf.InverseLerp(10f, 15f, base.transform.position.y - ScriptGlobals.huddle.pos3.y));
+		this.cameraZoneAtTrap.positionAim = positionAim;
+	}
+
+	// Token: 0x06001E2F RID: 7727 RVA: 0x00102D64 File Offset: 0x00100F64
+	private void FixedUpdate()
+	{
+		if (ScriptGlobals.huddle == null || ScriptGlobals.huddle.spine == null || this.jetCrateRemoved)
+		{
+			return;
+		}
+		float num = this.targetPos.position.x - ScriptGlobals.huddle.transform.position.x;
+		float num2 = Mathf.Abs(num);
+		if (!this.teaseIsActive)
+		{
+			num2 = 100f;
+		}
+		else
+		{
+			this.timeActive += Time.deltaTime;
+		}
+		float num3 = MathUtils.SmoothFraction(Mathf.Clamp(this.timeActive - 1f, 0f, 1f));
+		float num4 = this.pullUpCurve.Evaluate(Mathf.InverseLerp(10f, 3f, num2)) * num3;
+		Vector3 position = this.targetPos.position;
+		float num5 = Mathf.Lerp(this.lowY.position.y, this.highY.position.y, num4);
+		if (num5 > position.y)
+		{
+			position.y += (num5 - position.y) * Time.deltaTime * 5f;
+		}
+		else
+		{
+			position.y += (num5 - position.y) * Time.deltaTime * 0.6f;
+		}
+		if (num2 < 9f && this.timeActive > 3.5f)
+		{
+			float num6 = Mathf.InverseLerp(9f, 1f, num);
+			position.x = Mathf.MoveTowards(position.x, this.right.position.x, Time.deltaTime * 0.75f * num6 * Mathf.InverseLerp(3.5f, 5f, this.timeActive));
+		}
+		this.targetPos.position = position;
+		position.y += this.shakeCurveY.Evaluate(this.timeActive * 0.35f) * 0.9f * Mathf.Min(1f, this.timeActive);
+		position.x += this.shakeCurveX.Evaluate(this.timeActive * 0.2f) * 0.2f * Mathf.Min(1f, this.timeActive);
+		if (this.moveCrateAway)
+		{
+			this.moveCrateAwayTime += Time.deltaTime;
+			position.z = this.ropeStaticBody.transform.position.z;
+			if (this.moveCrateAwayTime < 10f / this.JetcrateRemoveSpeed)
+			{
+				position.z -= this.JetcrateRemoveSpeed * Time.deltaTime;
+				Rigidbody attachedRigidbody = this.teaserJetCrate.attachedRigidbody;
+				if (attachedRigidbody != null)
+				{
+					float z = attachedRigidbody.velocity.z;
+					Vector3 vector = Vector3.forward * (-this.JetcrateRemoveSpeed - z) * Mathf.Min(10f * Time.deltaTime, 1f);
+					this.teaserJetCrate.attachedRigidbody.AddForce(vector, 2);
+				}
+			}
+			else
+			{
+				this.teaserJetCrate.gameObject.SetActive(false);
+				if (this.ropeRoot != null)
+				{
+					this.ropeRoot.SetActive(false);
+				}
+				this.jetCrateRemoved = true;
+			}
+		}
+		float num7 = Mathf.Abs(ScriptGlobals.huddle.pos.x - position.x);
+		bool flag = false;
+		if (num7 < 4f)
+		{
+			float y = ScriptGlobals.huddle.cloth.topBone.pos.y;
+			float num8 = position.y - 11.5f - y;
+			num8 *= MathUtils.SmoothFraction(Mathf.Clamp(4f - num7, 0f, 1f));
+			if (num8 < 0f)
+			{
+				this.extraLift = this.extraLift * (1f - 4f * Time.deltaTime) - num8 * Time.deltaTime * 4f;
+				flag = true;
+			}
+		}
+		if (!flag)
+		{
+			this.extraLift *= 1f - Time.deltaTime * 3f;
+		}
+		position.y += this.extraLift;
+		this.ropeStaticBody.MovePosition(position);
+		if (!this.hatchOpened && Mathf.Abs(ScriptGlobals.huddle.pos3.x - this.right.transform.position.x) < 4f && Mathf.Abs(ScriptGlobals.huddle.velocity.x) < 2f && Mathf.Abs(base.transform.position.x - this.right.transform.position.x) < 2f)
+		{
+			this.onHatchTimer += Time.deltaTime;
+			bool flag2 = false;
+			if (Mathf.Abs(ScriptGlobals.huddle.input.stick.x) > 0.5f && !this.huddleReactOpen)
+			{
+				if (this.onHatchTimer > 3f)
+				{
+					this.huddleReactOpen = true;
+					this.onHatchTimer = 4.75f;
+				}
+			}
+			else if (this.onHatchTimer > 5f)
+			{
+				flag2 = true;
+			}
+			if (flag2 && Mathf.Abs(ScriptGlobals.huddle.pos3.x - this.right.transform.position.x) < 1.25f && Mathf.Abs(ScriptGlobals.huddle.velocity.x) < 1f)
+			{
+				this.hatchOpened = true;
+				this.openHatch.Signal();
+			}
+		}
+		if (this.hatchOpened && ScriptGlobals.huddle.pos.y <= this.turnOffCratePosition.position.y)
+		{
+			this.moveCrateAway = true;
+		}
+		if (this.teaserJetCrate != null && !this.hatchOpened)
+		{
+			Vector3 position2 = this.teaserJetCrate.transform.position;
+			float sqrMagnitude = (position2 - ScriptGlobals.huddle.pos3).sqrMagnitude;
+			this.timer -= Time.deltaTime;
+			if (this.timer < 0f && Mathf.Abs(position2.x - ScriptGlobals.huddle.pos.x) < 3f && position2.y - ScriptGlobals.huddle.pos.y < 5f)
+			{
+				ScriptGlobals.huddle.visualHuddle.arms2.ReachOutFor(this.teaserJetCrate, true);
+				this.timer = Random.Range(0.1f, 0.3f);
+			}
+			this.distLastFrame = sqrMagnitude;
+		}
+	}
+
+	// Token: 0x0400378D RID: 14221
+	public Transform targetPos;
+
+	// Token: 0x0400378E RID: 14222
+	public CameraBlendBox cameraZoneAtTrap;
+
+	// Token: 0x0400378F RID: 14223
+	public AnimationCurve pullUpCurve;
+
+	// Token: 0x04003790 RID: 14224
+	public AnimationCurve shakeCurveY;
+
+	// Token: 0x04003791 RID: 14225
+	public AnimationCurve shakeCurveX;
+
+	// Token: 0x04003792 RID: 14226
+	public Rigidbody ropeStaticBody;
+
+	// Token: 0x04003793 RID: 14227
+	public Transform lowY;
+
+	// Token: 0x04003794 RID: 14228
+	public Transform highY;
+
+	// Token: 0x04003795 RID: 14229
+	public Transform left;
+
+	// Token: 0x04003796 RID: 14230
+	public Transform right;
+
+	// Token: 0x04003797 RID: 14231
+	public Collider teaserJetCrate;
+
+	// Token: 0x04003798 RID: 14232
+	public Transform turnOffCratePosition;
+
+	// Token: 0x04003799 RID: 14233
+	public GameObject ropeRoot;
+
+	// Token: 0x0400379A RID: 14234
+	public float JetcrateRemoveSpeed = 3f;
+
+	// Token: 0x0400379B RID: 14235
+	private SignalIn startTeasing;
+
+	// Token: 0x0400379C RID: 14236
+	private SignalOut openHatch;
+
+	// Token: 0x0400379D RID: 14237
+	private float onHatchTimer;
+
+	// Token: 0x0400379E RID: 14238
+	private Vector3 startCamAim;
+
+	// Token: 0x0400379F RID: 14239
+	private bool teaseIsActive;
+
+	// Token: 0x040037A0 RID: 14240
+	private float timeActive;
+
+	// Token: 0x040037A1 RID: 14241
+	private bool hatchOpened;
+
+	// Token: 0x040037A2 RID: 14242
+	private bool moveCrateAway;
+
+	// Token: 0x040037A3 RID: 14243
+	private float moveCrateAwayTime;
+
+	// Token: 0x040037A4 RID: 14244
+	private bool jetCrateRemoved;
+
+	// Token: 0x040037A5 RID: 14245
+	private float distLastFrame;
+
+	// Token: 0x040037A6 RID: 14246
+	private float timer;
+
+	// Token: 0x040037A7 RID: 14247
+	private float extraLift;
+
+	// Token: 0x040037A8 RID: 14248
+	private bool huddleReactOpen;
+}

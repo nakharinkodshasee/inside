@@ -1,0 +1,36 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005C3 RID: 1475
+public class HuddleSwingWhileGrabing : MonoBehaviour
+{
+	// Token: 0x06002588 RID: 9608 RVA: 0x001330B0 File Offset: 0x001312B0
+	private void Start()
+	{
+		this.orgSwingStrength = ScriptGlobals.huddle.properties.grab.hangingGrab.swingStrength;
+	}
+
+	// Token: 0x06002589 RID: 9609 RVA: 0x001330D4 File Offset: 0x001312D4
+	private void Update()
+	{
+		if (ScriptGlobals.huddle.grabState.body == base.GetComponent<Rigidbody>() && !this.isGrabbing)
+		{
+			this.isGrabbing = true;
+			ScriptGlobals.huddle.properties.grab.hangingGrab.swingStrength = this.orgSwingStrength * this.strengthMultiplier;
+		}
+		else if (ScriptGlobals.huddle.grabState.body == null && this.isGrabbing)
+		{
+			this.isGrabbing = false;
+			ScriptGlobals.huddle.properties.grab.hangingGrab.swingStrength = this.orgSwingStrength;
+		}
+	}
+
+	// Token: 0x0400449C RID: 17564
+	public float strengthMultiplier = 2f;
+
+	// Token: 0x0400449D RID: 17565
+	private bool isGrabbing;
+
+	// Token: 0x0400449E RID: 17566
+	private float orgSwingStrength;
+}

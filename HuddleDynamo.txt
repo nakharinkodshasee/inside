@@ -1,0 +1,118 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001B8 RID: 440
+public class HuddleDynamo : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000CF7 RID: 3319 RVA: 0x0007C484 File Offset: 0x0007A684
+	public bool PreAwake(int callcount)
+	{
+		this.huddleIsStuck = SignalIn.Create("huddleIsStuck", base.gameObject, delegate
+		{
+			this.HuddleIsStuck(true);
+		});
+		this.huddleIsNotStuck = SignalIn.Create("huddleIsNotStuck", base.gameObject, delegate
+		{
+			this.HuddleIsStuck(false);
+		});
+		return true;
+	}
+
+	// Token: 0x06000CF8 RID: 3320 RVA: 0x0007C4D8 File Offset: 0x0007A6D8
+	private void HuddleIsStuck(bool isStuck)
+	{
+		if (isStuck)
+		{
+			base.GetComponent<Rigidbody>().isKinematic = true;
+		}
+		else
+		{
+			base.GetComponent<Rigidbody>().isKinematic = false;
+		}
+	}
+
+	// Token: 0x06000CF9 RID: 3321 RVA: 0x0007C508 File Offset: 0x0007A708
+	private void UpdateHuddleGroundAngle()
+	{
+		if (!this.groundAngleSet && ScriptGlobals.huddle.status.ground.body == base.GetComponent<Rigidbody>())
+		{
+			this.previousGroundAngle = ScriptGlobals.huddle.properties.stumble.groundMaxAngle;
+			ScriptGlobals.huddle.properties.stumble.groundMaxAngle = 2.8274333f;
+			this.groundAngleSet = true;
+		}
+		else if (this.groundAngleSet && ScriptGlobals.huddle.status.ground.body != base.GetComponent<Rigidbody>())
+		{
+			ScriptGlobals.huddle.properties.stumble.groundMaxAngle = this.previousGroundAngle;
+			this.groundAngleSet = false;
+		}
+	}
+
+	// Token: 0x06000CFA RID: 3322 RVA: 0x0007C5D4 File Offset: 0x0007A7D4
+	private void UpdateDynamoValue()
+	{
+		float num = base.transform.localRotation.eulerAngles.x;
+		if (num > 180f)
+		{
+			num -= 360f;
+		}
+		this.dynamoValue = Mathf.InverseLerp(90f, -90f, num);
+	}
+
+	// Token: 0x06000CFB RID: 3323 RVA: 0x0007C628 File Offset: 0x0007A828
+	private void UpdateMotorForce()
+	{
+		JointMotor motor = base.GetComponent<Rigidbody>().GetComponent<HingeJoint>().motor;
+		if (ScriptGlobals.huddle.status.ground.body == base.GetComponent<Rigidbody>())
+		{
+			motor.force = 0f;
+			base.GetComponent<Rigidbody>().GetComponent<HingeJoint>().motor = motor;
+		}
+		else
+		{
+			motor.force = 6f;
+			base.GetComponent<Rigidbody>().GetComponent<HingeJoint>().motor = motor;
+		}
+	}
+
+	// Token: 0x06000CFC RID: 3324 RVA: 0x0007C6AC File Offset: 0x0007A8AC
+	private void UpdateDynamoDoor()
+	{
+		this.door.GetComponent<Rigidbody>().MovePosition(Vector3.Lerp(this.doorDown.position, this.doorUp.position, this.dynamoValue));
+	}
+
+	// Token: 0x06000CFD RID: 3325 RVA: 0x0007C6EC File Offset: 0x0007A8EC
+	private void FixedUpdate()
+	{
+		if (ScriptGlobals.huddle.isCharacterActive)
+		{
+			this.UpdateHuddleGroundAngle();
+			this.UpdateDynamoValue();
+			this.UpdateMotorForce();
+			this.UpdateDynamoDoor();
+		}
+	}
+
+	// Token: 0x040016D4 RID: 5844
+	public Rigidbody door;
+
+	// Token: 0x040016D5 RID: 5845
+	public Transform doorUp;
+
+	// Token: 0x040016D6 RID: 5846
+	public Transform doorDown;
+
+	// Token: 0x040016D7 RID: 5847
+	private float dynamoValue;
+
+	// Token: 0x040016D8 RID: 5848
+	private SignalIn huddleIsStuck;
+
+	// Token: 0x040016D9 RID: 5849
+	private SignalIn huddleIsNotStuck;
+
+	// Token: 0x040016DA RID: 5850
+	private bool groundAngleSet;
+
+	// Token: 0x040016DB RID: 5851
+	private float previousGroundAngle;
+}

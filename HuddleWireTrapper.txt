@@ -1,0 +1,835 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200017B RID: 379
+public class HuddleWireTrapper : DefaultBoyInput, IPreAwake
+{
+	// Token: 0x17000046 RID: 70
+	// (get) Token: 0x06000B26 RID: 2854 RVA: 0x0006DF18 File Offset: 0x0006C118
+	public override vector2f stick
+	{
+		get
+		{
+			if (this.wireMode == HuddleWireTrapper.wireModes.SuckTowardsPoint)
+			{
+				return -vector2f.up;
+			}
+			float b = Mathf.Clamp((this.endTimer - 2f) * 0.5f, 0f, 1f);
+			return base.GetRelativeStick(GameInput.stick) * b;
+		}
+	}
+
+	// Token: 0x06000B27 RID: 2855 RVA: 0x0006DF70 File Offset: 0x0006C170
+	public bool PreAwake(int callcount)
+	{
+		this.shootLeftWire = SignalIn.Create("shootLeftWire", base.gameObject, new Action(this.OnShootLeftWire));
+		this.fallDownHole = SignalIn.Create("fallDownHole", base.gameObject, new Action(this.OnFallDownHole));
+		this.caught = SignalOut.Create("caught", base.gameObject);
+		this.startWhirlEffect = SignalOut.Create("startWhirlEffect", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000B28 RID: 2856 RVA: 0x0006DFF0 File Offset: 0x0006C1F0
+	private void OnFallDownHole()
+	{
+		if (!this.fastRopeBurstMode)
+		{
+			this.wireMode = HuddleWireTrapper.wireModes.Landing;
+		}
+	}
+
+	// Token: 0x06000B29 RID: 2857 RVA: 0x0006E004 File Offset: 0x0006C204
+	private void OnShootLeftWire()
+	{
+		if (this.wireMode == HuddleWireTrapper.wireModes.Initial)
+		{
+			this.shootIndex = 0;
+			this.curShootDelay = 0f;
+			this.wireMode = HuddleWireTrapper.wireModes.Shooting;
+		}
+	}
+
+	// Token: 0x06000B2A RID: 2858 RVA: 0x0006E038 File Offset: 0x0006C238
+	public void ScheduleJerk(HuddleCloth.ClothBone bone, int id, float timer = 0.4f)
+	{
+		this.bonesToJolt.Add(bone);
+		this.timerToJolt.Add(timer);
+		this.particleID.Add(id);
+	}
+
+	// Token: 0x06000B2B RID: 2859 RVA: 0x0006E06C File Offset: 0x0006C26C
+	public void StartJerk(HuddleCloth.ClothBone bone)
+	{
+		SingletonBehaviour<FakeRagdollJointManager>.instance.DoGlobalJolt();
+		this.jerkList.Clear();
+		this.jerkList.Add(bone);
+		this.jerkedList.Clear();
+		this.doingJerk = true;
+		ScriptGlobals.huddle.visualHuddle.arms2.TwitchArms();
+		ScriptGlobals.huddle.visualHuddle.waterLegs.TwitchArms();
+	}
+
+	// Token: 0x06000B2C RID: 2860 RVA: 0x0006E0D4 File Offset: 0x0006C2D4
+	public void DoHuddleJerk()
+	{
+		if (this.jerkList.Count == 0)
+		{
+			this.doingJerk = false;
+			return;
+		}
+		HuddleCloth.ClothBone clothBone = this.jerkList[0];
+		this.jerkList.RemoveAt(0);
+		int i = 0;
+		int num = clothBone.neighbours.Length;
+		while (i < num)
+		{
+			HuddleCloth.ClothBone bone = clothBone.neighbours[i].bone;
+			if (!this.jerkedList.Contains(bone.visualTransform))
+			{
+				this.jerkList.Add(bone);
+				this.jerkedList.Add(bone.visualTransform);
+			}
+			i++;
+		}
+		Vector3 vector = clothBone.pos - ScriptGlobals.huddle.pos3;
+		float num2 = 1.25f;
+		if (this.wireMode == HuddleWireTrapper.wireModes.AfterShooting && this.endTimer < 2f)
+		{
+			num2 = 0.7f;
+		}
+		if (this.burstIndex > 0)
+		{
+			num2 = -1f;
+		}
+		clothBone.body.AddForce(-vector * 5f * num2, 2);
+	}
+
+	// Token: 0x06000B2D RID: 2861 RVA: 0x0006E1EC File Offset: 0x0006C3EC
+	private HuddleCloth.ClothBone GetUniqueBone(HuddleCloth.ClothBone bone)
+	{
+		if (this.usedBones.Contains(bone))
+		{
+			HuddleCloth.ClothBone clothBone = bone.neighbours[0].bone;
+			if (this.usedBones.Contains(clothBone))
+			{
+				clothBone = bone.neighbours[1].bone;
+				if (this.usedBones.Contains(clothBone))
+				{
+					clothBone = null;
+				}
+			}
+			return clothBone;
+		}
+		return bone;
+	}
+
+	// Token: 0x06000B2E RID: 2862 RVA: 0x0006E258 File Offset: 0x0006C458
+	private HuddleArmControl2 SpawnExtraArm(GameObject objTograb)
+	{
+		Vector3 localOffset = objTograb.transform.InverseTransformDirection(Vector3.back) * 0.05f + Vector3.down * 0.1f;
+		Vector3 wantedNormal = objTograb.transform.InverseTransformDirection(Vector3.left);
+		HuddleArmControl2 huddleArmControl = ScriptGlobals.huddle.visualHuddle.arms2.ForceExtraArmToGrab(objTograb, localOffset, wantedNormal, 1.4f, 0.3f);
+		if (huddleArmControl)
+		{
+			huddleArmControl.toPoint.SetWantedLocalRotation(Quaternion.Euler(0f, 200f, 250f));
+		}
+		return huddleArmControl;
+	}
+
+	// Token: 0x06000B2F RID: 2863 RVA: 0x0006E2F4 File Offset: 0x0006C4F4
+	private void AlignRopeParent(RopeGun wire)
+	{
+		GameObject ropeParent = wire.GetRopeParent();
+		Vector3 vector = ropeParent.transform.position;
+		Vector3 normalized = (ScriptGlobals.huddle.transform.position - vector).normalized;
+		if (this.wireMode == HuddleWireTrapper.wireModes.Freefall)
+		{
+			normalized.x *= 3f;
+			vector += normalized * 7f * Time.deltaTime;
+			ropeParent.transform.position = vector;
+			return;
+		}
+		float stretchPercentage = wire.GetStretchPercentage();
+		if (stretchPercentage < 0.999f)
+		{
+			float num = 5f;
+			vector -= normalized * (num * Time.deltaTime);
+			ropeParent.transform.position = vector;
+		}
+		else if (stretchPercentage > 1.03f)
+		{
+			vector += normalized * (1.4f * Time.deltaTime);
+			ropeParent.transform.position = vector;
+		}
+	}
+
+	// Token: 0x06000B30 RID: 2864 RVA: 0x0006E3EC File Offset: 0x0006C5EC
+	private void RotateHuddle(float factor)
+	{
+		HuddleCloth cloth = ScriptGlobals.huddle.cloth;
+		int i = 0;
+		int num = cloth.bones.Length;
+		while (i < num)
+		{
+			float num2 = cloth.bones[i].pos.y - ScriptGlobals.huddle.pos.y;
+			Vector3 vector = Vector3.right * num2 * 20f * factor * Time.deltaTime;
+			cloth.bones[i].body.AddForce(vector, 2);
+			i++;
+		}
+	}
+
+	// Token: 0x06000B31 RID: 2865 RVA: 0x0006E484 File Offset: 0x0006C684
+	private void UpdateFinishing()
+	{
+		Vector3 velocity = ScriptGlobals.huddle.velocity;
+		float factor = Mathf.Min(this.finishTimer / this.suckStun, 1f);
+		this.RotateHuddle(factor);
+		if (velocity.y > -0.2f)
+		{
+			ScriptGlobals.huddle.AddVelocity(Vector3.down * 1f * Mathf.Min(this.finishTimer, 1f) * Time.deltaTime);
+		}
+		this.finishTimer -= Time.deltaTime;
+		if (this.finishTimer <= 0f)
+		{
+			int i = 0;
+			int count = this.hitParticles.Count;
+			while (i < count)
+			{
+				Object.Destroy(this.hitParticles[i]);
+				i++;
+			}
+			this.hitParticles.Clear();
+			int j = 0;
+			int count2 = this.pullOutParticles.Count;
+			while (j < count2)
+			{
+				Object.Destroy(this.pullOutParticles[j]);
+				j++;
+			}
+			this.pullOutParticles.Clear();
+			ScriptGlobals.huddle.input = null;
+			this.wireMode = HuddleWireTrapper.wireModes.Finished;
+		}
+	}
+
+	// Token: 0x06000B32 RID: 2866 RVA: 0x0006E5B4 File Offset: 0x0006C7B4
+	private void UpdateShooting()
+	{
+		this.curShootDelay -= Time.deltaTime;
+		if (this.curShootDelay <= 0f || (this.rightBreak && ScriptGlobals.huddle.pos.x < base.transform.position.x - 1.8f))
+		{
+			if (!this.rightShot)
+			{
+				vector2f relativeStick = base.GetRelativeStick(GameInput.stick);
+				if (relativeStick.x > 0f)
+				{
+					this.RotateHuddle(relativeStick.x * 0.3f);
+				}
+				if (this.shootIndex < this.leftWires.Count && this.shootIndex < this.hitPos.Count)
+				{
+					HuddleCloth.ClothBone clothBone = HuddleUtils.GetClosestBone(ScriptGlobals.huddle, ScriptGlobals.huddle.pos3 + this.hitPos[this.shootIndex]);
+					clothBone = this.GetUniqueBone(clothBone);
+					if (clothBone != null)
+					{
+						Vector3 aLocalOffset = (this.leftWires[this.shootIndex].transform.position - clothBone.body.position).normalized * 0.42f;
+						this.leftWires[this.shootIndex].ShootAt(clothBone.body, aLocalOffset, 1);
+						this.usedBones.Add(clothBone);
+						this.ScheduleJerk(clothBone, this.shootIndex, 0.4f);
+					}
+					this.shootIndex++;
+					this.curShootDelay = this.shotDelay;
+					if (this.shootIndex >= this.leftWires.Count || this.shootIndex >= this.hitPos.Count)
+					{
+						this.curShootDelay = this.rightShootDelay;
+						this.rightShot = true;
+						this.rightBreak = true;
+						this.shootIndex = 0;
+					}
+				}
+			}
+			else
+			{
+				this.RotateHuddle(base.GetRelativeStick(GameInput.stick).x * 0.3f);
+				if ((this.rightShootDelay > 0f || ScriptGlobals.huddle.pos.x < base.transform.position.x + 1f) && this.shootIndex < this.rightWires.Count && this.shootIndex < this.rightHitPos.Count)
+				{
+					this.rightBreak = false;
+					HuddleCloth.ClothBone clothBone2 = HuddleUtils.GetClosestBone(ScriptGlobals.huddle, ScriptGlobals.huddle.pos3 + this.rightHitPos[this.shootIndex]);
+					clothBone2 = this.GetUniqueBone(clothBone2);
+					if (clothBone2 != null)
+					{
+						Vector3 aLocalOffset2 = (this.rightWires[this.shootIndex].transform.position - clothBone2.body.position).normalized * 0.42f;
+						this.rightWires[this.shootIndex].ShootAt(clothBone2.body, aLocalOffset2, 1);
+						this.usedBones.Add(clothBone2);
+						this.ScheduleJerk(clothBone2, this.shootIndex + 2, 0.4f);
+					}
+					this.shootIndex++;
+					this.curShootDelay = this.shotDelay;
+					if (this.shootIndex >= this.rightWires.Count)
+					{
+						ScriptGlobals.huddle.input = this;
+						this.wireMode = HuddleWireTrapper.wireModes.AfterShooting;
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000B33 RID: 2867 RVA: 0x0006E940 File Offset: 0x0006CB40
+	private void TestForWaitingJerks()
+	{
+		if (this.timerToJolt.Count > 0)
+		{
+			if (this.timerToJolt[0] <= 0f)
+			{
+				int num = this.particleID[0];
+				HuddleCloth.ClothBone clothBone = this.bonesToJolt[0];
+				if (num < this.hitParticles.Count)
+				{
+					Vector3 normalized;
+					if (num < 2)
+					{
+						normalized = (this.leftWires[num].transform.position - clothBone.pos).normalized;
+					}
+					else
+					{
+						normalized = (this.rightWires[num - 2].transform.position - clothBone.pos).normalized;
+					}
+					ParticleSystem particleSystem = this.hitParticles[num];
+					particleSystem.transform.position = clothBone.pos + normalized * 0.42f;
+					particleSystem.transform.rotation = Quaternion.LookRotation(normalized);
+					particleSystem.transform.parent = clothBone.body.transform;
+					particleSystem.Play();
+					if (num < this.pullOutParticles.Count)
+					{
+						ParticleSystem particleSystem2 = this.pullOutParticles[num];
+						particleSystem2.transform.position = clothBone.pos + normalized * 0.42f;
+						particleSystem2.transform.parent = clothBone.body.transform;
+					}
+				}
+				this.StartJerk(clothBone);
+				this.timerToJolt.RemoveAt(0);
+				this.bonesToJolt.RemoveAt(0);
+				this.particleID.RemoveAt(0);
+			}
+			int i = 0;
+			int count = this.timerToJolt.Count;
+			while (i < count)
+			{
+				this.timerToJolt[0] = this.timerToJolt[0] - Time.deltaTime;
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x06000B34 RID: 2868 RVA: 0x0006EB24 File Offset: 0x0006CD24
+	private void UpdatePullFromWires()
+	{
+		if (this.rightShot && ScriptGlobals.huddle.pos.x > base.transform.position.x)
+		{
+			float num = ScriptGlobals.huddle.pos.x - base.transform.position.x;
+			if (this.wireMode == HuddleWireTrapper.wireModes.Shooting)
+			{
+				num = Mathf.Min(num * 0.7f, 1.5f);
+			}
+			else
+			{
+				num = Mathf.Min(num, 2f);
+			}
+			if (this.wireMode == HuddleWireTrapper.wireModes.Finishing)
+			{
+				num *= 0.7f;
+			}
+			Vector3 vector = Vector3.left * num;
+			ScriptGlobals.huddle.AddVelocity(vector * 3f * Time.deltaTime);
+		}
+		if (this.wireMode != HuddleWireTrapper.wireModes.Shooting && ScriptGlobals.huddle.pos.x < base.transform.position.x)
+		{
+			float num2 = 1f;
+			if (this.wireMode == HuddleWireTrapper.wireModes.Finishing)
+			{
+				num2 *= 0.2f;
+			}
+			Vector3 vector2 = Vector3.right * num2 * (base.transform.position.x - ScriptGlobals.huddle.pos.x);
+			ScriptGlobals.huddle.AddVelocity(vector2 * 3f * Time.deltaTime);
+		}
+	}
+
+	// Token: 0x06000B35 RID: 2869 RVA: 0x0006ECAC File Offset: 0x0006CEAC
+	private void UpdatePositionOfWires()
+	{
+		if (this.rightShot)
+		{
+			int i = 0;
+			int count = this.leftWires.Count;
+			while (i < count)
+			{
+				this.AlignRopeParent(this.leftWires[i]);
+				i++;
+			}
+		}
+		if (this.wireMode != HuddleWireTrapper.wireModes.Shooting)
+		{
+			int j = 0;
+			int count2 = this.rightWires.Count;
+			while (j < count2)
+			{
+				this.AlignRopeParent(this.rightWires[j]);
+				j++;
+			}
+		}
+	}
+
+	// Token: 0x06000B36 RID: 2870 RVA: 0x0006ED30 File Offset: 0x0006CF30
+	private void DoTimedRopeBursts()
+	{
+		this.ropeBurstTime -= Time.deltaTime;
+		if (this.ropeBurstTime <= 0f)
+		{
+			switch (this.burstIndex)
+			{
+			case 0:
+				this.leftWires[1].LetGoOfHuddle(true);
+				this.burstIndex++;
+				this.StartJerk(this.usedBones[1]);
+				if (this.wireMode == HuddleWireTrapper.wireModes.SuckTowardsPoint2)
+				{
+					this.ropeBurstTime = 0.1f;
+				}
+				else
+				{
+					this.ropeBurstTime = 0.9f;
+					Rigidbody ropePartFromBottom = this.rightWires[1].GetRopePartFromBottom(1);
+					this.extraArm2 = this.SpawnExtraArm(ropePartFromBottom.gameObject);
+				}
+				if (this.pullOutParticles.Count > 1)
+				{
+					this.pullOutParticles[1].transform.rotation = Quaternion.LookRotation(Vector3.up);
+					this.pullOutParticles[1].Play();
+				}
+				break;
+			case 1:
+				this.rightWires[1].LetGoOfHuddle(true);
+				this.StartJerk(this.usedBones[3]);
+				if (this.wireMode == HuddleWireTrapper.wireModes.SuckTowardsPoint2)
+				{
+					this.ropeBurstTime = 0.1f;
+				}
+				else
+				{
+					this.ropeBurstTime = 0.6f;
+				}
+				this.burstIndex++;
+				if (this.pullOutParticles.Count > 3)
+				{
+					this.pullOutParticles[3].transform.rotation = Quaternion.LookRotation(Vector3.up);
+					this.pullOutParticles[3].Play();
+				}
+				break;
+			case 2:
+				this.leftWires[0].LetGoOfHuddle(true);
+				this.StartJerk(this.usedBones[0]);
+				if (this.wireMode == HuddleWireTrapper.wireModes.SuckTowardsPoint2)
+				{
+					this.ropeBurstTime = 0.1f;
+				}
+				else
+				{
+					this.ropeBurstTime = 0.2f;
+				}
+				this.burstIndex++;
+				if (this.pullOutParticles.Count > 0)
+				{
+					this.pullOutParticles[0].transform.rotation = Quaternion.LookRotation(Vector3.up + Vector3.left * 0.3f);
+					this.pullOutParticles[0].Play();
+				}
+				break;
+			case 3:
+				this.rightWires[0].LetGoOfHuddle(true);
+				this.StartJerk(this.usedBones[2]);
+				this.finishTimer = 10f;
+				if (this.pullOutParticles.Count > 2)
+				{
+					this.pullOutParticles[2].transform.rotation = Quaternion.LookRotation(Vector3.up + Vector3.right * 0.3f);
+					this.pullOutParticles[2].Play();
+				}
+				this.burstIndex++;
+				if (this.extraArm != null)
+				{
+					this.extraArm.RetractDynamicArm();
+				}
+				if (this.extraArm2 != null)
+				{
+					this.extraArm2.RetractDynamicArm();
+				}
+				this.extraArm = null;
+				if (this.wireMode != HuddleWireTrapper.wireModes.SuckTowardsPoint2)
+				{
+					this.wireMode = HuddleWireTrapper.wireModes.Finishing;
+				}
+				break;
+			}
+		}
+	}
+
+	// Token: 0x06000B37 RID: 2871 RVA: 0x0006F084 File Offset: 0x0006D284
+	private void UpdateBreakingWires()
+	{
+		if (this.ropeBurstTime < 0.9f && !this.arm1Spawned)
+		{
+			this.arm1Spawned = true;
+			Rigidbody ropePartFromBottom = this.leftWires[1].GetRopePartFromBottom(1);
+			this.extraArm = this.SpawnExtraArm(ropePartFromBottom.gameObject);
+		}
+		if (this.burstIndex < 1)
+		{
+			if (this.goingUp)
+			{
+				if (ScriptGlobals.huddle.velocity.y < this.startSpeed)
+				{
+					ScriptGlobals.huddle.AddVelocity(Vector3.up * (14f * Time.deltaTime));
+				}
+				else
+				{
+					this.startSpeed *= 0.75f;
+					this.goingUp = false;
+				}
+			}
+			else if (ScriptGlobals.huddle.velocity.y < -2f * this.startSpeed)
+			{
+				this.goingUp = true;
+			}
+		}
+		else if (ScriptGlobals.huddle.velocity.y < 1f)
+		{
+			ScriptGlobals.huddle.AddVelocity(Vector3.up * (3f * Time.deltaTime));
+		}
+		this.DoTimedRopeBursts();
+		if (this.extraArm != null && this.extraArm.armObject.transform.localScale.z >= 1.6f)
+		{
+			this.extraArm.RetractDynamicArm();
+			this.extraArm = null;
+		}
+		if (this.extraArm2 != null && this.extraArm2.armObject.transform.localScale.z >= 1.6f)
+		{
+			this.extraArm2.RetractDynamicArm();
+			this.extraArm2 = null;
+		}
+	}
+
+	// Token: 0x06000B38 RID: 2872 RVA: 0x0006F254 File Offset: 0x0006D454
+	private void TestForReleaseOfExtraArms()
+	{
+	}
+
+	// Token: 0x06000B39 RID: 2873 RVA: 0x0006F258 File Offset: 0x0006D458
+	private void UpdateLanding()
+	{
+		if (ScriptGlobals.huddle.velocity3.y < 0f)
+		{
+			ScriptGlobals.huddle.AddVelocity(Vector3.up * 10f * Time.deltaTime);
+		}
+		else
+		{
+			this.wireMode = HuddleWireTrapper.wireModes.BreakingWires;
+		}
+	}
+
+	// Token: 0x06000B3A RID: 2874 RVA: 0x0006F2B0 File Offset: 0x0006D4B0
+	private void UpdateAfterShooting()
+	{
+		if (this.startWhirlEffectTimer >= 0f)
+		{
+			this.startWhirlEffectTimer -= Time.deltaTime;
+			if (this.startWhirlEffectTimer < 0f)
+			{
+				this.startWhirlEffect.Signal();
+			}
+		}
+		ScriptGlobals.huddle.AddVelocity(Vector3.down * 4f * Time.deltaTime);
+		vector2f relativeStick = base.GetRelativeStick(GameInput.stick);
+		if (this.endTimer < 3.5f)
+		{
+			Vector3 vector = ScriptGlobals.huddle.rot * Vector3.up;
+			this.RotateHuddle(relativeStick.x * 0.7f * vector.y * vector.y);
+		}
+		else
+		{
+			this.RotateHuddle(relativeStick.x * 0.3f);
+		}
+		if (this.endTimer > 0f)
+		{
+			this.endTimer -= Time.deltaTime;
+			if (this.endTimer <= 0f)
+			{
+				this.caught.Signal();
+				if (this.holeFloorCollision != null)
+				{
+					this.holeFloorCollision.SetActive(true);
+				}
+				if (this.startWhirlEffectTimer >= 0f)
+				{
+					this.startWhirlEffect.Signal();
+				}
+				this.wireMode = HuddleWireTrapper.wireModes.SuckTowardsPoint;
+			}
+		}
+	}
+
+	// Token: 0x06000B3B RID: 2875 RVA: 0x0006F408 File Offset: 0x0006D608
+	private void UpdateSuckTowardsPoint()
+	{
+		Vector3 point = (!(this.suckTowardsPoint != null)) ? base.transform.position : this.suckTowardsPoint.transform.position;
+		HuddleUtils.SuckAllBonesTowardPoint(ScriptGlobals.huddle, point, 20f);
+		this.suckTime -= Time.deltaTime;
+		this.RotateHuddle(base.GetRelativeStick(GameInput.stick).x * 0.5f * Mathf.Max(1f, this.suckTime * 0.8f));
+		if (this.suckTime < 0f)
+		{
+			this.wireMode = HuddleWireTrapper.wireModes.SuckTowardsPoint2;
+			this.ropeBurstTime = 0.3f;
+		}
+	}
+
+	// Token: 0x06000B3C RID: 2876 RVA: 0x0006F4C4 File Offset: 0x0006D6C4
+	private void UpdateSuckTowardsPoint2()
+	{
+		Vector3 vector = (!(this.suckTowardsPoint != null)) ? base.transform.position : this.suckTowardsPoint.transform.position;
+		vector += Vector3.down * this.suckDepth;
+		float num = ScriptGlobals.huddle.pos.y - vector.y;
+		Vector3 velocity = ScriptGlobals.huddle.velocity3;
+		if (num > 1f)
+		{
+			HuddleCloth cloth = ScriptGlobals.huddle.cloth;
+			if (base.transform.position.y - ScriptGlobals.huddle.pos.y > 2f)
+			{
+				this.RotateHuddle(1f);
+			}
+			if (velocity.y > -this.suckMaxSpeed)
+			{
+				ScriptGlobals.huddle.AddVelocity(Vector3.down * (num * 7f * this.suckPower * Time.deltaTime));
+			}
+		}
+		else
+		{
+			this.RotateHuddle(1f);
+			ScriptGlobals.huddle.AddVelocity(Vector3.up * 5f * Time.deltaTime);
+			if (velocity.y > -1f)
+			{
+				this.finishTimer = this.suckStun;
+				this.wireMode = HuddleWireTrapper.wireModes.Finishing;
+			}
+		}
+		this.DoTimedRopeBursts();
+	}
+
+	// Token: 0x06000B3D RID: 2877 RVA: 0x0006F62C File Offset: 0x0006D82C
+	private void FixedUpdate()
+	{
+		if (this.wireMode == HuddleWireTrapper.wireModes.Initial || this.wireMode == HuddleWireTrapper.wireModes.Finished)
+		{
+			return;
+		}
+		if (this.wireMode == HuddleWireTrapper.wireModes.Finishing)
+		{
+			if (this.doingJerk)
+			{
+				this.DoHuddleJerk();
+			}
+			this.UpdatePullFromWires();
+			this.UpdateFinishing();
+			return;
+		}
+		if (this.wireMode == HuddleWireTrapper.wireModes.Shooting)
+		{
+			this.UpdateShooting();
+		}
+		this.TestForWaitingJerks();
+		this.UpdatePullFromWires();
+		if (this.wireMode != HuddleWireTrapper.wireModes.SuckTowardsPoint2)
+		{
+			this.UpdatePositionOfWires();
+		}
+		if (this.doingJerk)
+		{
+			this.DoHuddleJerk();
+		}
+		switch (this.wireMode)
+		{
+		case HuddleWireTrapper.wireModes.AfterShooting:
+			this.UpdateAfterShooting();
+			break;
+		case HuddleWireTrapper.wireModes.SuckTowardsPoint:
+			this.UpdateSuckTowardsPoint();
+			break;
+		case HuddleWireTrapper.wireModes.SuckTowardsPoint2:
+			this.UpdateSuckTowardsPoint2();
+			break;
+		case HuddleWireTrapper.wireModes.Landing:
+			this.UpdateLanding();
+			break;
+		case HuddleWireTrapper.wireModes.BreakingWires:
+			this.UpdateBreakingWires();
+			break;
+		}
+	}
+
+	// Token: 0x04001351 RID: 4945
+	public List<RopeGun> leftWires = new List<RopeGun>();
+
+	// Token: 0x04001352 RID: 4946
+	public List<Vector3> hitPos = new List<Vector3>();
+
+	// Token: 0x04001353 RID: 4947
+	public List<RopeGun> rightWires = new List<RopeGun>();
+
+	// Token: 0x04001354 RID: 4948
+	public List<Vector3> rightHitPos = new List<Vector3>();
+
+	// Token: 0x04001355 RID: 4949
+	public List<ParticleSystem> hitParticles = new List<ParticleSystem>();
+
+	// Token: 0x04001356 RID: 4950
+	public List<ParticleSystem> pullOutParticles = new List<ParticleSystem>();
+
+	// Token: 0x04001357 RID: 4951
+	private List<HuddleCloth.ClothBone> usedBones = new List<HuddleCloth.ClothBone>();
+
+	// Token: 0x04001358 RID: 4952
+	public float shotDelay = 0.3f;
+
+	// Token: 0x04001359 RID: 4953
+	public float rightShootDelay = -2f;
+
+	// Token: 0x0400135A RID: 4954
+	public float endTimer = 4f;
+
+	// Token: 0x0400135B RID: 4955
+	public float startWhirlEffectTimer = 1f;
+
+	// Token: 0x0400135C RID: 4956
+	public float ropeBurstTime = 3f;
+
+	// Token: 0x0400135D RID: 4957
+	public float suckTime = 5f;
+
+	// Token: 0x0400135E RID: 4958
+	public float suckDepth = 4f;
+
+	// Token: 0x0400135F RID: 4959
+	public float suckPower = 1f;
+
+	// Token: 0x04001360 RID: 4960
+	public float suckMaxSpeed = 15f;
+
+	// Token: 0x04001361 RID: 4961
+	public float suckStun = 5f;
+
+	// Token: 0x04001362 RID: 4962
+	public GameObject suckTowardsPoint;
+
+	// Token: 0x04001363 RID: 4963
+	public GameObject holeFloorCollision;
+
+	// Token: 0x04001364 RID: 4964
+	public bool fastRopeBurstMode;
+
+	// Token: 0x04001365 RID: 4965
+	private SignalIn shootLeftWire;
+
+	// Token: 0x04001366 RID: 4966
+	private SignalIn fallDownHole;
+
+	// Token: 0x04001367 RID: 4967
+	private int shootIndex;
+
+	// Token: 0x04001368 RID: 4968
+	private float curShootDelay;
+
+	// Token: 0x04001369 RID: 4969
+	private SignalOut caught;
+
+	// Token: 0x0400136A RID: 4970
+	private SignalOut startWhirlEffect;
+
+	// Token: 0x0400136B RID: 4971
+	private bool rightShot;
+
+	// Token: 0x0400136C RID: 4972
+	private HuddleWireTrapper.wireModes wireMode;
+
+	// Token: 0x0400136D RID: 4973
+	private List<HuddleCloth.ClothBone> jerkList = new List<HuddleCloth.ClothBone>();
+
+	// Token: 0x0400136E RID: 4974
+	private List<Transform> jerkedList = new List<Transform>();
+
+	// Token: 0x0400136F RID: 4975
+	private bool doingJerk;
+
+	// Token: 0x04001370 RID: 4976
+	private List<HuddleCloth.ClothBone> bonesToJolt = new List<HuddleCloth.ClothBone>();
+
+	// Token: 0x04001371 RID: 4977
+	private List<float> timerToJolt = new List<float>();
+
+	// Token: 0x04001372 RID: 4978
+	private List<int> particleID = new List<int>();
+
+	// Token: 0x04001373 RID: 4979
+	private HuddleArmControl2 extraArm;
+
+	// Token: 0x04001374 RID: 4980
+	private bool arm1Spawned;
+
+	// Token: 0x04001375 RID: 4981
+	private HuddleArmControl2 extraArm2;
+
+	// Token: 0x04001376 RID: 4982
+	private bool arm2Spawned;
+
+	// Token: 0x04001377 RID: 4983
+	private bool rightShotDone;
+
+	// Token: 0x04001378 RID: 4984
+	private bool rightBreak;
+
+	// Token: 0x04001379 RID: 4985
+	private int burstIndex;
+
+	// Token: 0x0400137A RID: 4986
+	private float finishTimer;
+
+	// Token: 0x0400137B RID: 4987
+	private float startSpeed = 2f;
+
+	// Token: 0x0400137C RID: 4988
+	private bool goingUp = true;
+
+	// Token: 0x0400137D RID: 4989
+	private vector2f lastStick;
+
+	// Token: 0x0200017C RID: 380
+	private enum wireModes
+	{
+		// Token: 0x0400137F RID: 4991
+		Initial,
+		// Token: 0x04001380 RID: 4992
+		Shooting,
+		// Token: 0x04001381 RID: 4993
+		AfterShooting,
+		// Token: 0x04001382 RID: 4994
+		SuckTowardsPoint,
+		// Token: 0x04001383 RID: 4995
+		SuckTowardsPoint2,
+		// Token: 0x04001384 RID: 4996
+		Freefall,
+		// Token: 0x04001385 RID: 4997
+		Landing,
+		// Token: 0x04001386 RID: 4998
+		BreakingWires,
+		// Token: 0x04001387 RID: 4999
+		Finishing,
+		// Token: 0x04001388 RID: 5000
+		Finished
+	}
+}

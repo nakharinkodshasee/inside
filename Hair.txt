@@ -1,0 +1,429 @@
+using System;
+using Playdead.Native;
+using UnityEngine;
+
+// Token: 0x020003DC RID: 988
+public class Hair : UmbrellaBehaviour<Hair>, IPreAwake
+{
+	// Token: 0x17000081 RID: 129
+	// (get) Token: 0x06001A76 RID: 6774 RVA: 0x000E7404 File Offset: 0x000E5604
+	// (set) Token: 0x06001A77 RID: 6775 RVA: 0x000E740C File Offset: 0x000E560C
+	public Vector3 fakeColliderWorldPosThisFrame { get; private set; }
+
+	// Token: 0x06001A78 RID: 6776 RVA: 0x000E7418 File Offset: 0x000E5618
+	public bool PreAwake(int callcount)
+	{
+		if (!this.wasAwoken)
+		{
+			this.wasAwoken = true;
+			this.waterWobbleSpeed = Random.Range(0.7f, 1f);
+			if (this.placeOnBoyHead != null)
+			{
+				Vector3 localPosition = base.transform.localPosition;
+				base.transform.parent = this.placeOnBoyHead.visualBoy.actor.bones[this.placeOnBoyHead.visualBoy.actor.specificBones.head].transform;
+				base.transform.localPosition = localPosition;
+			}
+			this.HairRenderer.SetColors(this.debugVisualColor, this.debugVisualColor);
+			this.initialRandom = Random.Range(1f - this.RandomDeviance, 1f + this.RandomDeviance);
+			int vertexCount = this.numberHairPoints + 1;
+			this.HairRenderer.SetVertexCount(vertexCount);
+			this.hairPts = new MathUtils.HairPointStruct[this.numberHairPoints];
+			this._transform = base.transform;
+			this.HairRenderer.SetPosition(0, Vector3.zero);
+			this.HairRenderer.useWorldSpace = true;
+			this.startDamper = 0f;
+		}
+		if (this.allowUpdate)
+		{
+			this.UpdateHairSetting(false);
+			if (!GameManager.IsLoading())
+			{
+				this.waitUpdateCount = Hair.globalWaitUpdateCount;
+				Hair.globalWaitUpdateCount = Hair.globalWaitUpdateCount % 4 + 1;
+			}
+		}
+		return true;
+	}
+
+	// Token: 0x06001A79 RID: 6777 RVA: 0x000E7588 File Offset: 0x000E5788
+	private void UpdatePointFromParentPos(Vector3 parentPos, ref MathUtils.HairPointStruct hp, Vector3 gravityVec, float frameRandomIn, float deltaTime)
+	{
+		float num = frameRandomIn * hp.randomFactor;
+		float num2 = this.gravity * deltaTime;
+		hp.velocity.x = hp.velocity.x + num2 * gravityVec.x;
+		hp.velocity.y = hp.velocity.y + num2 * gravityVec.y;
+		hp.velocity.z = hp.velocity.z + num2 * gravityVec.z;
+		Vector3 position;
+		position.x = hp.position.x + hp.velocity.x * deltaTime;
+		position.y = hp.position.y + hp.velocity.y * deltaTime;
+		position.z = hp.position.z + hp.velocity.z * deltaTime;
+		if (this.sqrColliderRadius > 0f)
+		{
+			Vector3 vector;
+			vector.x = position.x - this.fakeColliderWorldPosThisFrame.x;
+			vector.y = position.y - this.fakeColliderWorldPosThisFrame.y;
+			vector.z = position.z - this.fakeColliderWorldPosThisFrame.z;
+			float sqrMagnitude = vector.sqrMagnitude;
+			if (sqrMagnitude < this.sqrColliderRadius)
+			{
+				float num3 = Mathf.Sqrt(this.sqrColliderRadius / sqrMagnitude);
+				position.x = this.fakeColliderWorldPosThisFrame.x + vector.x * num3;
+				position.y = this.fakeColliderWorldPosThisFrame.y + vector.y * num3;
+				position.z = this.fakeColliderWorldPosThisFrame.z + vector.z * num3;
+			}
+		}
+		if (this.useYClamp)
+		{
+			position.y = FastMath.Min(position.y, this.yClamp);
+		}
+		Vector3 vector2;
+		vector2.x = position.x - parentPos.x;
+		vector2.y = position.y - parentPos.y;
+		vector2.z = position.z - parentPos.z;
+		float sqrMagnitude2 = vector2.sqrMagnitude;
+		if (sqrMagnitude2 > this.sqrMaxDist)
+		{
+			float num4 = this.maxDist / Mathf.Sqrt(sqrMagnitude2);
+			Vector3 vector3;
+			vector3.x = parentPos.x + vector2.x * num4;
+			vector3.y = parentPos.y + vector2.y * num4;
+			vector3.z = parentPos.z + vector2.z * num4;
+			Vector3 vector4;
+			vector4.x = vector3.x - position.x;
+			vector4.y = vector3.y - position.y;
+			vector4.z = vector3.z - position.z;
+			float num5 = this.maxAccelDelta * num * deltaTime;
+			float sqrMagnitude3 = vector4.sqrMagnitude;
+			if (sqrMagnitude3 > num5 * num5)
+			{
+				float num6 = num5 / Mathf.Sqrt(sqrMagnitude3);
+				vector4.x *= num6;
+				vector4.y *= num6;
+				vector4.z *= num6;
+			}
+			hp.velocity.x = hp.velocity.x + vector4.x;
+			hp.velocity.y = hp.velocity.y + vector4.y;
+			hp.velocity.z = hp.velocity.z + vector4.z;
+			position = vector3;
+		}
+		float num7 = 1f - deltaTime * this.drag * num;
+		hp.velocity.x = hp.velocity.x * num7;
+		hp.velocity.y = hp.velocity.y * num7;
+		hp.velocity.z = hp.velocity.z * num7;
+		float num8 = this.maxSpeed * num;
+		float num9 = Mathf.Abs(hp.velocity.y);
+		if (num9 > num8)
+		{
+			hp.velocity.y = hp.velocity.y * num8 / num9;
+		}
+		float num10 = Mathf.Abs(hp.velocity.x);
+		if (num10 > num8)
+		{
+			hp.velocity.x = hp.velocity.x * num8 / num10;
+		}
+		hp.velocity.x = hp.velocity.x * this.startDamper;
+		hp.velocity.y = hp.velocity.y * this.startDamper;
+		hp.velocity.z = hp.velocity.z * this.startDamper;
+		hp.position = position;
+	}
+
+	// Token: 0x06001A7A RID: 6778 RVA: 0x000E7A2C File Offset: 0x000E5C2C
+	private void Start()
+	{
+		this.PreAwake(0);
+		this.UpdateHairSetting(true);
+	}
+
+	// Token: 0x06001A7B RID: 6779 RVA: 0x000E7A40 File Offset: 0x000E5C40
+	public void UpdateHairSetting(bool calledInternally = false)
+	{
+		if (this.setupComplete && calledInternally)
+		{
+			return;
+		}
+		if (!calledInternally)
+		{
+			this.allowUpdate = false;
+			this.PreAwake(0);
+			this.allowUpdate = true;
+		}
+		this.setupComplete = true;
+		this.HairRenderer.SetWidth(this.hairWidthTop, this.hairWidthBottom);
+		this.maxDist = this.hairLength * this.initialRandom / (float)this.numberHairPoints;
+		this.sqrMaxDist = this.maxDist * this.maxDist;
+		this.sqrColliderRadius = this.FakeColliderRadius * this.FakeColliderRadius;
+		Vector3 position = this._transform.position;
+		for (int i = 0; i < this.numberHairPoints; i++)
+		{
+			if (this.gravity < 0f)
+			{
+				position.y += this.maxDist;
+			}
+			else
+			{
+				position.y -= this.maxDist;
+			}
+			this.hairPts[i].position = position;
+			this.hairPts[i].randomFactor = this.initialRandom;
+			this.hairPts[i].hasBeenInside = 0;
+		}
+		int num = this.numberHairPoints + 1;
+		for (int j = 0; j < num; j++)
+		{
+			this.HairRenderer.SetPosition(j, position);
+		}
+		this.parentTransform = base.transform.parent;
+	}
+
+	// Token: 0x06001A7C RID: 6780 RVA: 0x000E7BB0 File Offset: 0x000E5DB0
+	public void UmbrellaLateUpdate()
+	{
+		if (!this.setupComplete)
+		{
+			return;
+		}
+		if (this.waitUpdateCount > 0)
+		{
+			this.waitUpdateCount--;
+			return;
+		}
+		bool checkInside = false;
+		Vector3 subPos = Vector3Fast.zero;
+		if (ScriptGlobals.boy.isDead && ScriptGlobals.boy.specialBoyMode == Boy.SpecialBoyMode.InsideSub)
+		{
+			checkInside = true;
+			subPos = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine).transform.position;
+		}
+		Vector3 position = this._transform.position;
+		Vector3 vector = position;
+		float deltaTime = Time.deltaTime;
+		if (deltaTime == 0f)
+		{
+			return;
+		}
+		this.startDamper = FastMath.Min(1f, this.startDamper + deltaTime * 3f);
+		int num = this.numberHairPoints;
+		Vector3 zero;
+		if (this.waterSimulation)
+		{
+			Vector3 vector2 = this._transform.TransformDirection(Vector3Fast.down);
+			zero.x = 3f * vector2.x;
+			zero.y = 3f * vector2.y;
+			zero.z = 3f * vector2.z;
+			this.gravityVector = Vector3Fast.down;
+			if (this.posLastFrame.x != 0f || this.posLastFrame.y != 0f || this.posLastFrame.z != 0f)
+			{
+				Vector3 vector3;
+				vector3.x = position.x - this.posLastFrame.x;
+				vector3.y = position.y - this.posLastFrame.y;
+				vector3.z = 0f;
+				float magnitude = vector3.magnitude;
+				float num2 = 0.75f / magnitude;
+				float num3 = magnitude * 1000f;
+				Vector3 up = Vector3Fast.up;
+				Vector3 vector4;
+				vector4.x = vector2.x * 0.25f + vector3.x * num2 + up.x * num3;
+				vector4.y = vector2.y * 0.25f + vector3.y * num2 + up.y * num3;
+				vector4.z = vector2.z * 0.25f + vector3.z * num2 + up.z * num3;
+				this.gravityVector.x = this.gravityVector.x + vector4.x * deltaTime * 5f;
+				this.gravityVector.y = this.gravityVector.y + vector4.y * deltaTime * 5f;
+				this.gravityVector.z = this.gravityVector.z + vector4.z * deltaTime * 5f;
+				this.gravityVector.Normalize();
+			}
+			else
+			{
+				Vector3 up2 = Vector3Fast.up;
+				this.gravityVector.x = vector2.x * 0.25f + up2.x * 0.75f;
+				this.gravityVector.y = vector2.y * 0.25f + up2.y * 0.75f;
+				this.gravityVector.z = vector2.z * 0.25f + up2.z * 0.75f;
+			}
+		}
+		else
+		{
+			zero = Vector3Fast.zero;
+			if (this.owner != null)
+			{
+				Vector3 movableGroundVelocity = this.owner.GetMovableGroundVelocity();
+				if (movableGroundVelocity != Vector3Fast.zero)
+				{
+					for (int i = 0; i < num; i++)
+					{
+						MathUtils.HairPointStruct[] array = this.hairPts;
+						int num4 = i;
+						array[num4].position.x = array[num4].position.x + movableGroundVelocity.x * deltaTime;
+						MathUtils.HairPointStruct[] array2 = this.hairPts;
+						int num5 = i;
+						array2[num5].position.y = array2[num5].position.y + movableGroundVelocity.y * deltaTime;
+						MathUtils.HairPointStruct[] array3 = this.hairPts;
+						int num6 = i;
+						array3[num6].position.z = array3[num6].position.z + movableGroundVelocity.z * deltaTime;
+					}
+				}
+			}
+		}
+		if (this.sqrColliderRadius > 0f)
+		{
+			this.fakeColliderWorldPosThisFrame = this.parentTransform.TransformPoint(this.fakeColliderlocalOffset);
+		}
+		Vector3 gravityToUse = this.gravityVector;
+		if (this.waterSimulation)
+		{
+			this.rotater += deltaTime * this.waterWobbleSpeed;
+			float num7 = Mathf.Sin(this.rotater);
+			gravityToUse = Quaternion.Euler(0f, 0f, num7 * 20f) * this.gravityVector + (1f - this.startDamper) * Vector3Fast.up;
+		}
+		float frameRandom = Random.Range(1f - this.RandomDeviance, 1f + this.RandomDeviance);
+		GameCodeImpl.UpdateHair(vector, this.hairPts, this.numberHairPoints, gravityToUse, this.gravity, zero, frameRandom, this.sqrColliderRadius, this.fakeColliderWorldPosThisFrame, this.useYClamp, this.yClamp, this.maxDist, this.maxAccelDelta, this.drag, this.maxSpeed, this.startDamper, checkInside, subPos, deltaTime);
+		this.HairRenderer.SetPosition(0, vector);
+		for (int j = 0; j < num; j++)
+		{
+			this.HairRenderer.SetPosition(j + 1, this.hairPts[j].position);
+		}
+		this.posLastFrame = vector;
+	}
+
+	// Token: 0x04002FB7 RID: 12215
+	public LineRenderer HairRenderer;
+
+	// Token: 0x04002FB8 RID: 12216
+	public float hairLength = 0.4f;
+
+	// Token: 0x04002FB9 RID: 12217
+	public int numberHairPoints = 6;
+
+	// Token: 0x04002FBA RID: 12218
+	public float hairWidthTop = 0.05f;
+
+	// Token: 0x04002FBB RID: 12219
+	public float hairWidthBottom = 0.04f;
+
+	// Token: 0x04002FBC RID: 12220
+	public float drag = 7f;
+
+	// Token: 0x04002FBD RID: 12221
+	public float maxSpeed = 5f;
+
+	// Token: 0x04002FBE RID: 12222
+	public float maxAccelDelta = 1f;
+
+	// Token: 0x04002FBF RID: 12223
+	public float gravity = -15f;
+
+	// Token: 0x04002FC0 RID: 12224
+	public float RandomDeviance = 0.3f;
+
+	// Token: 0x04002FC1 RID: 12225
+	public Color debugVisualColor = Color.red;
+
+	// Token: 0x04002FC2 RID: 12226
+	public Boy placeOnBoyHead;
+
+	// Token: 0x04002FC3 RID: 12227
+	public float FakeColliderRadius;
+
+	// Token: 0x04002FC4 RID: 12228
+	public Vector3 fakeColliderlocalOffset;
+
+	// Token: 0x04002FC5 RID: 12229
+	public bool waterSimulation;
+
+	// Token: 0x04002FC6 RID: 12230
+	public bool fakeFastUpdate = true;
+
+	// Token: 0x04002FC7 RID: 12231
+	public bool useYClamp;
+
+	// Token: 0x04002FC8 RID: 12232
+	public float yClamp;
+
+	// Token: 0x04002FC9 RID: 12233
+	public bool forceToward;
+
+	// Token: 0x04002FCA RID: 12234
+	public Vector3 forceTowardLocalPosition;
+
+	// Token: 0x04002FCB RID: 12235
+	public AnimcontrolledCharacter owner;
+
+	// Token: 0x04002FCC RID: 12236
+	private Vector3 gravityVector = Vector3.up;
+
+	// Token: 0x04002FCD RID: 12237
+	private float initialRandom = 1f;
+
+	// Token: 0x04002FCE RID: 12238
+	private float rotater;
+
+	// Token: 0x04002FCF RID: 12239
+	private Vector3 posLastFrame = Vector3.zero;
+
+	// Token: 0x04002FD0 RID: 12240
+	private float waterWobbleSpeed = 1f;
+
+	// Token: 0x04002FD1 RID: 12241
+	[HideInInspector]
+	[SerializeField]
+	private float maxDist;
+
+	// Token: 0x04002FD2 RID: 12242
+	[SerializeField]
+	[HideInInspector]
+	private bool setupComplete;
+
+	// Token: 0x04002FD3 RID: 12243
+	[SerializeField]
+	[HideInInspector]
+	private float sqrMaxDist;
+
+	// Token: 0x04002FD4 RID: 12244
+	[SerializeField]
+	[HideInInspector]
+	private MathUtils.HairPointStruct[] hairPts;
+
+	// Token: 0x04002FD5 RID: 12245
+	[HideInInspector]
+	[SerializeField]
+	private Transform parentTransform;
+
+	// Token: 0x04002FD6 RID: 12246
+	[HideInInspector]
+	[SerializeField]
+	private Transform _transform;
+
+	// Token: 0x04002FD7 RID: 12247
+	[SerializeField]
+	[HideInInspector]
+	private float sqrColliderRadius;
+
+	// Token: 0x04002FD8 RID: 12248
+	private static int globalWaitUpdateCount = 1;
+
+	// Token: 0x04002FD9 RID: 12249
+	private int waitUpdateCount = 1;
+
+	// Token: 0x04002FDA RID: 12250
+	private bool wasAwoken;
+
+	// Token: 0x04002FDB RID: 12251
+	private float startDamper;
+
+	// Token: 0x04002FDC RID: 12252
+	private bool allowUpdate = true;
+
+	// Token: 0x020003DD RID: 989
+	[Serializable]
+	private class HairPointClass
+	{
+		// Token: 0x04002FDE RID: 12254
+		public Vector3 position;
+
+		// Token: 0x04002FDF RID: 12255
+		public Vector3 velocity;
+
+		// Token: 0x04002FE0 RID: 12256
+		public float randomFactor = 1f;
+
+		// Token: 0x04002FE1 RID: 12257
+		public bool hasBeenInside;
+	}
+}

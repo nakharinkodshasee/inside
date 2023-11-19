@@ -1,0 +1,1044 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200016F RID: 367
+public class HuddleFoetus : MonoBehaviour, IPreAwake
+{
+	// Token: 0x1700003D RID: 61
+	// (get) Token: 0x06000ACA RID: 2762 RVA: 0x0006A72C File Offset: 0x0006892C
+	private Boy boy
+	{
+		get
+		{
+			return ScriptGlobals.boy;
+		}
+	}
+
+	// Token: 0x1700003E RID: 62
+	// (get) Token: 0x06000ACB RID: 2763 RVA: 0x0006A734 File Offset: 0x00068934
+	private Huddle huddle
+	{
+		get
+		{
+			return ScriptGlobals.huddle;
+		}
+	}
+
+	// Token: 0x06000ACC RID: 2764 RVA: 0x0006A73C File Offset: 0x0006893C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.huddleGrabPointPrefab != null)
+		{
+			int i = 0;
+			int count = this.attachPositions.Count;
+			while (i < count)
+			{
+				GameObject gameObject = this.attachPositions[i];
+				if (gameObject != null)
+				{
+					GameObject gameObject2 = Object.Instantiate<GameObject>(this.huddleGrabPointPrefab);
+					UnderwaterHatch underwaterHatch = null;
+					if (gameObject2 != null)
+					{
+						underwaterHatch = gameObject2.GetComponent<UnderwaterHatch>();
+					}
+					if (underwaterHatch != null)
+					{
+						underwaterHatch.transform.parent = gameObject.transform;
+						underwaterHatch.transform.localEulerAngles = Vector3.zero;
+						underwaterHatch.transform.localPosition = Vector3.zero;
+						this.attachPoints.Add(underwaterHatch);
+						this.ropeAttachPoints.Add(underwaterHatch.transform.FindChild("HatchRopeRoot"));
+					}
+					gameObject2.SetActive(false);
+				}
+				i++;
+			}
+		}
+		int j = 0;
+		int count2 = this.attachPoints.Count;
+		while (j < count2)
+		{
+			UnderwaterHatch underwaterHatch2 = this.attachPoints[j];
+			if (underwaterHatch2 == null)
+			{
+				this.attachPointInitPosList.Add(Vector3.zero);
+				this.pointDetachedList.Add(true);
+			}
+			else
+			{
+				this.attachPointInitPosList.Add(underwaterHatch2.transform.position);
+				this.pointDetachedList.Add(false);
+			}
+			j++;
+		}
+		int k = this.huddleJoltReaction.Count;
+		int count3 = this.attachPoints.Count;
+		while (k < count3)
+		{
+			if (k == 0)
+			{
+				this.huddleJoltReaction.Add(0.4f);
+			}
+			else
+			{
+				this.huddleJoltReaction.Add(1f);
+			}
+			k++;
+		}
+		this.ToggleRopeVisiblity(false);
+	}
+
+	// Token: 0x06000ACD RID: 2765 RVA: 0x0006A920 File Offset: 0x00068B20
+	public bool PreAwake(int callcount)
+	{
+		this.characterSwapped = SignalOut.Create("characterSwapped", base.gameObject);
+		this.FirstDetach = SignalOut.Create("FirstDetach", base.gameObject);
+		this.SecondDetach = SignalOut.Create("SecondDetach", base.gameObject);
+		this.ThirdDetach = SignalOut.Create("ThirdDetach", base.gameObject);
+		this.FourthDetach = SignalOut.Create("FourthDetach", base.gameObject);
+		this.shakeMachinery = SignalOut.Create("shakeMachinery", base.gameObject);
+		this.Entry0Detach = SignalOut.Create("Entry0Detach", base.gameObject);
+		this.Entry1Detach = SignalOut.Create("Entry1Detach", base.gameObject);
+		this.Entry2Detach = SignalOut.Create("Entry2Detach", base.gameObject);
+		this.Entry3Detach = SignalOut.Create("Entry3Detach", base.gameObject);
+		this.placeHuddle = SignalIn.Create("placeHuddle", base.gameObject, new Action(this.OnPlaceHuddle));
+		this.enableHuddleSound = SignalIn.Create("enableHuddleSound", base.gameObject, new Action(this.OnEnableHuddleSound));
+		return true;
+	}
+
+	// Token: 0x06000ACE RID: 2766 RVA: 0x0006AA50 File Offset: 0x00068C50
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.initialMachineRotation = this.machineryRootNode.transform.rotation;
+		this.initialFoetusPos = base.transform.position;
+	}
+
+	// Token: 0x06000ACF RID: 2767 RVA: 0x0006AA8C File Offset: 0x00068C8C
+	private bool AreAllPulledOut()
+	{
+		int i = 0;
+		int count = this.pointDetachedList.Count;
+		while (i < count)
+		{
+			if (!this.pointDetachedList[i])
+			{
+				return false;
+			}
+			i++;
+		}
+		return true;
+	}
+
+	// Token: 0x06000AD0 RID: 2768 RVA: 0x0006AACC File Offset: 0x00068CCC
+	private void OnEnableHuddleSound()
+	{
+		this.sequencer.enabled = true;
+	}
+
+	// Token: 0x06000AD1 RID: 2769 RVA: 0x0006AADC File Offset: 0x00068CDC
+	private void PlaceHuddle()
+	{
+		this.huddle.SetCharacterActive(true);
+		this.sequencer = AudioKeyObject.huddle.GetComponent<HuddleSequencer>();
+		this.sequencer.enabled = false;
+		Vector3 pos = this.huddle.pos3;
+		this.huddle.SpawnState(new HuddleFoetusState(this.huddle));
+		this.huddle.Teleport(base.transform.position);
+		pos = this.huddle.pos3;
+		int i = 0;
+		int count = this.attachPoints.Count;
+		while (i < count)
+		{
+			UnderwaterHatch underwaterHatch = this.attachPoints[i];
+			if (underwaterHatch != null && !this.pointDetachedList[i])
+			{
+				Vector3 vector = this.attachPointInitPosList[i];
+				float num = 1000000f;
+				Transform transform = null;
+				HuddleCloth.ClothBone item = null;
+				foreach (HuddleCloth.ClothBone clothBone in this.huddle.cloth.bones)
+				{
+					Vector3 vector2 = clothBone.visualTransform.position - pos + base.transform.position;
+					float sqrMagnitude = (vector2 - vector).sqrMagnitude;
+					if (sqrMagnitude < num)
+					{
+						num = sqrMagnitude;
+						transform = clothBone.visualTransform;
+						item = clothBone;
+					}
+				}
+				if (transform != null)
+				{
+					this.attachedBones.Add(item);
+					underwaterHatch.transform.parent = transform;
+					underwaterHatch.transform.localPosition = Vector3.zero;
+					underwaterHatch.transform.localEulerAngles = Vector3.zero;
+				}
+				underwaterHatch.gameObject.SetActive(true);
+			}
+			i++;
+		}
+		this.huddleActivated = true;
+	}
+
+	// Token: 0x06000AD2 RID: 2770 RVA: 0x0006AC9C File Offset: 0x00068E9C
+	private void TestReleaseArms()
+	{
+		if (this.activeHeadArm != null)
+		{
+			if (!this.activeHeadArm.gameObject.activeSelf)
+			{
+				this.activeHeadArm = null;
+			}
+			else if (this.activeHeadArm.armObject.transform.localScale.z >= 1.68f)
+			{
+				this.activeHeadArm.RetractDynamicArm();
+				this.activeHeadArm = null;
+			}
+		}
+		if (this.activeSpineArm != null)
+		{
+			if (!this.activeSpineArm.gameObject.activeSelf)
+			{
+				this.activeSpineArm = null;
+			}
+			else if (this.activeSpineArm.armObject.transform.localScale.z >= 1.68f)
+			{
+				this.activeSpineArm.RetractDynamicArm();
+				this.activeSpineArm = null;
+			}
+		}
+		if (this.activeKneeArm != null)
+		{
+			if (!this.activeKneeArm.gameObject.activeSelf)
+			{
+				this.activeKneeArm = null;
+			}
+			else if (this.activeKneeArm.armObject.transform.localScale.z >= 1.68f)
+			{
+				this.activeKneeArm.RetractDynamicArm();
+				this.activeKneeArm = null;
+			}
+		}
+	}
+
+	// Token: 0x06000AD3 RID: 2771 RVA: 0x0006ADEC File Offset: 0x00068FEC
+	private void SpawnOneArm()
+	{
+		this.activeHeadArm = this.SpawnSpecificArm(this.activeHeadArm, ScriptGlobals.boy.visualBoy.actor.specificBones.head);
+		this.activeSpineArm = this.SpawnSpecificArm(this.activeSpineArm, ScriptGlobals.boy.visualBoy.actor.specificBones.spineB);
+		this.activeKneeArm = this.SpawnSpecificArm(this.activeKneeArm, ScriptGlobals.boy.visualBoy.actor.specificBones.knees[1]);
+	}
+
+	// Token: 0x06000AD4 RID: 2772 RVA: 0x0006AE84 File Offset: 0x00069084
+	private HuddleArmControl2 SpawnSpecificArm(HuddleArmControl2 specificArm, int boneID)
+	{
+		if (specificArm == null && this.spawnTimer <= 0f)
+		{
+			specificArm = this.SpawnExtraArm(boneID);
+			if (specificArm != null)
+			{
+				this.spawnTimer = 0.5f;
+			}
+		}
+		return specificArm;
+	}
+
+	// Token: 0x06000AD5 RID: 2773 RVA: 0x0006AEC4 File Offset: 0x000690C4
+	private HuddleArmControl2 SpawnExtraArm(int boneID)
+	{
+		Actor actor = ScriptGlobals.boy.visualBoy.actor;
+		Actor.Bone bone = actor.bones[boneID];
+		HuddleArmControl2 huddleArmControl = null;
+		if (bone != null)
+		{
+			huddleArmControl = this.huddle.visualHuddle.arms2.ForceExtraArmToGrab(bone.transform.gameObject, new Vector3(-0.1f, -0.056f, 0.15f), bone.transform.forward, 1.4f, 0.7f);
+			if (huddleArmControl)
+			{
+				if (boneID == ScriptGlobals.boy.visualBoy.actor.specificBones.spineB)
+				{
+					huddleArmControl.toPoint.SetWantedLocalRotation(Quaternion.Euler(0f, 0f, 205f));
+				}
+				else if (boneID == ScriptGlobals.boy.visualBoy.actor.specificBones.head)
+				{
+					huddleArmControl.toPoint.SetWantedLocalRotation(Quaternion.Euler(0f, 7.5f, 181f));
+				}
+				else
+				{
+					huddleArmControl.toPoint.SetWantedLocalRotation(Quaternion.Euler(22f, 322f, 20f));
+				}
+			}
+		}
+		return huddleArmControl;
+	}
+
+	// Token: 0x06000AD6 RID: 2774 RVA: 0x0006AFF4 File Offset: 0x000691F4
+	private void TouchBoy()
+	{
+		bool flag = this.boy.state is BoyCustomAnimState;
+		if (!flag)
+		{
+			this.extraAllowGrab = false;
+		}
+		if (flag && !this.extraAllowGrab)
+		{
+			this.huddle.visualHuddle.arms2.ForceExtraArmsToRelease();
+			this.activeHeadArm = null;
+			this.activeKneeArm = null;
+			this.activeSpineArm = null;
+		}
+		else
+		{
+			int num = 0;
+			if (this.activeHeadArm != null)
+			{
+				num++;
+			}
+			if (this.activeSpineArm != null)
+			{
+				num++;
+			}
+			if (this.activeKneeArm != null)
+			{
+				num++;
+			}
+			if (num < this.armsChasingBoy)
+			{
+				float magnitude = (this.boy.pos3 - this.huddle.pos3).magnitude;
+				this.spawnTimer -= Time.deltaTime;
+				if (magnitude < 2.5f)
+				{
+					this.SpawnOneArm();
+				}
+			}
+			this.TestReleaseArms();
+			this.AddPullForceToBoy();
+		}
+	}
+
+	// Token: 0x06000AD7 RID: 2775 RVA: 0x0006B104 File Offset: 0x00069304
+	private void PullBoyWithArm(HuddleArmControl2 arm)
+	{
+		if (arm != null)
+		{
+			this.boy.AddVelocity(-this.boy.velocity * 1.1f * Time.deltaTime, null, 1f);
+			Vector3 a = arm.transform.position - this.boy.pos3;
+			vector2f a2 = MathUtils.v2(a);
+			float magnitude = a2.magnitude;
+			if (magnitude > 1f)
+			{
+				a2 /= magnitude;
+			}
+			this.boy.AddVelocity(a2 * 0.4f * Time.deltaTime, null, 1f);
+			HuddleCloth.ClothBone[] silhouette = ScriptGlobals.huddle.cloth.silhouette;
+			int silhouetteTopIndex = ScriptGlobals.huddle.cloth.silhouetteTopIndex;
+			HuddleCloth.ClothBone clothBone = silhouette[MathUtils.Mod(silhouetteTopIndex + arm.huddleBoneIndex, silhouette.Length)];
+		}
+	}
+
+	// Token: 0x06000AD8 RID: 2776 RVA: 0x0006B1EC File Offset: 0x000693EC
+	private void AddPullForceToBoy()
+	{
+		this.PullBoyWithArm(this.activeHeadArm);
+		this.PullBoyWithArm(this.activeSpineArm);
+		this.PullBoyWithArm(this.activeKneeArm);
+	}
+
+	// Token: 0x06000AD9 RID: 2777 RVA: 0x0006B220 File Offset: 0x00069420
+	private void PullInBoy(bool playAnim)
+	{
+		if (!this.activeSpineArm || !this.activeSpineArm.gameObject.activeSelf)
+		{
+			this.activeSpineArm = this.SpawnExtraArm(ScriptGlobals.boy.visualBoy.actor.specificBones.spineB);
+		}
+		if (!this.activeHeadArm || !this.activeHeadArm.gameObject.activeSelf)
+		{
+			this.activeHeadArm = this.SpawnExtraArm(ScriptGlobals.boy.visualBoy.actor.specificBones.head);
+		}
+		if (!this.activeKneeArm || !this.activeKneeArm.gameObject.activeSelf)
+		{
+			this.activeKneeArm = this.SpawnExtraArm(ScriptGlobals.boy.visualBoy.actor.specificBones.knees[1]);
+		}
+		if (playAnim && this.pullBoyInAnim != null)
+		{
+			this.pullBoyInAnim.transform.position = this.lastHatchPulled.pullAnim.transform.position;
+			Vector3 forward = this.lastHatchPulled.pullAnim.transform.forward;
+			Vector3 vector = Vector3.Cross(Vector3.forward, forward);
+			if (vector.y * this.lastHatchPulled.pullAnim.transform.up.y < 0f)
+			{
+				this.pullBoyInAnim.mirror = true;
+				vector = -vector;
+			}
+			this.pullBoyInAnim.transform.rotation = Quaternion.LookRotation(forward, vector);
+			BoyUtils.StartCustomAnim(this.boy, this.pullBoyInAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightThenLeft, 0.2f, 0.3f, 0, 0.2f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftSpike, 0.2f, 0.4f, 0, 0.4f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.2f, 0, 0.8f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftToRight, 0.15f, 0.5f, 0, 1.3f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.FadeOut, 0.3f, 0.7f, 0, 1.9f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.SpikeWithPause, 0.2f, 0.1f, 3, 2.2f);
+		}
+	}
+
+	// Token: 0x06000ADA RID: 2778 RVA: 0x0006B488 File Offset: 0x00069688
+	private void SendOutSignals(int lastIndexPulled)
+	{
+		switch (lastIndexPulled)
+		{
+		case 0:
+			this.Entry0Detach.Signal();
+			break;
+		case 1:
+			this.Entry1Detach.Signal();
+			break;
+		case 2:
+			this.Entry2Detach.Signal();
+			break;
+		case 3:
+			this.Entry3Detach.Signal();
+			break;
+		}
+		this.detachCount = 0;
+		int i = 0;
+		int count = this.pointDetachedList.Count;
+		while (i < count)
+		{
+			bool flag = this.pointDetachedList[i];
+			if (flag)
+			{
+				this.detachCount++;
+			}
+			i++;
+		}
+		if (this.detachCount == 1)
+		{
+			this.FirstDetach.Signal();
+			this.armsChasingBoy = 1;
+		}
+		else if (this.detachCount == 2)
+		{
+			this.SecondDetach.Signal();
+			this.armsChasingBoy = 3;
+		}
+		else if (this.detachCount == 3)
+		{
+			this.ThirdDetach.Signal();
+		}
+		else if (this.detachCount == 4)
+		{
+			this.FourthDetach.Signal();
+		}
+		if (this.detachCount == this.pullInCount && this.pullBoyInAnim != null)
+		{
+			this.pullInTimer = 0.2f;
+			this.beingPulledIn = true;
+			this.PullInBoy(false);
+		}
+	}
+
+	// Token: 0x06000ADB RID: 2779 RVA: 0x0006B5EC File Offset: 0x000697EC
+	private void TestGrabPoints()
+	{
+		if (!this.boy.isDead && this.boy.input.rawAction && !(this.boy.state is BoyCustomAnimState))
+		{
+			UnderwaterHatch underwaterHatch = null;
+			float num = 0.6f;
+			int i = 0;
+			int count = this.attachPoints.Count;
+			while (i < count)
+			{
+				UnderwaterHatch underwaterHatch2 = this.attachPoints[i];
+				if (!underwaterHatch2.IsPulledOff())
+				{
+					Vector3 vector = underwaterHatch2.transform.TransformPoint(Vector3.up * 0.2f);
+					Vector3 vector2 = vector - ScriptGlobals.boy.pos3;
+					vector2.z = 0f;
+					float magnitude = vector2.magnitude;
+					float magnitude2 = (vector2 - new Vector3(ScriptGlobals.boy.capsuleUp.x * 0.3f, ScriptGlobals.boy.capsuleUp.y * 0.3f, 0f)).magnitude;
+					float num2 = Mathf.Min(magnitude, magnitude2);
+					if (num2 < num)
+					{
+						num = num2;
+						underwaterHatch = underwaterHatch2;
+					}
+				}
+				i++;
+			}
+			if (underwaterHatch != null)
+			{
+				underwaterHatch.BoyEnterGrabState(ScriptGlobals.boy);
+			}
+		}
+		else
+		{
+			int j = 0;
+			int count2 = this.attachPoints.Count;
+			while (j < count2)
+			{
+				UnderwaterHatch underwaterHatch3 = this.attachPoints[j];
+				if (underwaterHatch3.IsPulledOff() && !this.pointDetachedList[j])
+				{
+					this.DetachRope(j);
+					this.deadzone = 2f;
+				}
+				j++;
+			}
+		}
+	}
+
+	// Token: 0x06000ADC RID: 2780 RVA: 0x0006B798 File Offset: 0x00069998
+	private float GetActualRopeLength(RopeGeneratorNode rope)
+	{
+		return rope.CalculateActualLength();
+	}
+
+	// Token: 0x06000ADD RID: 2781 RVA: 0x0006B7A0 File Offset: 0x000699A0
+	private void DetachRope(int i)
+	{
+		if (this.lastHatchPulled != null)
+		{
+			this.extraAllowGrab = true;
+		}
+		UnderwaterHatch underwaterHatch = this.attachPoints[i];
+		this.lastHatchPulled = underwaterHatch;
+		SingletonBehaviour<FakeRagdollJointManager>.instance.DoGlobalJolt();
+		this.huddle.cloth.StartBoneJerk(this.attachedBones[i], this.huddleJoltReaction[this.detachCount], false);
+		this.huddle.visualHuddle.arms2.TwitchArms();
+		this.huddle.visualHuddle.waterLegs.TwitchArms();
+		if (this.ropeBottomList.Count > i)
+		{
+			GameObject gameObject = this.ropeBottomList[i];
+			gameObject.transform.parent = this.ropeAttachPoints[i];
+			gameObject.transform.localPosition = Vector3Fast.zero;
+			Vector3 vector = underwaterHatch.transform.up;
+			vector.z *= 0.4f;
+			vector.Normalize();
+			vector *= 2.3f;
+			this.pulloffBottomList[i].StartFlyingOff(vector, base.transform.parent);
+			this.fakeRopeList[i].SetIterationCounter(5, 3f);
+			this.fakeRopeList[i].simulateWater = false;
+			Transform transform = this.ropeAttachPoints[i];
+			transform.parent = this.pulloffBottomList[i].transform;
+			transform.localPosition = Vector3Fast.zero;
+			FakeRagdollJoint2 component = transform.gameObject.GetComponent<FakeRagdollJoint2>();
+			if (component)
+			{
+				component.enabled = true;
+			}
+		}
+		underwaterHatch.transform.parent = base.transform;
+		this.pointDetachedList[i] = true;
+		this.SendOutSignals(i);
+	}
+
+	// Token: 0x06000ADE RID: 2782 RVA: 0x0006B970 File Offset: 0x00069B70
+	private void MoveHuddleTowardsFoetusPos()
+	{
+		if (this.huddleActivated)
+		{
+			if (this.huddle != null && this.huddle.spine != null && this.huddle.state is HuddleFoetusState)
+			{
+				Vector3 vector = base.transform.position - this.huddle.pos3;
+				if ((double)Vector3.Dot(vector, this.huddle.velocity3) < 0.01)
+				{
+					this.huddle.AddVelocity(vector * Time.deltaTime - this.huddle.velocity3 * Time.deltaTime * 4f);
+				}
+			}
+			this.totalAngular += this.huddle.angularVelocity;
+			if (this.totalAngular.z * this.huddle.angularVelocity.z > 0f)
+			{
+				this.huddle.AddAngularImpulse(-this.totalAngular * (0.1f * this.huddle.mass * Time.deltaTime));
+			}
+		}
+	}
+
+	// Token: 0x06000ADF RID: 2783 RVA: 0x0006BAB4 File Offset: 0x00069CB4
+	private void FixedUpdate()
+	{
+		if (this.inHuddleAwake || ((ScriptGlobals.boy.isCharacterActive || (ScriptGlobals.huddle != null && ScriptGlobals.huddle.state is HuddleFoetusState)) && !GameManager.IsLoading()))
+		{
+			Vector3 vector = this.huddle.pos3 - this.initialFoetusPos;
+			vector.z = 0f;
+			Vector3 vector2 = vector;
+			float magnitude = vector2.magnitude;
+			if (magnitude > 0.01f)
+			{
+				Vector3 vector3 = this.maxShakeRotationAngle / this.maxPositionOffset * vector;
+				Vector3 vector4;
+				vector4..ctor(vector3.y, -vector3.x, 0f);
+				this.machineryRootNode.rotation = this.initialMachineRotation * Quaternion.Euler(vector4);
+			}
+			if (this.inHuddleAwake)
+			{
+				this.goToCenterScale = Mathf.Min(this.goToCenterScale + Time.deltaTime * 0.5f, 1f);
+				this.huddleJerkDeadZone = Mathf.Min(this.huddleJerkDeadZone + Time.deltaTime, 1f);
+				if (this.huddle.state is HuddleFoetusState)
+				{
+					this.huddle.SpawnState(new HuddleSwimState(this.huddle));
+				}
+				float num = 0.5f;
+				bool flag = false;
+				if (magnitude > this.maxPositionOffset)
+				{
+					this.hardPullTime += this.huddle.dt;
+					if (this.hardPullTime < 0.8f)
+					{
+						HuddleSwimState huddleSwimState = this.huddle.state as HuddleSwimState;
+						if (huddleSwimState != null)
+						{
+							huddleSwimState.OverrideSwimSpeedFactor(0.5f);
+						}
+					}
+					flag = true;
+					vector2 = this.maxPositionOffset / magnitude * vector2;
+					if (Vector3.Dot(vector2, this.huddle.velocity3) > 0f)
+					{
+						num = 2f;
+					}
+					else
+					{
+						num = 0.7f;
+					}
+					magnitude = this.maxPositionOffset;
+					if ((this.huddleJerkDeadZone >= 1f && Vector3.Dot(this.huddle.velocity3, vector2 / this.maxPositionOffset) > 1f) || this.hardPullTime > 1.63f)
+					{
+						this.hardPullTime = 0f;
+						HuddleCloth.ClothBone bestBone = this.GetBestBone(this.huddle.velocity3.normalized);
+						ScriptGlobals.huddle.cloth.StartBoneJerk(bestBone, this.breakFreeMagnitude, true);
+						this.huddle.AddVelocity(-this.huddle.velocity3);
+						this.huddleJerkDeadZone = 0f;
+						this.jerks++;
+						if (this.jerks == 1)
+						{
+							int i = 0;
+							int count = this.pointDetachedList.Count;
+							while (i < count)
+							{
+								if (!this.pointDetachedList[i])
+								{
+									this.DetachRope(i);
+								}
+								i++;
+							}
+						}
+						RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightThenLeft, 0.6f, 0.3f, 0, 0f);
+						if (this.jerks >= 2)
+						{
+							HuddleSwimState huddleSwimState2 = this.huddle.state as HuddleSwimState;
+							if (huddleSwimState2 != null)
+							{
+								huddleSwimState2.JustSpawnedFromFoetus(3f, 7f);
+							}
+							this.inHuddleAwake = false;
+							this.huddleAwake = true;
+							this.boy.SetCharacterActive(false);
+							SingletonBehaviour<CameraScript>.instance.SetTarget(ScriptGlobals.mainCharacter.transform, this.cameraBlendDuration);
+							this.characterSwapped.Signal();
+						}
+						else
+						{
+							HuddleSwimState huddleSwimState3 = this.huddle.state as HuddleSwimState;
+							if (huddleSwimState3 != null)
+							{
+								huddleSwimState3.JustSpawnedFromFoetus(0.5f, 1.5f);
+							}
+							this.shakeMachinery.Signal();
+						}
+					}
+				}
+				else
+				{
+					this.hardPullTime = 0f;
+				}
+				Vector3 vector5 = this.initialFoetusPos + vector2;
+				base.transform.position = vector5;
+				float num2 = this.initialFoetusPos.y - this.huddle.pos3.y;
+				if (num2 > 0f && !flag)
+				{
+					vector5.y = this.initialFoetusPos.y;
+				}
+				Vector3 vector6 = 0.5f * (vector5 - this.huddle.pos3) / Time.deltaTime;
+				Vector3 vector7 = vector6 - this.huddle.velocity3;
+				this.huddle.AddVelocity(vector7 * Time.deltaTime * num * this.goToCenterScale);
+			}
+			if (this.setRopeBottoms > 1)
+			{
+				int j = 0;
+				int count2 = this.ropeBottomList.Count;
+				while (j < count2)
+				{
+					GameObject gameObject = this.ropeBottomList[j];
+					if (gameObject != null && this.attachPoints.Count > j)
+					{
+						UnderwaterHatch underwaterHatch = this.attachPoints[j];
+						if ((underwaterHatch.transform.position - gameObject.transform.position).sqrMagnitude < 100f)
+						{
+							this.setRopeBottoms = 0;
+							gameObject.transform.position = underwaterHatch.transform.position;
+							gameObject.transform.parent = underwaterHatch.transform;
+							gameObject.transform.localEulerAngles = Vector3.zero;
+							gameObject.transform.localPosition = Vector3.up * 0.35f;
+						}
+						else
+						{
+							this.setRopeBottoms++;
+						}
+					}
+					j++;
+				}
+			}
+			this.setRopeBottoms--;
+			this.deadzone -= Time.deltaTime;
+			bool flag2 = this.AreAllPulledOut();
+			Vector3 vector8 = ScriptGlobals.boy.pos3 - base.transform.position;
+			vector8.z *= 0.3f;
+			float magnitude2 = vector8.magnitude;
+			if (magnitude2 < 1.7f && flag2 && this.deadzone <= 0f && this.huddle.state is HuddleFoetusState)
+			{
+				this.huddle.SpawnState(new HuddleSwimState(this.huddle));
+				this.boy.SetCharacterActive(false);
+				SingletonBehaviour<CameraScript>.instance.SetTarget(ScriptGlobals.mainCharacter.transform, this.cameraBlendDuration);
+				this.characterSwapped.Signal();
+			}
+			if (this.huddle != null)
+			{
+			}
+			if (this.pullInTimer > 0f)
+			{
+				this.pullInTimer -= Time.deltaTime;
+				if (this.pullInTimer <= 0f)
+				{
+					this.PullInBoy(true);
+				}
+				else
+				{
+					this.PullInBoy(false);
+				}
+			}
+			else if (this.beingPulledIn)
+			{
+				if (this.pullBoyInAnim != null)
+				{
+					if (this.pullBoyInAnim.frame > 50f)
+					{
+						if (this.pullInJerk == 0)
+						{
+							HuddleCloth.ClothBone bestBone2 = this.GetBestBone((ScriptGlobals.boy.pos3 - this.huddle.pos3).normalized);
+							ScriptGlobals.huddle.cloth.StartBoneJerk(bestBone2, 1f, true);
+							this.huddle.visualHuddle.arms2.ForceExtraArmsToRelease();
+							this.pullInJerk++;
+						}
+					}
+					else
+					{
+						this.PullInBoy(false);
+					}
+					if (this.pullBoyInAnim.frame > this.pullBoyInAnim.numFrames - 3f && this.huddle.state is HuddleFoetusState)
+					{
+						this.boy.SetCharacterActive(false);
+						if (!this.huddleAwake)
+						{
+							this.inHuddleAwake = true;
+						}
+						else
+						{
+							RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.FadeIn, 0.4f, 0.3f, 0, 0f);
+							RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.5f, 0.2f, 0, 0.2f);
+							RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightFadeOut, 0.4f, 0.5f, 0, 0.3f);
+							HuddleSwimState huddleSwimState4 = new HuddleSwimState(this.huddle);
+							huddleSwimState4.JustSpawnedFromFoetus(0f, 5f);
+							this.huddle.SpawnState(huddleSwimState4);
+							PersistentBehaviour<GlobalAudio>.instance.HandleBoyHuddleSwapFinished();
+							SingletonBehaviour<CameraScript>.instance.SetTarget(ScriptGlobals.mainCharacter.transform, this.cameraBlendDuration);
+							this.characterSwapped.Signal();
+						}
+					}
+				}
+			}
+			else if (this.huddle.visualHuddle != null)
+			{
+				this.TestGrabPoints();
+				this.TouchBoy();
+			}
+			this.MoveHuddleTowardsFoetusPos();
+		}
+	}
+
+	// Token: 0x06000AE0 RID: 2784 RVA: 0x0006C380 File Offset: 0x0006A580
+	private HuddleCloth.ClothBone GetBestBone(Vector3 boneDir)
+	{
+		HuddleCloth.ClothBone result = null;
+		float num = -100f;
+		Vector3 pos = ScriptGlobals.huddle.pos3;
+		int i = 0;
+		int num2 = ScriptGlobals.huddle.cloth.silhouette.Length;
+		while (i < num2)
+		{
+			HuddleCloth.ClothBone clothBone = ScriptGlobals.huddle.cloth.silhouette[i];
+			Vector3 vector = clothBone.pos - pos;
+			vector.z = 0f;
+			float num3 = Vector3.Dot(vector, boneDir);
+			if (num3 > num)
+			{
+				num = num3;
+				result = clothBone;
+			}
+			i++;
+		}
+		return result;
+	}
+
+	// Token: 0x06000AE1 RID: 2785 RVA: 0x0006C410 File Offset: 0x0006A610
+	private bool IsBigJerk()
+	{
+		return true;
+	}
+
+	// Token: 0x06000AE2 RID: 2786 RVA: 0x0006C414 File Offset: 0x0006A614
+	private void ToggleRopeVisiblity(bool value)
+	{
+		int i = 0;
+		int count = this.fakeRopeList.Count;
+		while (i < count)
+		{
+			FakeRope fakeRope = this.fakeRopeList[i];
+			if (fakeRope)
+			{
+				fakeRope.gameObject.SetActive(value);
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06000AE3 RID: 2787 RVA: 0x0006C464 File Offset: 0x0006A664
+	private void OnPlaceHuddle()
+	{
+		if (!this.huddleActivated)
+		{
+			this.ToggleRopeVisiblity(true);
+			this.hasBeenActive = true;
+			this.PlaceHuddle();
+			this.setRopeBottoms = 2;
+		}
+	}
+
+	// Token: 0x06000AE4 RID: 2788 RVA: 0x0006C498 File Offset: 0x0006A698
+	private void RemoveHuddle()
+	{
+		int i = 0;
+		int count = this.ropeBottomList.Count;
+		while (i < count)
+		{
+			GameObject gameObject = this.ropeBottomList[i];
+			if (gameObject != null)
+			{
+				gameObject.transform.parent = base.transform;
+			}
+			i++;
+		}
+		this.huddle.SetCharacterActive(false);
+		this.huddleActivated = false;
+	}
+
+	// Token: 0x040012B3 RID: 4787
+	public List<GameObject> attachPositions = new List<GameObject>();
+
+	// Token: 0x040012B4 RID: 4788
+	private List<HuddleCloth.ClothBone> attachedBones = new List<HuddleCloth.ClothBone>();
+
+	// Token: 0x040012B5 RID: 4789
+	public List<GameObject> ropeBottomList = new List<GameObject>();
+
+	// Token: 0x040012B6 RID: 4790
+	public List<HatchPullOffFakePhysics> pulloffBottomList = new List<HatchPullOffFakePhysics>();
+
+	// Token: 0x040012B7 RID: 4791
+	public List<FakeRope> fakeRopeList = new List<FakeRope>();
+
+	// Token: 0x040012B8 RID: 4792
+	public BoyDepthObstruction boyDepthObstruction;
+
+	// Token: 0x040012B9 RID: 4793
+	public List<float> huddleJoltReaction = new List<float>();
+
+	// Token: 0x040012BA RID: 4794
+	public GameObject huddleGrabPointPrefab;
+
+	// Token: 0x040012BB RID: 4795
+	public AnimClipNode pullBoyInAnim;
+
+	// Token: 0x040012BC RID: 4796
+	public float cameraBlendDuration = 3f;
+
+	// Token: 0x040012BD RID: 4797
+	public float breakFreeMagnitude = 1.5f;
+
+	// Token: 0x040012BE RID: 4798
+	public int jerksToBreakFree = 4;
+
+	// Token: 0x040012BF RID: 4799
+	public Transform machineryRootNode;
+
+	// Token: 0x040012C0 RID: 4800
+	private Quaternion initialMachineRotation;
+
+	// Token: 0x040012C1 RID: 4801
+	public float maxShakeRotationAngle = 1f;
+
+	// Token: 0x040012C2 RID: 4802
+	public float maxPositionOffset = 1f;
+
+	// Token: 0x040012C3 RID: 4803
+	private Vector3 positionOffset = Vector3.zero;
+
+	// Token: 0x040012C4 RID: 4804
+	private Vector3 initialFoetusPos;
+
+	// Token: 0x040012C5 RID: 4805
+	private bool huddleAwake;
+
+	// Token: 0x040012C6 RID: 4806
+	private float activationDist = 25f;
+
+	// Token: 0x040012C7 RID: 4807
+	private bool huddleActivated;
+
+	// Token: 0x040012C8 RID: 4808
+	private SignalOut characterSwapped;
+
+	// Token: 0x040012C9 RID: 4809
+	private SignalOut FirstDetach;
+
+	// Token: 0x040012CA RID: 4810
+	private SignalOut SecondDetach;
+
+	// Token: 0x040012CB RID: 4811
+	private SignalOut ThirdDetach;
+
+	// Token: 0x040012CC RID: 4812
+	private SignalOut FourthDetach;
+
+	// Token: 0x040012CD RID: 4813
+	private SignalOut shakeMachinery;
+
+	// Token: 0x040012CE RID: 4814
+	private SignalOut Entry0Detach;
+
+	// Token: 0x040012CF RID: 4815
+	private SignalOut Entry1Detach;
+
+	// Token: 0x040012D0 RID: 4816
+	private SignalOut Entry2Detach;
+
+	// Token: 0x040012D1 RID: 4817
+	private SignalOut Entry3Detach;
+
+	// Token: 0x040012D2 RID: 4818
+	private SignalIn placeHuddle;
+
+	// Token: 0x040012D3 RID: 4819
+	private SignalIn enableHuddleSound;
+
+	// Token: 0x040012D4 RID: 4820
+	private HuddleArmControl2 activeHeadArm;
+
+	// Token: 0x040012D5 RID: 4821
+	private HuddleArmControl2 activeSpineArm;
+
+	// Token: 0x040012D6 RID: 4822
+	private HuddleArmControl2 activeKneeArm;
+
+	// Token: 0x040012D7 RID: 4823
+	private int armsChasingBoy;
+
+	// Token: 0x040012D8 RID: 4824
+	private int pullInCount = 3;
+
+	// Token: 0x040012D9 RID: 4825
+	private HuddleSequencer sequencer;
+
+	// Token: 0x040012DA RID: 4826
+	[SerializeField]
+	[HideInInspector]
+	private List<bool> pointDetachedList = new List<bool>();
+
+	// Token: 0x040012DB RID: 4827
+	[SerializeField]
+	[HideInInspector]
+	private List<Vector3> attachPointInitPosList = new List<Vector3>();
+
+	// Token: 0x040012DC RID: 4828
+	[HideInInspector]
+	[SerializeField]
+	private List<UnderwaterHatch> attachPoints = new List<UnderwaterHatch>();
+
+	// Token: 0x040012DD RID: 4829
+	[SerializeField]
+	[HideInInspector]
+	private List<Transform> ropeAttachPoints = new List<Transform>();
+
+	// Token: 0x040012DE RID: 4830
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x040012DF RID: 4831
+	private float deadzone;
+
+	// Token: 0x040012E0 RID: 4832
+	private float spawnTimer;
+
+	// Token: 0x040012E1 RID: 4833
+	private float pullInTimer = -1f;
+
+	// Token: 0x040012E2 RID: 4834
+	private bool extraAllowGrab;
+
+	// Token: 0x040012E3 RID: 4835
+	private int detachCount;
+
+	// Token: 0x040012E4 RID: 4836
+	private UnderwaterHatch lastHatchPulled;
+
+	// Token: 0x040012E5 RID: 4837
+	private bool beingPulledIn;
+
+	// Token: 0x040012E6 RID: 4838
+	private Vector3 totalAngular;
+
+	// Token: 0x040012E7 RID: 4839
+	private int setRopeBottoms;
+
+	// Token: 0x040012E8 RID: 4840
+	private bool hasBeenActive;
+
+	// Token: 0x040012E9 RID: 4841
+	private int pullInJerk;
+
+	// Token: 0x040012EA RID: 4842
+	private float goToCenterScale;
+
+	// Token: 0x040012EB RID: 4843
+	private float huddleJerkDeadZone = 1f;
+
+	// Token: 0x040012EC RID: 4844
+	private float hardPullTime;
+
+	// Token: 0x040012ED RID: 4845
+	private int jerks;
+
+	// Token: 0x040012EE RID: 4846
+	private float jerkDeadzone;
+
+	// Token: 0x040012EF RID: 4847
+	private bool inHuddleAwake;
+}

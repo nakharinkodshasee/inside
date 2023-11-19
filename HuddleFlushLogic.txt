@@ -1,0 +1,299 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000507 RID: 1287
+public class HuddleFlushLogic : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060021A5 RID: 8613 RVA: 0x00119E68 File Offset: 0x00118068
+	public bool PreAwake(int callcount)
+	{
+		this.startFlush = SignalIn.Create("startFlush", base.gameObject, new Action(this.StartFlush));
+		this.flushEnded = SignalOut.Create("flushEnded", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060021A6 RID: 8614 RVA: 0x00119EB0 File Offset: 0x001180B0
+	private void Start()
+	{
+		if (this.slipperyFloor != null)
+		{
+			this.floorMaterial = this.slipperyFloor.material;
+			this.initialDynamicFriction = this.floorMaterial.dynamicFriction;
+			this.initialStaticFriction = this.floorMaterial.staticFriction;
+		}
+	}
+
+	// Token: 0x060021A7 RID: 8615 RVA: 0x00119F04 File Offset: 0x00118104
+	private void StartFlush()
+	{
+		HuddleGrab huddleGrab = this.grabObject;
+		huddleGrab.GetComponent<Rigidbody>().isKinematic = false;
+		Vector3 vector = huddleGrab.GetComponent<Rigidbody>().velocity;
+		huddleGrab.enabled = false;
+		if (ScriptGlobals.huddle.grabState != null)
+		{
+			ScriptGlobals.huddle.grabState.DropGrabBody(0.3f);
+		}
+		Vector3 vector2;
+		vector2..ctor(-1f, 0f, -2f);
+		vector = vector2.normalized * 4f;
+		huddleGrab.GetComponent<Rigidbody>().angularVelocity = new Vector3(1.6f, -2.7f, 0.9f);
+		if (this.suckPoint != null)
+		{
+			this.orgStrength = ScriptGlobals.huddle.cloth.skinning.strength;
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftThenRight, 0.4f, 0.3f, 0, 0f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.FadeIn, 0.15f, 0.5f, 0, 0f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.FadeOut, 0.15f, 4f, 0, 0.49f);
+			this.pullMode = HuddleFlushLogic.PullMode.Sucking;
+			HuddleUtils.SpawnFallState(ScriptGlobals.huddle, 0f, this.suckStunTime);
+			HuddleRagdollState huddleRagdollState = ScriptGlobals.huddle.state as HuddleRagdollState;
+			if (huddleRagdollState != null)
+			{
+				huddleRagdollState.SetAllowForceToSwim(false);
+			}
+			this.suckStartTime = -0.2f;
+		}
+	}
+
+	// Token: 0x060021A8 RID: 8616 RVA: 0x0011A064 File Offset: 0x00118264
+	private void UpdateSucking()
+	{
+		Huddle huddle = ScriptGlobals.huddle;
+		if (!this.endSignalSent)
+		{
+			huddle.disableEdgeCode = true;
+		}
+		HuddleCloth.ClothBone[] bones = huddle.cloth.bones;
+		if (this.loosenUp && this.fullTime < this.suckStunTime - 1f)
+		{
+			float num = huddle.cloth.skinning.strength;
+			num += (this.wantedLooseStr - num) * Time.deltaTime * 3f;
+			huddle.cloth.skinning.strength = num;
+			this.loosenFactor = Mathf.Min(this.loosenFactor + Time.deltaTime * 0.5f, 1f);
+		}
+		else
+		{
+			huddle.cloth.skinning.strength = this.orgStrength * (1f - this.loosenFactor) + 20f * this.loosenFactor;
+			this.loosenFactor = Mathf.Max(this.loosenFactor - Time.deltaTime * 0.5f, 0f);
+		}
+		huddle.SetWeakenened(this.loosenFactor * 0.7f, 0.1f);
+		bool flag = false;
+		this.suckStartTime = Mathf.Min(this.suckStartTime + huddle.dt, 1f);
+		this.fullTime += huddle.dt;
+		if (this.suckStartTime > 0f)
+		{
+			if (this.fullTime < this.secondPushTime + this.secondPushDuration)
+			{
+				float num2 = Mathf.Min((this.fullTime - this.secondPushTime) / this.secondPushDuration, 1f);
+				if (this.fullTime > this.secondPushTime)
+				{
+					float num3 = num2;
+					num3 *= num3;
+					this.floorMaterial.staticFriction = this.initialStaticFriction * num3;
+					this.floorMaterial.dynamicFriction = this.initialDynamicFriction * num3;
+				}
+				int i = 0;
+				int num4 = bones.Length;
+				while (i < num4)
+				{
+					Rigidbody body = bones[i].body;
+					if (this.fullTime > this.secondPushTime)
+					{
+						if (this.fullTime > this.secondPushTime + this.secondPushDuration)
+						{
+							this.floorMaterial.staticFriction = this.initialStaticFriction;
+							this.floorMaterial.dynamicFriction = this.initialDynamicFriction;
+						}
+						else
+						{
+							float num5 = (body.position.x - huddle.pos.x) / 15f;
+							float x = body.velocity.x;
+							float num6 = this.secondPushForceMultiplier.Evaluate(num2 - num5) * this.secondPushVel;
+							float num7 = body.position.x - huddle.pos3.x;
+							num7 = Mathf.Clamp(num7, -2f, 2f);
+							float num8 = 1f - (this.fullTime - this.secondPushTime) / this.secondPushDuration;
+							num6 += num7 * (0.3f + num8 * 1.3f) * 0.8f;
+							float num9 = num6 - x;
+							body.AddForce(Vector3.right * num9, 2);
+						}
+					}
+					else
+					{
+						Vector3 velocity = body.velocity;
+						Vector3 vector = this.suckPoint.transform.InverseTransformPoint(body.position);
+						Vector3 vector2 = this.suckPoint.transform.forward;
+						float num10 = this.poolSuckSpeed;
+						if (vector.z < 0f)
+						{
+							this.loosenUp = true;
+							vector2 = (this.suckPoint.transform.position - body.position).normalized;
+						}
+						else
+						{
+							num10 = Mathf.Max(this.hatchSuckSpeed - vector.z * this.hatchSuckSpeed / this.outsideHatchDistance, 0f);
+							if (vector.z > this.outsideHatchDistance - 0.4f)
+							{
+								flag = true;
+							}
+						}
+						vector2 *= num10;
+						if (this.fullTime > this.suckStunTime)
+						{
+							vector2 = Vector3.zero;
+						}
+						Vector3 vector3 = body.position - huddle.pos3;
+						vector3.y = 0f;
+						vector3.z = 0f;
+						vector3.x = Mathf.Clamp(vector3.x, -2f, 2f);
+						vector2 += vector3 * 5f * this.loosenFactor;
+						Vector3 vector4 = vector2 - velocity;
+						body.AddForce(vector4 * huddle.dt * this.suckStrictness * this.suckStartTime, 2);
+					}
+					i++;
+				}
+			}
+			else if (this.fullTime < this.suckStunTime)
+			{
+				float num11 = 1f - (this.fullTime - (this.secondPushTime + this.secondPushDuration)) / (this.suckStunTime - (this.secondPushTime + this.secondPushDuration));
+				int j = 0;
+				int num12 = bones.Length;
+				while (j < num12)
+				{
+					Rigidbody body2 = bones[j].body;
+					float num13 = body2.position.x - huddle.pos3.x;
+					num13 = Mathf.Clamp(num13, -2f, 2f);
+					float x2 = body2.velocity.x;
+					float num14 = num13 * 0.8f * num11;
+					float num15 = num14 - x2;
+					body2.AddForce(Vector3.right * num15, 2);
+					j++;
+				}
+			}
+		}
+		if (!this.endSignalSent && this.fullTime >= this.suckStunTime)
+		{
+			this.flushEnded.Signal();
+			this.endSignalSent = true;
+		}
+		if (flag && this.fullTime > this.suckStunTime && this.loosenFactor == 0f)
+		{
+			base.enabled = false;
+		}
+	}
+
+	// Token: 0x060021A9 RID: 8617 RVA: 0x0011A654 File Offset: 0x00118854
+	private void FixedUpdate()
+	{
+		if (!ScriptGlobals.huddleActive)
+		{
+			return;
+		}
+		if (this.pullMode == HuddleFlushLogic.PullMode.Sucking)
+		{
+			this.UpdateSucking();
+			return;
+		}
+	}
+
+	// Token: 0x04003E94 RID: 16020
+	private const float spreadOutStrength = 0.8f;
+
+	// Token: 0x04003E95 RID: 16021
+	public HuddleGrab grabObject;
+
+	// Token: 0x04003E96 RID: 16022
+	public GameObject suckPoint;
+
+	// Token: 0x04003E97 RID: 16023
+	public float suckStunTime = 7f;
+
+	// Token: 0x04003E98 RID: 16024
+	public float poolSuckSpeed = 10f;
+
+	// Token: 0x04003E99 RID: 16025
+	public float hatchSuckSpeed = 18f;
+
+	// Token: 0x04003E9A RID: 16026
+	public float outsideHatchDistance = 3.3f;
+
+	// Token: 0x04003E9B RID: 16027
+	public float suckStrictness = 5f;
+
+	// Token: 0x04003E9C RID: 16028
+	public float wantedLooseStr = 20f;
+
+	// Token: 0x04003E9D RID: 16029
+	public AnimationCurve secondPushForceMultiplier;
+
+	// Token: 0x04003E9E RID: 16030
+	public float secondPushTime = 2f;
+
+	// Token: 0x04003E9F RID: 16031
+	public float secondPushDuration = 2f;
+
+	// Token: 0x04003EA0 RID: 16032
+	public float secondPushVel = -5f;
+
+	// Token: 0x04003EA1 RID: 16033
+	public Collider slipperyFloor;
+
+	// Token: 0x04003EA2 RID: 16034
+	private PhysicMaterial floorMaterial;
+
+	// Token: 0x04003EA3 RID: 16035
+	private float initialDynamicFriction;
+
+	// Token: 0x04003EA4 RID: 16036
+	private float initialStaticFriction;
+
+	// Token: 0x04003EA5 RID: 16037
+	private float mGrabTimeElapsed;
+
+	// Token: 0x04003EA6 RID: 16038
+	private float mSpeed;
+
+	// Token: 0x04003EA7 RID: 16039
+	private float orgStrength;
+
+	// Token: 0x04003EA8 RID: 16040
+	private float maxPullVel;
+
+	// Token: 0x04003EA9 RID: 16041
+	private int prePulls = 1;
+
+	// Token: 0x04003EAA RID: 16042
+	private int pulls;
+
+	// Token: 0x04003EAB RID: 16043
+	private SignalIn startFlush;
+
+	// Token: 0x04003EAC RID: 16044
+	private SignalOut flushEnded;
+
+	// Token: 0x04003EAD RID: 16045
+	private bool endSignalSent;
+
+	// Token: 0x04003EAE RID: 16046
+	private HuddleFlushLogic.PullMode pullMode;
+
+	// Token: 0x04003EAF RID: 16047
+	private float suckStartTime;
+
+	// Token: 0x04003EB0 RID: 16048
+	private float fullTime;
+
+	// Token: 0x04003EB1 RID: 16049
+	private bool loosenUp;
+
+	// Token: 0x04003EB2 RID: 16050
+	private float loosenFactor;
+
+	// Token: 0x02000508 RID: 1288
+	private enum PullMode
+	{
+		// Token: 0x04003EB4 RID: 16052
+		Idle,
+		// Token: 0x04003EB5 RID: 16053
+		Sucking
+	}
+}

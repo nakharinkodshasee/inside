@@ -1,0 +1,301 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000AF RID: 175
+public class HulvPreWarm : MonoBehaviour
+{
+	// Token: 0x060005C0 RID: 1472 RVA: 0x00045094 File Offset: 0x00043294
+	private void OnEnable()
+	{
+		if (this.hulv != null)
+		{
+			this.hulv.WarmUp();
+			for (int i = base.transform.childCount - 1; i >= 0; i--)
+			{
+				Object.Destroy(base.transform.GetChild(i).gameObject);
+			}
+		}
+		base.gameObject.SetActive(false);
+	}
+
+	// Token: 0x04000A0E RID: 2574
+	public Hulv hulv;
+}
+
+using System;
+using UnityEngine;
+
+// Token: 0x020000B0 RID: 176
+public class HulvProbe : MonoBehaviour
+{
+	// Token: 0x04000A0F RID: 2575
+	public Hulv hulv;
+}
+
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020003E0 RID: 992
+public class HulvVfx : MonoBehaviour, IPreAwake, IUnityAnimEventHandler, IUnityAnimEventComponent
+{
+	// Token: 0x17000082 RID: 130
+	// (get) Token: 0x06001A83 RID: 6787 RVA: 0x000E8258 File Offset: 0x000E6458
+	public UnityAnimEventTriggerConnection connection
+	{
+		get
+		{
+			return this.triggerConnection;
+		}
+	}
+
+	// Token: 0x06001A84 RID: 6788 RVA: 0x000E8260 File Offset: 0x000E6460
+	[EarlyProcessBuild(0)]
+	[ContextMenu("PreProcessTest")]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.hulv = base.GetComponent<Hulv>();
+		this.jaw = this.hulv.jawLowerBone;
+		this.biteSystem = Object.Instantiate<GameObject>(this.biteSystem);
+		this.biteFirstSystem = Object.Instantiate<GameObject>(this.biteFirstSystem);
+		this.biteTwistSystem = Object.Instantiate<GameObject>(this.biteTwistSystem);
+		this.biteWaterSystem = Object.Instantiate<GameObject>(this.biteWaterSystem);
+		this.biteSystem.transform.parent = this.jaw.transform;
+		this.biteFirstSystem.transform.parent = this.jaw.transform;
+		this.biteTwistSystem.transform.parent = this.jaw.transform;
+		this.biteWaterSystem.transform.parent = this.jaw.transform;
+		this.biteSystem.transform.SetLocalPositionRotation(Vector3Fast.zero, QuaternionFast.identity);
+		this.biteFirstSystem.transform.SetLocalPositionRotation(Vector3Fast.zero, QuaternionFast.identity);
+		this.biteTwistSystem.transform.SetLocalPositionRotation(Vector3Fast.zero, QuaternionFast.identity);
+		this.biteWaterSystem.transform.SetLocalPositionRotation(Vector3Fast.zero, QuaternionFast.identity);
+		this.biteParticleSystem = this.biteSystem.GetComponent<ParticleSystem>();
+		this.biteFirstParticleSystem = this.biteFirstSystem.GetComponent<ParticleSystem>();
+		this.biteTwistParticleSystem = this.biteTwistSystem.GetComponent<ParticleSystem>();
+		this.biteWaterParticleSystem = this.biteWaterSystem.GetComponent<ParticleSystem>();
+		MaterialInstance[] componentsInChildren = this.biteSystem.GetComponentsInChildren<MaterialInstance>(true);
+		MaterialInstance[] componentsInChildren2 = this.biteFirstSystem.GetComponentsInChildren<MaterialInstance>(true);
+		MaterialInstance[] componentsInChildren3 = this.biteTwistSystem.GetComponentsInChildren<MaterialInstance>(true);
+		this.misWater = this.biteWaterSystem.GetComponentsInChildren<MaterialInstance>(true);
+		this.mis = new MaterialInstance[componentsInChildren.Length + componentsInChildren2.Length + componentsInChildren3.Length + this.misWater.Length];
+		int num = 0;
+		int i = 0;
+		while (i < componentsInChildren.Length)
+		{
+			this.mis[num] = componentsInChildren[i];
+			i++;
+			num++;
+		}
+		int j = 0;
+		while (j < componentsInChildren2.Length)
+		{
+			this.mis[num] = componentsInChildren2[j];
+			j++;
+			num++;
+		}
+		int k = 0;
+		while (k < componentsInChildren3.Length)
+		{
+			this.mis[num] = componentsInChildren3[k];
+			k++;
+			num++;
+		}
+		int l = 0;
+		while (l < this.misWater.Length)
+		{
+			this.mis[num] = this.misWater[l];
+			l++;
+			num++;
+		}
+	}
+
+	// Token: 0x06001A85 RID: 6789 RVA: 0x000E8500 File Offset: 0x000E6700
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		this.cols = new MaterialInstance.ColorProperty[this.mis.Length];
+		int i = 0;
+		int num = this.mis.Length;
+		while (i < num)
+		{
+			MaterialInstance materialInstance = this.mis[i];
+			MaterialInstance.ColorProperty colorProperty = materialInstance.GetColorProperty("_TintColor");
+			if (colorProperty == null)
+			{
+				colorProperty = materialInstance.GetColorProperty("_Color");
+			}
+			if (colorProperty == null)
+			{
+				colorProperty = materialInstance.GetColorProperty("_MainCol");
+			}
+			this.cols[i] = colorProperty;
+			if (colorProperty != null)
+			{
+				materialInstance.SetColorProperty(colorProperty, this.bloodColor);
+			}
+			i++;
+		}
+		if (this.waterTrigger)
+		{
+			Vector2 vector;
+			vector..ctor(this.waterTrigger.position.y + this.waterTrigger.localScale.y * 0.5f, 4f);
+			this.waterBounds = new MaterialInstance.VectorProperty[this.misWater.Length];
+			int j = 0;
+			int num2 = this.misWater.Length;
+			while (j < num2)
+			{
+				MaterialInstance materialInstance2 = this.misWater[j];
+				MaterialInstance.VectorProperty orAddVectorProperty = materialInstance2.GetOrAddVectorProperty("_WaterBounds");
+				this.waterBounds[j] = orAddVectorProperty;
+				materialInstance2.SetVectorProperty(orAddVectorProperty, vector);
+				j++;
+			}
+		}
+		return true;
+	}
+
+	// Token: 0x06001A86 RID: 6790 RVA: 0x000E864C File Offset: 0x000E684C
+	public void HandleAnimEvent(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent)
+	{
+		if (animEvent.vfxType == UnityAnimEvent.VFXType.Custom0 && !(ScriptGlobals.mainCharacter is Huddle))
+		{
+			if (animEvent.customVFX == "Bite" && this.biteParticleSystem)
+			{
+				this.biteParticleSystem.Play();
+			}
+			if (animEvent.customVFX == "BiteFirst" && this.biteFirstParticleSystem)
+			{
+				this.biteFirstParticleSystem.Play();
+			}
+			if (animEvent.customVFX == "BiteTwist" && this.biteTwistParticleSystem)
+			{
+				this.biteTwistParticleSystem.Play();
+			}
+			if (animEvent.customVFX == "BiteWater" && this.biteWaterParticleSystem)
+			{
+				this.biteWaterParticleSystem.Simulate(0f, true, true);
+				this.biteWaterParticleSystem.Play();
+			}
+		}
+	}
+
+	// Token: 0x06001A87 RID: 6791 RVA: 0x000E8748 File Offset: 0x000E6948
+	public void HandleAnimEventEditor(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent)
+	{
+	}
+
+	// Token: 0x06001A88 RID: 6792 RVA: 0x000E874C File Offset: 0x000E694C
+	public void HandleContinuousAnimEvent(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent, bool isActive)
+	{
+	}
+
+	// Token: 0x06001A89 RID: 6793 RVA: 0x000E8750 File Offset: 0x000E6950
+	public void HandleAnimationChange(IUnityAnimEventTrigger trigger, Object oldAnim, Object newAnim)
+	{
+	}
+
+	// Token: 0x06001A8A RID: 6794 RVA: 0x000E8754 File Offset: 0x000E6954
+	public void PreprocessUnityAnimEvents(int animID, List<UnityAnimEvent> events)
+	{
+	}
+
+	// Token: 0x06001A8B RID: 6795 RVA: 0x000E8758 File Offset: 0x000E6958
+	virtual bool get_enabled()
+	{
+		return base.enabled;
+	}
+
+	// Token: 0x06001A8C RID: 6796 RVA: 0x000E8760 File Offset: 0x000E6960
+	virtual GameObject get_gameObject()
+	{
+		return base.gameObject;
+	}
+
+	// Token: 0x04002FE5 RID: 12261
+	private const string startName1 = "Bite";
+
+	// Token: 0x04002FE6 RID: 12262
+	private const string startName2 = "BiteFirst";
+
+	// Token: 0x04002FE7 RID: 12263
+	private const string startName3 = "BiteTwist";
+
+	// Token: 0x04002FE8 RID: 12264
+	private const string startName4 = "BiteWater";
+
+	// Token: 0x04002FE9 RID: 12265
+	public GameObject biteSystem;
+
+	// Token: 0x04002FEA RID: 12266
+	public GameObject biteFirstSystem;
+
+	// Token: 0x04002FEB RID: 12267
+	public GameObject biteTwistSystem;
+
+	// Token: 0x04002FEC RID: 12268
+	public GameObject biteWaterSystem;
+
+	// Token: 0x04002FED RID: 12269
+	public Transform waterTrigger;
+
+	// Token: 0x04002FEE RID: 12270
+	public Color bloodColor;
+
+	// Token: 0x04002FEF RID: 12271
+	private MaterialInstance.ColorProperty[] cols;
+
+	// Token: 0x04002FF0 RID: 12272
+	private MaterialInstance.VectorProperty[] waterBounds;
+
+	// Token: 0x04002FF1 RID: 12273
+	private UnityAnimEventTriggerConnection triggerConnection;
+
+	// Token: 0x04002FF2 RID: 12274
+	[SerializeField]
+	[HideInInspector]
+	private MaterialInstance[] mis;
+
+	// Token: 0x04002FF3 RID: 12275
+	[HideInInspector]
+	[SerializeField]
+	private MaterialInstance[] misWater;
+
+	// Token: 0x04002FF4 RID: 12276
+	[HideInInspector]
+	[SerializeField]
+	private ParticleSystem biteParticleSystem;
+
+	// Token: 0x04002FF5 RID: 12277
+	[SerializeField]
+	[HideInInspector]
+	private ParticleSystem biteFirstParticleSystem;
+
+	// Token: 0x04002FF6 RID: 12278
+	[SerializeField]
+	[HideInInspector]
+	private ParticleSystem biteTwistParticleSystem;
+
+	// Token: 0x04002FF7 RID: 12279
+	[HideInInspector]
+	[SerializeField]
+	private ParticleSystem biteWaterParticleSystem;
+
+	// Token: 0x04002FF8 RID: 12280
+	[HideInInspector]
+	[SerializeField]
+	private Hulv hulv;
+
+	// Token: 0x04002FF9 RID: 12281
+	[HideInInspector]
+	[SerializeField]
+	private Transform jaw;
+
+	// Token: 0x04002FFA RID: 12282
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

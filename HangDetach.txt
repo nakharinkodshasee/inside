@@ -1,0 +1,97 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000462 RID: 1122
+public class HangDetach : MonoBehaviour
+{
+	// Token: 0x06001D81 RID: 7553 RVA: 0x000FE804 File Offset: 0x000FCA04
+	private void Start()
+	{
+	}
+
+	// Token: 0x06001D82 RID: 7554 RVA: 0x000FE808 File Offset: 0x000FCA08
+	private void Detach()
+	{
+		this.isDetached = true;
+		base.GetComponent<Rigidbody>().isKinematic = false;
+		this.addDetachForceNextFrame = true;
+		base.GetComponent<HuddleGrab>().mode = HuddleGrab.Mode.Item;
+		ScriptGlobals.huddle.grabState.RefreshGrab();
+	}
+
+	// Token: 0x06001D83 RID: 7555 RVA: 0x000FE84C File Offset: 0x000FCA4C
+	private void FixedUpdate()
+	{
+		if (this.addDetachForceNextFrame)
+		{
+			this.detachForceCounter++;
+			if (this.detachForceCounter == 3)
+			{
+				this.addDetachForceNextFrame = false;
+				Vector3 vector = ScriptGlobals.huddle.transform.position - base.transform.position;
+				vector.Normalize();
+				base.GetComponent<Rigidbody>().AddForce(vector * 6f * base.GetComponent<Rigidbody>().mass, 1);
+			}
+		}
+		if (this.isDetached)
+		{
+			return;
+		}
+		if (ScriptGlobals.huddle.grabState.activeBody == base.GetComponent<Rigidbody>())
+		{
+			ScriptGlobals.huddle.AddImpulse(-Vector3.down * Mathf.Min(0f, GameInput.stick.y) * Time.deltaTime * 60f);
+			int num = 0;
+			ColInfo3Buffer clothCollisions = ScriptGlobals.huddle.status.clothCollisions;
+			int num2 = 0;
+			int size = clothCollisions.size;
+			while (num2 != size)
+			{
+				ColInfo3 colInfo = clothCollisions.raw[num2];
+				if (0.8f < colInfo.normal.y)
+				{
+					num++;
+				}
+				num2++;
+			}
+			if (GameInput.stick.y < -0.5f)
+			{
+				this.hangTimer += Time.deltaTime;
+				if (this.hangTimer >= this.hangTimeToDetach)
+				{
+					this.Detach();
+				}
+			}
+			else if (!ScriptGlobals.huddle.status.hasFoothold)
+			{
+				this.hangTimer += Time.deltaTime;
+				if (this.hangTimer >= this.hangTimeToDetach)
+				{
+					this.Detach();
+				}
+			}
+			else
+			{
+				this.hangTimer = 0f;
+			}
+		}
+		else
+		{
+			this.hangTimer = 0f;
+		}
+	}
+
+	// Token: 0x04003643 RID: 13891
+	public float hangTimeToDetach = 2f;
+
+	// Token: 0x04003644 RID: 13892
+	private float hangTimer;
+
+	// Token: 0x04003645 RID: 13893
+	private bool addDetachForceNextFrame;
+
+	// Token: 0x04003646 RID: 13894
+	private bool isDetached;
+
+	// Token: 0x04003647 RID: 13895
+	private int detachForceCounter;
+}

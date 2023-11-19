@@ -1,0 +1,58 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000334 RID: 820
+public class HuddleBurn : MonoBehaviour
+{
+	// Token: 0x060016F3 RID: 5875 RVA: 0x000C987C File Offset: 0x000C7A7C
+	private void Start()
+	{
+		this.huddleProbe = AudioKeyObject.huddle;
+		this.huddleShaderHelper = this.huddleProbe.GetComponent<Shader_SetHuddlePosition>();
+	}
+
+	// Token: 0x060016F4 RID: 5876 RVA: 0x000C989C File Offset: 0x000C7A9C
+	private void OnDisable()
+	{
+		this.huddleInside = false;
+	}
+
+	// Token: 0x060016F5 RID: 5877 RVA: 0x000C98A8 File Offset: 0x000C7AA8
+	private void Update()
+	{
+		if (this.huddleInside)
+		{
+			this.huddleShaderHelper.Burn(base.transform.position, this.radius);
+		}
+	}
+
+	// Token: 0x060016F6 RID: 5878 RVA: 0x000C98D4 File Offset: 0x000C7AD4
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (collider.gameObject == this.huddleProbe)
+		{
+			this.huddleInside = true;
+		}
+	}
+
+	// Token: 0x060016F7 RID: 5879 RVA: 0x000C98F4 File Offset: 0x000C7AF4
+	private void OnTriggerExit(Collider collider)
+	{
+		if (collider.gameObject == this.huddleProbe)
+		{
+			this.huddleInside = false;
+		}
+	}
+
+	// Token: 0x0400290F RID: 10511
+	public float radius = 2.5f;
+
+	// Token: 0x04002910 RID: 10512
+	private Shader_SetHuddlePosition huddleShaderHelper;
+
+	// Token: 0x04002911 RID: 10513
+	private GameObject huddleProbe;
+
+	// Token: 0x04002912 RID: 10514
+	private bool huddleInside;
+}

@@ -1,0 +1,183 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200024E RID: 590
+public class grabHandle : MonoBehaviour
+{
+	// Token: 0x06001258 RID: 4696 RVA: 0x000AC230 File Offset: 0x000AA430
+	private void Start()
+	{
+		this.minAngle = base.gameObject.GetComponent<HingeJoint>().limits.min;
+		this.leftSignalSend = true;
+		this.rightSignalSend = false;
+		if (this.startRight)
+		{
+			this.rightSignalSend = true;
+			this.leftSignalSend = false;
+			Vector3 eulerAngles = base.transform.rotation.eulerAngles;
+			eulerAngles.z *= -1f;
+			Quaternion rotation = Quaternion.Euler(eulerAngles);
+			base.transform.rotation = rotation;
+		}
+	}
+
+	// Token: 0x06001259 RID: 4697 RVA: 0x000AC2C0 File Offset: 0x000AA4C0
+	private void SendSignal(int position)
+	{
+		if (position == 1 && !this.rightSignalSend)
+		{
+			this.rightSignalSend = true;
+			this.leftSignalSend = false;
+			if (this.objectToMessage)
+			{
+				this.objectToMessage.SendMessage(this.rightMessage, 1);
+			}
+		}
+		else if (position == 2 && !this.leftSignalSend)
+		{
+			this.rightSignalSend = false;
+			this.leftSignalSend = true;
+			if (this.objectToMessage)
+			{
+				this.objectToMessage.SendMessage(this.leftMessage, 1);
+			}
+		}
+	}
+
+	// Token: 0x0600125A RID: 4698 RVA: 0x000AC358 File Offset: 0x000AA558
+	private void DeactivateSpring()
+	{
+		JointSpring spring = base.gameObject.GetComponent<HingeJoint>().spring;
+		spring.spring = 0f;
+		base.gameObject.GetComponent<HingeJoint>().spring = spring;
+	}
+
+	// Token: 0x0600125B RID: 4699 RVA: 0x000AC394 File Offset: 0x000AA594
+	private void ActivateSpring(float targetAngle)
+	{
+		JointSpring spring = base.gameObject.GetComponent<HingeJoint>().spring;
+		spring.spring = 0.025f;
+		spring.targetPosition = targetAngle;
+		base.gameObject.GetComponent<HingeJoint>().spring = spring;
+	}
+
+	// Token: 0x0600125C RID: 4700 RVA: 0x000AC3D8 File Offset: 0x000AA5D8
+	private void SetSpringAngle(float targetAngle)
+	{
+		JointSpring spring = base.gameObject.GetComponent<HingeJoint>().spring;
+		spring.targetPosition = targetAngle;
+		base.gameObject.GetComponent<HingeJoint>().spring = spring;
+	}
+
+	// Token: 0x0600125D RID: 4701 RVA: 0x000AC410 File Offset: 0x000AA610
+	private bool BoyGrabbesHandle()
+	{
+		BoyGrabState boyGrabState = ScriptGlobals.boy.state as BoyGrabState;
+		return boyGrabState != null && boyGrabState.body == base.GetComponent<Rigidbody>();
+	}
+
+	// Token: 0x0600125E RID: 4702 RVA: 0x000AC44C File Offset: 0x000AA64C
+	private void CheckLimitReach()
+	{
+		float num = MathUtils.SignedAngleDif(base.transform.rotation.eulerAngles.z * 0.017453292f, Mathf.Abs(this.minAngle) / 2f * 0.017453292f) * 57.29578f;
+		if (num <= 2.5f)
+		{
+			this.DeactivateSpring();
+			this.SendSignal(2);
+		}
+		else if (num >= Mathf.Abs(this.minAngle) - 2.5f)
+		{
+			this.DeactivateSpring();
+			this.SendSignal(1);
+		}
+	}
+
+	// Token: 0x0600125F RID: 4703 RVA: 0x000AC4E0 File Offset: 0x000AA6E0
+	private void UpdateIdle()
+	{
+		Vector3 eulerAngles = base.transform.rotation.eulerAngles;
+		this.CheckLimitReach();
+		bool flag = eulerAngles.z >= 360f - Mathf.Abs(this.minAngle) / 2f;
+		if (flag && base.gameObject.GetComponent<HingeJoint>().spring.targetPosition != this.minAngle)
+		{
+			this.SetSpringAngle(this.minAngle);
+		}
+		else if (!flag && base.gameObject.GetComponent<HingeJoint>().spring.targetPosition != 0f)
+		{
+			this.SetSpringAngle(0f);
+		}
+		if (this.BoyGrabbesHandle())
+		{
+			this.myState = grabHandle.MyState.grabbed;
+			this.DeactivateSpring();
+		}
+	}
+
+	// Token: 0x06001260 RID: 4704 RVA: 0x000AC5B4 File Offset: 0x000AA7B4
+	private void UpdateGrabbed()
+	{
+		this.CheckLimitReach();
+		if (!this.BoyGrabbesHandle())
+		{
+			if (base.transform.rotation.eulerAngles.z >= 360f - Mathf.Abs(this.minAngle) / 2f)
+			{
+				this.ActivateSpring(this.minAngle);
+			}
+			else
+			{
+				this.ActivateSpring(0f);
+			}
+			this.myState = grabHandle.MyState.idle;
+		}
+	}
+
+	// Token: 0x06001261 RID: 4705 RVA: 0x000AC62C File Offset: 0x000AA82C
+	private void Update()
+	{
+		grabHandle.MyState myState = this.myState;
+		if (myState != grabHandle.MyState.idle)
+		{
+			if (myState == grabHandle.MyState.grabbed)
+			{
+				this.UpdateGrabbed();
+			}
+		}
+		else
+		{
+			this.UpdateIdle();
+		}
+	}
+
+	// Token: 0x040021BA RID: 8634
+	public bool startRight;
+
+	// Token: 0x040021BB RID: 8635
+	public GameObject objectToMessage;
+
+	// Token: 0x040021BC RID: 8636
+	public string rightMessage;
+
+	// Token: 0x040021BD RID: 8637
+	public string leftMessage;
+
+	// Token: 0x040021BE RID: 8638
+	private float minAngle;
+
+	// Token: 0x040021BF RID: 8639
+	private bool rightSignalSend;
+
+	// Token: 0x040021C0 RID: 8640
+	private bool leftSignalSend;
+
+	// Token: 0x040021C1 RID: 8641
+	private grabHandle.MyState myState;
+
+	// Token: 0x0200024F RID: 591
+	private enum MyState
+	{
+		// Token: 0x040021C3 RID: 8643
+		idle,
+		// Token: 0x040021C4 RID: 8644
+		grabbed
+	}
+}

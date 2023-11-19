@@ -1,0 +1,110 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200048A RID: 1162
+public class GetJetFreeSoundToggle : MonoBehaviour, IFastEventListener
+{
+	// Token: 0x06001E6E RID: 7790 RVA: 0x00104A84 File Offset: 0x00102C84
+	private void Awake()
+	{
+		GameManager.scenesLoaded.Register(this, ref this.scenesLoadedHandle);
+	}
+
+	// Token: 0x06001E6F RID: 7791 RVA: 0x00104A98 File Offset: 0x00102C98
+	private void Start()
+	{
+		this.jetCrate = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.labJetCrate);
+	}
+
+	// Token: 0x06001E70 RID: 7792 RVA: 0x00104AAC File Offset: 0x00102CAC
+	private void OnDestroy()
+	{
+		GameManager.scenesLoaded.Unregister(ref this.scenesLoadedHandle);
+	}
+
+	// Token: 0x06001E71 RID: 7793 RVA: 0x00104AC0 File Offset: 0x00102CC0
+	public void OnFastEvent(FastEvent sender)
+	{
+		this.scenesLoaded = true;
+	}
+
+	// Token: 0x06001E72 RID: 7794 RVA: 0x00104ACC File Offset: 0x00102CCC
+	private void Setup()
+	{
+		this.isAbove = (this.jetCrate.transform.position.y > this.treshold.position.y);
+		if (this.isAbove)
+		{
+			for (int i = 0; i < this.above.Length; i++)
+			{
+				this.above[i].WakeUp();
+			}
+			this.below.SleepNextUpdate();
+		}
+		else
+		{
+			for (int j = 0; j < this.above.Length; j++)
+			{
+				this.above[j].SleepNextUpdate();
+			}
+			this.below.WakeUp();
+		}
+		this.setupComplete = true;
+	}
+
+	// Token: 0x06001E73 RID: 7795 RVA: 0x00104B88 File Offset: 0x00102D88
+	private void Update()
+	{
+		if (this.jetCrate == null || !this.scenesLoaded)
+		{
+			return;
+		}
+		if (!this.setupComplete)
+		{
+			this.Setup();
+			return;
+		}
+		float y = this.jetCrate.transform.position.y;
+		if (y > this.treshold.position.y && !this.isAbove)
+		{
+			for (int i = 0; i < this.above.Length; i++)
+			{
+				this.above[i].WakeUp();
+			}
+			this.below.SleepNextUpdate();
+			this.isAbove = true;
+		}
+		else if (y < this.treshold.position.y && this.isAbove)
+		{
+			for (int j = 0; j < this.above.Length; j++)
+			{
+				this.above[j].SleepNextUpdate();
+			}
+			this.below.WakeUp();
+			this.isAbove = false;
+		}
+	}
+
+	// Token: 0x0400380F RID: 14351
+	public RTPCBox[] above;
+
+	// Token: 0x04003810 RID: 14352
+	public RTPCBox below;
+
+	// Token: 0x04003811 RID: 14353
+	public Transform treshold;
+
+	// Token: 0x04003812 RID: 14354
+	private bool isAbove;
+
+	// Token: 0x04003813 RID: 14355
+	private bool scenesLoaded;
+
+	// Token: 0x04003814 RID: 14356
+	private bool setupComplete;
+
+	// Token: 0x04003815 RID: 14357
+	private Companion jetCrate;
+
+	// Token: 0x04003816 RID: 14358
+	private int scenesLoadedHandle = -1;
+}

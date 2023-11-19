@@ -1,0 +1,67 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001BB RID: 443
+public class HuddleAvoidZone : DefaultBoyInput
+{
+	// Token: 0x17000049 RID: 73
+	// (get) Token: 0x06000D09 RID: 3337 RVA: 0x0007C9FC File Offset: 0x0007ABFC
+	public override vector2f stick
+	{
+		get
+		{
+			return new vector2f(this.fleeSign, base.stick.y);
+		}
+	}
+
+	// Token: 0x06000D0A RID: 3338 RVA: 0x0007CA24 File Offset: 0x0007AC24
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000D0B RID: 3339 RVA: 0x0007CA28 File Offset: 0x0007AC28
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<CharacterProbe>())
+		{
+			this.huddleProbesInside++;
+			if (this.huddleProbesInside == 1)
+			{
+				ScriptGlobals.huddle.input = this;
+				this.fleeSign = Mathf.Sign(ScriptGlobals.huddle.pos.x - base.transform.position.x);
+				this.outTimer = 0f;
+			}
+		}
+	}
+
+	// Token: 0x06000D0C RID: 3340 RVA: 0x0007CAA8 File Offset: 0x0007ACA8
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<CharacterProbe>())
+		{
+			this.huddleProbesInside--;
+		}
+	}
+
+	// Token: 0x06000D0D RID: 3341 RVA: 0x0007CAC8 File Offset: 0x0007ACC8
+	private void FixedUpdate()
+	{
+		if (ScriptGlobals.huddle.input == this && this.huddleProbesInside == 0)
+		{
+			this.outTimer -= Time.deltaTime;
+			if (this.outTimer <= 0f)
+			{
+				ScriptGlobals.huddle.input = null;
+			}
+		}
+	}
+
+	// Token: 0x040016E6 RID: 5862
+	private int huddleProbesInside;
+
+	// Token: 0x040016E7 RID: 5863
+	private float fleeSign = 1f;
+
+	// Token: 0x040016E8 RID: 5864
+	private float outTimer;
+}

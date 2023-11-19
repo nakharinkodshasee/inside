@@ -1,0 +1,149 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000589 RID: 1417
+public class HuddleMissile : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600245A RID: 9306 RVA: 0x0012BF04 File Offset: 0x0012A104
+	public bool PreAwake(int callcount)
+	{
+		this.boom = SignalOut.Create("boom", base.gameObject);
+		this.explode = SignalIn.Create("explode", base.gameObject, new Action(this.Explode));
+		return true;
+	}
+
+	// Token: 0x0600245B RID: 9307 RVA: 0x0012BF4C File Offset: 0x0012A14C
+	private void Start()
+	{
+		this.huddle = ScriptGlobals.huddle;
+		this.forceOffset.y = base.transform.position.y;
+	}
+
+	// Token: 0x0600245C RID: 9308 RVA: 0x0012BF84 File Offset: 0x0012A184
+	private void FixedUpdate()
+	{
+		if (!this.detonated)
+		{
+			base.GetComponent<Rigidbody>().velocity = base.transform.right * -this.speed;
+		}
+		if (this.shockTimer > 0f)
+		{
+			this.AfterShock();
+			this.shockTimer -= Time.deltaTime;
+		}
+		if (this.explosionTimer > 0f)
+		{
+			this.explosionTimer -= Time.deltaTime;
+			if (this.explosionTimer <= 0f)
+			{
+				this.Explode();
+			}
+		}
+	}
+
+	// Token: 0x0600245D RID: 9309 RVA: 0x0012C020 File Offset: 0x0012A220
+	private void OnTriggerEnter(Collider c)
+	{
+		if (this.detonated)
+		{
+			return;
+		}
+		this.hit = c;
+		if (c.attachedRigidbody && c.gameObject.GetComponent<CharacterProbe>())
+		{
+			this.huddleHit = true;
+		}
+		else
+		{
+			this.huddleHit = false;
+		}
+		this.detonated = true;
+		this.Explode();
+	}
+
+	// Token: 0x0600245E RID: 9310 RVA: 0x0012C088 File Offset: 0x0012A288
+	private void Explode()
+	{
+		if (this.huddleHit)
+		{
+			Vector3 impulse = base.transform.right * this.directForce + new Vector3(0f, 10f, 0f);
+			Vector3 pos = this.huddle.pos;
+			pos.y = this.forceOffset.y;
+			this.huddle.AddImpulse(impulse, pos);
+			this.shockTimer = 0.5f;
+		}
+		else if (this.hit.attachedRigidbody)
+		{
+			Vector3 vector = base.transform.right * this.indirectForce;
+			this.hit.attachedRigidbody.AddForce(vector);
+		}
+		base.GetComponent<Rigidbody>().velocity = Vector3.zero;
+		this.visuals.SetActive(false);
+		GameObject gameObject = Object.Instantiate<GameObject>(this.explosion);
+		gameObject.transform.position = this.explosionSpawn.transform.position;
+		gameObject.transform.eulerAngles = base.transform.eulerAngles + new Vector3(0f, 90f, 0f);
+		this.boom.Signal();
+		Object.Destroy(base.gameObject);
+	}
+
+	// Token: 0x0600245F RID: 9311 RVA: 0x0012C1D0 File Offset: 0x0012A3D0
+	private void AfterShock()
+	{
+		Vector3 impulse = base.transform.right * this.afterShockForce;
+		this.huddle.AddImpulse(impulse);
+	}
+
+	// Token: 0x040042AA RID: 17066
+	public GameObject explosion;
+
+	// Token: 0x040042AB RID: 17067
+	public GameObject visuals;
+
+	// Token: 0x040042AC RID: 17068
+	public GameObject explosionSpawn;
+
+	// Token: 0x040042AD RID: 17069
+	private SignalIn explode;
+
+	// Token: 0x040042AE RID: 17070
+	private SignalOut boom;
+
+	// Token: 0x040042AF RID: 17071
+	private Huddle huddle;
+
+	// Token: 0x040042B0 RID: 17072
+	private float shockTimer;
+
+	// Token: 0x040042B1 RID: 17073
+	private float explosionTimer;
+
+	// Token: 0x040042B2 RID: 17074
+	private float speed = 25f;
+
+	// Token: 0x040042B3 RID: 17075
+	private bool detonated;
+
+	// Token: 0x040042B4 RID: 17076
+	private bool huddleHit;
+
+	// Token: 0x040042B5 RID: 17077
+	private Vector3 forceOffset;
+
+	// Token: 0x040042B6 RID: 17078
+	private Vector3 vel;
+
+	// Token: 0x040042B7 RID: 17079
+	private float impactTime = 0.1f;
+
+	// Token: 0x040042B8 RID: 17080
+	private float directForce = -40f;
+
+	// Token: 0x040042B9 RID: 17081
+	private float indirectForce = -1200f;
+
+	// Token: 0x040042BA RID: 17082
+	private float afterShockForce = -0.7f;
+
+	// Token: 0x040042BB RID: 17083
+	private Collider hit;
+}

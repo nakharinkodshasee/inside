@@ -1,0 +1,122 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000467 RID: 1127
+public class HuddleJetCrateThrowBack : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001D97 RID: 7575 RVA: 0x000FF738 File Offset: 0x000FD938
+	public bool PreAwake(int callcount)
+	{
+		this.intercepted = SignalIn.Create("intercepted", base.gameObject, new Action(this.DoIntercept));
+		this.jetcreateTrigger2Enter = SignalIn.Create("jetcreateTrigger2Enter", base.gameObject, new Action(this.DoJetEnter));
+		this.jetcreateTrigger2Exit = SignalIn.Create("jetcreateTrigger2Exit", base.gameObject, new Action(this.DoJetExit));
+		return true;
+	}
+
+	// Token: 0x06001D98 RID: 7576 RVA: 0x000FF7AC File Offset: 0x000FD9AC
+	private void Start()
+	{
+		this.waitTime = Random.Range(this.waitMin, this.waitMax);
+	}
+
+	// Token: 0x06001D99 RID: 7577 RVA: 0x000FF7C8 File Offset: 0x000FD9C8
+	private void DoIntercept()
+	{
+		this.isIntercepted = true;
+	}
+
+	// Token: 0x06001D9A RID: 7578 RVA: 0x000FF7D4 File Offset: 0x000FD9D4
+	private void DoJetEnter()
+	{
+		this.jetInRestSafetyTrigger = true;
+		this.restTimer = 0f;
+	}
+
+	// Token: 0x06001D9B RID: 7579 RVA: 0x000FF7E8 File Offset: 0x000FD9E8
+	private void DoJetExit()
+	{
+		this.jetInRestSafetyTrigger = false;
+	}
+
+	// Token: 0x06001D9C RID: 7580 RVA: 0x000FF7F4 File Offset: 0x000FD9F4
+	private void ThrowBack()
+	{
+		this.isIntercepted = false;
+		this.waitTime = Random.Range(this.waitMin, this.waitMax);
+		this.timer = 0f;
+		this.jetCrate.velocity = Vector3.zero;
+		this.jetCrate.angularVelocity = Vector3.zero;
+		this.jetCrate.transform.SetPositionRotation(this.throwPos.position, this.throwPos.rotation);
+		this.jetCrate.AddForce(this.throwForce, 1);
+		Vector3 zero = Vector3.zero;
+		zero.z = Random.Range(this.throwTorqueMin, this.throwTorqueMax);
+		this.jetCrate.AddTorque(zero, 1);
+	}
+
+	// Token: 0x06001D9D RID: 7581 RVA: 0x000FF8B0 File Offset: 0x000FDAB0
+	private void FixedUpdate()
+	{
+		if (this.isIntercepted)
+		{
+			this.timer += Time.deltaTime;
+			if (this.timer > this.waitTime)
+			{
+				this.ThrowBack();
+			}
+		}
+		if (this.jetInRestSafetyTrigger)
+		{
+			this.restTimer += Time.deltaTime;
+			if (this.restTimer > 3f)
+			{
+				this.jetCrate.AddForce(Vector3.right, 1);
+				this.restTimer = -3f;
+			}
+		}
+	}
+
+	// Token: 0x0400366E RID: 13934
+	public Rigidbody jetCrate;
+
+	// Token: 0x0400366F RID: 13935
+	public float waitMin = 3f;
+
+	// Token: 0x04003670 RID: 13936
+	public float waitMax = 7f;
+
+	// Token: 0x04003671 RID: 13937
+	public Transform throwPos;
+
+	// Token: 0x04003672 RID: 13938
+	public Vector3 throwForce;
+
+	// Token: 0x04003673 RID: 13939
+	public float throwTorqueMin = -0.7f;
+
+	// Token: 0x04003674 RID: 13940
+	public float throwTorqueMax = 0.7f;
+
+	// Token: 0x04003675 RID: 13941
+	private SignalIn intercepted;
+
+	// Token: 0x04003676 RID: 13942
+	private SignalIn jetcreateTrigger2Enter;
+
+	// Token: 0x04003677 RID: 13943
+	private SignalIn jetcreateTrigger2Exit;
+
+	// Token: 0x04003678 RID: 13944
+	public bool isIntercepted;
+
+	// Token: 0x04003679 RID: 13945
+	private float waitTime;
+
+	// Token: 0x0400367A RID: 13946
+	private float timer;
+
+	// Token: 0x0400367B RID: 13947
+	private bool jetInRestSafetyTrigger;
+
+	// Token: 0x0400367C RID: 13948
+	private float restTimer;
+}

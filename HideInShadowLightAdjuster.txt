@@ -1,0 +1,95 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000531 RID: 1329
+public class HideInShadowLightAdjuster : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060022A3 RID: 8867 RVA: 0x00122CA4 File Offset: 0x00120EA4
+	public bool PreAwake(int callcount)
+	{
+		SignalIn.Create("stopAdjusting", base.gameObject, new Action(this.doStop));
+		SignalIn.Create("startAdjusting", base.gameObject, new Action(this.doStart));
+		return true;
+	}
+
+	// Token: 0x060022A4 RID: 8868 RVA: 0x00122CEC File Offset: 0x00120EEC
+	private void Start()
+	{
+		this.doStop();
+	}
+
+	// Token: 0x060022A5 RID: 8869 RVA: 0x00122CF4 File Offset: 0x00120EF4
+	private void doStop()
+	{
+		this.doAdjust = false;
+		this.spotLightIntoRoom.GetComponent<Light>().enabled = false;
+		this.spotLightMoving.GetComponent<Light>().enabled = true;
+		int i = 0;
+		int count = this.thingsToDisable.Count;
+		while (i < count)
+		{
+			this.thingsToDisable[i].SetActive(false);
+			i++;
+		}
+		int j = 0;
+		int count2 = this.thingsToEnable.Count;
+		while (j < count2)
+		{
+			this.thingsToEnable[j].SetActive(true);
+			j++;
+		}
+	}
+
+	// Token: 0x060022A6 RID: 8870 RVA: 0x00122D8C File Offset: 0x00120F8C
+	private void doStart()
+	{
+		this.doAdjust = true;
+		this.spotLightIntoRoom.GetComponent<Light>().enabled = true;
+		this.spotLightMoving.GetComponent<Light>().enabled = false;
+		int i = 0;
+		int count = this.thingsToDisable.Count;
+		while (i < count)
+		{
+			this.thingsToDisable[i].SetActive(true);
+			i++;
+		}
+		int j = 0;
+		int count2 = this.thingsToEnable.Count;
+		while (j < count2)
+		{
+			this.thingsToEnable[j].SetActive(false);
+			j++;
+		}
+	}
+
+	// Token: 0x040040B2 RID: 16562
+	public Transform spotLightIntoRoom;
+
+	// Token: 0x040040B3 RID: 16563
+	public Transform spotLightMoving;
+
+	// Token: 0x040040B4 RID: 16564
+	public List<GameObject> thingsToDisable;
+
+	// Token: 0x040040B5 RID: 16565
+	public List<GameObject> thingsToEnable;
+
+	// Token: 0x040040B6 RID: 16566
+	public float minDist = 15f;
+
+	// Token: 0x040040B7 RID: 16567
+	public float maxDist = 25f;
+
+	// Token: 0x040040B8 RID: 16568
+	public float targetLightIntensity = 0.75f;
+
+	// Token: 0x040040B9 RID: 16569
+	private SignalIn stopAdjusting;
+
+	// Token: 0x040040BA RID: 16570
+	private SignalIn startAdjusting;
+
+	// Token: 0x040040BB RID: 16571
+	private bool doAdjust;
+}

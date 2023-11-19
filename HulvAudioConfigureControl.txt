@@ -1,0 +1,101 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000472 RID: 1138
+public class HulvAudioConfigureControl : MonoBehaviour
+{
+	// Token: 0x06001DE9 RID: 7657 RVA: 0x00100FB0 File Offset: 0x000FF1B0
+	private void Awake()
+	{
+		this.hulv1 = this.hulvPlayer1.GetComponent<Hulv>();
+		this.hulv2 = this.hulvPlayer2.GetComponent<Hulv>();
+		this.hulv3 = this.hulvPlayer3.GetComponent<Hulv>();
+	}
+
+	// Token: 0x06001DEA RID: 7658 RVA: 0x00100FE8 File Offset: 0x000FF1E8
+	public void SetHulvEmotion(HulvPlayer player, HulvPlayer.Config.EmotionOverride emo)
+	{
+		player.SetConfiguration(new HulvPlayer.Config
+		{
+			emotionOverride = emo,
+			manualBarking = this.manualBarking
+		});
+	}
+
+	// Token: 0x06001DEB RID: 7659 RVA: 0x0010101C File Offset: 0x000FF21C
+	private void UpdateHulvPlayers()
+	{
+		if (this.hulv1IdleLastFrame && !this.hulv1.IsHulvIdle())
+		{
+			this.SetHulvEmotion(this.hulvPlayer1, this.emotionAngry);
+			this.hulv1IdleLastFrame = false;
+		}
+		else if (!this.hulv1IdleLastFrame && this.hulv1.IsHulvIdle())
+		{
+			this.SetHulvEmotion(this.hulvPlayer1, this.emotionFrustrated);
+			this.hulv1IdleLastFrame = true;
+		}
+		if (this.hulv2IdleLastFrame && !this.hulv2.IsHulvIdle())
+		{
+			this.SetHulvEmotion(this.hulvPlayer2, this.emotionAngry);
+			this.hulv2IdleLastFrame = false;
+		}
+		else if (!this.hulv2IdleLastFrame && this.hulv2.IsHulvIdle())
+		{
+			this.SetHulvEmotion(this.hulvPlayer2, this.emotionFrustrated);
+			this.hulv2IdleLastFrame = true;
+		}
+		if (this.hulv3IdleLastFrame && !this.hulv3.IsHulvIdle())
+		{
+			this.SetHulvEmotion(this.hulvPlayer3, this.emotionAngry);
+			this.hulv3IdleLastFrame = false;
+		}
+		else if (!this.hulv3IdleLastFrame && this.hulv3.IsHulvIdle())
+		{
+			this.SetHulvEmotion(this.hulvPlayer3, this.emotionFrustrated);
+			this.hulv3IdleLastFrame = true;
+		}
+	}
+
+	// Token: 0x06001DEC RID: 7660 RVA: 0x00101170 File Offset: 0x000FF370
+	private void FixedUpdate()
+	{
+		this.UpdateHulvPlayers();
+	}
+
+	// Token: 0x040036EE RID: 14062
+	public HulvPlayer hulvPlayer1;
+
+	// Token: 0x040036EF RID: 14063
+	public HulvPlayer hulvPlayer2;
+
+	// Token: 0x040036F0 RID: 14064
+	public HulvPlayer hulvPlayer3;
+
+	// Token: 0x040036F1 RID: 14065
+	private Hulv hulv1;
+
+	// Token: 0x040036F2 RID: 14066
+	private Hulv hulv2;
+
+	// Token: 0x040036F3 RID: 14067
+	private Hulv hulv3;
+
+	// Token: 0x040036F4 RID: 14068
+	private bool hulv1IdleLastFrame;
+
+	// Token: 0x040036F5 RID: 14069
+	private bool hulv2IdleLastFrame;
+
+	// Token: 0x040036F6 RID: 14070
+	private bool hulv3IdleLastFrame;
+
+	// Token: 0x040036F7 RID: 14071
+	public bool manualBarking = true;
+
+	// Token: 0x040036F8 RID: 14072
+	private HulvPlayer.Config.EmotionOverride emotionAngry = HulvPlayer.Config.EmotionOverride.Angry;
+
+	// Token: 0x040036F9 RID: 14073
+	private HulvPlayer.Config.EmotionOverride emotionFrustrated = HulvPlayer.Config.EmotionOverride.Frustrated;
+}

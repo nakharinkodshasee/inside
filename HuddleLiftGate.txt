@@ -1,0 +1,61 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000171 RID: 369
+public class HuddleLiftGate : DefaultBoyInput
+{
+	// Token: 0x17000040 RID: 64
+	// (get) Token: 0x06000AEC RID: 2796 RVA: 0x0006C6A8 File Offset: 0x0006A8A8
+	public override vector2f stick
+	{
+		get
+		{
+			return new vector2f(-base.stick.x * 0.75f, base.stick.y);
+		}
+	}
+
+	// Token: 0x06000AED RID: 2797 RVA: 0x0006C6E0 File Offset: 0x0006A8E0
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000AEE RID: 2798 RVA: 0x0006C6E4 File Offset: 0x0006A8E4
+	private void FixedUpdate()
+	{
+		if (ScriptGlobals.huddle.grabState.body == base.GetComponent<Rigidbody>())
+		{
+			ScriptGlobals.huddle.input = this;
+		}
+		else
+		{
+			ScriptGlobals.huddle.input = null;
+		}
+		if (ScriptGlobals.huddle.input == this)
+		{
+			base.GetComponent<Rigidbody>().AddForce(Vector3.up * 0.1f * this.cheatLiftForce, 0);
+			if (this.stick.y > 0f)
+			{
+				base.GetComponent<Rigidbody>().AddForce(Vector3.up * this.stick.y * this.cheatLiftForce, 0);
+			}
+		}
+		if (ScriptGlobals.huddle.input == this)
+		{
+			this.grabTime += Time.deltaTime;
+			if (this.grabTime < 1.5f)
+			{
+				ScriptGlobals.huddle.AddVelocity(-ScriptGlobals.huddle.velocity3 * 4f * Time.deltaTime);
+			}
+		}
+		else
+		{
+			this.grabTime = 0f;
+		}
+	}
+
+	// Token: 0x040012F3 RID: 4851
+	public float cheatLiftForce = 10f;
+
+	// Token: 0x040012F4 RID: 4852
+	private float grabTime;
+}
+

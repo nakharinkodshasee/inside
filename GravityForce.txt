@@ -1,0 +1,67 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200025B RID: 603
+public class GravityForce : MonoBehaviour
+{
+	// Token: 0x0600129F RID: 4767 RVA: 0x000AF4CC File Offset: 0x000AD6CC
+	private void OnTriggerEnter(Collider coll)
+	{
+		GravityZone component = coll.GetComponent<GravityZone>();
+		if (component && !this.activeZones.Contains(component))
+		{
+			this.activeZones.Add(component);
+		}
+		if (this.activeZones.Count == 1)
+		{
+			base.GetComponent<Rigidbody>().useGravity = false;
+		}
+	}
+
+	// Token: 0x060012A0 RID: 4768 RVA: 0x000AF528 File Offset: 0x000AD728
+	private void OnTriggerExit(Collider coll)
+	{
+		GravityZone component = coll.GetComponent<GravityZone>();
+		if (component)
+		{
+			this.activeZones.Remove(component);
+		}
+		if (this.activeZones.Count == 0)
+		{
+			base.GetComponent<Rigidbody>().useGravity = true;
+		}
+	}
+
+	// Token: 0x060012A1 RID: 4769 RVA: 0x000AF570 File Offset: 0x000AD770
+	public Vector3 GetCurrentGravity()
+	{
+		if (base.GetComponent<Rigidbody>().useGravity)
+		{
+			return Physics.gravity;
+		}
+		return this.customGravity;
+	}
+
+	// Token: 0x060012A2 RID: 4770 RVA: 0x000AF590 File Offset: 0x000AD790
+	private void FixedUpdate()
+	{
+		this.customGravity = Vector3.zero;
+		foreach (GravityZone gravityZone in this.activeZones)
+		{
+			this.customGravity += gravityZone.GetZoneGravity();
+		}
+		base.GetComponent<Rigidbody>().AddForce(this.customGravity, 5);
+		BuoyancyForce component = base.GetComponent<BuoyancyForce>();
+		if (component != null)
+		{
+			component.SetCustomGravity(this.customGravity);
+		}
+	}
+
+	// Token: 0x04002261 RID: 8801
+	private List<GravityZone> activeZones = new List<GravityZone>();
+
+	// Token: 0x04002262 RID: 8802
+	private Vector3 customGravity;
+}

@@ -1,0 +1,211 @@
+using System;
+using System.Collections.Generic;
+using AudioCommands;
+using UnityEngine;
+
+// Token: 0x0200048F RID: 1167
+public class GirlExplorerPlatform : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001EA2 RID: 7842 RVA: 0x00106C6C File Offset: 0x00104E6C
+	public bool PreAwake(int callcount)
+	{
+		this.fall = SignalIn.Create("fall", base.gameObject, new Action(this.DoFall));
+		this.loadFallen = SignalIn.Create("loadFallen", base.gameObject, new Action(this.DoLoadFallen));
+		this.railingFall = SignalIn.Create("railingFall", base.gameObject, new Action(this.DoRailingFall));
+		this.animPlatformBreakState = this.animPlatform[this.animPlatformBreak.name];
+		this.animRailBreakState = this.animRail[this.animRailBreak.name];
+		return true;
+	}
+
+	// Token: 0x06001EA3 RID: 7843 RVA: 0x00106D18 File Offset: 0x00104F18
+	private void Start()
+	{
+		if (!this.fallen)
+		{
+			this.animPlatform.Play(this.animPlatformIdle.name);
+		}
+		if (!this.railingFallen)
+		{
+			this.animRail.Play(this.animRailIdle.name);
+		}
+	}
+
+	// Token: 0x06001EA4 RID: 7844 RVA: 0x00106D6C File Offset: 0x00104F6C
+	private void OnEnable()
+	{
+		if (this.fallen)
+		{
+			this.animPlatform.Play(this.animPlatformBreakState.name);
+			this.animPlatformBreakState.normalizedTime = 1f;
+		}
+		if (this.railingFallen)
+		{
+			this.animRail.Play(this.animRailBreakState.name);
+			this.animRailBreakState.normalizedTime = 1f;
+		}
+	}
+
+	// Token: 0x06001EA5 RID: 7845 RVA: 0x00106DE0 File Offset: 0x00104FE0
+	private void DoFall()
+	{
+		if (!this.fallen)
+		{
+			this.fallen = true;
+			ThemeUtils.SetVoiceConfig(ScriptGlobals.boy.gameObject, this.voicePlatformLanding);
+			this.animPlatform.Play(this.animPlatformBreak.name);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.3f, 0.2f, 0, 0f);
+			this.SetRopesNotKinematic();
+		}
+	}
+
+	// Token: 0x06001EA6 RID: 7846 RVA: 0x00106E4C File Offset: 0x0010504C
+	private void DoRailingFall()
+	{
+		if (!this.railingFallen)
+		{
+			this.railingFallen = true;
+			ThemeUtils.SetVoiceConfig(ScriptGlobals.boy.gameObject, this.voicePlatformLanding);
+			this.animRail.Play(this.animRailBreak.name);
+			int i = 0;
+			int num = this.fxRailFall.Length;
+			while (i < num)
+			{
+				if (this.fxRailFall[i] != null)
+				{
+					this.fxRailFall[i].Play(true);
+				}
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x06001EA7 RID: 7847 RVA: 0x00106ED4 File Offset: 0x001050D4
+	private void DoLoadFallen()
+	{
+		if (!this.fallen)
+		{
+			this.fallen = true;
+			this.SetRopesNotKinematic();
+			this.animPlatform.Play(this.animPlatformBreakState.name);
+			this.animPlatformBreakState.normalizedTime = 1f;
+		}
+		if (!this.railingFallen)
+		{
+			this.railingFallen = true;
+			this.animRail.Play(this.animRailBreakState.name);
+			this.animRailBreakState.normalizedTime = 1f;
+		}
+	}
+
+	// Token: 0x06001EA8 RID: 7848 RVA: 0x00106F5C File Offset: 0x0010515C
+	private void SetRopesNotKinematic()
+	{
+		int i = 0;
+		int count = this.ropeLong.Count;
+		while (i < count)
+		{
+			Rigidbody rigidbody = this.ropeLong[i];
+			rigidbody.isKinematic = false;
+			rigidbody.WakeUp();
+			i++;
+		}
+		int j = 0;
+		int count2 = this.ropeShort.Count;
+		while (j < count2)
+		{
+			Rigidbody rigidbody2 = this.ropeShort[j];
+			rigidbody2.isKinematic = false;
+			rigidbody2.WakeUp();
+			j++;
+		}
+	}
+
+	// Token: 0x06001EA9 RID: 7849 RVA: 0x00106FE0 File Offset: 0x001051E0
+	private void Update()
+	{
+		if (!this.fallen)
+		{
+			if (this.shortRopeLR == null)
+			{
+				this.shortRopeLR = this.shortRopeEnd.transform.parent.GetComponent<LineRenderer>();
+			}
+			if (this.ropeLineRenderer == null)
+			{
+				this.ropeLineRenderer = this.shortRopeEnd.transform.parent.GetComponent<RopeLineRenderer>();
+			}
+			if (this.shortRopeLR != null && this.ropeLineRenderer && this.ropeLineRenderer.GetLineRendererVertexCount() > 0)
+			{
+				this.shortRopeLR.SetPosition(48, this.longRopeEnd.transform.position);
+			}
+		}
+	}
+
+	// Token: 0x040038C2 RID: 14530
+	public Animation animPlatform;
+
+	// Token: 0x040038C3 RID: 14531
+	public AnimationClip animPlatformIdle;
+
+	// Token: 0x040038C4 RID: 14532
+	public AnimationClip animPlatformBreak;
+
+	// Token: 0x040038C5 RID: 14533
+	public AnimationClip animPlatformBroken;
+
+	// Token: 0x040038C6 RID: 14534
+	public Animation animRail;
+
+	// Token: 0x040038C7 RID: 14535
+	public AnimationClip animRailIdle;
+
+	// Token: 0x040038C8 RID: 14536
+	public AnimationClip animRailBreak;
+
+	// Token: 0x040038C9 RID: 14537
+	public AnimationClip animRailBroken;
+
+	// Token: 0x040038CA RID: 14538
+	public List<Rigidbody> ropeShort;
+
+	// Token: 0x040038CB RID: 14539
+	public List<Rigidbody> ropeLong;
+
+	// Token: 0x040038CC RID: 14540
+	public GameObject longRopeEnd;
+
+	// Token: 0x040038CD RID: 14541
+	public GameObject shortRopeEnd;
+
+	// Token: 0x040038CE RID: 14542
+	public ParticleSystem[] fxRailFall = new ParticleSystem[0];
+
+	// Token: 0x040038CF RID: 14543
+	public BoyVoiceConfig voicePlatformLanding;
+
+	// Token: 0x040038D0 RID: 14544
+	private LineRenderer shortRopeLR;
+
+	// Token: 0x040038D1 RID: 14545
+	private RopeLineRenderer ropeLineRenderer;
+
+	// Token: 0x040038D2 RID: 14546
+	private SignalIn fall;
+
+	// Token: 0x040038D3 RID: 14547
+	private SignalIn loadFallen;
+
+	// Token: 0x040038D4 RID: 14548
+	private SignalIn railingFall;
+
+	// Token: 0x040038D5 RID: 14549
+	private bool fallen;
+
+	// Token: 0x040038D6 RID: 14550
+	private bool railingFallen;
+
+	// Token: 0x040038D7 RID: 14551
+	private AnimationState animPlatformBreakState;
+
+	// Token: 0x040038D8 RID: 14552
+	private AnimationState animRailBreakState;
+}

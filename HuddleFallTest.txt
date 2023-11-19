@@ -1,0 +1,167 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200016E RID: 366
+public class HuddleFallTest : DefaultBoyInput, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x1700003C RID: 60
+	// (get) Token: 0x06000AC0 RID: 2752 RVA: 0x0006A364 File Offset: 0x00068564
+	public override vector2f stick
+	{
+		get
+		{
+			return new vector2f(1f, 0f);
+		}
+	}
+
+	// Token: 0x06000AC1 RID: 2753 RVA: 0x0006A378 File Offset: 0x00068578
+	public bool PreAwake(int callcount)
+	{
+		this.wakeUp = SignalIn.Create("wakeUp", base.gameObject, new Action(this.OnHuddleWakeUp));
+		this.smash = SignalOut.Create("smash", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000AC2 RID: 2754 RVA: 0x0006A3C0 File Offset: 0x000685C0
+	private void Start()
+	{
+		this.preSmashTrigger.enterTrigger.Register(this, ref this.preSmashTriggerEnterHandle);
+	}
+
+	// Token: 0x06000AC3 RID: 2755 RVA: 0x0006A3DC File Offset: 0x000685DC
+	private void OnHuddleWakeUp()
+	{
+		HuddleUtils.SpawnGetupState(ScriptGlobals.huddle);
+	}
+
+	// Token: 0x06000AC4 RID: 2756 RVA: 0x0006A3E8 File Offset: 0x000685E8
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.preSmashTrigger.enterTrigger)
+		{
+			this.OnPreSmashTriggerEnter(collider);
+		}
+	}
+
+	// Token: 0x06000AC5 RID: 2757 RVA: 0x0006A404 File Offset: 0x00068604
+	private void OnPreSmashTriggerEnter(Collider coll)
+	{
+		if (this.smashActive)
+		{
+			return;
+		}
+		if (coll.GetComponent<HuddleProbe>() && ScriptGlobals.huddle.velocity.x > this.smashSpeed)
+		{
+			this.wall.gameObject.SetActive(false);
+			this.smashActive = true;
+			this.smash.Signal();
+		}
+	}
+
+	// Token: 0x06000AC6 RID: 2758 RVA: 0x0006A470 File Offset: 0x00068670
+	private void FixedUpdate()
+	{
+		if (this.smashActive)
+		{
+			this.smashActiveTimer += Time.deltaTime;
+			if (this.smashActiveTimer > 2f && ScriptGlobals.huddle.input == this)
+			{
+				ScriptGlobals.huddle.input = null;
+			}
+		}
+		if (!this.hasFallen && this.smashActiveTimer > this.fallDelay)
+		{
+			this.Fall();
+		}
+		if (this.setDaming)
+		{
+			this.setTimer += Time.deltaTime;
+			if (this.setTimer > 1.5f)
+			{
+				this.setDaming = false;
+				foreach (HuddleCloth.ClothBone clothBone in ScriptGlobals.huddle.cloth.bones)
+				{
+					clothBone.body.drag = 0.5f;
+					clothBone.body.angularDrag = 0.25f;
+				}
+			}
+		}
+		if (this.resetDampingTimerActive)
+		{
+			this.resetTimer += Time.deltaTime;
+			if (this.resetTimer > 4f)
+			{
+				this.resetTimer = 0f;
+				this.resetDampingTimerActive = false;
+				foreach (HuddleCloth.ClothBone clothBone2 in ScriptGlobals.huddle.cloth.bones)
+				{
+					clothBone2.body.drag = 0f;
+					clothBone2.body.angularDrag = 0f;
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000AC7 RID: 2759 RVA: 0x0006A5F8 File Offset: 0x000687F8
+	private void Fall()
+	{
+		HuddleUtils.SpawnFallState(ScriptGlobals.huddle, 0f, 100f);
+		this.setDaming = true;
+		this.resetDampingTimerActive = true;
+		this.hasFallen = true;
+	}
+
+	// Token: 0x06000AC8 RID: 2760 RVA: 0x0006A624 File Offset: 0x00068824
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (this.hasFallen)
+		{
+			return;
+		}
+		if (coll.GetComponent<CharacterProbe>())
+		{
+		}
+	}
+
+	// Token: 0x040012A5 RID: 4773
+	public CollisionEvents preSmashTrigger;
+
+	// Token: 0x040012A6 RID: 4774
+	public Transform wall;
+
+	// Token: 0x040012A7 RID: 4775
+	public float smashSpeed = 6f;
+
+	// Token: 0x040012A8 RID: 4776
+	public float fallDelay = 0.05f;
+
+	// Token: 0x040012A9 RID: 4777
+	private SignalIn wakeUp;
+
+	// Token: 0x040012AA RID: 4778
+	private SignalOut smash;
+
+	// Token: 0x040012AB RID: 4779
+	private int preSmashTriggerEnterHandle = -1;
+
+	// Token: 0x040012AC RID: 4780
+	private bool smashActive;
+
+	// Token: 0x040012AD RID: 4781
+	private float smashActiveTimer;
+
+	// Token: 0x040012AE RID: 4782
+	private bool setDaming;
+
+	// Token: 0x040012AF RID: 4783
+	private float setTimer;
+
+	// Token: 0x040012B0 RID: 4784
+	private bool resetDampingTimerActive;
+
+	// Token: 0x040012B1 RID: 4785
+	private float resetTimer;
+
+	// Token: 0x040012B2 RID: 4786
+	private bool hasFallen;
+}

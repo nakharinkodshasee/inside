@@ -1,0 +1,98 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200050B RID: 1291
+public class HuddleSphereGfxSwap : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060021B2 RID: 8626 RVA: 0x0011A9AC File Offset: 0x00118BAC
+	public bool PreAwake(int callcount)
+	{
+		this.goingInside = SignalIn.Create("goingInside", base.gameObject, new Action(this.DoEnableInside));
+		this.goingOutside = SignalIn.Create("goingOutside", base.gameObject, new Action(this.DoEnableOutside));
+		return true;
+	}
+
+	// Token: 0x060021B3 RID: 8627 RVA: 0x0011AA00 File Offset: 0x00118C00
+	private void Start()
+	{
+		this.outsideGFX.SetActive(true);
+		this.insideGFX.SetActive(false);
+		this.outsideBoyGFX.SetActive(true);
+		this.anim = base.GetComponent<Animation>();
+		this.animState = this.anim[this.anim.clip.name];
+	}
+
+	// Token: 0x060021B4 RID: 8628 RVA: 0x0011AA60 File Offset: 0x00118C60
+	private void Update()
+	{
+		if (this.isFading)
+		{
+			if (!this.anim.isPlaying || this.animState.normalizedTime >= 1f)
+			{
+				this.lightBoy.intensity = 0f;
+				this.lightInside.intensity = 0f;
+				this.insideGFX.SetActive(false);
+				this.isFading = false;
+			}
+			else
+			{
+				float normalizedTime = this.animState.normalizedTime;
+				this.lightBoy.intensity = this.lightBoyCurve.Evaluate(normalizedTime);
+				this.lightInside.intensity = this.lightInsideCurve.Evaluate(normalizedTime);
+			}
+		}
+	}
+
+	// Token: 0x060021B5 RID: 8629 RVA: 0x0011AB10 File Offset: 0x00118D10
+	private void DoEnableInside()
+	{
+		this.outsideGFX.SetActive(false);
+		this.insideGFX.SetActive(true);
+		this.outsideBoyGFX.SetActive(false);
+	}
+
+	// Token: 0x060021B6 RID: 8630 RVA: 0x0011AB44 File Offset: 0x00118D44
+	private void DoEnableOutside()
+	{
+		this.anim.Play();
+		this.isFading = true;
+		this.outsideGFX.SetActive(true);
+		this.outsideBoyGFX.SetActive(false);
+	}
+
+	// Token: 0x04003EBF RID: 16063
+	public GameObject insideGFX;
+
+	// Token: 0x04003EC0 RID: 16064
+	public GameObject outsideGFX;
+
+	// Token: 0x04003EC1 RID: 16065
+	public GameObject outsideBoyGFX;
+
+	// Token: 0x04003EC2 RID: 16066
+	public Light lightBoy;
+
+	// Token: 0x04003EC3 RID: 16067
+	public AnimationCurve lightBoyCurve;
+
+	// Token: 0x04003EC4 RID: 16068
+	public Light lightInside;
+
+	// Token: 0x04003EC5 RID: 16069
+	public AnimationCurve lightInsideCurve;
+
+	// Token: 0x04003EC6 RID: 16070
+	private SignalIn goingInside;
+
+	// Token: 0x04003EC7 RID: 16071
+	private SignalIn goingOutside;
+
+	// Token: 0x04003EC8 RID: 16072
+	private Animation anim;
+
+	// Token: 0x04003EC9 RID: 16073
+	private bool isFading;
+
+	// Token: 0x04003ECA RID: 16074
+	private AnimationState animState;
+}

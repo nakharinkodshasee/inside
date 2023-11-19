@@ -1,0 +1,117 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200048B RID: 1163
+public class GirlCamAimController : MonoBehaviour
+{
+	// Token: 0x06001E75 RID: 7797 RVA: 0x00104CA4 File Offset: 0x00102EA4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		int count = this.blendBoxesToControl.Count;
+		this.cameraStartZooms = new float[count];
+		this.cameraStartAimsX = new float[count];
+		this.cameraStartAimsY = new float[count];
+		for (int i = 0; i < count; i++)
+		{
+			CameraBlendBox cameraBlendBox = this.blendBoxesToControl[i];
+			this.cameraStartZooms[i] = cameraBlendBox.positionCamera.z;
+			this.cameraStartAimsX[i] = cameraBlendBox.positionAim.x;
+			this.cameraStartAimsY[i] = cameraBlendBox.positionAim.y;
+		}
+	}
+
+	// Token: 0x06001E76 RID: 7798 RVA: 0x00104D4C File Offset: 0x00102F4C
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyProbesInside++;
+		}
+	}
+
+	// Token: 0x06001E77 RID: 7799 RVA: 0x00104D6C File Offset: 0x00102F6C
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyProbesInside--;
+		}
+	}
+
+	// Token: 0x06001E78 RID: 7800 RVA: 0x00104D8C File Offset: 0x00102F8C
+	private void UpdateZooms()
+	{
+		float num = Mathf.Abs(this.girlTransform.position.x - ScriptGlobals.boy.transform.position.x);
+		float num2 = Mathf.InverseLerp(3f, 10f, num);
+		int i = 0;
+		int count = this.blendBoxesToControl.Count;
+		while (i < count)
+		{
+			this.blendBoxesToControl[i].positionCamera.z = Mathf.Lerp(this.cameraStartZooms[i] * 0.9f, this.cameraStartZooms[i], num2);
+			i++;
+		}
+	}
+
+	// Token: 0x06001E79 RID: 7801 RVA: 0x00104E30 File Offset: 0x00103030
+	private void UpdateAimX()
+	{
+		float num = this.girlTransform.position.x - ScriptGlobals.boy.transform.position.x;
+		float num2 = Mathf.InverseLerp(-5f, 5f, num);
+		int i = 0;
+		int count = this.blendBoxesToControl.Count;
+		while (i < count)
+		{
+			this.blendBoxesToControl[i].positionAim.x = Mathf.Lerp(this.cameraStartAimsX[i], -this.cameraStartAimsX[i], num2);
+			i++;
+		}
+	}
+
+	// Token: 0x06001E7A RID: 7802 RVA: 0x00104EC8 File Offset: 0x001030C8
+	private void UpdateAimY()
+	{
+	}
+
+	// Token: 0x06001E7B RID: 7803 RVA: 0x00104ECC File Offset: 0x001030CC
+	private void Update()
+	{
+		this.UpdateZooms();
+		this.UpdateAimX();
+		this.UpdateAimY();
+	}
+
+	// Token: 0x04003817 RID: 14359
+	public Transform girlTransform;
+
+	// Token: 0x04003818 RID: 14360
+	public List<CameraBlendBox> blendBoxesToControl;
+
+	// Token: 0x04003819 RID: 14361
+	private int boyProbesInside;
+
+	// Token: 0x0400381A RID: 14362
+	[HideInInspector]
+	[SerializeField]
+	private float[] cameraStartZooms;
+
+	// Token: 0x0400381B RID: 14363
+	[SerializeField]
+	[HideInInspector]
+	private float[] cameraStartAimsX;
+
+	// Token: 0x0400381C RID: 14364
+	[HideInInspector]
+	[SerializeField]
+	private float[] cameraStartAimsY;
+
+	// Token: 0x0400381D RID: 14365
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

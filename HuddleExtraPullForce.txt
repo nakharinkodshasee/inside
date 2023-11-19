@@ -1,0 +1,41 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001B9 RID: 441
+public class HuddleExtraPullForce : MonoBehaviour
+{
+	// Token: 0x06000D01 RID: 3329 RVA: 0x0007C740 File Offset: 0x0007A940
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000D02 RID: 3330 RVA: 0x0007C744 File Offset: 0x0007A944
+	private void FixedUpdate()
+	{
+		if (ScriptGlobals.huddleActive && ScriptGlobals.huddle.grabState.body == base.GetComponent<Rigidbody>() && ScriptGlobals.huddle.grabState.IsGrabbing())
+		{
+			if (ScriptGlobals.huddle.input.stick.x < this.stickXrangeNegative || ScriptGlobals.huddle.input.stick.x > this.stickXrangePositive)
+			{
+				float x = ScriptGlobals.huddle.input.stick.x;
+				this.forceTimer += Time.deltaTime;
+				base.GetComponent<Rigidbody>().AddForce(Mathf.Lerp(x * (this.force * 0.3f), x * this.force, this.forceTimer * 0.25f) * base.GetComponent<Rigidbody>().mass, 0f, 0f, 0);
+			}
+			else
+			{
+				this.forceTimer = 0f;
+			}
+		}
+	}
+
+	// Token: 0x040016DC RID: 5852
+	public float stickXrangePositive;
+
+	// Token: 0x040016DD RID: 5853
+	public float stickXrangeNegative;
+
+	// Token: 0x040016DE RID: 5854
+	public float force;
+
+	// Token: 0x040016DF RID: 5855
+	private float forceTimer;
+}
