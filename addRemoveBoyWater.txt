@@ -1,0 +1,63 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005DC RID: 1500
+public class addRemoveBoyWater : MonoBehaviour
+{
+	// Token: 0x060025F5 RID: 9717 RVA: 0x00135638 File Offset: 0x00133838
+	public void addBoyWater()
+	{
+		this.water.AddComponent<BoyWater>();
+		if (this.floatObj1 != null && this.floatObj1.GetComponent<BuoyancyForce>() != null)
+		{
+			this.floatObj1.GetComponent<BuoyancyForce>().enabled = false;
+			this.floatObj1.GetComponent<Rigidbody>().mass = 0.025f;
+		}
+		if (this.floatObj2 != null && this.floatObj2.GetComponent<BuoyancyForce>() != null)
+		{
+			this.floatObj2.GetComponent<BuoyancyForce>().enabled = false;
+			this.floatObj2.GetComponent<Rigidbody>().mass = 0.025f;
+		}
+		if (this.floatObj3 != null && this.floatObj3.GetComponent<BuoyancyForce>() != null)
+		{
+			this.floatObj3.GetComponent<BuoyancyForce>().enabled = false;
+			this.floatObj3.GetComponent<Rigidbody>().mass = 0.025f;
+		}
+	}
+
+	// Token: 0x060025F6 RID: 9718 RVA: 0x00135738 File Offset: 0x00133938
+	public void removeBoyWater()
+	{
+		foreach (BoyWater boyWater in this.water.GetComponents<BoyWater>())
+		{
+			Object.Destroy(boyWater);
+		}
+		if (this.floatObj1 != null)
+		{
+			this.floatObj1.GetComponent<BuoyancyForce>().enabled = true;
+			this.floatObj1.GetComponent<Rigidbody>().mass = 1.002f;
+		}
+		if (this.floatObj2 != null)
+		{
+			this.floatObj2.GetComponent<BuoyancyForce>().enabled = true;
+			this.floatObj2.GetComponent<Rigidbody>().mass = 1.002f;
+		}
+		if (this.floatObj3 != null)
+		{
+			this.floatObj3.GetComponent<BuoyancyForce>().enabled = true;
+			this.floatObj3.GetComponent<Rigidbody>().mass = 1.002f;
+		}
+	}
+
+	// Token: 0x0400452E RID: 17710
+	public GameObject water;
+
+	// Token: 0x0400452F RID: 17711
+	public GameObject floatObj1;
+
+	// Token: 0x04004530 RID: 17712
+	public GameObject floatObj2;
+
+	// Token: 0x04004531 RID: 17713
+	public GameObject floatObj3;
+}

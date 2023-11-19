@@ -1,0 +1,107 @@
+using System;
+using System.Collections.Generic;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x020000C9 RID: 201
+public class AnimcontrolledPigCustom : AnimControlCustomCode
+{
+	// Token: 0x0600064F RID: 1615 RVA: 0x00048008 File Offset: 0x00046208
+	public override AnimcontrolledCharacter.CustomPositioningFunction GetCustomPositioningFunction(string definitionName)
+	{
+		if (this.dbPositioning.ContainsKey(definitionName))
+		{
+			return this.dbPositioning[definitionName];
+		}
+		return null;
+	}
+
+	// Token: 0x06000650 RID: 1616 RVA: 0x0004802C File Offset: 0x0004622C
+	private static void GetUpRun_Positioning(AnimcontrolledCharacter character, float deltaTime)
+	{
+		AnimationBlendHelper blendHelper = character.GetBlendHelper();
+		ABHelperData latestAnimData = blendHelper.GetLatestAnimData();
+		if (latestAnimData.normalizedAnimPos > 0.6f)
+		{
+			ABDefinition topDefinition = blendHelper.GetTopDefinition();
+			float num = blendHelper.blendParameters[3] * deltaTime * 3f;
+			character.transform.rotation = Quaternion.Euler(0f, num, 0f) * character.transform.rotation;
+		}
+	}
+
+	// Token: 0x06000651 RID: 1617 RVA: 0x000480A0 File Offset: 0x000462A0
+	private static void Run_Positioning(AnimcontrolledCharacter character, float deltaTime)
+	{
+		Vector3 position = character.transform.position;
+		position.z += (ScriptGlobals.boy.pos3.z - position.z) * deltaTime * 4f;
+		character.transform.position = position;
+	}
+
+	// Token: 0x06000652 RID: 1618 RVA: 0x000480F8 File Offset: 0x000462F8
+	private static void RunTurnRun_Positioning(AnimcontrolledCharacter character, float deltaTime)
+	{
+		AnimationBlendHelper blendHelper = character.GetBlendHelper();
+		ABHelperData latestAnimData = blendHelper.GetLatestAnimData();
+		if (latestAnimData.normalizedAnimPos < 0.1f)
+		{
+			Vector3 forward = character.transform.forward;
+			forward.z = 0f;
+			forward.Normalize();
+			if (forward != Vector3.zero)
+			{
+				AnimcontrolledPigCustom._RunStartRotation = Quaternion.LookRotation(forward);
+			}
+			AnimcontrolledPigCustom.doFastForwardFix = false;
+		}
+		else if (deltaTime > 0.09f)
+		{
+			AnimcontrolledPigCustom.doFastForwardFix = true;
+		}
+		if (latestAnimData.normalizedAnimPos > 0.5f || deltaTime > 0.09f)
+		{
+			Vector3 position = character.transform.position;
+			position.z += (ScriptGlobals.boy.pos3.z - position.z) * deltaTime * 6f;
+			character.transform.position = position;
+			if (AnimcontrolledPigCustom.doFastForwardFix)
+			{
+				Vector3 position2 = character.transform.position;
+				position2.z = ScriptGlobals.boy.pos3.z;
+				character.transform.position = position2;
+			}
+			if (latestAnimData.normalizedAnimPos > 0.5f)
+			{
+				character.transform.rotation = Quaternion.Slerp(character.transform.rotation, AnimcontrolledPigCustom._RunStartRotation * Quaternion.Euler(0f, 180f, 0f), Mathf.Min(deltaTime * 3f, 1f));
+			}
+		}
+	}
+
+	// Token: 0x04000ABC RID: 2748
+	private Dictionary<string, AnimcontrolledCharacter.CustomPositioningFunction> dbPositioning = new Dictionary<string, AnimcontrolledCharacter.CustomPositioningFunction>
+	{
+		{
+			"RunTurn",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledPigCustom.RunTurnRun_Positioning)
+		},
+		{
+			"RunA",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledPigCustom.Run_Positioning)
+		},
+		{
+			"RunA_Long",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledPigCustom.Run_Positioning)
+		},
+		{
+			"GetUpRun",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledPigCustom.GetUpRun_Positioning)
+		}
+	};
+
+	// Token: 0x04000ABD RID: 2749
+	private Dictionary<string, AnimcontrolledCharacter.CustomStaticPositionFunction> dbStaticPositioning = new Dictionary<string, AnimcontrolledCharacter.CustomStaticPositionFunction>();
+
+	// Token: 0x04000ABE RID: 2750
+	private static Quaternion _RunStartRotation = Quaternion.identity;
+
+	// Token: 0x04000ABF RID: 2751
+	private static bool doFastForwardFix = false;
+}

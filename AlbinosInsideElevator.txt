@@ -1,0 +1,49 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004BA RID: 1210
+public class AlbinosInsideElevator : MonoBehaviour
+{
+	// Token: 0x06001FB6 RID: 8118 RVA: 0x0010E0CC File Offset: 0x0010C2CC
+	private void FixedUpdate()
+	{
+		if (this.elevatorLever.GrabCheck())
+		{
+			float num = 1f;
+			if (!this.AllAlbinosInsideElevator() && !this.elevatorMines.IsMoving())
+			{
+				num = this.slowLeverSpeed;
+			}
+			if (num != this.previousLeverSpeed)
+			{
+				this.elevatorLever.AdjustPullSpeed(num);
+				this.previousLeverSpeed = num;
+			}
+		}
+	}
+
+	// Token: 0x06001FB7 RID: 8119 RVA: 0x0010E130 File Offset: 0x0010C330
+	private bool AllAlbinosInsideElevator()
+	{
+		AlbinoGroupManager mInstance = AlbinoGroupManager.mInstance;
+		return mInstance == null || mInstance.AlbinoDistanceCheck(this.insideTransform.position, this.insideDistance);
+	}
+
+	// Token: 0x04003AB4 RID: 15028
+	public Lever elevatorLever;
+
+	// Token: 0x04003AB5 RID: 15029
+	public ElevatorMines elevatorMines;
+
+	// Token: 0x04003AB6 RID: 15030
+	public float insideDistance = 4.2f;
+
+	// Token: 0x04003AB7 RID: 15031
+	public float slowLeverSpeed = 0.5f;
+
+	// Token: 0x04003AB8 RID: 15032
+	public Transform insideTransform;
+
+	// Token: 0x04003AB9 RID: 15033
+	private float previousLeverSpeed = 1f;
+}

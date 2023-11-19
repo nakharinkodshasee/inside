@@ -1,0 +1,309 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000107 RID: 263
+public class AnimateMaterialInstance : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060007EE RID: 2030 RVA: 0x00055438 File Offset: 0x00053638
+	public bool PreAwake(int callcount)
+	{
+		if (callcount != 0)
+		{
+			if (callcount == 1)
+			{
+				this.mi = base.gameObject.GetComponent<MaterialInstance>();
+				if (this.animateFloat && this.mi != null)
+				{
+					this.miFP = this.mi.GetOrAddFloatProperty(this.shaderPropertyName);
+					this.miFloatBackup = this.mi.GetFloatValue(this.miFP);
+					this.miFloat = this.floatStartValue;
+					this.mi.SetFloatProperty(this.miFP, this.miFloat);
+				}
+				if (this.animateColor && this.mi != null)
+				{
+					this.miCP = this.mi.GetOrAddColorProperty(this.colorPropertyName);
+					this.miColorBackup = this.mi.GetColorValue(this.miCP);
+					this.miColor = this.colorGradient.Evaluate(0f);
+					this.mi.SetColorProperty(this.miCP, this.miColor);
+				}
+				if (this.debug)
+				{
+					if (this.animateFloat)
+					{
+						this.miFloat = this.mi.GetFloatValue(this.miFP);
+					}
+					if (this.animateColor)
+					{
+						this.miColor = this.mi.GetColorValue(this.miCP);
+					}
+				}
+			}
+			return true;
+		}
+		this.animate = SignalIn.Create("animate", base.gameObject, new Action(this.OnAnimate));
+		this.stop = SignalIn.Create("stop", base.gameObject, new Action(this.OnStop));
+		this.loadComplete = SignalIn.Create("loadComplete", base.gameObject, new Action(this.OnLoadComplete));
+		return false;
+	}
+
+	// Token: 0x060007EF RID: 2031 RVA: 0x0005560C File Offset: 0x0005380C
+	private void Start()
+	{
+		if (this.state != AnimateMaterialInstance.State.Complete && this.autoAnimate)
+		{
+			this.waitDelay = Random.Range(this.waitDelayMin, this.waitDelayMax);
+			this.SetDelayState();
+		}
+	}
+
+	// Token: 0x060007F0 RID: 2032 RVA: 0x00055650 File Offset: 0x00053850
+	private void AnimateState()
+	{
+		if (this.time < this.animateTime)
+		{
+			this.time += Time.deltaTime;
+			if (this.animateTime > 0f)
+			{
+				float num = this.time / this.animateTime;
+				this.miFloat = Mathf.Lerp(this.floatStartValue, this.floatEndValue, num);
+				this.miColor = this.colorGradient.Evaluate(num);
+			}
+			if (this.animateFloat && this.mi != null)
+			{
+				this.mi.SetFloatProperty(this.miFP, this.miFloat);
+			}
+			if (this.animateColor && this.mi != null)
+			{
+				this.mi.SetColorProperty(this.miCP, this.miColor);
+			}
+			if (this.debug)
+			{
+			}
+		}
+		else
+		{
+			if (this.animateFloat && this.mi != null)
+			{
+				this.mi.SetFloatProperty(this.miFP, this.floatEndValue);
+			}
+			if (this.animateColor && this.mi != null)
+			{
+				this.mi.SetColorProperty(this.miCP, this.colorGradient.Evaluate(1f));
+			}
+			if (this.loop)
+			{
+				this.waitDelay = Random.Range(this.waitDelayMin, this.waitDelayMax);
+				this.SetDelayState();
+			}
+			else
+			{
+				this.state = AnimateMaterialInstance.State.None;
+			}
+		}
+	}
+
+	// Token: 0x060007F1 RID: 2033 RVA: 0x000557E4 File Offset: 0x000539E4
+	private void SetAnimateState()
+	{
+		this.time = 0f;
+		this.animateTime = Random.Range(this.animateDurationMin, this.animateDurationMax);
+		this.state = AnimateMaterialInstance.State.Animate;
+	}
+
+	// Token: 0x060007F2 RID: 2034 RVA: 0x00055810 File Offset: 0x00053A10
+	private void SetDelayState()
+	{
+		if (!this.autoAnimate)
+		{
+			this.state = AnimateMaterialInstance.State.None;
+		}
+		else if (this.waitDelay <= 0f)
+		{
+			this.SetAnimateState();
+		}
+		else
+		{
+			this.waitTimer = this.waitDelay;
+			this.state = AnimateMaterialInstance.State.Delay;
+		}
+	}
+
+	// Token: 0x060007F3 RID: 2035 RVA: 0x00055864 File Offset: 0x00053A64
+	private void DelayState()
+	{
+		if (this.waitTimer > 0f)
+		{
+			this.waitTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.SetAnimateState();
+		}
+	}
+
+	// Token: 0x060007F4 RID: 2036 RVA: 0x00055894 File Offset: 0x00053A94
+	private void Update()
+	{
+		if (this.state == AnimateMaterialInstance.State.Animate)
+		{
+			this.AnimateState();
+		}
+		else if (this.state == AnimateMaterialInstance.State.Delay)
+		{
+			this.DelayState();
+		}
+	}
+
+	// Token: 0x060007F5 RID: 2037 RVA: 0x000558C0 File Offset: 0x00053AC0
+	public void OnStop()
+	{
+		if (this.revertValuesOnStop)
+		{
+			if (this.animateFloat && this.mi != null)
+			{
+				this.mi.SetFloatProperty(this.miFP, this.miFloatBackup);
+			}
+			if (this.animateColor && this.mi != null)
+			{
+				this.mi.SetColorProperty(this.miCP, this.miColorBackup);
+			}
+		}
+		this.state = AnimateMaterialInstance.State.None;
+	}
+
+	// Token: 0x060007F6 RID: 2038 RVA: 0x00055948 File Offset: 0x00053B48
+	public void OnAnimate()
+	{
+		if (this.state == AnimateMaterialInstance.State.Complete)
+		{
+			return;
+		}
+		this.waitDelay = Random.Range(this.waitDelayMin, this.waitDelayMax);
+		if (this.waitDelay <= 0f)
+		{
+			this.SetAnimateState();
+		}
+		else
+		{
+			this.waitTimer = this.waitDelay;
+			this.state = AnimateMaterialInstance.State.Delay;
+		}
+	}
+
+	// Token: 0x060007F7 RID: 2039 RVA: 0x000559A8 File Offset: 0x00053BA8
+	private void OnLoadComplete()
+	{
+		if (this.animateFloat && this.mi != null)
+		{
+			this.mi.SetFloatProperty(this.miFP, this.floatEndValue);
+		}
+		if (this.animateColor && this.mi != null)
+		{
+			this.mi.SetColorProperty(this.miCP, this.colorGradient.Evaluate(1f));
+		}
+		this.state = AnimateMaterialInstance.State.Complete;
+	}
+
+	// Token: 0x04000DAC RID: 3500
+	public float floatStartValue;
+
+	// Token: 0x04000DAD RID: 3501
+	public float floatEndValue = 1f;
+
+	// Token: 0x04000DAE RID: 3502
+	public Gradient colorGradient;
+
+	// Token: 0x04000DAF RID: 3503
+	public bool animateFloat = true;
+
+	// Token: 0x04000DB0 RID: 3504
+	public bool animateColor;
+
+	// Token: 0x04000DB1 RID: 3505
+	public float animateDurationMin = 1f;
+
+	// Token: 0x04000DB2 RID: 3506
+	public float animateDurationMax = 2f;
+
+	// Token: 0x04000DB3 RID: 3507
+	public float waitDelayMin = 1f;
+
+	// Token: 0x04000DB4 RID: 3508
+	public float waitDelayMax = 2f;
+
+	// Token: 0x04000DB5 RID: 3509
+	private float waitTimer;
+
+	// Token: 0x04000DB6 RID: 3510
+	private float waitDelay;
+
+	// Token: 0x04000DB7 RID: 3511
+	public bool autoAnimate;
+
+	// Token: 0x04000DB8 RID: 3512
+	public bool loop = true;
+
+	// Token: 0x04000DB9 RID: 3513
+	public bool revertValuesOnStop;
+
+	// Token: 0x04000DBA RID: 3514
+	private MaterialInstance mi;
+
+	// Token: 0x04000DBB RID: 3515
+	private MaterialInstance.FloatProperty miFP;
+
+	// Token: 0x04000DBC RID: 3516
+	private MaterialInstance.ColorProperty miCP;
+
+	// Token: 0x04000DBD RID: 3517
+	private float miFloat;
+
+	// Token: 0x04000DBE RID: 3518
+	private Color miColor;
+
+	// Token: 0x04000DBF RID: 3519
+	private float miFloatBackup;
+
+	// Token: 0x04000DC0 RID: 3520
+	private Color miColorBackup;
+
+	// Token: 0x04000DC1 RID: 3521
+	private float time;
+
+	// Token: 0x04000DC2 RID: 3522
+	private float animateTime = 1f;
+
+	// Token: 0x04000DC3 RID: 3523
+	public string shaderPropertyName = "_PDTime";
+
+	// Token: 0x04000DC4 RID: 3524
+	public string colorPropertyName = "_Color";
+
+	// Token: 0x04000DC5 RID: 3525
+	private AnimateMaterialInstance.State state;
+
+	// Token: 0x04000DC6 RID: 3526
+	public SignalIn animate;
+
+	// Token: 0x04000DC7 RID: 3527
+	public SignalIn stop;
+
+	// Token: 0x04000DC8 RID: 3528
+	public SignalIn loadComplete;
+
+	// Token: 0x04000DC9 RID: 3529
+	private bool debug;
+
+	// Token: 0x02000108 RID: 264
+	private enum State
+	{
+		// Token: 0x04000DCB RID: 3531
+		None,
+		// Token: 0x04000DCC RID: 3532
+		Animate,
+		// Token: 0x04000DCD RID: 3533
+		Delay,
+		// Token: 0x04000DCE RID: 3534
+		Complete
+	}
+}

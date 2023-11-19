@@ -1,0 +1,71 @@
+using System;
+using System.Collections.Generic;
+
+// Token: 0x02000033 RID: 51
+public class AnimcontrolTransitionGroup : AnimcontrolTransitionDefinition
+{
+	// Token: 0x06000183 RID: 387 RVA: 0x000158C4 File Offset: 0x00013AC4
+	public override bool UpdateCachedDefinition(AnimationBlendHelper blendHelper, AnimcontrolTransitionManager manager)
+	{
+		bool flag = true;
+		int i = 0;
+		int count = this.transitions.Count;
+		while (i < count)
+		{
+			AnimcontrolTransitionDefinition animcontrolTransitionDefinition = this.transitions[i];
+			flag = (animcontrolTransitionDefinition.UpdateCachedDefinition(blendHelper, manager) && flag);
+			i++;
+		}
+		return flag;
+	}
+
+	// Token: 0x06000184 RID: 388 RVA: 0x00015914 File Offset: 0x00013B14
+	public override AnimcontrolStateInfo.TransitionData TransitionMet(AnimationBlendHelper blendHelper, AnimcontrolTransitionManager manager)
+	{
+		int i = 0;
+		int count = this.transitions.Count;
+		while (i < count)
+		{
+			AnimcontrolTransitionDefinition animcontrolTransitionDefinition = this.transitions[i];
+			AnimcontrolStateInfo.TransitionData transitionData = animcontrolTransitionDefinition.TransitionMet(blendHelper, manager);
+			if (transitionData != null)
+			{
+				return transitionData;
+			}
+			i++;
+		}
+		return null;
+	}
+
+	// Token: 0x06000185 RID: 389 RVA: 0x00015960 File Offset: 0x00013B60
+	public override string GetTransitionString()
+	{
+		string text = string.Empty;
+		int i = 0;
+		int count = this.transitions.Count;
+		while (i < count)
+		{
+			AnimcontrolTransitionDefinition animcontrolTransitionDefinition = this.transitions[i];
+			string transitionString = animcontrolTransitionDefinition.GetTransitionString();
+			if (text.Length > 0)
+			{
+				text = text + ", " + transitionString;
+			}
+			else
+			{
+				text = transitionString;
+			}
+			i++;
+		}
+		base.name = "G: " + text;
+		return text;
+	}
+
+	// Token: 0x06000186 RID: 390 RVA: 0x000159DC File Offset: 0x00013BDC
+	private void Start()
+	{
+	}
+
+	// Token: 0x04000248 RID: 584
+	private List<AnimcontrolTransitionDefinition> transitions = new List<AnimcontrolTransitionDefinition>();
+}

@@ -1,0 +1,221 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004F6 RID: 1270
+public class AlbinoFloating : MonoBehaviour
+{
+	// Token: 0x0600214A RID: 8522 RVA: 0x001169CC File Offset: 0x00114BCC
+	public void Start()
+	{
+		this.dropPosY = this.dropPos.transform.position.y;
+		if (this.wire)
+		{
+			this.animWire = this.wire.GetComponent<Animation>();
+			if (this.animWire)
+			{
+				this.animWireFallState = this.animWire[this.animWireFall.name];
+			}
+		}
+		if (this.state != AlbinoFloating.State.LoadFallen)
+		{
+			this.ToggleVisibility(true);
+			this.SetFloatingState();
+		}
+	}
+
+	// Token: 0x0600214B RID: 8523 RVA: 0x00116A60 File Offset: 0x00114C60
+	public void SetFloatingState()
+	{
+		this.state = AlbinoFloating.State.Floating;
+	}
+
+	// Token: 0x0600214C RID: 8524 RVA: 0x00116A6C File Offset: 0x00114C6C
+	public void FloatingState()
+	{
+	}
+
+	// Token: 0x0600214D RID: 8525 RVA: 0x00116A70 File Offset: 0x00114C70
+	public void SetPrepareFallState()
+	{
+		this.fallTimer = 1f + Random.Range(1f, 2f);
+		this.state = AlbinoFloating.State.PrepareFall;
+	}
+
+	// Token: 0x0600214E RID: 8526 RVA: 0x00116AA0 File Offset: 0x00114CA0
+	private void PrepareFallState()
+	{
+		if (this.fallTimer > 0f)
+		{
+			this.fallTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.SetFallingState();
+		}
+	}
+
+	// Token: 0x0600214F RID: 8527 RVA: 0x00116AD0 File Offset: 0x00114CD0
+	public void SetFallingState()
+	{
+		this.spawner.OnSpawnAndOrFollow();
+		if (this.dropFx)
+		{
+			this.dropFx.Play();
+		}
+		if (this.floatingAlbinoTemp)
+		{
+			this.floatingAlbinoTemp.SetActive(false);
+		}
+		this.followTimer = 4f;
+		if (this.animWireFallState)
+		{
+			this.animWire.Play(this.animWireFallState.name);
+		}
+		if (this.animMaterial)
+		{
+			this.animMaterial.OnAnimate();
+		}
+		this.state = AlbinoFloating.State.Falling;
+	}
+
+	// Token: 0x06002150 RID: 8528 RVA: 0x00116B74 File Offset: 0x00114D74
+	private void FallingState()
+	{
+		if (this.wireStatic && !this.wireStatic.activeSelf && (!this.animWireFallState || this.animWireFallState.normalizedTime >= 1f))
+		{
+			this.ToggleVisibility(false);
+		}
+		if (this.followTimer > 0f)
+		{
+			this.followTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.SetFollowState();
+		}
+	}
+
+	// Token: 0x06002151 RID: 8529 RVA: 0x00116BFC File Offset: 0x00114DFC
+	private void SetFollowState()
+	{
+		this.state = AlbinoFloating.State.None;
+	}
+
+	// Token: 0x06002152 RID: 8530 RVA: 0x00116C08 File Offset: 0x00114E08
+	public void Update()
+	{
+		switch (this.state)
+		{
+		case AlbinoFloating.State.Floating:
+			this.FloatingState();
+			break;
+		case AlbinoFloating.State.PrepareFall:
+			this.PrepareFallState();
+			break;
+		case AlbinoFloating.State.Falling:
+			this.FallingState();
+			break;
+		}
+	}
+
+	// Token: 0x06002153 RID: 8531 RVA: 0x00116C58 File Offset: 0x00114E58
+	public void FallCheck(float waterHeight)
+	{
+		if (this.state != AlbinoFloating.State.Floating)
+		{
+			return;
+		}
+		if (waterHeight > this.dropPosY)
+		{
+			this.SetPrepareFallState();
+		}
+	}
+
+	// Token: 0x06002154 RID: 8532 RVA: 0x00116C7C File Offset: 0x00114E7C
+	public void LoadFallen()
+	{
+		this.ToggleVisibility(false);
+		if (this.floatingAlbinoTemp)
+		{
+			this.floatingAlbinoTemp.SetActive(false);
+		}
+		if (this.animMaterial)
+		{
+			this.animMaterial.OnAnimate();
+		}
+		this.state = AlbinoFloating.State.LoadFallen;
+	}
+
+	// Token: 0x06002155 RID: 8533 RVA: 0x00116CD0 File Offset: 0x00114ED0
+	private void ToggleVisibility(bool floating)
+	{
+		if (this.wire)
+		{
+			this.wire.SetActive(floating);
+		}
+		if (this.wireStatic)
+		{
+			this.wireStatic.SetActive(!floating);
+		}
+	}
+
+	// Token: 0x04003DAF RID: 15791
+	public AlbinoSpawner spawner;
+
+	// Token: 0x04003DB0 RID: 15792
+	public GameObject floatingAlbinoTemp;
+
+	// Token: 0x04003DB1 RID: 15793
+	public Transform dropPos;
+
+	// Token: 0x04003DB2 RID: 15794
+	public GameObject wireStatic;
+
+	// Token: 0x04003DB3 RID: 15795
+	public GameObject wire;
+
+	// Token: 0x04003DB4 RID: 15796
+	public ParticleSystem dropFx;
+
+	// Token: 0x04003DB5 RID: 15797
+	public AnimationClip animWireFall;
+
+	// Token: 0x04003DB6 RID: 15798
+	public AnimateMaterialInstance animMaterial;
+
+	// Token: 0x04003DB7 RID: 15799
+	private Animation animWire;
+
+	// Token: 0x04003DB8 RID: 15800
+	private AnimationState animWireFallState;
+
+	// Token: 0x04003DB9 RID: 15801
+	private bool fallen;
+
+	// Token: 0x04003DBA RID: 15802
+	private float dropPosY;
+
+	// Token: 0x04003DBB RID: 15803
+	private float fallTimer;
+
+	// Token: 0x04003DBC RID: 15804
+	private float followTimer;
+
+	// Token: 0x04003DBD RID: 15805
+	private AlbinoFloating.State state;
+
+	// Token: 0x020004F7 RID: 1271
+	private enum State
+	{
+		// Token: 0x04003DBF RID: 15807
+		None,
+		// Token: 0x04003DC0 RID: 15808
+		Floating,
+		// Token: 0x04003DC1 RID: 15809
+		PrepareFall,
+		// Token: 0x04003DC2 RID: 15810
+		Falling,
+		// Token: 0x04003DC3 RID: 15811
+		LoadFallen
+	}
+}

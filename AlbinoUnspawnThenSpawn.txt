@@ -1,0 +1,50 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000021 RID: 33
+public class AlbinoUnspawnThenSpawn : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600013E RID: 318 RVA: 0x00013698 File Offset: 0x00011898
+	public bool PreAwake(int callcount)
+	{
+		this.unspawnSpawn = SignalIn.Create("unspawnSpawn", base.gameObject, new Action(this.DoSpawn));
+		return true;
+	}
+
+	// Token: 0x0600013F RID: 319 RVA: 0x000136C0 File Offset: 0x000118C0
+	private void DoSpawn()
+	{
+		if (!this.hasBeenSet)
+		{
+			foreach (AlbinoSpawner albinoSpawner in this.albinoSpawners)
+			{
+				albinoSpawner.OnUnspawn();
+				if (this.doFollowWhenSpawned)
+				{
+					albinoSpawner.OnSpawnAndOrFollow();
+				}
+				else
+				{
+					albinoSpawner.OnSpawnAlbino();
+				}
+			}
+		}
+		this.hasBeenSet = true;
+	}
+
+	// Token: 0x040001BC RID: 444
+	public List<AlbinoSpawner> albinoSpawners;
+
+	// Token: 0x040001BD RID: 445
+	public bool doFollowWhenSpawned;
+
+	// Token: 0x040001BE RID: 446
+	private SignalIn unspawnSpawn;
+
+	// Token: 0x040001BF RID: 447
+	private bool setCompleted;
+
+	// Token: 0x040001C0 RID: 448
+	private bool hasBeenSet;
+}

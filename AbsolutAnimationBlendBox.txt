@@ -1,0 +1,233 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000104 RID: 260
+public class AbsolutAnimationBlendBox : MonoBehaviour
+{
+	// Token: 0x060007DB RID: 2011 RVA: 0x00054C24 File Offset: 0x00052E24
+	private void Start()
+	{
+		this.animClimb = this.animBlendNode.GetComponent<AnimClipNode>();
+		this.SetIdleState();
+	}
+
+	// Token: 0x060007DC RID: 2012 RVA: 0x00054C40 File Offset: 0x00052E40
+	private void SetIdleState()
+	{
+		this.state = AbsolutAnimationBlendBox.State.Idle;
+	}
+
+	// Token: 0x060007DD RID: 2013 RVA: 0x00054C4C File Offset: 0x00052E4C
+	private void IdleState()
+	{
+		if (this.releaseTimer > 0f)
+		{
+			this.releaseTimer -= Time.deltaTime;
+			return;
+		}
+		if (this.boyInside && this.inTrigger)
+		{
+			float x = this.boyInside.input.stick.x;
+			if (this.facingRequired == 0f || (this.facingRequired == this.boyInside.facing && Mathf.Abs(x) > this.minInputX && Mathf.Sign(x) == this.facingRequired))
+			{
+				this.SetClimbState();
+			}
+		}
+	}
+
+	// Token: 0x060007DE RID: 2014 RVA: 0x00054D00 File Offset: 0x00052F00
+	private void SetClimbState()
+	{
+		this.currentBlend = 0f;
+		this.grabStunTimer = this.grabStunDelay;
+		BoyUtils.StartCustomAnim(this.boyInside, this.animClimb, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.animClimb.frame = Mathf.Lerp(0f, this.animClimb.numFrames, this.currentBlend);
+		this.state = AbsolutAnimationBlendBox.State.Climb;
+	}
+
+	// Token: 0x060007DF RID: 2015 RVA: 0x00054D6C File Offset: 0x00052F6C
+	private void ClimbState()
+	{
+		VisualBoyCustomAnim visualBoyCustomAnim = this.boyInside.visualBoy.state as VisualBoyCustomAnim;
+		if (visualBoyCustomAnim == null || visualBoyCustomAnim.anim != this.animClimb)
+		{
+			this.Release(false, 0.2f);
+			return;
+		}
+		float num = this.boyInside.input.stick.x * this.boyInside.facing;
+		float num2 = (num + 1f) * 0.5f;
+		bool flag = Mathf.Abs(num) > this.minInputX;
+		if (!flag)
+		{
+			num2 = this.NearestRestPos();
+		}
+		else if (num2 > 0.5f)
+		{
+			num2 = 1f;
+		}
+		else
+		{
+			num2 = 0f;
+		}
+		float num3 = num2 - this.currentBlend;
+		float num4 = 1f / this.blendTime;
+		num4 = num4 * 0.5f + num4 * Mathf.Lerp(0f, 1f, Mathf.Abs(num)) * 0.5f;
+		float num5 = num4 * Time.deltaTime * Mathf.Sign(num3);
+		this.blendDir = Mathf.Sign(num3);
+		if (num5 > Mathf.Abs(num3))
+		{
+			num5 = Mathf.Abs(num3);
+		}
+		this.currentBlend += num5;
+		this.animClimb.frame = Mathf.Lerp(0f, this.animClimb.numFrames, this.currentBlend);
+		if (this.grabStunTimer > 0f)
+		{
+			this.grabStunTimer -= Time.deltaTime;
+		}
+		if (this.currentBlend >= 0.99f)
+		{
+			this.Release(true, 0.2f);
+		}
+		else if (this.useEarlyUnstun && this.currentBlend >= 0.45f && ScriptGlobals.boy.input.stick.x > 0.5f)
+		{
+			this.Release(true, 0.2f);
+		}
+		else if (this.grabStunTimer <= 0f && Mathf.Abs(num3) < 0.01f && num2 < 0.5f && (!flag || Mathf.Sign(this.boyInside.input.stick.x) != this.facingRequired))
+		{
+			this.Release(true, 0.3f);
+		}
+	}
+
+	// Token: 0x060007E0 RID: 2016 RVA: 0x00054FD4 File Offset: 0x000531D4
+	private void FixedUpdate()
+	{
+		if (this.state == AbsolutAnimationBlendBox.State.Climb)
+		{
+			this.ClimbState();
+		}
+		else if (this.state == AbsolutAnimationBlendBox.State.Idle)
+		{
+			this.IdleState();
+		}
+	}
+
+	// Token: 0x060007E1 RID: 2017 RVA: 0x00055000 File Offset: 0x00053200
+	private void Release(bool clear = true, float blendSpeed = 0.2f)
+	{
+		if (clear)
+		{
+			BoyUtils.ClearState(this.boyInside, blendSpeed);
+			this.animClimb.frame = Mathf.Lerp(0f, this.animClimb.numFrames, this.currentBlend);
+		}
+		this.releaseTimer = this.releaseDelay;
+		this.SetIdleState();
+	}
+
+	// Token: 0x060007E2 RID: 2018 RVA: 0x00055058 File Offset: 0x00053258
+	private float NearestRestPos()
+	{
+		float result = float.NaN;
+		float num = float.MaxValue;
+		foreach (float num2 in this.restPositions)
+		{
+			float num3 = num2;
+			float num4 = Mathf.Min(this.animClimb.numFrames, num3) / this.animClimb.numFrames;
+			float num5 = Mathf.Abs(num4 - this.currentBlend);
+			if (num4 > this.currentBlend && this.blendDir > 0f)
+			{
+				num5 *= 0.25f;
+			}
+			else if (num4 < this.currentBlend && this.blendDir < 0f)
+			{
+				num5 *= 0.25f;
+			}
+			if (num5 < num)
+			{
+				result = num4;
+				num = num5;
+			}
+		}
+		return result;
+	}
+
+	// Token: 0x060007E3 RID: 2019 RVA: 0x00055158 File Offset: 0x00053358
+	private void OnTriggerEnter(Collider coll)
+	{
+		BoyProbe component = coll.GetComponent<BoyProbe>();
+		if (component)
+		{
+			this.inTrigger = true;
+			this.boyInside = component.boy;
+		}
+	}
+
+	// Token: 0x060007E4 RID: 2020 RVA: 0x0005518C File Offset: 0x0005338C
+	private void OnTriggerExit(Collider coll)
+	{
+		BoyProbe component = coll.GetComponent<BoyProbe>();
+		if (component)
+		{
+			this.inTrigger = false;
+		}
+	}
+
+	// Token: 0x04000D8F RID: 3471
+	public float facingRequired;
+
+	// Token: 0x04000D90 RID: 3472
+	public GameObject animBlendNode;
+
+	// Token: 0x04000D91 RID: 3473
+	public float blendTime = 2f;
+
+	// Token: 0x04000D92 RID: 3474
+	public List<float> restPositions;
+
+	// Token: 0x04000D93 RID: 3475
+	public bool useEarlyUnstun;
+
+	// Token: 0x04000D94 RID: 3476
+	private AbsolutAnimationBlendBox.State state;
+
+	// Token: 0x04000D95 RID: 3477
+	private float currentBlend;
+
+	// Token: 0x04000D96 RID: 3478
+	private float blendDir;
+
+	// Token: 0x04000D97 RID: 3479
+	private float minInputX = 0.3f;
+
+	// Token: 0x04000D98 RID: 3480
+	private float releaseTimer;
+
+	// Token: 0x04000D99 RID: 3481
+	private float releaseDelay = 0.2f;
+
+	// Token: 0x04000D9A RID: 3482
+	private float grabStunTimer;
+
+	// Token: 0x04000D9B RID: 3483
+	private float grabStunDelay = 0.1f;
+
+	// Token: 0x04000D9C RID: 3484
+	private AnimClipNode animClimb;
+
+	// Token: 0x04000D9D RID: 3485
+	private Boy boyInside;
+
+	// Token: 0x04000D9E RID: 3486
+	private bool inTrigger;
+
+	// Token: 0x02000105 RID: 261
+	private enum State
+	{
+		// Token: 0x04000DA0 RID: 3488
+		None,
+		// Token: 0x04000DA1 RID: 3489
+		Idle,
+		// Token: 0x04000DA2 RID: 3490
+		Climb
+	}
+}

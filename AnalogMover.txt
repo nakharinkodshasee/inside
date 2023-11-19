@@ -1,0 +1,53 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001CC RID: 460
+public class AnalogMover : MonoBehaviour
+{
+	// Token: 0x06000DA1 RID: 3489 RVA: 0x000829C0 File Offset: 0x00080BC0
+	public bool IsAtTarget()
+	{
+		return this.atTarget;
+	}
+
+	// Token: 0x06000DA2 RID: 3490 RVA: 0x000829C8 File Offset: 0x00080BC8
+	private void FixedUpdate()
+	{
+		Vector3 position = this.mover.position;
+		float targetBlend = this.lever.GetTargetBlend();
+		float num = (position.y - this.downPos.position.y) / 0.7f;
+		num = 1f - Mathf.Clamp(num, 0f, 1f);
+		if (Mathf.Abs(targetBlend) < 0.1f)
+		{
+			return;
+		}
+		float num2 = ((targetBlend <= 0f) ? this.downPos.position : this.upPos.position).y - position.y;
+		if (Mathf.Abs(num2) < 0.05f)
+		{
+			this.atTarget = true;
+			return;
+		}
+		this.atTarget = false;
+		float num3 = Mathf.Abs(targetBlend) * this.maxSpeed;
+		position.y += Mathf.Sign(num2) * num3 * Time.deltaTime;
+		this.mover.MovePosition(position);
+	}
+
+	// Token: 0x04001833 RID: 6195
+	public Rigidbody mover;
+
+	// Token: 0x04001834 RID: 6196
+	public LeverAnalog lever;
+
+	// Token: 0x04001835 RID: 6197
+	public Transform upPos;
+
+	// Token: 0x04001836 RID: 6198
+	public Transform downPos;
+
+	// Token: 0x04001837 RID: 6199
+	public float maxSpeed = 2f;
+
+	// Token: 0x04001838 RID: 6200
+	private bool atTarget;
+}

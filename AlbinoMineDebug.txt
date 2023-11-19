@@ -1,0 +1,12 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020002C2 RID: 706
+public class AlbinoMineDebug : MonoBehaviour
+{
+	// Token: 0x040025B8 RID: 9656
+	private AlbinoGroupManager manager;
+
+	// Token: 0x040025B9 RID: 9657
+	private bool GotAlb;
+}

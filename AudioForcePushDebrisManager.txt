@@ -1,0 +1,64 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020004BC RID: 1212
+public class AudioForcePushDebrisManager : MonoBehaviour
+{
+	// Token: 0x06001FBF RID: 8127 RVA: 0x0010E378 File Offset: 0x0010C578
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x06001FC0 RID: 8128 RVA: 0x0010E388 File Offset: 0x0010C588
+	private float GetHighestAcceptedDist()
+	{
+		this.listToSort.Clear();
+		int i = 0;
+		int count = this.audioDebris.Count;
+		while (i < count)
+		{
+			AudioForcePushDebris audioForcePushDebris = this.audioDebris[i];
+			float magnitude = (audioForcePushDebris.transform.position - this.boy.pos3).magnitude;
+			this.listToSort.Add(magnitude);
+			i++;
+		}
+		this.listToSort.Sort();
+		return this.listToSort[this.activeEmitters - 1];
+	}
+
+	// Token: 0x06001FC1 RID: 8129 RVA: 0x0010E41C File Offset: 0x0010C61C
+	private void Update()
+	{
+		float highestAcceptedDist = this.GetHighestAcceptedDist();
+		int i = 0;
+		int count = this.audioDebris.Count;
+		while (i < count)
+		{
+			AudioForcePushDebris audioForcePushDebris = this.audioDebris[i];
+			float magnitude = (audioForcePushDebris.transform.position - this.boy.pos3).magnitude;
+			if (magnitude <= highestAcceptedDist)
+			{
+				audioForcePushDebris.MakeActive();
+			}
+			else
+			{
+				audioForcePushDebris.MakeInactive();
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x04003AC8 RID: 15048
+	public List<AudioForcePushDebris> audioDebris;
+
+	// Token: 0x04003AC9 RID: 15049
+	private List<float> listToSort = new List<float>();
+
+	// Token: 0x04003ACA RID: 15050
+	private int activeEmitters = 5;
+
+	// Token: 0x04003ACB RID: 15051
+	private Boy boy;
+}

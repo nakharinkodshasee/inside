@@ -1,0 +1,380 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004B5 RID: 1205
+public class AlbinoRagdoll : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001F91 RID: 8081 RVA: 0x0010D404 File Offset: 0x0010B604
+	public bool PreAwake(int callcount)
+	{
+		this.dropBody = SignalIn.Create("dropBody", base.gameObject, new Action(this.OnDropBody));
+		return true;
+	}
+
+	// Token: 0x06001F92 RID: 8082 RVA: 0x0010D42C File Offset: 0x0010B62C
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy;
+		this.boyHandBone = this.boy.visualBoy.actor.bones[this.boy.visualBoy.actor.GetBone("LeftWrist")].transform.GetChild(0);
+		this.grabHelperJoint = this.grabHelper.GetComponent<HingeJoint>();
+		this.limitInput = base.GetComponent<BoySetInput>();
+		this.originalInertiaList = new Vector3[this.ragdoll.Length];
+		int i = 0;
+		int num = this.ragdoll.Length;
+		while (i < num)
+		{
+			Rigidbody rigidbody = this.ragdoll[i];
+			this.originalInertiaList[i] = rigidbody.inertiaTensor;
+			i++;
+		}
+		this.grabTimer = this.grabDelay;
+		this.SetIdleState();
+	}
+
+	// Token: 0x06001F93 RID: 8083 RVA: 0x0010D50C File Offset: 0x0010B70C
+	private void SetIdleState()
+	{
+		this.state = AlbinoRagdoll.State.Idle;
+	}
+
+	// Token: 0x06001F94 RID: 8084 RVA: 0x0010D518 File Offset: 0x0010B718
+	private void IdleState()
+	{
+		if (this.grabTimer < this.grabDelay)
+		{
+			this.grabTimer += Time.deltaTime;
+		}
+		if (Device.GrabCheck(this.boy, true))
+		{
+			float num = float.MaxValue;
+			Rigidbody rigidbody = null;
+			int i = 0;
+			int num2 = this.grabParts.Length;
+			while (i < num2)
+			{
+				Rigidbody rigidbody2 = this.grabParts[i];
+				float num3 = Vector3.Distance(rigidbody2.position, this.boyHandBone.position);
+				if (num3 < num)
+				{
+					num = num3;
+					rigidbody = rigidbody2;
+				}
+				i++;
+			}
+			if (rigidbody != null && num < this.grabDist)
+			{
+				this.SetGrabState(rigidbody);
+			}
+		}
+	}
+
+	// Token: 0x06001F95 RID: 8085 RVA: 0x0010D5CC File Offset: 0x0010B7CC
+	private void SetGrabState(Rigidbody bodyPart)
+	{
+		this.currentBodyPart = bodyPart;
+		Vector3 position = this.animHolder.position;
+		Ray ray;
+		ray..ctor(this.currentBodyPart.position + Vector3.up, Vector3.down);
+		float y = position.y;
+		Vector3 up = this.animHolder.transform.up;
+		float num = 100f;
+		int i = 0;
+		int num2 = this.groundColliders.Length;
+		while (i < num2)
+		{
+			Collider collider = this.groundColliders[i];
+			RaycastHit raycastHit;
+			if (collider.Raycast(ray, ref raycastHit, 5f) && raycastHit.distance < num)
+			{
+				num = raycastHit.distance;
+				position.y = raycastHit.point.y;
+				up = raycastHit.normal;
+			}
+			i++;
+		}
+		position.x = this.currentBodyPart.position.x;
+		position.z = 0f;
+		this.animHolder.position = position;
+		this.animHolder.transform.up = up;
+		bool flag = this.boy.pos.x - 0.17f * this.boy.facing > this.currentBodyPart.position.x;
+		this.animHolder.rotation *= Quaternion.Euler(0f, (float)((!flag) ? 90 : -90), 0f);
+		this.animGrab.mirror = flag;
+		BoyUtils.StartCustomAnim(this.boy, this.animGrab, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		ThemeUtils.SetBoyTheme(ScriptGlobals.boy.visualBoy, "DragRagdollR", VisualBoy.ThemePriority.High);
+		this.blendStartPos = this.currentBodyPart.position;
+		this.grabHelper.transform.position = this.currentBodyPart.position;
+		this.grabHelper.transform.forward = -this.currentBodyPart.transform.up;
+		this.grabHelperJoint.connectedBody = this.currentBodyPart;
+		this.blendTimer = 0f;
+		this.state = AlbinoRagdoll.State.Grab;
+	}
+
+	// Token: 0x06001F96 RID: 8086 RVA: 0x0010D810 File Offset: 0x0010BA10
+	private void GrabState()
+	{
+		this.CheckLimits();
+		if (this.grabTimer > 0f)
+		{
+			this.grabTimer -= Time.deltaTime;
+			return;
+		}
+		this.blendTimer += Time.deltaTime;
+		float num = this.blendTimer / this.blendDuration;
+		num = Mathf.Clamp01(num);
+		Vector3 vector = Vector3.MoveTowards(this.blendStartPos, this.boyHandBone.position, num);
+		this.grabHelper.MovePosition(vector);
+		if (num >= 1f)
+		{
+			this.SetFollowState();
+		}
+		else if (!this.boy.input.rawAction)
+		{
+			this.Release();
+		}
+	}
+
+	// Token: 0x06001F97 RID: 8087 RVA: 0x0010D8C4 File Offset: 0x0010BAC4
+	private void SetFollowState()
+	{
+		this.state = AlbinoRagdoll.State.Follow;
+	}
+
+	// Token: 0x06001F98 RID: 8088 RVA: 0x0010D8D0 File Offset: 0x0010BAD0
+	private void FollowState()
+	{
+		this.CheckLimits();
+		this.grabHelper.MovePosition(this.boyHandBone.position);
+		Vector3 vector = this.chestRigidbody.position - this.grabHelper.position;
+		this.grabHelper.MoveRotation(Quaternion.LookRotation(vector, Vector3.up));
+		if (!this.boy.input.rawAction)
+		{
+			this.Release();
+		}
+	}
+
+	// Token: 0x06001F99 RID: 8089 RVA: 0x0010D948 File Offset: 0x0010BB48
+	private void SetFallState()
+	{
+		this.state = AlbinoRagdoll.State.Fall;
+	}
+
+	// Token: 0x06001F9A RID: 8090 RVA: 0x0010D954 File Offset: 0x0010BB54
+	private void FallState()
+	{
+	}
+
+	// Token: 0x06001F9B RID: 8091 RVA: 0x0010D958 File Offset: 0x0010BB58
+	private void FixedUpdate()
+	{
+		if (this.state != AlbinoRagdoll.State.None)
+		{
+			switch (this.state)
+			{
+			case AlbinoRagdoll.State.Idle:
+				this.IdleState();
+				break;
+			case AlbinoRagdoll.State.Grab:
+				this.GrabState();
+				break;
+			case AlbinoRagdoll.State.Follow:
+				this.FollowState();
+				break;
+			case AlbinoRagdoll.State.Fall:
+				this.FallState();
+				break;
+			}
+			int i = 0;
+			int num = this.ragdoll.Length;
+			while (i < num)
+			{
+				Rigidbody rigidbody = this.ragdoll[i];
+				rigidbody.inertiaTensor = this.originalInertiaList[i] * this.inertiaFactor;
+				i++;
+			}
+			if (this.currentBodyPart && this.state != AlbinoRagdoll.State.Fall)
+			{
+				Vector3 position = this.currentBodyPart.position;
+				if (Mathf.Abs(position.z) > this.handLockDepth)
+				{
+					this.currentBodyPart.AddForce(Vector3.forward * -Mathf.Sign(position.z) * this.handLockForce);
+				}
+			}
+		}
+	}
+
+	// Token: 0x06001F9C RID: 8092 RVA: 0x0010DA74 File Offset: 0x0010BC74
+	private void Release()
+	{
+		if (this.limitInput)
+		{
+			this.limitInput.deactivateScript();
+		}
+		if (!this.boy.isDead)
+		{
+			BoyUtils.ClearState(this.boy, -1f);
+		}
+		this.grabHelperJoint.connectedBody = null;
+		ThemeUtils.SetBoyTheme(ScriptGlobals.boy.visualBoy, string.Empty, VisualBoy.ThemePriority.High);
+		this.SetIdleState();
+	}
+
+	// Token: 0x06001F9D RID: 8093 RVA: 0x0010DAE4 File Offset: 0x0010BCE4
+	private void CheckLimits()
+	{
+		if (!this.limitInput || !this.currentBodyPart)
+		{
+			return;
+		}
+		float x = this.currentBodyPart.position.x;
+		if (this.rightLimit && x > this.rightLimit.position.x)
+		{
+			this.limitInput.activateScript();
+			this.limitInput.posCapX = 0f;
+			this.limitInput.negCapX = -1f;
+		}
+		else if (this.leftLimit && x < this.leftLimit.position.x)
+		{
+			this.limitInput.activateScript();
+			this.limitInput.posCapX = 1f;
+			this.limitInput.negCapX = 0f;
+		}
+		else
+		{
+			this.limitInput.deactivateScript();
+		}
+	}
+
+	// Token: 0x06001F9E RID: 8094 RVA: 0x0010DBE4 File Offset: 0x0010BDE4
+	private void OnDropBody()
+	{
+		if (this.state == AlbinoRagdoll.State.Grab || this.state == AlbinoRagdoll.State.Follow)
+		{
+			if (!this.boy.isDead)
+			{
+				BoyUtils.ClearState(this.boy, -1f);
+			}
+			this.grabHelperJoint.connectedBody = null;
+			ThemeUtils.SetBoyTheme(ScriptGlobals.boy.visualBoy, string.Empty, VisualBoy.ThemePriority.High);
+			BoyUtils.StartCustomAnim(this.boy, this.animStumble, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		this.SetFallState();
+	}
+
+	// Token: 0x06001F9F RID: 8095 RVA: 0x0010DC6C File Offset: 0x0010BE6C
+	private void OnDrawGizmos()
+	{
+		if (EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			Gizmos.color = Color.green.Alpha(0.2f);
+			int i = 0;
+			int num = this.grabParts.Length;
+			while (i < num)
+			{
+				Gizmos.DrawSphere(this.grabParts[i].position, this.grabDist);
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x04003A7C RID: 14972
+	public Rigidbody[] grabParts;
+
+	// Token: 0x04003A7D RID: 14973
+	public Rigidbody[] ragdoll;
+
+	// Token: 0x04003A7E RID: 14974
+	public Rigidbody[] feet;
+
+	// Token: 0x04003A7F RID: 14975
+	public Rigidbody grabHelper;
+
+	// Token: 0x04003A80 RID: 14976
+	public Collider[] groundColliders;
+
+	// Token: 0x04003A81 RID: 14977
+	public float grabDelay = 0.3f;
+
+	// Token: 0x04003A82 RID: 14978
+	public float grabDist = 1f;
+
+	// Token: 0x04003A83 RID: 14979
+	public float blendDuration = 1f;
+
+	// Token: 0x04003A84 RID: 14980
+	public float handLockDepth = 0.3f;
+
+	// Token: 0x04003A85 RID: 14981
+	public float handLockForce = 10f;
+
+	// Token: 0x04003A86 RID: 14982
+	public float inertiaFactor;
+
+	// Token: 0x04003A87 RID: 14983
+	public Rigidbody chestRigidbody;
+
+	// Token: 0x04003A88 RID: 14984
+	public Transform animHolder;
+
+	// Token: 0x04003A89 RID: 14985
+	public AnimClipNode animGrab;
+
+	// Token: 0x04003A8A RID: 14986
+	public AnimClipNode animStumble;
+
+	// Token: 0x04003A8B RID: 14987
+	public Transform rightLimit;
+
+	// Token: 0x04003A8C RID: 14988
+	public Transform leftLimit;
+
+	// Token: 0x04003A8D RID: 14989
+	public bool debug;
+
+	// Token: 0x04003A8E RID: 14990
+	private SignalIn dropBody;
+
+	// Token: 0x04003A8F RID: 14991
+	private AlbinoRagdoll.State state;
+
+	// Token: 0x04003A90 RID: 14992
+	private Transform boyHandBone;
+
+	// Token: 0x04003A91 RID: 14993
+	private Boy boy;
+
+	// Token: 0x04003A92 RID: 14994
+	private Rigidbody currentBodyPart;
+
+	// Token: 0x04003A93 RID: 14995
+	private Vector3[] originalInertiaList;
+
+	// Token: 0x04003A94 RID: 14996
+	private Vector3 blendStartPos;
+
+	// Token: 0x04003A95 RID: 14997
+	private float blendTimer;
+
+	// Token: 0x04003A96 RID: 14998
+	private float grabTimer;
+
+	// Token: 0x04003A97 RID: 14999
+	private HingeJoint grabHelperJoint;
+
+	// Token: 0x04003A98 RID: 15000
+	private BoySetInput limitInput;
+
+	// Token: 0x020004B6 RID: 1206
+	private enum State
+	{
+		// Token: 0x04003A9A RID: 15002
+		None,
+		// Token: 0x04003A9B RID: 15003
+		Idle,
+		// Token: 0x04003A9C RID: 15004
+		Grab,
+		// Token: 0x04003A9D RID: 15005
+		Follow,
+		// Token: 0x04003A9E RID: 15006
+		Fall
+	}
+}

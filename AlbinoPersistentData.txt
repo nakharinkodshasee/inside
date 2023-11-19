@@ -1,0 +1,149 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Xml.Linq;
+using UnityEngine;
+
+// Token: 0x02000098 RID: 152
+public class AlbinoPersistentData : IPersistentData
+{
+	// Token: 0x060004FF RID: 1279 RVA: 0x000369D8 File Offset: 0x00034BD8
+	public void Unserialize(BinaryReader reader)
+	{
+		this.albinoDataList.Clear();
+		int num = reader.ReadInt32();
+		for (int i = 0; i < num; i++)
+		{
+			AlbinoPersistentData.SpawnState state = (AlbinoPersistentData.SpawnState)reader.ReadInt32();
+			float x = reader.ReadSingle();
+			float y = reader.ReadSingle();
+			float z = reader.ReadSingle();
+			this.albinoDataList.Add(new AlbinoPersistentData.AlbinoState(state, x, y, z));
+		}
+	}
+
+	// Token: 0x06000500 RID: 1280 RVA: 0x00036A40 File Offset: 0x00034C40
+	public void Serialize(BinaryWriter writer)
+	{
+		int count = this.albinoDataList.Count;
+		writer.Write(count);
+		for (int i = 0; i < count; i++)
+		{
+			AlbinoPersistentData.AlbinoState albinoState = this.albinoDataList[i];
+			writer.Write((int)albinoState.state);
+			writer.Write(albinoState.position.x);
+			writer.Write(albinoState.position.y);
+			writer.Write(albinoState.position.z);
+		}
+	}
+
+	// Token: 0x06000501 RID: 1281 RVA: 0x00036AC0 File Offset: 0x00034CC0
+	public void Serialize(XElement element)
+	{
+		for (int i = 0; i < this.albinoDataList.Count; i++)
+		{
+			AlbinoPersistentData.AlbinoState albinoState = this.albinoDataList[i];
+			element.Add(new XElement(string.Format("Albino{0}", i))
+			{
+				Value = AlbinoPersistentData.AlbinoStateToString(this.albinoDataList[i])
+			});
+		}
+	}
+
+	// Token: 0x06000502 RID: 1282 RVA: 0x00036B30 File Offset: 0x00034D30
+	public void Unserialize(XElement element)
+	{
+		this.albinoDataList.Clear();
+		foreach (XElement xelement in element.Elements())
+		{
+			this.albinoDataList.Add(AlbinoPersistentData.ParseAlbinoState(xelement.Value));
+		}
+	}
+
+	// Token: 0x06000503 RID: 1283 RVA: 0x00036BB0 File Offset: 0x00034DB0
+	public int GetHash()
+	{
+		int num = 17;
+		for (int i = 0; i < this.albinoDataList.Count; i++)
+		{
+			num = PDUtilities.AccumulateHash<int>(num, this.albinoDataList[i].GetHashCode());
+		}
+		return num;
+	}
+
+	// Token: 0x06000504 RID: 1284 RVA: 0x00036BF8 File Offset: 0x00034DF8
+	private static string AlbinoStateToString(AlbinoPersistentData.AlbinoState albinoState)
+	{
+		return string.Format("{0}, {1}, {2}, {3}", new object[]
+		{
+			(int)albinoState.state,
+			albinoState.position.x,
+			albinoState.position.y,
+			albinoState.position.z
+		});
+	}
+
+	// Token: 0x06000505 RID: 1285 RVA: 0x00036C5C File Offset: 0x00034E5C
+	private static AlbinoPersistentData.AlbinoState ParseAlbinoState(string text)
+	{
+		string[] array = text.Split(new char[]
+		{
+			','
+		});
+		AlbinoPersistentData.SpawnState state = (AlbinoPersistentData.SpawnState)int.Parse(array[0]);
+		float x = float.Parse(array[1]);
+		float y = float.Parse(array[2]);
+		float z = float.Parse(array[3]);
+		return new AlbinoPersistentData.AlbinoState(state, x, y, z);
+	}
+
+	// Token: 0x04000865 RID: 2149
+	public List<AlbinoPersistentData.AlbinoState> albinoDataList = new List<AlbinoPersistentData.AlbinoState>();
+
+	// Token: 0x02000099 RID: 153
+	public enum SpawnState
+	{
+		// Token: 0x04000867 RID: 2151
+		uninitialized,
+		// Token: 0x04000868 RID: 2152
+		spawnedButWaiting,
+		// Token: 0x04000869 RID: 2153
+		followBoy,
+		// Token: 0x0400086A RID: 2154
+		insideWaitTrigger,
+		// Token: 0x0400086B RID: 2155
+		insideWaitTriggerNoRandomize,
+		// Token: 0x0400086C RID: 2156
+		albinoCompleted
+	}
+
+	// Token: 0x0200009A RID: 154
+	public class AlbinoState
+	{
+		// Token: 0x06000506 RID: 1286 RVA: 0x00036CAC File Offset: 0x00034EAC
+		public AlbinoState()
+		{
+		}
+
+		// Token: 0x06000507 RID: 1287 RVA: 0x00036CB4 File Offset: 0x00034EB4
+		public AlbinoState(AlbinoPersistentData.SpawnState state, float x, float y, float z)
+		{
+			this.state = state;
+			this.position = new Vector3(x, y, z);
+		}
+
+		// Token: 0x06000508 RID: 1288 RVA: 0x00036CD4 File Offset: 0x00034ED4
+		public int GetHash()
+		{
+			int obj = 17;
+			obj = PDUtilities.AccumulateHash<int>(obj, this.state.GetHashCode());
+			return PDUtilities.AccumulateHash<int>(obj, this.position.GetHashCode());
+		}
+
+		// Token: 0x0400086D RID: 2157
+		public AlbinoPersistentData.SpawnState state;
+
+		// Token: 0x0400086E RID: 2158
+		public Vector3 position;
+	}
+}

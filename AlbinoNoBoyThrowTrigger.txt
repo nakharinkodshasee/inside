@@ -1,0 +1,33 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000096 RID: 150
+public class AlbinoNoBoyThrowTrigger : AlbinoTrigger
+{
+	// Token: 0x060004FB RID: 1275 RVA: 0x000368F4 File Offset: 0x00034AF4
+	public override void Start()
+	{
+	}
+
+	// Token: 0x060004FC RID: 1276 RVA: 0x000368F8 File Offset: 0x00034AF8
+	private void OnDrawGizmos()
+	{
+		if (EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			float y = base.transform.lossyScale.y;
+			float x = base.transform.lossyScale.x;
+			if (base.GetComponent<Collider>() != null)
+			{
+				Vector3 size = base.GetComponent<Collider>().bounds.size;
+				if (base.gameObject.layer != LayerMask.NameToLayer("NPC+"))
+				{
+					Gizmos.color = new Color(1f, 0f, 0f, 0.6f);
+					Gizmos.DrawCube(base.transform.position, size);
+					return;
+				}
+				y = size.y;
+				x = size.x;
+			}
+		}
+	}
+}

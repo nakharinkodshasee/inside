@@ -1,0 +1,116 @@
+using System;
+using System.Collections.Generic;
+
+// Token: 0x02000045 RID: 69
+public class AnimcontrolledScientistCustom : AnimControlCustomCode
+{
+	// Token: 0x06000229 RID: 553 RVA: 0x0001AC38 File Offset: 0x00018E38
+	private void Start()
+	{
+	}
+
+	// Token: 0x0600022A RID: 554 RVA: 0x0001AC3C File Offset: 0x00018E3C
+	public override AnimcontrolledCharacter.CustomTransitionFunction GetCustomTransitFunction(string definitionName)
+	{
+		if (this.dbTransitions.ContainsKey(definitionName))
+		{
+			return this.dbTransitions[definitionName];
+		}
+		return null;
+	}
+
+	// Token: 0x0600022B RID: 555 RVA: 0x0001AC60 File Offset: 0x00018E60
+	public override AnimcontrolledCharacter.CustomPositioningFunction GetCustomPositioningFunction(string definitionName)
+	{
+		if (this.dbPositioning.ContainsKey(definitionName))
+		{
+			return this.dbPositioning[definitionName];
+		}
+		return null;
+	}
+
+	// Token: 0x0600022C RID: 556 RVA: 0x0001AC84 File Offset: 0x00018E84
+	public override void NewWaypointSet(BaseWaypoint wayPoint)
+	{
+	}
+
+	// Token: 0x0600022D RID: 557 RVA: 0x0001AC88 File Offset: 0x00018E88
+	public override void WaypointReached(BaseWaypoint wayPoint)
+	{
+	}
+
+	// Token: 0x0600022E RID: 558 RVA: 0x0001AC8C File Offset: 0x00018E8C
+	public override void SetUniqueAnimationFromWaypoint(BaseWaypoint waypointToUse)
+	{
+	}
+
+	// Token: 0x0600022F RID: 559 RVA: 0x0001AC90 File Offset: 0x00018E90
+	public override void PostUpdateFollowWaypoint(AnimcontrolledCharacter.AnimControl controls, BaseWaypoint wayPoint)
+	{
+	}
+
+	// Token: 0x06000230 RID: 560 RVA: 0x0001AC94 File Offset: 0x00018E94
+	private static AnimcontrolStateInfo.TransitionData IdleAngryA_CT(AnimcontrolledCharacter character)
+	{
+		AnimationBlendHelper blendHelper = character.GetBlendHelper();
+		return character.TestAndConvertDefinition(blendHelper.GetDefinition("RunState", true));
+	}
+
+	// Token: 0x06000231 RID: 561 RVA: 0x0001ACBC File Offset: 0x00018EBC
+	private static void IdleTurn90LWalk_Positioning(AnimcontrolledCharacter character, float deltaTime)
+	{
+		AnimControlCustomCode.RotateWhileTurning(character, deltaTime, 0f, 0.8f, -90f);
+	}
+
+	// Token: 0x06000232 RID: 562 RVA: 0x0001ACD4 File Offset: 0x00018ED4
+	private static void IdleTurn90RWalk_Positioning(AnimcontrolledCharacter character, float deltaTime)
+	{
+		AnimControlCustomCode.RotateWhileTurning(character, deltaTime, 0f, 0.8f, 90f);
+	}
+
+	// Token: 0x06000233 RID: 563 RVA: 0x0001ACEC File Offset: 0x00018EEC
+	private static void IdleTurn180LWalk_Positioning(AnimcontrolledCharacter character, float deltaTime)
+	{
+		AnimControlCustomCode.RotateWhileTurning(character, deltaTime, 0f, 0.6f, -180f);
+	}
+
+	// Token: 0x06000234 RID: 564 RVA: 0x0001AD04 File Offset: 0x00018F04
+	private static void IdleTurn180RWalk_Positioning(AnimcontrolledCharacter character, float deltaTime)
+	{
+		AnimControlCustomCode.RotateWhileTurning(character, deltaTime, 0f, 0.6f, 180f);
+	}
+
+	// Token: 0x06000235 RID: 565 RVA: 0x0001AD1C File Offset: 0x00018F1C
+	private static void WalkTurn180R_Positioning(AnimcontrolledCharacter character, float deltaTime)
+	{
+		AnimControlCustomCode.RotateWhileTurning(character, deltaTime, 0.3f, 0.7f, 180f);
+	}
+
+	// Token: 0x04000303 RID: 771
+	private Dictionary<string, AnimcontrolledCharacter.CustomTransitionFunction> dbTransitions = new Dictionary<string, AnimcontrolledCharacter.CustomTransitionFunction>();
+
+	// Token: 0x04000304 RID: 772
+	private Dictionary<string, AnimcontrolledCharacter.CustomPositioningFunction> dbPositioning = new Dictionary<string, AnimcontrolledCharacter.CustomPositioningFunction>
+	{
+		{
+			"Gen_WalkBTurn180R",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledScientistCustom.WalkTurn180R_Positioning)
+		},
+		{
+			"Gen_IdleTurn90LWalk",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledScientistCustom.IdleTurn90LWalk_Positioning)
+		},
+		{
+			"Gen_IdleTurn90RWalk",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledScientistCustom.IdleTurn90RWalk_Positioning)
+		},
+		{
+			"Gen_IdleTurn180LWalk",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledScientistCustom.IdleTurn180LWalk_Positioning)
+		},
+		{
+			"Gen_IdleTurn180RWalk",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledScientistCustom.IdleTurn180RWalk_Positioning)
+		}
+	};
+}

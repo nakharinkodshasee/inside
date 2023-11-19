@@ -1,0 +1,58 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003F7 RID: 1015
+public class AgilityTimer : MonoBehaviour
+{
+	// Token: 0x06001AE5 RID: 6885 RVA: 0x000EC564 File Offset: 0x000EA764
+	public void activate()
+	{
+		this.activated = true;
+	}
+
+	// Token: 0x06001AE6 RID: 6886 RVA: 0x000EC570 File Offset: 0x000EA770
+	public void deactivate()
+	{
+		this.activated = false;
+		this.newPos = ScriptGlobals.boy.pos3 + Vector3.up;
+		PlayerPrefs.SetFloat("SavePointTime", this.currentTime);
+	}
+
+	// Token: 0x06001AE7 RID: 6887 RVA: 0x000EC5A4 File Offset: 0x000EA7A4
+	private void Start()
+	{
+		if (Time.frameCount < 5)
+		{
+			PlayerPrefs.SetFloat("SavePointTime", 0f);
+		}
+		this.newPos = base.gameObject.transform.position;
+		this.currentTime = PlayerPrefs.GetFloat("SavePointTime");
+	}
+
+	// Token: 0x06001AE8 RID: 6888 RVA: 0x000EC5F4 File Offset: 0x000EA7F4
+	private void Update()
+	{
+		if (this.activated)
+		{
+			this.currentTime += Time.deltaTime;
+		}
+		if (ScriptGlobals.boy.isDead)
+		{
+			this.deactivate();
+		}
+	}
+
+	// Token: 0x06001AE9 RID: 6889 RVA: 0x000EC634 File Offset: 0x000EA834
+	public void OnGUI()
+	{
+	}
+
+	// Token: 0x040030CC RID: 12492
+	private bool activated;
+
+	// Token: 0x040030CD RID: 12493
+	private float currentTime;
+
+	// Token: 0x040030CE RID: 12494
+	private Vector3 newPos;
+}

@@ -1,0 +1,276 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200001F RID: 31
+public class AlbinoSpawner : UmbrellaBehaviour<AlbinoSpawner>, IPreAwake
+{
+	// Token: 0x0600012D RID: 301 RVA: 0x0001316C File Offset: 0x0001136C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (base.transform.childCount > 0)
+		{
+			GameObject gameObject = base.transform.GetChild(0).gameObject;
+			if (Application.isPlaying)
+			{
+				gameObject.SetActive(false);
+			}
+			else
+			{
+				PDUtilities.Destroy(gameObject);
+			}
+		}
+		this.audioWakeUp = new AudioEventSimple(this.wakeUpEvent);
+	}
+
+	// Token: 0x0600012E RID: 302 RVA: 0x000131DC File Offset: 0x000113DC
+	public bool PreAwake(int callcount)
+	{
+		this.spawnAlbino = SignalIn.Create("spawnAlbino", base.gameObject, new Action(this.OnSpawnAlbino));
+		this.spawnAndOrFollow = SignalIn.Create("spawnAndOrFollow", base.gameObject, new Action(this.OnSpawnAndOrFollow));
+		this.unspawn = SignalIn.Create("unspawn", base.gameObject, new Action(this.OnUnspawn));
+		return true;
+	}
+
+	// Token: 0x0600012F RID: 303 RVA: 0x00013250 File Offset: 0x00011450
+	public void Awake()
+	{
+		this.MyAwake();
+		this.MyStart();
+	}
+
+	// Token: 0x06000130 RID: 304 RVA: 0x00013260 File Offset: 0x00011460
+	private void MyAwake()
+	{
+		this.OnPreProcess();
+		if (this.albinoID < AlbinoGroupManager.mInstance.albinosAI.size)
+		{
+			this.albinoAI = AlbinoGroupManager.mInstance.albinosAI.raw[this.albinoID];
+		}
+	}
+
+	// Token: 0x06000131 RID: 305 RVA: 0x000132AC File Offset: 0x000114AC
+	public AlbinoAI GetAllocatedAlbinoAI()
+	{
+		return this.albinoAI;
+	}
+
+	// Token: 0x06000132 RID: 306 RVA: 0x000132B4 File Offset: 0x000114B4
+	private int GetNewUniqueID(int currentID)
+	{
+		List<int> list = new List<int>();
+		foreach (Object @object in Object.FindObjectsOfType(typeof(AlbinoSpawner)))
+		{
+			AlbinoSpawner albinoSpawner = @object as AlbinoSpawner;
+			if (albinoSpawner != null && albinoSpawner != this)
+			{
+				list.Add(albinoSpawner.albinoID);
+			}
+		}
+		if (currentID < 0 || list.Contains(currentID))
+		{
+			int num = 0;
+			while (list.Contains(num))
+			{
+				num++;
+			}
+			return num;
+		}
+		return this.albinoID;
+	}
+
+	// Token: 0x06000133 RID: 307 RVA: 0x00013358 File Offset: 0x00011558
+	public bool GetHasSpawned()
+	{
+		return this.hasSpawned;
+	}
+
+	// Token: 0x06000134 RID: 308 RVA: 0x00013360 File Offset: 0x00011560
+	private void MyStart()
+	{
+		bool flag = this.usePersistentSpawnData;
+		this.iWantToSpawn = false;
+		if (flag)
+		{
+			if (GameManager.IsLoading())
+			{
+				AlbinoGroupManager.mInstance.TestAndSpawnAlbino(this, false);
+				this.hasSpawned = true;
+			}
+			else
+			{
+				this.iWantToSpawn = true;
+				AlbinoGroupManager.mInstance.CanISpawnAlbino(true);
+			}
+		}
+	}
+
+	// Token: 0x06000135 RID: 309 RVA: 0x000133B8 File Offset: 0x000115B8
+	public void OnUnspawn()
+	{
+		if (this.albinoAI != null)
+		{
+			this.albinoAI.unspawnAlbino();
+		}
+	}
+
+	// Token: 0x06000136 RID: 310 RVA: 0x000133D8 File Offset: 0x000115D8
+	public void OnSpawnAlbino()
+	{
+		AlbinoGroupManager.mInstance.TestAndSpawnAlbino(this, true);
+		this.hasSpawned = true;
+	}
+
+	// Token: 0x06000137 RID: 311 RVA: 0x000133F0 File Offset: 0x000115F0
+	public void FollowWaypoint(GameObject wayPoint)
+	{
+		if (this.albinoAI != null)
+		{
+			this.albinoAI.FollowWaypoint(wayPoint, true);
+		}
+	}
+
+	// Token: 0x06000138 RID: 312 RVA: 0x00013410 File Offset: 0x00011610
+	public void OnSpawnAndOrFollow()
+	{
+		if (this.ignoreMindhat || LevelGlobals.mindHatOnHead == null || LevelGlobals.mindHatOnHead.IsAttached())
+		{
+			this.hasSpawned = true;
+			if (AlbinoGroupManager.mInstance.TestAndSpawnAlbino(this, true) && this.albinoAI != null)
+			{
+				if (this.albinoAI.aiMode == AlbinoAI.AIMode.SpawnedButWaiting && this.wakeupAnimation.Length > 0)
+				{
+					if (this.playFullWakeup)
+					{
+						this.playingFullWakeup = true;
+						this.albinoAI.remotePuppet = true;
+					}
+					if (this.audioAtWakeUp)
+					{
+						AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.albinoAI.audioGameObject, this);
+						this.audioWakeUp.PostFast(akGameObj);
+					}
+					if (this.wakeupAnimStatic)
+					{
+						this.albinoAI.GetCharacter().ForceToAnimation(this.wakeupAnimation, base.gameObject, -1f, 0f, false);
+						this.albinoAI.GetCharacter().onGround = true;
+					}
+					else
+					{
+						this.albinoAI.GetCharacter().ForceToAnimation(this.wakeupAnimation, null, -1f, 0f, false);
+					}
+					this.albinoAI.GetCharacter().GetBlendHelper().UpdateAnimationBlends(0.001f);
+				}
+				if (this.albinoAI.aiMode == AlbinoAI.AIMode.SpawnedButWaiting || this.albinoAI.aiMode == AlbinoAI.AIMode.FollowWaypoint)
+				{
+					this.albinoAI.SetFollowBoy();
+				}
+				if (this.setNewLeash)
+				{
+					this.albinoAI.SetNewLeashLength(this.newLeashLength);
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000139 RID: 313 RVA: 0x000135A8 File Offset: 0x000117A8
+	public void UmbrellaUpdate()
+	{
+		if (this.playingFullWakeup && this.albinoAI != null && this.albinoAI.GetCharacter().GetBlendHelper().GetTopDefinition().debugName != this.wakeupAnimation)
+		{
+			AlbinoGroupManager.mInstance.doNewOffsetNextTime = true;
+			this.albinoAI.remotePuppet = false;
+			this.playingFullWakeup = false;
+		}
+		if (this.iWantToSpawn && AlbinoGroupManager.mInstance.CanISpawnAlbino(false))
+		{
+			AlbinoGroupManager.mInstance.TestAndSpawnAlbino(this, false);
+			this.hasSpawned = true;
+			this.iWantToSpawn = false;
+		}
+	}
+
+	// Token: 0x0600013A RID: 314 RVA: 0x00013650 File Offset: 0x00011850
+	private void OnDrawGizmos()
+	{
+	}
+
+	// Token: 0x040001A5 RID: 421
+	public int albinoID = -1;
+
+	// Token: 0x040001A6 RID: 422
+	public bool startAwake;
+
+	// Token: 0x040001A7 RID: 423
+	public bool instantlyFollowBoy = true;
+
+	// Token: 0x040001A8 RID: 424
+	public string initialAnimation;
+
+	// Token: 0x040001A9 RID: 425
+	public string wakeupAnimation;
+
+	// Token: 0x040001AA RID: 426
+	public bool initAnimStatic;
+
+	// Token: 0x040001AB RID: 427
+	public bool wakeupAnimStatic;
+
+	// Token: 0x040001AC RID: 428
+	public bool usePersistentSpawnData = true;
+
+	// Token: 0x040001AD RID: 429
+	public bool ignoreMindhat;
+
+	// Token: 0x040001AE RID: 430
+	public bool playFullWakeup;
+
+	// Token: 0x040001AF RID: 431
+	public bool setNewLeash;
+
+	// Token: 0x040001B0 RID: 432
+	public float newLeashLength = 30f;
+
+	// Token: 0x040001B1 RID: 433
+	public bool audioAtWakeUp;
+
+	// Token: 0x040001B2 RID: 434
+	public string wakeUpEvent = string.Empty;
+
+	// Token: 0x040001B3 RID: 435
+	private SignalIn spawnAlbino;
+
+	// Token: 0x040001B4 RID: 436
+	private SignalIn spawnAndOrFollow;
+
+	// Token: 0x040001B5 RID: 437
+	private SignalIn unspawn;
+
+	// Token: 0x040001B6 RID: 438
+	private AlbinoAI albinoAI;
+
+	// Token: 0x040001B7 RID: 439
+	private bool playingFullWakeup;
+
+	// Token: 0x040001B8 RID: 440
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioWakeUp;
+
+	// Token: 0x040001B9 RID: 441
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x040001BA RID: 442
+	private bool iWantToSpawn;
+
+	// Token: 0x040001BB RID: 443
+	private bool hasSpawned;
+}

@@ -1,0 +1,116 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000251 RID: 593
+public class AddForceToRagdoll : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001268 RID: 4712 RVA: 0x000AC99C File Offset: 0x000AAB9C
+	private void DoForceToBody(string boneName)
+	{
+		Transform transform = null;
+		GameObject gameObject = this.boy.transform.parent.GetComponentInChildren<RagdollSkeleton>().gameObject;
+		for (int i = 0; i < gameObject.transform.childCount; i++)
+		{
+			GameObject gameObject2 = gameObject.transform.GetChild(i).gameObject;
+			if (gameObject2.name == boneName)
+			{
+				transform = gameObject2.transform;
+			}
+		}
+		if (transform == null)
+		{
+		}
+		if (transform && transform.GetComponent<Rigidbody>())
+		{
+			transform.GetComponent<Rigidbody>().AddForce(this.force, 1);
+		}
+	}
+
+	// Token: 0x06001269 RID: 4713 RVA: 0x000ACA48 File Offset: 0x000AAC48
+	public void DoAddForce()
+	{
+		if (this.bodyName1 != string.Empty)
+		{
+			this.DoForceToBody(this.bodyName1);
+		}
+		if (this.bodyName2 != string.Empty)
+		{
+			this.DoForceToBody(this.bodyName2);
+		}
+	}
+
+	// Token: 0x0600126A RID: 4714 RVA: 0x000ACA98 File Offset: 0x000AAC98
+	public void AddForce()
+	{
+		if (this.delay <= 0f)
+		{
+			this.DoAddForce();
+		}
+		else
+		{
+			this.delayTimer = this.delay;
+			this.waitToAddForce = true;
+		}
+	}
+
+	// Token: 0x0600126B RID: 4715 RVA: 0x000ACAD4 File Offset: 0x000AACD4
+	public bool PreAwake(int callcount)
+	{
+		this.AddForceSignal = SignalIn.Create("AddForceSignal", base.gameObject, new Action(this.AddForce));
+		return true;
+	}
+
+	// Token: 0x0600126C RID: 4716 RVA: 0x000ACAFC File Offset: 0x000AACFC
+	private void Start()
+	{
+		if (this.specificBoy == null)
+		{
+			this.boy = ScriptGlobals.boy;
+		}
+		else
+		{
+			this.boy = this.specificBoy;
+		}
+	}
+
+	// Token: 0x0600126D RID: 4717 RVA: 0x000ACB2C File Offset: 0x000AAD2C
+	private void FixedUpdate()
+	{
+		if (this.waitToAddForce)
+		{
+			this.delayTimer -= Time.deltaTime;
+			if (this.delayTimer <= 0f)
+			{
+				this.DoAddForce();
+				this.waitToAddForce = false;
+			}
+		}
+	}
+
+	// Token: 0x040021D0 RID: 8656
+	public string bodyName1 = "Head";
+
+	// Token: 0x040021D1 RID: 8657
+	public string bodyName2 = string.Empty;
+
+	// Token: 0x040021D2 RID: 8658
+	public Vector3 force;
+
+	// Token: 0x040021D3 RID: 8659
+	public float delay;
+
+	// Token: 0x040021D4 RID: 8660
+	public Boy specificBoy;
+
+	// Token: 0x040021D5 RID: 8661
+	private SignalIn AddForceSignal;
+
+	// Token: 0x040021D6 RID: 8662
+	private Boy boy;
+
+	// Token: 0x040021D7 RID: 8663
+	private float delayTimer;
+
+	// Token: 0x040021D8 RID: 8664
+	private bool waitToAddForce;
+}

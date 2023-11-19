@@ -1,0 +1,167 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000032 RID: 50
+public class AnimcontrolTransition : AnimcontrolTransitionDefinition
+{
+	// Token: 0x0600017D RID: 381 RVA: 0x0001559C File Offset: 0x0001379C
+	public override bool UpdateCachedDefinition(AnimationBlendHelper blendHelper, AnimcontrolTransitionManager manager)
+	{
+		bool flag = true;
+		if (this.definitionIndex < 0)
+		{
+			flag = false;
+			string text = string.Empty;
+			if (this.transitState != null)
+			{
+				text = this.transitState.name;
+			}
+			else if (this.transitAnim != null)
+			{
+				text = this.transitAnim.name;
+			}
+			if (text.Length > 0)
+			{
+				flag = true;
+				this.definitionIndex = blendHelper.GetDefinitionIndex(text);
+				if (this.definitionIndex < 0)
+				{
+					flag = false;
+				}
+				else
+				{
+					this.transitState = manager.GetState(blendHelper.GetDefinitionFromIndex(this.definitionIndex));
+				}
+			}
+		}
+		if (!flag)
+		{
+		}
+		return flag;
+	}
+
+	// Token: 0x0600017E RID: 382 RVA: 0x0001564C File Offset: 0x0001384C
+	private AnimcontrolStateInfo.TransitionData GetDefinition(AnimationBlendHelper blendHelper, AnimcontrolTransitionManager manager)
+	{
+		this.UpdateCachedDefinition(blendHelper, manager);
+		if (this.definitionIndex > -1)
+		{
+			AnimcontrolStateInfo.TransitionData transitionData = new AnimcontrolStateInfo.TransitionData();
+			transitionData.definition = blendHelper.GetDefinitionFromIndex(this.definitionIndex);
+			if (this.transitState != null)
+			{
+				transitionData.transitTime = this.transitState.transitIntoTime;
+				if (manager.GetCurrentState().runCycle && this.transitState.runCycle)
+				{
+					transitionData.startPos = blendHelper.GetAnimPos();
+				}
+			}
+			if (this.overrideTransitTime >= 0f)
+			{
+				transitionData.transitTime = this.overrideTransitTime;
+			}
+			if (this.overrideStartPos >= 0f)
+			{
+				transitionData.startPos = this.overrideStartPos;
+			}
+			return transitionData;
+		}
+		return null;
+	}
+
+	// Token: 0x0600017F RID: 383 RVA: 0x00015710 File Offset: 0x00013910
+	public override AnimcontrolStateInfo.TransitionData TransitionMet(AnimationBlendHelper blendHelper, AnimcontrolTransitionManager manager)
+	{
+		int i = 0;
+		int count = this.conditions.Count;
+		while (i < count)
+		{
+			AnimcontrolConditionDefinition animcontrolConditionDefinition = this.conditions[i];
+			if (!animcontrolConditionDefinition.ConditionMet(blendHelper))
+			{
+				return null;
+			}
+			i++;
+		}
+		if (this.transitState == null)
+		{
+			return this.GetDefinition(blendHelper, manager);
+		}
+		int j = 0;
+		int count2 = this.transitState.requirements.Count;
+		while (j < count2)
+		{
+			AnimcontrolConditionDefinition animcontrolConditionDefinition2 = this.transitState.requirements[j];
+			if (!animcontrolConditionDefinition2.ConditionMet(blendHelper))
+			{
+				return null;
+			}
+			j++;
+		}
+		return this.GetDefinition(blendHelper, manager);
+	}
+
+	// Token: 0x06000180 RID: 384 RVA: 0x000157C0 File Offset: 0x000139C0
+	public override string GetTransitionString()
+	{
+		string text = string.Empty;
+		string text2 = string.Empty;
+		int i = 0;
+		int count = this.conditions.Count;
+		while (i < count)
+		{
+			AnimcontrolConditionDefinition animcontrolConditionDefinition = this.conditions[i];
+			if (animcontrolConditionDefinition != null)
+			{
+				string conditionString = animcontrolConditionDefinition.GetConditionString();
+				if (text2.Length == 0)
+				{
+					text2 = conditionString;
+				}
+				else
+				{
+					text2 = text2 + " && " + conditionString;
+				}
+			}
+			i++;
+		}
+		if (this.transitState != null)
+		{
+			text = this.transitState.name;
+		}
+		else if (this.transitAnim != null)
+		{
+			text = this.transitAnim.name;
+		}
+		if (text2.Length > 0)
+		{
+			text = text + " (" + text2 + ")";
+		}
+		base.name = "T: " + text;
+		return text;
+	}
+
+	// Token: 0x06000181 RID: 385 RVA: 0x000158AC File Offset: 0x00013AAC
+	private void Start()
+	{
+	}
+
+	// Token: 0x04000242 RID: 578
+	public AnimcontrolStateInfo transitState;
+
+	// Token: 0x04000243 RID: 579
+	public AnimationClip transitAnim;
+
+	// Token: 0x04000244 RID: 580
+	public float overrideTransitTime = -1f;
+
+	// Token: 0x04000245 RID: 581
+	public float overrideStartPos = -1f;
+
+	// Token: 0x04000246 RID: 582
+	public List<AnimcontrolConditionDefinition> conditions = new List<AnimcontrolConditionDefinition>();
+
+	// Token: 0x04000247 RID: 583
+	private int definitionIndex = -1;
+}

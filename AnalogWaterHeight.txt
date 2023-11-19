@@ -1,0 +1,159 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001CD RID: 461
+public class AnalogWaterHeight : MonoBehaviour, IWaterStream
+{
+	// Token: 0x06000DA4 RID: 3492 RVA: 0x00082AEC File Offset: 0x00080CEC
+	private void Start()
+	{
+		if (!this.water)
+		{
+			return;
+		}
+		this.waterFluidVolume = this.water.GetComponent<FluidVolume>();
+		if (!this.waterFluidVolume)
+		{
+			return;
+		}
+		this.waterFluidVolume.AddStreamSource(this);
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000DA5 RID: 3493 RVA: 0x00082B40 File Offset: 0x00080D40
+	private void SetIdleState()
+	{
+		this.state = AnalogWaterHeight.State.Idle;
+	}
+
+	// Token: 0x06000DA6 RID: 3494 RVA: 0x00082B4C File Offset: 0x00080D4C
+	private void IdleState()
+	{
+		float targetBlend = this.lever.GetTargetBlend();
+		if (targetBlend != 0f)
+		{
+			this.SetAdjustState(Mathf.Sign(targetBlend));
+		}
+	}
+
+	// Token: 0x06000DA7 RID: 3495 RVA: 0x00082B7C File Offset: 0x00080D7C
+	private void SetAdjustState(float dir)
+	{
+		this.volumeAdded = 0f;
+		this.currentDir = dir;
+		if (this.currentDir == 1f)
+		{
+			this.currentAmount = this.upAmount;
+		}
+		else
+		{
+			this.currentAmount = this.downAmount;
+		}
+		this.CalculateVolumeToAdd(this.currentAmount);
+		this.state = AnalogWaterHeight.State.Adjust;
+	}
+
+	// Token: 0x06000DA8 RID: 3496 RVA: 0x00082BDC File Offset: 0x00080DDC
+	private void AdjustState()
+	{
+		float targetBlend = this.lever.GetTargetBlend();
+		if (this.volumeAdded < Mathf.Abs(this.volumeToAdd))
+		{
+			float num = this.speed * Mathf.Abs(targetBlend) * this.water.transform.localScale.x * this.water.transform.localScale.z;
+			float num2 = Mathf.Sign(this.volumeToAdd) * num * Time.deltaTime;
+			this.waterFluidVolume.AddVolume(num2);
+			this.volumeAdded += Mathf.Abs(num2);
+		}
+		if (targetBlend == 0f)
+		{
+			this.SetIdleState();
+		}
+		else if (Mathf.Sign(targetBlend) != this.currentDir)
+		{
+			this.SetAdjustState(Mathf.Sign(targetBlend));
+		}
+	}
+
+	// Token: 0x06000DA9 RID: 3497 RVA: 0x00082CB4 File Offset: 0x00080EB4
+	private void FixedUpdate()
+	{
+		if (this.state == AnalogWaterHeight.State.Adjust)
+		{
+			this.AdjustState();
+		}
+		else if (this.state == AnalogWaterHeight.State.Idle)
+		{
+			this.IdleState();
+		}
+	}
+
+	// Token: 0x06000DAA RID: 3498 RVA: 0x00082CE0 File Offset: 0x00080EE0
+	public Vector3 GetStreamAtPosition(Vector3 pos)
+	{
+		if (this.state == AnalogWaterHeight.State.Idle || this.volumeAdded >= Mathf.Abs(this.volumeToAdd))
+		{
+			return Vector3.zero;
+		}
+		float num = this.speed * Mathf.Sign(this.volumeToAdd);
+		return this.water.transform.up * num * this.streamScale;
+	}
+
+	// Token: 0x06000DAB RID: 3499 RVA: 0x00082D4C File Offset: 0x00080F4C
+	private void CalculateVolumeToAdd(float amount)
+	{
+		this.volumeToAdd = amount * this.water.transform.localScale.x * this.water.transform.localScale.z - this.waterFluidVolume.Volume;
+	}
+
+	// Token: 0x06000DAC RID: 3500 RVA: 0x00082DA0 File Offset: 0x00080FA0
+	private void OnDestroy()
+	{
+		this.waterFluidVolume.RemoveStreamSource(this);
+	}
+
+	// Token: 0x04001839 RID: 6201
+	public LeverAnalog lever;
+
+	// Token: 0x0400183A RID: 6202
+	public GameObject water;
+
+	// Token: 0x0400183B RID: 6203
+	public float upAmount;
+
+	// Token: 0x0400183C RID: 6204
+	public float downAmount;
+
+	// Token: 0x0400183D RID: 6205
+	public float speed = 2.5f;
+
+	// Token: 0x0400183E RID: 6206
+	public float streamScale = 0.5f;
+
+	// Token: 0x0400183F RID: 6207
+	private FluidVolume waterFluidVolume;
+
+	// Token: 0x04001840 RID: 6208
+	private float volumeToAdd;
+
+	// Token: 0x04001841 RID: 6209
+	private float volumeAdded;
+
+	// Token: 0x04001842 RID: 6210
+	private float currentAmount;
+
+	// Token: 0x04001843 RID: 6211
+	private float currentDir;
+
+	// Token: 0x04001844 RID: 6212
+	private AnalogWaterHeight.State state;
+
+	// Token: 0x020001CE RID: 462
+	private enum State
+	{
+		// Token: 0x04001846 RID: 6214
+		None,
+		// Token: 0x04001847 RID: 6215
+		Idle,
+		// Token: 0x04001848 RID: 6216
+		Adjust
+	}
+}

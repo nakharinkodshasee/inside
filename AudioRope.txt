@@ -1,0 +1,172 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000124 RID: 292
+public class AudioRope : AudioTriggerBehaviour, IPlayerBehaviour, IContinuousPlayerBehaviour
+{
+	// Token: 0x060008C9 RID: 2249 RVA: 0x0005CA0C File Offset: 0x0005AC0C
+	[EarlyProcessBuild(0)]
+	private void OnPreprocess()
+	{
+		if (this.preprocessed)
+		{
+			return;
+		}
+		GameObject defaultAudioGameObject = base.GetDefaultAudioGameObject(null);
+		this.audioTransform = defaultAudioGameObject.transform;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(defaultAudioGameObject, this);
+		float maxRange = base.props.maxRange;
+		this.player = new ContinuousEventPlayer(akGameObj, this.playerConfig, this.eventTypeValue != AudioEventNameType.None, base.GetPrefix(), "twirl", "phy_rope", maxRange, this.eventTypeValue == AudioEventNameType.Test);
+		this.lineRenderer = base.GetComponent<RopeLineRenderer>();
+		this.preprocessed = true;
+	}
+
+	// Token: 0x060008CA RID: 2250 RVA: 0x0005CA98 File Offset: 0x0005AC98
+	protected override void Awake()
+	{
+		base.Awake();
+		if (!this.preprocessed)
+		{
+			this.OnPreprocess();
+		}
+	}
+
+	// Token: 0x060008CB RID: 2251 RVA: 0x0005CAB4 File Offset: 0x0005ACB4
+	private void OnDisable()
+	{
+		this.player.StopSound();
+	}
+
+	// Token: 0x060008CC RID: 2252 RVA: 0x0005CAC4 File Offset: 0x0005ACC4
+	private void Update()
+	{
+		if (!this.useFixedUpdate)
+		{
+			this.OnUpdate(Time.deltaTime);
+		}
+	}
+
+	// Token: 0x060008CD RID: 2253 RVA: 0x0005CADC File Offset: 0x0005ACDC
+	private void FixedUpdate()
+	{
+		if (this.useFixedUpdate)
+		{
+			this.OnUpdate(Time.fixedDeltaTime);
+		}
+	}
+
+	// Token: 0x060008CE RID: 2254 RVA: 0x0005CAF4 File Offset: 0x0005ACF4
+	public string[] GetEvents()
+	{
+		return ContinuousEventPlayer.GetEvents(base.playEvents, base.GetPrefix(), "twirl", base.useTestEvents);
+	}
+
+	// Token: 0x060008CF RID: 2255 RVA: 0x0005CB20 File Offset: 0x0005AD20
+	public string[] GetRTPCs()
+	{
+		return ContinuousEventPlayer.GetRTPCs(base.GetPrefix(), "phy_rope", base.useTestEvents);
+	}
+
+	// Token: 0x060008D0 RID: 2256 RVA: 0x0005CB38 File Offset: 0x0005AD38
+	public ContinuousEventPlayer.Config GetPlayerConfig()
+	{
+		return this.playerConfig;
+	}
+
+	// Token: 0x060008D1 RID: 2257 RVA: 0x0005CB40 File Offset: 0x0005AD40
+	private void OnUpdate(float dt)
+	{
+		if (!this.lineRenderer)
+		{
+			return;
+		}
+		Vector3 position = this.audioTransform.position;
+		Vector3 vector = (!(ScriptGlobals.mainCharacter is Huddle)) ? ScriptGlobals.boy.pos3 : ScriptGlobals.huddle.pos3;
+		float num = vector.x - position.x;
+		float num2 = vector.y - position.y;
+		float num3 = vector.z - position.z;
+		float num4 = num * num + num2 * num2 + num3 * num3;
+		if (num4 < 600f)
+		{
+			this.player.OnUpdate(this.playerConfig, num4);
+			float speed = this.lineRenderer.GetRotationSum() * this.playerConfig.sensitivity;
+			this.player.SetValue(speed, EffectMaterial.Material.None);
+		}
+	}
+
+	// Token: 0x060008D2 RID: 2258 RVA: 0x0005CC1C File Offset: 0x0005AE1C
+	public void Reset()
+	{
+		this.player.Reset();
+	}
+
+	// Token: 0x060008D3 RID: 2259 RVA: 0x0005CC2C File Offset: 0x0005AE2C
+	virtual GameObject get_gameObject()
+	{
+		return base.gameObject;
+	}
+
+	// Token: 0x060008D4 RID: 2260 RVA: 0x0005CC34 File Offset: 0x0005AE34
+	virtual AudioEventNameType get_eventNameType()
+	{
+		return base.eventNameType;
+	}
+
+	// Token: 0x060008D5 RID: 2261 RVA: 0x0005CC3C File Offset: 0x0005AE3C
+	virtual void set_eventNameType(AudioEventNameType value)
+	{
+		base.eventNameType = value;
+	}
+
+	// Token: 0x060008D6 RID: 2262 RVA: 0x0005CC48 File Offset: 0x0005AE48
+	virtual string get_prefix()
+	{
+		return base.prefix;
+	}
+
+	// Token: 0x060008D7 RID: 2263 RVA: 0x0005CC50 File Offset: 0x0005AE50
+	virtual void set_prefix(string value)
+	{
+		base.prefix = value;
+	}
+
+	// Token: 0x060008D8 RID: 2264 RVA: 0x0005CC5C File Offset: 0x0005AE5C
+	virtual string GetPrefix()
+	{
+		return base.GetPrefix();
+	}
+
+	// Token: 0x04000EE0 RID: 3808
+	private const string eventNameStub = "twirl";
+
+	// Token: 0x04000EE1 RID: 3809
+	private const string rtpcNameStub = "phy_rope";
+
+	// Token: 0x04000EE2 RID: 3810
+	public ContinuousEventPlayer.Config playerConfig = new ContinuousEventPlayer.Config(0.01f, 50f, 0, 0);
+
+	// Token: 0x04000EE3 RID: 3811
+	public float sensitivity = 50f;
+
+	// Token: 0x04000EE4 RID: 3812
+	public float threshold = 0.01f;
+
+	// Token: 0x04000EE5 RID: 3813
+	public bool useFixedUpdate = true;
+
+	// Token: 0x04000EE6 RID: 3814
+	[SerializeField]
+	private ContinuousEventPlayer player;
+
+	// Token: 0x04000EE7 RID: 3815
+	[SerializeField]
+	private RopeLineRenderer lineRenderer;
+
+	// Token: 0x04000EE8 RID: 3816
+	[SerializeField]
+	private bool preprocessed;
+
+	// Token: 0x04000EE9 RID: 3817
+	[SerializeField]
+	private Transform audioTransform;
+}

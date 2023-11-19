@@ -1,0 +1,87 @@
+using System;
+using System.Collections.Generic;
+
+// Token: 0x0200002B RID: 43
+public class AnimcontrolConditionGroup : AnimcontrolConditionDefinition
+{
+	// Token: 0x06000170 RID: 368 RVA: 0x00014F44 File Offset: 0x00013144
+	public override bool ConditionMet(AnimationBlendHelper blendHelper)
+	{
+		if (this.comparison == AnimcontrolConditionGroup.comparisonValue.Any)
+		{
+			int i = 0;
+			int count = this.conditions.Count;
+			while (i < count)
+			{
+				AnimcontrolConditionDefinition animcontrolConditionDefinition = this.conditions[i];
+				if (animcontrolConditionDefinition.ConditionMet(blendHelper))
+				{
+					return true;
+				}
+				i++;
+			}
+			return false;
+		}
+		int j = 0;
+		int count2 = this.conditions.Count;
+		while (j < count2)
+		{
+			AnimcontrolConditionDefinition animcontrolConditionDefinition2 = this.conditions[j];
+			if (!animcontrolConditionDefinition2.ConditionMet(blendHelper))
+			{
+				return false;
+			}
+			j++;
+		}
+		return true;
+	}
+
+	// Token: 0x06000171 RID: 369 RVA: 0x00014FD8 File Offset: 0x000131D8
+	public override string GetConditionString()
+	{
+		string text = string.Empty;
+		bool flag = false;
+		int i = 0;
+		int count = this.conditions.Count;
+		while (i < count)
+		{
+			AnimcontrolConditionDefinition animcontrolConditionDefinition = this.conditions[i];
+			string conditionString = animcontrolConditionDefinition.GetConditionString();
+			if (text.Length == 0)
+			{
+				text = conditionString;
+			}
+			else if (this.comparison == AnimcontrolConditionGroup.comparisonValue.Any)
+			{
+				flag = true;
+				text = text + " || " + conditionString;
+			}
+			else
+			{
+				text = text + " && " + conditionString;
+			}
+			i++;
+		}
+		if (flag)
+		{
+			text = "(" + text + ")";
+		}
+		base.name = text;
+		return text;
+	}
+
+	// Token: 0x0400021D RID: 541
+	public AnimcontrolConditionGroup.comparisonValue comparison = AnimcontrolConditionGroup.comparisonValue.All;
+
+	// Token: 0x0400021E RID: 542
+	public List<AnimcontrolConditionDefinition> conditions;
+
+	// Token: 0x0200002C RID: 44
+	public enum comparisonValue
+	{
+		// Token: 0x04000220 RID: 544
+		Any,
+		// Token: 0x04000221 RID: 545
+		All
+	}
+}

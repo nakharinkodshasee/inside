@@ -1,0 +1,99 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000457 RID: 1111
+public class AudioFireBoxWaterImpact : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001D46 RID: 7494 RVA: 0x000FD188 File Offset: 0x000FB388
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioFireStart = new AudioEventSimpleLocal("env_huddle_huddleOven_box_fireStart", akGameObj);
+		this.audioFireStop = new AudioEventSimpleLocal("env_huddle_huddleOven_box_fireStop", akGameObj);
+		this.audioHitWater = new AudioEventSimpleLocal("env_huddle_huddleOven_box_hitWater", akGameObj);
+		this.audioHitSprinkler = new AudioEventSimpleLocal("env_huddle_huddleOven_box_hitSprinkler", akGameObj);
+	}
+
+	// Token: 0x06001D47 RID: 7495 RVA: 0x000FD1FC File Offset: 0x000FB3FC
+	public bool PreAwake(int callcount)
+	{
+		this.turnFireOn = SignalIn.Create("turnFireOn", base.gameObject, new Action(this.DoTurnFireOn));
+		return true;
+	}
+
+	// Token: 0x06001D48 RID: 7496 RVA: 0x000FD224 File Offset: 0x000FB424
+	private void Awake()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x06001D49 RID: 7497 RVA: 0x000FD22C File Offset: 0x000FB42C
+	private void DoTurnFireOn()
+	{
+		this.audioFireStart.PostFast();
+		this.isOnFire = true;
+	}
+
+	// Token: 0x06001D4A RID: 7498 RVA: 0x000FD244 File Offset: 0x000FB444
+	private void DoTurnFireOff()
+	{
+		this.audioFireStop.PostFast();
+		this.isOnFire = false;
+	}
+
+	// Token: 0x06001D4B RID: 7499 RVA: 0x000FD25C File Offset: 0x000FB45C
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (!this.isOnFire)
+		{
+			return;
+		}
+		if (coll.GetComponent<FluidVolume>())
+		{
+			this.audioHitWater.PostFast();
+			this.DoTurnFireOff();
+		}
+		else if (coll.GetComponent<WaterCurtain>())
+		{
+			this.audioHitSprinkler.PostFast();
+			this.DoTurnFireOff();
+		}
+	}
+
+	// Token: 0x040035BE RID: 13758
+	private SignalIn turnFireOn;
+
+	// Token: 0x040035BF RID: 13759
+	private bool isOnFire;
+
+	// Token: 0x040035C0 RID: 13760
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioFireStart;
+
+	// Token: 0x040035C1 RID: 13761
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioFireStop;
+
+	// Token: 0x040035C2 RID: 13762
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioHitWater;
+
+	// Token: 0x040035C3 RID: 13763
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioHitSprinkler;
+
+	// Token: 0x040035C4 RID: 13764
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

@@ -1,0 +1,127 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200001D RID: 29
+public class AlbinoReparentObjectInHierarchy : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000128 RID: 296 RVA: 0x00012E7C File Offset: 0x0001107C
+	public bool PreAwake(int callcount)
+	{
+		this.dropObject = SignalIn.Create("dropObject", base.gameObject, new Action(this.OnDropObject));
+		return true;
+	}
+
+	// Token: 0x06000129 RID: 297 RVA: 0x00012EA4 File Offset: 0x000110A4
+	private void OnDestroy()
+	{
+		if (this.reparentState == AlbinoReparentObjectInHierarchy.ReparentState.Reparented && this.objectToReparent != null)
+		{
+			Object.Destroy(this.objectToReparent);
+		}
+	}
+
+	// Token: 0x0600012A RID: 298 RVA: 0x00012EDC File Offset: 0x000110DC
+	private void FixedUpdate()
+	{
+		if (this.reparentState == AlbinoReparentObjectInHierarchy.ReparentState.UnReparented)
+		{
+			AlbinoAI allocatedAlbinoAI = this.albinoSpawner.GetAllocatedAlbinoAI();
+			if (allocatedAlbinoAI != null && allocatedAlbinoAI.currentSpawner == this.albinoSpawner)
+			{
+				GameObject animChar = allocatedAlbinoAI.GetCharacter().animChar;
+				Transform transform = animChar.transform.Find(this.albinoParentNode);
+				if (transform == null)
+				{
+					this.reparentState = AlbinoReparentObjectInHierarchy.ReparentState.NoParentNode;
+				}
+				else
+				{
+					Rigidbody component = this.objectToReparent.GetComponent<Rigidbody>();
+					if (component != null)
+					{
+						component.isKinematic = true;
+					}
+					this.objectToReparent.transform.parent = transform.transform;
+					this.objectToReparent.transform.localPosition = this.localPos;
+					this.objectToReparent.transform.localEulerAngles = this.localEuler;
+					this.reparentState = AlbinoReparentObjectInHierarchy.ReparentState.Reparented;
+					this.setExtraLocalPos = 10;
+				}
+			}
+		}
+		else if (this.reparentState == AlbinoReparentObjectInHierarchy.ReparentState.Reparented)
+		{
+			if (this.setExtraLocalPos > 0)
+			{
+				this.objectToReparent.transform.localPosition = this.localPos;
+				this.objectToReparent.transform.localEulerAngles = this.localEuler;
+				this.setExtraLocalPos--;
+			}
+			AlbinoAI allocatedAlbinoAI2 = this.albinoSpawner.GetAllocatedAlbinoAI();
+			if (!allocatedAlbinoAI2 || allocatedAlbinoAI2.currentSpawner != this.albinoSpawner)
+			{
+				this.objectToReparent.transform.parent = base.transform.parent;
+				this.objectToReparent.transform.position = base.transform.position;
+				this.objectToReparent.transform.rotation = base.transform.rotation;
+				Rigidbody component2 = this.objectToReparent.GetComponent<Rigidbody>();
+				if (component2 != null)
+				{
+					component2.isKinematic = false;
+				}
+				this.reparentState = AlbinoReparentObjectInHierarchy.ReparentState.UnReparented;
+			}
+		}
+	}
+
+	// Token: 0x0600012B RID: 299 RVA: 0x000130CC File Offset: 0x000112CC
+	private void OnDropObject()
+	{
+		if (this.reparentState == AlbinoReparentObjectInHierarchy.ReparentState.Reparented && this.objectToReparent != null)
+		{
+			this.reparentState = AlbinoReparentObjectInHierarchy.ReparentState.Released;
+			this.objectToReparent.transform.parent = base.transform.parent;
+			Rigidbody component = this.objectToReparent.GetComponent<Rigidbody>();
+			if (component != null)
+			{
+				component.isKinematic = false;
+			}
+		}
+	}
+
+	// Token: 0x04000198 RID: 408
+	public AlbinoSpawner albinoSpawner;
+
+	// Token: 0x04000199 RID: 409
+	public GameObject objectToReparent;
+
+	// Token: 0x0400019A RID: 410
+	public string albinoParentNode = "bones/Logic/Root/SpineA/SpineB/SpineC/LeftClavicle/LeftArm/LeftElbow/LeftWrist/holdL";
+
+	// Token: 0x0400019B RID: 411
+	private SignalIn dropObject;
+
+	// Token: 0x0400019C RID: 412
+	public Vector3 localPos;
+
+	// Token: 0x0400019D RID: 413
+	public Vector3 localEuler;
+
+	// Token: 0x0400019E RID: 414
+	private int setExtraLocalPos = 10;
+
+	// Token: 0x0400019F RID: 415
+	private AlbinoReparentObjectInHierarchy.ReparentState reparentState;
+
+	// Token: 0x0200001E RID: 30
+	public enum ReparentState
+	{
+		// Token: 0x040001A1 RID: 417
+		UnReparented,
+		// Token: 0x040001A2 RID: 418
+		Reparented,
+		// Token: 0x040001A3 RID: 419
+		NoParentNode,
+		// Token: 0x040001A4 RID: 420
+		Released
+	}
+}

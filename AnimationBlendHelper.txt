@@ -1,0 +1,505 @@
+using System;
+using System.Collections.Generic;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x02000111 RID: 273
+public class AnimationBlendHelper : MonoBehaviour, IAnimationBlender
+{
+	// Token: 0x06000837 RID: 2103 RVA: 0x00057B64 File Offset: 0x00055D64
+	public void AllAnimsInitialized()
+	{
+		this.alreadyUsedAnims.Clear();
+	}
+
+	// Token: 0x06000838 RID: 2104 RVA: 0x00057B74 File Offset: 0x00055D74
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000839 RID: 2105 RVA: 0x00057B78 File Offset: 0x00055D78
+	public int GetLargestDefinitionID()
+	{
+		return this.autoID;
+	}
+
+	// Token: 0x0600083A RID: 2106 RVA: 0x00057B80 File Offset: 0x00055D80
+	public static AnimationBlendHelper CreateAnimationBlendHelper(GameObject sceneParent, int maxParameterIndex = 0)
+	{
+		GameObject gameObject = new GameObject("AnimationBlendHelper");
+		AnimationBlendHelper animationBlendHelper = gameObject.AddComponent<AnimationBlendHelper>();
+		animationBlendHelper.transform.parent = sceneParent.transform;
+		animationBlendHelper.transform.localPosition = Vector3Fast.zero;
+		animationBlendHelper.transform.localRotation = Quaternion.identity;
+		animationBlendHelper.InitializeBlendParameters(maxParameterIndex);
+		return animationBlendHelper;
+	}
+
+	// Token: 0x0600083B RID: 2107 RVA: 0x00057BD8 File Offset: 0x00055DD8
+	public void InitializeBlendParameters(int maxParameterIndex)
+	{
+		while (this.blendParameters.Count <= maxParameterIndex)
+		{
+			this.blendParameters.Add(0f);
+		}
+	}
+
+	// Token: 0x0600083C RID: 2108 RVA: 0x00057C0C File Offset: 0x00055E0C
+	public void SetBlendParameter(int parameterIndex, float value)
+	{
+		this.blendParameters.raw[parameterIndex] = value;
+	}
+
+	// Token: 0x0600083D RID: 2109 RVA: 0x00057C1C File Offset: 0x00055E1C
+	public bool isDefActive(ABDefinition def)
+	{
+		int num = this.blendDefinitionStack.IndexOf(def);
+		return num > -1;
+	}
+
+	// Token: 0x0600083E RID: 2110 RVA: 0x00057C40 File Offset: 0x00055E40
+	public bool isDefActive(int definitionIndex)
+	{
+		ABDefinition v = this.blendDefinitions.raw[definitionIndex];
+		int num = this.blendDefinitionStack.IndexOf(v);
+		return num > -1;
+	}
+
+	// Token: 0x0600083F RID: 2111 RVA: 0x00057C74 File Offset: 0x00055E74
+	public void AddBlendDefinition(ABDefinition definition)
+	{
+		if (definition.definitionID < 0)
+		{
+			definition.definitionID = this.autoID++;
+		}
+		else
+		{
+			this.autoID = FastMath.Max(this.autoID, definition.definitionID + 1);
+		}
+		while (definition.definitionID >= this.blendDefinitions.size)
+		{
+			this.blendDefinitions.Add(null);
+		}
+		this.blendDefinitions.raw[definition.definitionID] = definition;
+		this.stringIndexToBlendDefinitions[definition.debugName] = definition.definitionID;
+		definition.SetBlendHelper(this);
+	}
+
+	// Token: 0x06000840 RID: 2112 RVA: 0x00057D1C File Offset: 0x00055F1C
+	public ABHelperData GetLatestAnimData()
+	{
+		return this.latestAnimationResult;
+	}
+
+	// Token: 0x06000841 RID: 2113 RVA: 0x00057D24 File Offset: 0x00055F24
+	public float GetAnimPos()
+	{
+		if (this.latestAnimationResult != null)
+		{
+			return this.latestAnimationResult.normalizedAnimPos;
+		}
+		return -1f;
+	}
+
+	// Token: 0x06000842 RID: 2114 RVA: 0x00057D44 File Offset: 0x00055F44
+	public void SetNormalizedPlayPos(float playPos)
+	{
+		int size = this.blendDefinitionStack.size;
+		if (size > 0)
+		{
+			if (this.latestAnimationResult != null)
+			{
+				this.latestAnimationResult.normalizedAnimPos = playPos;
+			}
+			this.blendDefinitionStack.raw[size - 1].SetNormalizedPlayPos(playPos);
+		}
+	}
+
+	// Token: 0x06000843 RID: 2115 RVA: 0x00057D90 File Offset: 0x00055F90
+	public int GetTopDefinitionID()
+	{
+		int size = this.blendDefinitionStack.size;
+		if (size > 0)
+		{
+			return this.blendDefinitionStack.raw[size - 1].definitionID;
+		}
+		return -1;
+	}
+
+	// Token: 0x06000844 RID: 2116 RVA: 0x00057DC8 File Offset: 0x00055FC8
+	public ABDefinition GetTopDefinition()
+	{
+		int size = this.blendDefinitionStack.size;
+		if (size > 0)
+		{
+			return this.blendDefinitionStack.raw[size - 1];
+		}
+		return null;
+	}
+
+	// Token: 0x06000845 RID: 2117 RVA: 0x00057DFC File Offset: 0x00055FFC
+	public Vector3 GetTopDefRootBonePos(out Quaternion rotation)
+	{
+		int size = this.blendDefinitionStack.size;
+		if (size == 0)
+		{
+			rotation = Quaternion.identity;
+			return Vector3Fast.zero;
+		}
+		ABDefinition abdefinition = this.blendDefinitionStack.raw[size - 1];
+		return abdefinition.GetRootBonePos(out rotation);
+	}
+
+	// Token: 0x06000846 RID: 2118 RVA: 0x00057E44 File Offset: 0x00056044
+	public int GetDefinitionIndex(string defName)
+	{
+		int result;
+		if (this.stringIndexToBlendDefinitions.TryGetValue(defName, out result))
+		{
+			return result;
+		}
+		return -1;
+	}
+
+	// Token: 0x06000847 RID: 2119 RVA: 0x00057E68 File Offset: 0x00056068
+	public ABDefinition GetDefinition(string defName, bool doErrorLog = true)
+	{
+		int num;
+		if (this.stringIndexToBlendDefinitions.TryGetValue(defName, out num))
+		{
+			return this.blendDefinitions.raw[num];
+		}
+		if (doErrorLog)
+		{
+		}
+		return null;
+	}
+
+	// Token: 0x06000848 RID: 2120 RVA: 0x00057EA0 File Offset: 0x000560A0
+	public ABDefinition GetDefinitionFromIndex(int index)
+	{
+		return this.blendDefinitions.raw[index];
+	}
+
+	// Token: 0x06000849 RID: 2121 RVA: 0x00057EB0 File Offset: 0x000560B0
+	public void SetStaticTopLayerPosition()
+	{
+		this.blendDefinitionStack.raw[this.blendDefinitionStack.size - 1].staticTopLayer = true;
+	}
+
+	// Token: 0x0600084A RID: 2122 RVA: 0x00057ED4 File Offset: 0x000560D4
+	public bool GetIsStaticDefinition(int blendDefinition)
+	{
+		return this.blendDefinitions.raw[blendDefinition].isStatic;
+	}
+
+	// Token: 0x0600084B RID: 2123 RVA: 0x00057EE8 File Offset: 0x000560E8
+	private bool MoveDefToTop(int index)
+	{
+		int num = this.blendDefinitionStack.size - 1;
+		if (index == num)
+		{
+			return false;
+		}
+		float[] array = new float[num - index + 1];
+		float num2 = 1f;
+		for (int i = num; i >= index; i--)
+		{
+			float num3 = num2 * this.blendDefinitionStack[i].blendWeight;
+			num2 -= num3;
+			array[num - i] = FastMath.Max(num3, 0f);
+		}
+		ABDefinition abdefinition = this.blendDefinitionStack[index];
+		this.blendDefinitionStack.RemoveAt(index);
+		abdefinition.blendWeight = array[num - index];
+		this.blendDefinitionStack.Add(abdefinition);
+		for (int j = num - 1; j >= index; j--)
+		{
+			this.blendDefinitionStack.raw[j].blendWeight = array[num - 1 - j] / (1f - this.blendDefinitionStack.raw[j + 1].blendWeight);
+		}
+		return true;
+	}
+
+	// Token: 0x0600084C RID: 2124 RVA: 0x00057FE8 File Offset: 0x000561E8
+	private void ResetPositionsForNonStaticStates()
+	{
+		int size = this.blendDefinitionStack.size;
+		for (int i = 0; i < size; i++)
+		{
+			this.blendDefinitionStack.raw[i].ResetUnstaticMovement();
+		}
+	}
+
+	// Token: 0x0600084D RID: 2125 RVA: 0x00058028 File Offset: 0x00056228
+	public void TransitToBlendDefinition(int definitionIndex, float transitTime = 0.2f, float startpos = 0f)
+	{
+		ABDefinition abdefinition = this.blendDefinitions.raw[definitionIndex];
+		if (abdefinition != null)
+		{
+			this.TransitToBlendDefinition(abdefinition, transitTime, startpos);
+		}
+	}
+
+	// Token: 0x0600084E RID: 2126 RVA: 0x00058054 File Offset: 0x00056254
+	public void TransitToBlendDefinition(ABDefinition def, float transitTime = 0.2f, float startpos = 0f)
+	{
+		def.transitTime = transitTime;
+		int num = -1;
+		int i = 0;
+		int size = this.blendDefinitionStack.size;
+		while (i < size)
+		{
+			if (def == this.blendDefinitionStack.raw[i])
+			{
+				num = i;
+				break;
+			}
+			i++;
+		}
+		if (num > -1)
+		{
+			if (this.MoveDefToTop(num))
+			{
+				def.ReRandomize(false);
+			}
+		}
+		else
+		{
+			int nextValidLayer = 0;
+			if (this.blendDefinitionStack.size > 0)
+			{
+				ABDefinition abdefinition = this.blendDefinitionStack.raw[this.blendDefinitionStack.size - 1];
+				nextValidLayer = abdefinition.layer + 1;
+			}
+			def.SetNextValidLayer(nextValidLayer);
+			startpos = def.RestartDef(startpos);
+			Transform transform = base.transform;
+			def.initialPos = transform.position;
+			def.initialEuler = transform.eulerAngles;
+			def.initialRotation = transform.rotation;
+			this.blendDefinitionStack.Add(def);
+			if (def.isStatic)
+			{
+				this.ResetPositionsForNonStaticStates();
+			}
+		}
+		if (this.latestAnimationResult != null)
+		{
+			this.latestAnimationResult.normalizedAnimPos = FastMath.Max(startpos, 0f);
+			this.latestAnimationResult.totalPlayTime = def.playedTime;
+		}
+		if (!(base.transform.parent != null) || base.transform.parent.parent != null)
+		{
+		}
+	}
+
+	// Token: 0x0600084F RID: 2127 RVA: 0x000581C8 File Offset: 0x000563C8
+	public void SetBlendDefinition(int definitionIndex)
+	{
+		ABDefinition blendDefinition = this.blendDefinitions.raw[definitionIndex];
+		this.SetBlendDefinition(blendDefinition);
+	}
+
+	// Token: 0x06000850 RID: 2128 RVA: 0x000581EC File Offset: 0x000563EC
+	public void SetBlendDefinition(ABDefinition defToSet)
+	{
+		Vector3 zero = Vector3Fast.zero;
+		Vector3 zero2 = Vector3Fast.zero;
+		this.dummyHelperData.Clear();
+		int size = this.blendDefinitionStack.size;
+		for (int i = 0; i < size; i++)
+		{
+			ABDefinition abdefinition = this.blendDefinitionStack.raw[i];
+			abdefinition.UpdateBlend(0f, -1, 0f, this.dummyHelperData, true);
+			abdefinition.speedScale = 1f;
+		}
+		this.blendDefinitionStack.size = 0;
+		if (defToSet.syncLayer)
+		{
+			defToSet.SetLayer(2);
+		}
+		else
+		{
+			defToSet.SetLayer(1);
+		}
+		defToSet.blendWeight = 1f;
+		this.blendDefinitionStack.Add(defToSet);
+		if (this.latestAnimationResult != null)
+		{
+			this.latestAnimationResult.normalizedAnimPos = this.dummyHelperData.normalizedAnimPos;
+		}
+	}
+
+	// Token: 0x06000851 RID: 2129 RVA: 0x000582C4 File Offset: 0x000564C4
+	public void Reset()
+	{
+		this.RemoveAllLayersBelow(this.blendDefinitionStack.Count);
+		this.blendDefinitionStack.size = 0;
+		this.latestAnimationResult = new ABHelperData();
+	}
+
+	// Token: 0x06000852 RID: 2130 RVA: 0x000582FC File Offset: 0x000564FC
+	public ABHelperData UpdateAnimationBlends(float deltaTime)
+	{
+		return this.DoTheUpdate(deltaTime);
+	}
+
+	// Token: 0x06000853 RID: 2131 RVA: 0x00058308 File Offset: 0x00056508
+	private void RemoveAllLayersBelow(int topIndex)
+	{
+		bool flag = false;
+		this.dummyHelperData.Clear();
+		for (int i = 0; i < topIndex; i++)
+		{
+			flag = true;
+			ABDefinition abdefinition = this.blendDefinitionStack.raw[0];
+			abdefinition.UpdateBlend(0f, -1, 0f, this.dummyHelperData, true);
+			abdefinition.DisableAnimations();
+			abdefinition.speedScale = 1f;
+			this.blendDefinitionStack.RemoveAt(0);
+		}
+		if (flag)
+		{
+			int nextValidLayer = 1;
+			int size = this.blendDefinitionStack.size;
+			for (int j = 0; j < size; j++)
+			{
+				ABDefinition abdefinition2 = this.blendDefinitionStack.raw[j];
+				nextValidLayer = abdefinition2.SetNextValidLayer(nextValidLayer) + 1;
+			}
+		}
+	}
+
+	// Token: 0x06000854 RID: 2132 RVA: 0x000583C0 File Offset: 0x000565C0
+	public ABHelperData DoTheUpdate(float deltaTime)
+	{
+		float normalizedAnimPos = this.latestAnimationResult.normalizedAnimPos;
+		this.latestAnimationResult.Clear();
+		AnimationBlendHelper.updateCount++;
+		float num = 1f;
+		bool flag = false;
+		Vector3 localPosition = Vector3Fast.zero;
+		int num2 = this.blendDefinitionStack.size - 1;
+		for (int i = num2; i >= 0; i--)
+		{
+			ABDefinition abdefinition = this.blendDefinitionStack.raw[i];
+			if (abdefinition.transitTime == 0f)
+			{
+				abdefinition.blendWeight = 1f;
+			}
+			else
+			{
+				abdefinition.blendWeight = FastMath.Min(1f, abdefinition.blendWeight + deltaTime / abdefinition.transitTime);
+			}
+			float num3 = abdefinition.blendWeight;
+			if (num3 < 1f)
+			{
+				num3 = MathUtils.SmoothFraction(num3);
+			}
+			abdefinition.playedTime += deltaTime;
+			abdefinition.UpdateBlend(num3 * num, AnimationBlendHelper.updateCount, deltaTime, this.latestAnimationResult, i == num2);
+			num *= 1f - num3;
+			if (num3 >= 1f)
+			{
+				this.RemoveAllLayersBelow(i);
+				break;
+			}
+			if (abdefinition.isStatic && abdefinition.staticTopLayer && i == this.blendDefinitionStack.size - 1)
+			{
+				flag = true;
+				localPosition = this.latestAnimationResult.localPosition;
+			}
+		}
+		if (flag)
+		{
+			this.latestAnimationResult.localPosition = localPosition;
+		}
+		if ((float)this.blendDefinitionStack.size > 0f)
+		{
+			ABDefinition abdefinition2 = this.blendDefinitionStack.raw[this.blendDefinitionStack.size - 1];
+			this.latestAnimationResult.totalPlayTime = abdefinition2.playedTime;
+			this.latestAnimationResult.topBlendWeight = abdefinition2.blendWeight;
+		}
+		return this.latestAnimationResult;
+	}
+
+	// Token: 0x06000855 RID: 2133 RVA: 0x00058590 File Offset: 0x00056790
+	internal bool CanTransitTo(ABDefinition def)
+	{
+		return def.allowReenty || !this.isDefActive(def);
+	}
+
+	// Token: 0x06000856 RID: 2134 RVA: 0x000585AC File Offset: 0x000567AC
+	public bool IsAnyStaticAnimPlaying()
+	{
+		int i = 0;
+		int size = this.blendDefinitionStack.size;
+		while (i < size)
+		{
+			ABDefinition abdefinition = this.blendDefinitionStack.raw[i];
+			if (abdefinition.isStatic)
+			{
+				return true;
+			}
+			i++;
+		}
+		return false;
+	}
+
+	// Token: 0x06000857 RID: 2135 RVA: 0x000585F4 File Offset: 0x000567F4
+	public void TestOutPutBlendDefinitions()
+	{
+		foreach (ABDefinition abdefinition in this.blendDefinitions)
+		{
+			if (abdefinition != null)
+			{
+			}
+		}
+	}
+
+	// Token: 0x06000858 RID: 2136 RVA: 0x00058658 File Offset: 0x00056858
+	public void CopyBlendData(AnimationBlendHelper from)
+	{
+		this.blendDefinitions = from.blendDefinitions;
+		this.TestOutPutBlendDefinitions();
+	}
+
+	// Token: 0x06000859 RID: 2137 RVA: 0x0005866C File Offset: 0x0005686C
+	public FastList<AnimationState> GetActiveAnimStates()
+	{
+		return this.latestAnimationResult.animStateList;
+	}
+
+	// Token: 0x04000E2C RID: 3628
+	public FastList<float> blendParameters = new FastList<float>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04000E2D RID: 3629
+	public FastList<ABDefinition> blendDefinitions = new FastList<ABDefinition>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04000E2E RID: 3630
+	private Dictionary<string, int> stringIndexToBlendDefinitions = new Dictionary<string, int>();
+
+	// Token: 0x04000E2F RID: 3631
+	private FastList<ABDefinition> blendDefinitionStack = new FastList<ABDefinition>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04000E30 RID: 3632
+	private bool autoUpdate;
+
+	// Token: 0x04000E31 RID: 3633
+	private ABHelperData latestAnimationResult = new ABHelperData();
+
+	// Token: 0x04000E32 RID: 3634
+	private ABHelperData dummyHelperData = new ABHelperData();
+
+	// Token: 0x04000E33 RID: 3635
+	private ABDefinition lastFrameTopBlendDefinition;
+
+	// Token: 0x04000E34 RID: 3636
+	private int autoID = 1;
+
+	// Token: 0x04000E35 RID: 3637
+	public Dictionary<AnimationState, SharedAnimationState> alreadyUsedAnims = new Dictionary<AnimationState, SharedAnimationState>();
+
+	// Token: 0x04000E36 RID: 3638
+	private static int updateCount;
+}

@@ -1,0 +1,106 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000091 RID: 145
+public class AlbinoCountTrigger : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060004E3 RID: 1251 RVA: 0x000360D4 File Offset: 0x000342D4
+	public void countUp()
+	{
+		this.addProbe();
+	}
+
+	// Token: 0x060004E4 RID: 1252 RVA: 0x000360DC File Offset: 0x000342DC
+	public void countDown()
+	{
+		this.substractProbe();
+	}
+
+	// Token: 0x060004E5 RID: 1253 RVA: 0x000360E4 File Offset: 0x000342E4
+	private void addProbe()
+	{
+		this.noOfProbesInside++;
+		this.countUpEvent.OnEvent(this);
+		if (this.noOfProbesInside == this.targetCount)
+		{
+			this.triggerEnter.OnEvent(this);
+			this.countReachedSignal.Signal();
+			this.countReached.OnEvent(this);
+		}
+	}
+
+	// Token: 0x060004E6 RID: 1254 RVA: 0x00036140 File Offset: 0x00034340
+	private void substractProbe()
+	{
+		this.noOfProbesInside--;
+		this.countDownEvent.OnEvent(this);
+		if (this.noOfProbesInside == this.targetCount - 1)
+		{
+			this.triggerExit.OnEvent(this);
+			this.countLostSignal.Signal();
+			this.countLost.OnEvent(this);
+		}
+	}
+
+	// Token: 0x060004E7 RID: 1255 RVA: 0x000361A0 File Offset: 0x000343A0
+	public bool PreAwake(int callcount)
+	{
+		this.countReachedSignal = SignalOut.Create("countReachedSignal", base.gameObject);
+		this.countLostSignal = SignalOut.Create("countLostSignal", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060004E8 RID: 1256 RVA: 0x000361DC File Offset: 0x000343DC
+	private bool IsValidCollider(Collider coll)
+	{
+		return coll.GetComponent<AlbinoAI>();
+	}
+
+	// Token: 0x060004E9 RID: 1257 RVA: 0x000361F4 File Offset: 0x000343F4
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (this.IsValidCollider(collider))
+		{
+			this.addProbe();
+		}
+	}
+
+	// Token: 0x060004EA RID: 1258 RVA: 0x00036208 File Offset: 0x00034408
+	private void OnTriggerExit(Collider collider)
+	{
+		if (this.IsValidCollider(collider))
+		{
+			this.substractProbe();
+		}
+	}
+
+	// Token: 0x0400084F RID: 2127
+	public int targetCount = 1;
+
+	// Token: 0x04000850 RID: 2128
+	private SimpleEvent<AlbinoCountTrigger> triggerEnter = new SimpleEvent<AlbinoCountTrigger>("triggerEnter");
+
+	// Token: 0x04000851 RID: 2129
+	private SimpleEvent<AlbinoCountTrigger> triggerExit = new SimpleEvent<AlbinoCountTrigger>("triggerExit");
+
+	// Token: 0x04000852 RID: 2130
+	private SimpleEvent<AlbinoCountTrigger> countUpEvent = new SimpleEvent<AlbinoCountTrigger>("countUpEvent");
+
+	// Token: 0x04000853 RID: 2131
+	private SimpleEvent<AlbinoCountTrigger> countDownEvent = new SimpleEvent<AlbinoCountTrigger>("countDownEvent");
+
+	// Token: 0x04000854 RID: 2132
+	private SimpleEvent<AlbinoCountTrigger> countReached = new SimpleEvent<AlbinoCountTrigger>("countReached");
+
+	// Token: 0x04000855 RID: 2133
+	private SimpleEvent<AlbinoCountTrigger> countLost = new SimpleEvent<AlbinoCountTrigger>("countLost");
+
+	// Token: 0x04000856 RID: 2134
+	private SignalOut countReachedSignal;
+
+	// Token: 0x04000857 RID: 2135
+	private SignalOut countLostSignal;
+
+	// Token: 0x04000858 RID: 2136
+	private int noOfProbesInside;
+}

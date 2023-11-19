@@ -1,0 +1,46 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000095 RID: 149
+public class AlbinoNarrowPathTrigger : AlbinoTrigger
+{
+	// Token: 0x060004F8 RID: 1272 RVA: 0x0003676C File Offset: 0x0003496C
+	public override void Start()
+	{
+		base.Start();
+		this.cachedZ = base.transform.position.z;
+	}
+
+	// Token: 0x060004F9 RID: 1273 RVA: 0x00036798 File Offset: 0x00034998
+	private void OnDrawGizmos()
+	{
+		if (EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			float y = base.transform.lossyScale.y;
+			float x = base.transform.lossyScale.x;
+			if (base.GetComponent<Collider>() != null)
+			{
+				Vector3 size = base.GetComponent<Collider>().bounds.size;
+				if (base.gameObject.layer != LayerMask.NameToLayer("NPC+"))
+				{
+					Gizmos.color = new Color(1f, 0f, 0f, 0.6f);
+					Gizmos.DrawCube(base.transform.position, size);
+					return;
+				}
+				y = size.y;
+				x = size.x;
+			}
+			Gizmos.color = new Color(1f, 0.7f, 0.5f, 0.3f);
+			Vector3 vector;
+			vector..ctor(x, y, 0f);
+			Gizmos.DrawCube(base.transform.position + Vector3.forward * (this.width * 0.5f + 0.3f), vector);
+			Gizmos.DrawCube(base.transform.position + Vector3.back * (this.width * 0.5f + 0.3f), vector);
+		}
+	}
+
+	// Token: 0x04000863 RID: 2147
+	public float width = 1.5f;
+
+	// Token: 0x04000864 RID: 2148
+	public float cachedZ;
+}

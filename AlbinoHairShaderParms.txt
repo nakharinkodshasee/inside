@@ -1,0 +1,53 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003CE RID: 974
+public class AlbinoHairShaderParms : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001A29 RID: 6697 RVA: 0x000E4460 File Offset: 0x000E2660
+	public bool PreAwake(int callcount)
+	{
+		if (!this.awoken)
+		{
+			this.awoken = true;
+			this.hair = base.gameObject.GetComponent<Hair>();
+			if (this.hair != null && this.hair.HairRenderer != null && this.hair.HairRenderer.gameObject != null)
+			{
+				this.matinstance_hair = this.hair.HairRenderer.gameObject.GetComponent<MaterialInstance>();
+				if (this.matinstance_hair == null)
+				{
+					this.matinstance_hair = this.hair.HairRenderer.gameObject.AddComponent<MaterialInstance>();
+				}
+				this.prop_headcenter = this.matinstance_hair.GetOrAddVectorProperty("_HeadCenter");
+			}
+		}
+		return true;
+	}
+
+	// Token: 0x06001A2A RID: 6698 RVA: 0x000E4530 File Offset: 0x000E2730
+	private void Awake()
+	{
+		this.PreAwake(0);
+	}
+
+	// Token: 0x06001A2B RID: 6699 RVA: 0x000E453C File Offset: 0x000E273C
+	private void LateUpdate()
+	{
+		if (this.hair.HairRenderer != null)
+		{
+			this.matinstance_hair.SetVectorProperty(this.prop_headcenter, this.hair.fakeColliderWorldPosThisFrame);
+		}
+	}
+
+	// Token: 0x04002F06 RID: 12038
+	private Hair hair;
+
+	// Token: 0x04002F07 RID: 12039
+	private MaterialInstance matinstance_hair;
+
+	// Token: 0x04002F08 RID: 12040
+	private MaterialInstance.VectorProperty prop_headcenter;
+
+	// Token: 0x04002F09 RID: 12041
+	private bool awoken;
+}

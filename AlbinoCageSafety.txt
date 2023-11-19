@@ -1,0 +1,50 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000008 RID: 8
+public class AlbinoCageSafety : MonoBehaviour
+{
+	// Token: 0x0600005F RID: 95 RVA: 0x00009C5C File Offset: 0x00007E5C
+	private void Awake()
+	{
+		this.rigBod = base.GetComponent<Rigidbody>();
+	}
+
+	// Token: 0x06000060 RID: 96 RVA: 0x00009C6C File Offset: 0x00007E6C
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000061 RID: 97 RVA: 0x00009C70 File Offset: 0x00007E70
+	private void FixedUpdate()
+	{
+		if (this.leftPos != null)
+		{
+			Vector3 position = this.rigBod.position;
+			if (this.rigBod.position.x < this.leftPos.position.x)
+			{
+				base.enabled = false;
+				return;
+			}
+			vector2f pos = ScriptGlobals.boy.pos;
+			if (FastMath.Abs(pos.x - position.x) > 10f || position.y - pos.y > 10f)
+			{
+				return;
+			}
+			if (!(ScriptGlobals.boy.state is BoyGrabState) && this.rigBod.angularVelocity.z < 0.1f)
+			{
+				float x = base.transform.up.x;
+				this.rigBod.AddTorque(Vector3.forward * (x * this.torqueFactor * 150f * Time.deltaTime), 1);
+			}
+		}
+	}
+
+	// Token: 0x0400009E RID: 158
+	public float torqueFactor = 1f;
+
+	// Token: 0x0400009F RID: 159
+	private Rigidbody rigBod;
+
+	// Token: 0x040000A0 RID: 160
+	public Transform leftPos;
+}

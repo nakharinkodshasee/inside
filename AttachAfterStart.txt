@@ -1,0 +1,33 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000633 RID: 1587
+public class AttachAfterStart : MonoBehaviour
+{
+	// Token: 0x0600276C RID: 10092 RVA: 0x0013D3EC File Offset: 0x0013B5EC
+	private void Update()
+	{
+		if (!this.attached)
+		{
+			this.attached = true;
+			if (this.attachTo != null)
+			{
+				base.transform.parent = this.attachTo;
+				base.transform.localPosition = this.localPos;
+				base.transform.localEulerAngles = this.localEuler;
+			}
+		}
+	}
+
+	// Token: 0x040046D6 RID: 18134
+	public Transform attachTo;
+
+	// Token: 0x040046D7 RID: 18135
+	public Vector3 localPos;
+
+	// Token: 0x040046D8 RID: 18136
+	public Vector3 localEuler;
+
+	// Token: 0x040046D9 RID: 18137
+	private bool attached;
+}

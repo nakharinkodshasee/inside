@@ -1,0 +1,205 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200008F RID: 143
+public class AlbinoAttractor : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060004D1 RID: 1233 RVA: 0x00034F98 File Offset: 0x00033198
+	public bool PreAwake(int callcount)
+	{
+		this.enableTrigger = SignalIn.Create("enableTrigger", base.gameObject, new Action(this.EnableTrigger));
+		this.disableTrigger = SignalIn.Create("disableTrigger", base.gameObject, new Action(this.DisableTrigger));
+		this.attractAll = SignalIn.Create("attractAll", base.gameObject, new Action(this.AttractAll));
+		this.releaseAll = SignalIn.Create("releaseAll", base.gameObject, new Action(this.ReleaseAll));
+		return true;
+	}
+
+	// Token: 0x060004D2 RID: 1234 RVA: 0x00035030 File Offset: 0x00033230
+	public void AttractAll()
+	{
+		GameObject gameObject = (!(this.attractPivot != null)) ? base.gameObject : this.attractPivot;
+		if (this.pushBox)
+		{
+			AlbinoGroupManager.mInstance.SetOverrideGrabBodyCollider(gameObject.GetComponent<Collider>());
+		}
+		else
+		{
+			AlbinoGroupManager.mInstance.SetOverridePointForAllActiveAlbinos(gameObject, this.radius);
+		}
+	}
+
+	// Token: 0x060004D3 RID: 1235 RVA: 0x00035094 File Offset: 0x00033294
+	public void ReleaseAll()
+	{
+		GameObject gameObject = (!(this.attractPivot != null)) ? base.gameObject : this.attractPivot;
+		if (this.pushBox)
+		{
+			if (AlbinoGroupManager.mInstance.GetOverrideGrabBodyCollider() == gameObject.GetComponent<Collider>())
+			{
+				AlbinoGroupManager.mInstance.SetOverrideGrabBodyCollider(null);
+			}
+		}
+		else
+		{
+			AlbinoGroupManager.mInstance.RemoveOverridePointForAlbinos(gameObject);
+		}
+	}
+
+	// Token: 0x060004D4 RID: 1236 RVA: 0x00035104 File Offset: 0x00033304
+	private void SendGotoPivot(AlbinoAI albino)
+	{
+		if (!this.pushBox)
+		{
+			GameObject overridePoint = (!(this.attractPivot != null)) ? base.gameObject : this.attractPivot;
+			AlbinoGroupManager.mInstance.SetOverridePointForAlbino(overridePoint, this.radius, albino);
+		}
+	}
+
+	// Token: 0x060004D5 RID: 1237 RVA: 0x00035154 File Offset: 0x00033354
+	private void EnableTrigger()
+	{
+		if (!this.triggerEnabled)
+		{
+			int count = this.albinosInside.Count;
+			for (int i = count - 1; i >= 0; i--)
+			{
+				AlbinoAI albinoAI = this.albinosInside[i];
+				if (albinoAI == null)
+				{
+					this.albinosInside.RemoveAt(i);
+				}
+				else
+				{
+					this.SendGotoPivot(albinoAI);
+				}
+			}
+		}
+		this.triggerEnabled = true;
+	}
+
+	// Token: 0x060004D6 RID: 1238 RVA: 0x000351C4 File Offset: 0x000333C4
+	private void DisableTrigger()
+	{
+		if (this.triggerEnabled)
+		{
+			GameObject overridePoint = (!(this.attractPivot != null)) ? base.gameObject : this.attractPivot;
+			AlbinoGroupManager.mInstance.RemoveOverridePointForAlbinos(overridePoint);
+			this.triggerEnabled = false;
+		}
+	}
+
+	// Token: 0x060004D7 RID: 1239 RVA: 0x00035214 File Offset: 0x00033414
+	private void OnTriggerEnter(Collider coll)
+	{
+		AlbinoAI component = coll.GetComponent<AlbinoAI>();
+		if (component != null)
+		{
+			this.albinosInside.Add(component);
+			if (this.triggerEnabled)
+			{
+				this.SendGotoPivot(component);
+			}
+		}
+	}
+
+	// Token: 0x060004D8 RID: 1240 RVA: 0x00035254 File Offset: 0x00033454
+	private void OnTriggerExit(Collider coll)
+	{
+		AlbinoAI component = coll.GetComponent<AlbinoAI>();
+		if (component != null)
+		{
+			if (this.autoReleaseFromTrigger)
+			{
+				AlbinoGroupManager.mInstance.RemoveOverridePointForAlbino(component);
+			}
+			this.albinosInside.Remove(component);
+		}
+	}
+
+	// Token: 0x060004D9 RID: 1241 RVA: 0x00035298 File Offset: 0x00033498
+	private void DrawArrow(Vector3 pos, Vector3 dir, Vector3 perpendicular, float distToPos = 0f, float len = 0.3f, float lenperpendicular = 0.05f)
+	{
+		Gizmos.DrawLine(pos - dir * (len + distToPos), pos - dir * distToPos);
+		Gizmos.DrawLine(pos - dir * (lenperpendicular + distToPos) + perpendicular * lenperpendicular, pos - dir * distToPos);
+		Gizmos.DrawLine(pos - dir * (lenperpendicular + distToPos) - perpendicular * lenperpendicular, pos - dir * distToPos);
+	}
+
+	// Token: 0x060004DA RID: 1242 RVA: 0x0003532C File Offset: 0x0003352C
+	private void OnDrawGizmos()
+	{
+		if (EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			Gizmos.color = new Color(1f, 0.5f, 0.5f, 0.5f);
+			Vector3 position = base.transform.position;
+			if (this.attractPivot != null)
+			{
+				position = this.attractPivot.transform.position;
+			}
+			this.DrawArrow(position, Vector3.right, Vector3.up, 0.1f, 0.3f, 0.05f);
+			this.DrawArrow(position, Vector3.left, Vector3.up, 0.1f, 0.3f, 0.05f);
+			this.DrawArrow(position, Vector3.down, Vector3.right, 0.1f, 0.3f, 0.05f);
+			this.DrawArrow(position, Vector3.up, Vector3.right, 0.1f, 0.3f, 0.05f);
+			Vector3 normalized = (Vector3.down + Vector3.right).normalized;
+			Vector3 normalized2 = (Vector3.down + Vector3.left).normalized;
+			Vector3 normalized3 = (Vector3.up + Vector3.right).normalized;
+			Vector3 normalized4 = (Vector3.up + Vector3.left).normalized;
+			Gizmos.color = new Color(0.5f, 1f, 0.5f, 1f);
+			this.DrawArrow(position, normalized, normalized2, 0.1f, 0.3f, 0.05f);
+			this.DrawArrow(position, normalized2, normalized, 0.1f, 0.3f, 0.05f);
+			this.DrawArrow(position, normalized3, normalized4, 0.1f, 0.3f, 0.05f);
+			this.DrawArrow(position, normalized4, normalized3, 0.1f, 0.3f, 0.05f);
+			if (this.pushBox && (base.GetComponent<Collider>() == null || !base.GetComponent<Collider>().enabled))
+			{
+				Gizmos.color = Color.red;
+				Gizmos.DrawLine(base.transform.position + (Vector3.left + Vector3.down) * 0.5f, base.transform.position + (Vector3.right + Vector3.up) * 0.5f);
+				Gizmos.DrawLine(base.transform.position + (Vector3.left + Vector3.up) * 0.5f, base.transform.position + (Vector3.right + Vector3.down) * 0.5f);
+				Gizmos.DrawWireSphere(base.transform.position, 0.4f);
+				return;
+			}
+			bool flag = base.GetComponent<Collider>() != null && base.GetComponent<Collider>().enabled;
+			if (base.GetComponent<Collider>() != null && base.GetComponent<Collider>().enabled && (this.pushBox || base.GetComponent<Collider>().isTrigger))
+			{
+				Vector3 size = base.GetComponent<Collider>().bounds.size;
+				if (!this.pushBox && base.gameObject.layer != LayerMask.NameToLayer("NPC+"))
+				{
+					Gizmos.color = new Color(1f, 0f, 0f, 0.6f);
+					Gizmos.DrawCube(base.transform.position, size);
+					return;
+				}
+				Gizmos.color = new Color(0.5f, 1f, 0.5f, 0.3f);
+				Gizmos.DrawCube(base.transform.position, size);
+			}
+		}
+	}
+
+	// Token: 0x04000842 RID: 2114
+	public GameObject attractPivot;
+
+	// Token: 0x04000843 RID: 2115
+	public float radius;
+
+	// Token: 0x04000844 RID: 2116
+	public bool pushBox;
+
+	// Token: 0x04000845 RID: 2117
+	public bool triggerEnabled = true;
+
+	// Token: 0x04000846 RID: 2118
+	public bool autoReleaseFromTrigger;
+
+	// Token: 0x04000847 RID: 2119
+	private SignalIn enableTrigger;
+
+	// Token: 0x04000848 RID: 2120
+	private SignalIn disableTrigger;
+
+	// Token: 0x04000849 RID: 2121
+	private SignalIn attractAll;
+
+	// Token: 0x0400084A RID: 2122
+	private SignalIn releaseAll;
+
+	// Token: 0x0400084B RID: 2123
+	private List<AlbinoAI> albinosInside = new List<AlbinoAI>();
+}

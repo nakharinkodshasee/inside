@@ -1,0 +1,228 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000015 RID: 21
+public class AlbinoMineCartCart : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060000FC RID: 252 RVA: 0x000117A8 File Offset: 0x0000F9A8
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObjectCart = AudioUtils.EnsureAkGameObj(this.cartRigidBody.gameObject, null);
+		this.audioWagonRotateStart = new AudioEventSimpleLocal("phy_mines_albinosInMineWagon_wagon_rotate", this.akGameObjectCart);
+		this.audioWagonRotateStop = new AudioEventSimpleLocal("phy_mines_albinosInMineWagon_wagon_stopRotation", this.akGameObjectCart);
+	}
+
+	// Token: 0x060000FD RID: 253 RVA: 0x0001180C File Offset: 0x0000FA0C
+	public bool PreAwake(int callcount)
+	{
+		this.loadCompleted = SignalIn.Create("loadCompleted", base.gameObject, new Action(this.DoLoadCompleted));
+		this.albinosOut = SignalOut.Create("albinosOut", base.gameObject);
+		if (this.anim == null)
+		{
+			this.anim = base.GetComponent<Animation>();
+			this.animDriveState = this.anim[this.animDrive.name];
+		}
+		return true;
+	}
+
+	// Token: 0x060000FE RID: 254 RVA: 0x0001188C File Offset: 0x0000FA8C
+	private void OnEnable()
+	{
+		if (this.wheelFront)
+		{
+			this.wheelFront.maxAngularVelocity = 200f;
+		}
+		if (this.wheelBack)
+		{
+			this.wheelBack.maxAngularVelocity = 200f;
+		}
+	}
+
+	// Token: 0x060000FF RID: 255 RVA: 0x000118DC File Offset: 0x0000FADC
+	private void Start()
+	{
+		this.OnPreProcess();
+		if (!(this.animationStartPoint == null) && !(this.cartRigidBody == null))
+		{
+			this.allOk = true;
+			if (this.animationStartPoint != null)
+			{
+				this.startDifToEndPoint = Mathf.Sign(this.animationStartPoint.transform.position.x - base.transform.position.x);
+				this.anim.Play();
+				this.animDriveState.speed = 0f;
+			}
+		}
+	}
+
+	// Token: 0x06000100 RID: 256 RVA: 0x00011984 File Offset: 0x0000FB84
+	private void DoLoadCompleted()
+	{
+		this.cartRigidBody.isKinematic = true;
+		this.physicsLocked = true;
+		Vector3 position = this.cartRigidBody.transform.position;
+		position.x += this.startDifToEndPoint;
+		this.cartRigidBody.transform.position = this.startAnimPoint.position;
+		this.anim.Play();
+		this.animDriveState.normalizedTime = 1f;
+		this.wheelSound.enabled = false;
+	}
+
+	// Token: 0x06000101 RID: 257 RVA: 0x00011A10 File Offset: 0x0000FC10
+	private void FixedUpdate()
+	{
+		Vector3 position = this.rootNode.position;
+		Vector3 vector = (position - this.lastPos) / Time.deltaTime;
+		this.lastPos = position;
+		if (this.physicsLocked && !this.audioStopHasBeenSend)
+		{
+			this.currentRTPC = vector.magnitude * 21f * (Time.deltaTime * 4f) + this.currentRTPC * (1f - Time.deltaTime * 4f);
+			SoundEngine.RTPCs.phyRotate.SetFast(this.currentRTPC, this.akGameObjectCart, 0f);
+		}
+	}
+
+	// Token: 0x06000102 RID: 258 RVA: 0x00011AB0 File Offset: 0x0000FCB0
+	private void HandleAudioHack()
+	{
+		if (!this.physicsLocked)
+		{
+			this.currentRTPC = this.wheelSound.player.GetValue();
+			SoundEngine.RTPCs.phyRotate.SetFast(this.currentRTPC, this.akGameObjectCart, 0f);
+			this.physicsLocked = true;
+			this.wheelSound.enabled = false;
+			this.audioWagonRotateStart.PostFast();
+		}
+	}
+
+	// Token: 0x06000103 RID: 259 RVA: 0x00011B18 File Offset: 0x0000FD18
+	private void Update()
+	{
+		if (!this.allOk)
+		{
+			return;
+		}
+		if (!this.animPlaying)
+		{
+			float num = this.animationStartPoint.transform.position.x - base.transform.position.x;
+			if (num * this.startDifToEndPoint < 0f)
+			{
+				Vector3 velocity = this.cartRigidBody.velocity;
+				velocity.y = 0f;
+				float magnitude = velocity.magnitude;
+				this.cartRigidBody.isKinematic = true;
+				this.animPlaying = true;
+				this.speedFactor = magnitude * this.initialSpeed;
+				this.animDriveState.speed = this.speedFactor;
+				this.HandleAudioHack();
+			}
+		}
+		else
+		{
+			base.transform.position += (this.animationStartPoint.transform.position - base.transform.position) * Time.deltaTime * 7f;
+			base.transform.rotation = Quaternion.Slerp(base.transform.rotation, this.animationStartPoint.transform.rotation, Time.deltaTime * 7f);
+			if (!this.audioStopHasBeenSend && this.animDriveState.normalizedTime > 0.44f)
+			{
+				this.audioWagonRotateStop.PostFast();
+				this.audioStopHasBeenSend = true;
+			}
+			if (this.animDriveState.normalizedTime > 0.9f)
+			{
+				this.allOk = false;
+				this.albinosOut.Signal();
+			}
+			this.speedFactor += (1f - this.speedFactor) * Time.deltaTime * this.blendSpeed;
+			this.animDriveState.speed = this.speedFactor;
+		}
+	}
+
+	// Token: 0x0400014E RID: 334
+	public GameObject animationStartPoint;
+
+	// Token: 0x0400014F RID: 335
+	public Rigidbody cartRigidBody;
+
+	// Token: 0x04000150 RID: 336
+	public float initialSpeed = 0.666f;
+
+	// Token: 0x04000151 RID: 337
+	public float blendSpeed = 1f;
+
+	// Token: 0x04000152 RID: 338
+	public Transform startAnimPoint;
+
+	// Token: 0x04000153 RID: 339
+	public AudioRotate wheelSound;
+
+	// Token: 0x04000154 RID: 340
+	public AnimationClip animDrive;
+
+	// Token: 0x04000155 RID: 341
+	public Rigidbody wheelFront;
+
+	// Token: 0x04000156 RID: 342
+	public Rigidbody wheelBack;
+
+	// Token: 0x04000157 RID: 343
+	public Transform rootNode;
+
+	// Token: 0x04000158 RID: 344
+	private SignalIn loadCompleted;
+
+	// Token: 0x04000159 RID: 345
+	private SignalOut albinosOut;
+
+	// Token: 0x0400015A RID: 346
+	private bool allOk;
+
+	// Token: 0x0400015B RID: 347
+	private bool animPlaying;
+
+	// Token: 0x0400015C RID: 348
+	private float startDifToEndPoint;
+
+	// Token: 0x0400015D RID: 349
+	private float speedFactor;
+
+	// Token: 0x0400015E RID: 350
+	private Animation anim;
+
+	// Token: 0x0400015F RID: 351
+	private AnimationState animDriveState;
+
+	// Token: 0x04000160 RID: 352
+	private bool physicsLocked;
+
+	// Token: 0x04000161 RID: 353
+	private float currentRTPC;
+
+	// Token: 0x04000162 RID: 354
+	private bool audioStopHasBeenSend;
+
+	// Token: 0x04000163 RID: 355
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioWagonRotateStart;
+
+	// Token: 0x04000164 RID: 356
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioWagonRotateStop;
+
+	// Token: 0x04000165 RID: 357
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObjectCart;
+
+	// Token: 0x04000166 RID: 358
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04000167 RID: 359
+	private Vector3 lastPos = Vector3Fast.zero;
+}

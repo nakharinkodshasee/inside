@@ -1,0 +1,34 @@
+using System;
+using System.Collections.Generic;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x02000027 RID: 39
+public class AnimControlTransitionDatabase : MonoBehaviour
+{
+	// Token: 0x06000165 RID: 357 RVA: 0x00014D74 File Offset: 0x00012F74
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000166 RID: 358 RVA: 0x00014D78 File Offset: 0x00012F78
+	public void CreateCustomAnimDefinitions(AnimcontrolledCharacterBase acCharacter, GameObject character, AnimationBlendHelper blendHelper, AnimationMovementInfo animDB, AnimationMovementInfo animDBGeneric, List<string> manuallyCreatedAnims, AnimcontrolTransitionManager manager)
+	{
+		AnimcontrolStateInfo[] componentsInChildren = base.GetComponentsInChildren<AnimcontrolStateInfo>(true);
+		int num = componentsInChildren.Length;
+		for (int i = 0; i < num; i++)
+		{
+			AnimcontrolStateInfo animcontrolStateInfo = componentsInChildren[i];
+			ABDefinition abdefinition = animcontrolStateInfo.CreateCustomAnimDefinitions(acCharacter, character, blendHelper, animDB, animDBGeneric, manuallyCreatedAnims);
+			if (abdefinition != null)
+			{
+				manager.AddState(abdefinition.definitionID, animcontrolStateInfo);
+			}
+		}
+	}
+
+	// Token: 0x06000167 RID: 359 RVA: 0x00014DD0 File Offset: 0x00012FD0
+	private void Update()
+	{
+	}
+}

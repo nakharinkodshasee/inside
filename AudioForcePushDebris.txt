@@ -1,0 +1,134 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004BB RID: 1211
+public class AudioForcePushDebris : MonoBehaviour
+{
+	// Token: 0x06001FB9 RID: 8121 RVA: 0x0010E17C File Offset: 0x0010C37C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.falling != null)
+		{
+			AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.falling.gameObject, this);
+			this.audioSandFall = new AudioEventSimpleLocal("env_mines_sandFall", akGameObj);
+			this.hasFallParticles = true;
+		}
+		if (this.bouncing != null)
+		{
+			AkGameObj akGameObj2 = AudioUtils.EnsureAkGameObj(this.bouncing.gameObject, this);
+			this.audioSandHit = new AudioEventSimpleLocal("env_mines_sandHit", akGameObj2);
+			this.hasBounceParticles = true;
+		}
+	}
+
+	// Token: 0x06001FBA RID: 8122 RVA: 0x0010E214 File Offset: 0x0010C414
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.cachedPos = base.transform.position;
+	}
+
+	// Token: 0x06001FBB RID: 8123 RVA: 0x0010E230 File Offset: 0x0010C430
+	public void MakeActive()
+	{
+		this.isActive = true;
+	}
+
+	// Token: 0x06001FBC RID: 8124 RVA: 0x0010E23C File Offset: 0x0010C43C
+	public void MakeInactive()
+	{
+		this.isActive = false;
+	}
+
+	// Token: 0x06001FBD RID: 8125 RVA: 0x0010E248 File Offset: 0x0010C448
+	private void Update()
+	{
+		if (FastMath.Abs(ScriptGlobals.boy.pos.x - this.cachedPos.x) > this.maxDistToBoy)
+		{
+			return;
+		}
+		if (this.hasBounceParticles)
+		{
+			this.bouncePlaying = this.bouncing.isPlaying;
+		}
+		if (this.hasFallParticles)
+		{
+			this.fallingPlaying = this.falling.isPlaying;
+		}
+		if (this.fallingPlaying && !this.fallingPlayingLastFrame && this.falling.time < 0.1f)
+		{
+			if (this.isActive && SoundEngine.AreEngineUpdatesEnabled())
+			{
+				this.audioSandFall.PostFast();
+			}
+			this.fallingPlayingLastFrame = true;
+		}
+		if (this.bouncePlaying && !this.bouncePlayingLastFrame)
+		{
+			if (this.isActive && SoundEngine.AreEngineUpdatesEnabled())
+			{
+				this.audioSandHit.PostFast();
+			}
+			this.fallingPlayingLastFrame = false;
+		}
+		this.bouncePlayingLastFrame = this.bouncePlaying;
+	}
+
+	// Token: 0x04003ABA RID: 15034
+	public ParticleSystem falling;
+
+	// Token: 0x04003ABB RID: 15035
+	public ParticleSystem bouncing;
+
+	// Token: 0x04003ABC RID: 15036
+	public float maxDistToBoy = 30f;
+
+	// Token: 0x04003ABD RID: 15037
+	private bool bouncePlaying;
+
+	// Token: 0x04003ABE RID: 15038
+	private bool bouncePlayingLastFrame;
+
+	// Token: 0x04003ABF RID: 15039
+	private bool fallingPlaying;
+
+	// Token: 0x04003AC0 RID: 15040
+	private bool fallingPlayingLastFrame;
+
+	// Token: 0x04003AC1 RID: 15041
+	private bool isActive;
+
+	// Token: 0x04003AC2 RID: 15042
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioSandFall;
+
+	// Token: 0x04003AC3 RID: 15043
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioSandHit;
+
+	// Token: 0x04003AC4 RID: 15044
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04003AC5 RID: 15045
+	[HideInInspector]
+	[SerializeField]
+	private bool hasBounceParticles;
+
+	// Token: 0x04003AC6 RID: 15046
+	[SerializeField]
+	[HideInInspector]
+	private bool hasFallParticles;
+
+	// Token: 0x04003AC7 RID: 15047
+	private Vector3 cachedPos;
+}

@@ -1,0 +1,95 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020004F5 RID: 1269
+public class AlbinoDropLogic : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002145 RID: 8517 RVA: 0x001167D8 File Offset: 0x001149D8
+	public bool PreAwake(int callcount)
+	{
+		this.drop = SignalIn.Create("drop", base.gameObject, new Action(this.OnDrop));
+		this.loadFallen = SignalIn.Create("loadFallen", base.gameObject, new Action(this.OnLoadAlbinosFallen));
+		return true;
+	}
+
+	// Token: 0x06002146 RID: 8518 RVA: 0x0011682C File Offset: 0x00114A2C
+	private void Update()
+	{
+		Bounds bounds = this.water.GetComponent<Collider>().bounds;
+		if ((double)(bounds.max.y - bounds.min.y) > 0.1)
+		{
+			float surfaceHeight = this.water.GetSurfaceHeight(Vector3.down);
+			int i = 0;
+			int num = this.albinosFloating.Length;
+			while (i < num)
+			{
+				AlbinoFloating albinoFloating = this.albinosFloating[i];
+				albinoFloating.FallCheck(surfaceHeight);
+				i++;
+			}
+		}
+		if (this.dropLimbsTimer > 0f)
+		{
+			this.dropLimbsTimer -= Time.deltaTime;
+			if (this.dropLimbsTimer < 0f)
+			{
+				AutoLimb autoLimb = this.autoLimbs[0];
+				this.autoLimbs.RemoveAt(0);
+				autoLimb.OnActivate();
+				if (this.autoLimbs.Count > 0)
+				{
+					this.dropLimbsTimer = Random.Range(0.5f, 1f);
+				}
+			}
+		}
+	}
+
+	// Token: 0x06002147 RID: 8519 RVA: 0x00116938 File Offset: 0x00114B38
+	private void OnDrop()
+	{
+		if (this.autoLimbs.Count > 0)
+		{
+			this.dropLimbsTimer = 1f;
+		}
+	}
+
+	// Token: 0x06002148 RID: 8520 RVA: 0x00116958 File Offset: 0x00114B58
+	private void OnLoadAlbinosFallen()
+	{
+		int i = 0;
+		int num = this.albinosFloating.Length;
+		while (i < num)
+		{
+			AlbinoFloating albinoFloating = this.albinosFloating[i];
+			albinoFloating.LoadFallen();
+			i++;
+		}
+		int j = 0;
+		int count = this.autoLimbs.Count;
+		while (j < count)
+		{
+			AutoLimb autoLimb = this.autoLimbs[j];
+			autoLimb.OnActivate();
+			j++;
+		}
+	}
+
+	// Token: 0x04003DA9 RID: 15785
+	public BoyWater water;
+
+	// Token: 0x04003DAA RID: 15786
+	public AlbinoFloating[] albinosFloating;
+
+	// Token: 0x04003DAB RID: 15787
+	public List<AutoLimb> autoLimbs;
+
+	// Token: 0x04003DAC RID: 15788
+	private SignalIn drop;
+
+	// Token: 0x04003DAD RID: 15789
+	private SignalIn loadFallen;
+
+	// Token: 0x04003DAE RID: 15790
+	private float dropLimbsTimer;
+}

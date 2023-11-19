@@ -1,0 +1,196 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200000F RID: 15
+public class AlbinoInCageAI : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060000DE RID: 222 RVA: 0x00010748 File Offset: 0x0000E948
+	public bool PreAwake(int callcount)
+	{
+		this.wakeUpAlbino = SignalIn.Create("wakeUpAlbino", base.gameObject, new Action(this.OnWakeUpAlbino));
+		this.playFallAnim = SignalIn.Create("playFallAnim", base.gameObject, new Action(this.OnPlayFallAnim));
+		this.disableAlbino = SignalIn.Create("disableAlbino", base.gameObject, new Action(this.OnDisableAlbino));
+		return true;
+	}
+
+	// Token: 0x060000DF RID: 223 RVA: 0x000107BC File Offset: 0x0000E9BC
+	private void Init()
+	{
+		this.woken = false;
+		this.activated = this.SetAlbinoAI();
+		if (this.albinoAI != null && this.activated)
+		{
+			this.albinoAI.GetCharacter().ForceToAnimation("CageIntroIdle" + this.animationSet, base.gameObject, 0.01f, Random.Range(0f, 1f), false);
+		}
+		Vector3 position = base.transform.position;
+		this.albinoState = AlbinoInCageAI.AlbinoCageState.InCage;
+	}
+
+	// Token: 0x060000E0 RID: 224 RVA: 0x00010848 File Offset: 0x0000EA48
+	public void OnDisableAlbino()
+	{
+		if (this.albinoAI == null)
+		{
+			this.activated = this.SetAlbinoAI();
+		}
+		this.albinoAI.SetRemotePuppet(false);
+		this.albinoToControl.OnUnspawn();
+	}
+
+	// Token: 0x060000E1 RID: 225 RVA: 0x0001088C File Offset: 0x0000EA8C
+	public void OnWakeUpAlbino()
+	{
+		if ((LevelGlobals.mindHatOnHead == null || LevelGlobals.mindHatOnHead.IsAttached()) && this.albinoAI != null && !this.woken)
+		{
+			this.woken = true;
+			this.albinoAI.GetCharacter().ForceToAnimation("CageIntroTrans" + this.animationSet, base.gameObject, -1f, 0f, false);
+		}
+	}
+
+	// Token: 0x060000E2 RID: 226 RVA: 0x00010910 File Offset: 0x0000EB10
+	private void OnPlayFallAnim()
+	{
+		if (this.albinoAI != null)
+		{
+			this.woken = true;
+			this.albinoAI.GetCharacter().ForceToAnimation("CageIntroFall" + this.animationSet, base.gameObject, -1f, 0f, false);
+		}
+	}
+
+	// Token: 0x060000E3 RID: 227 RVA: 0x00010968 File Offset: 0x0000EB68
+	private bool SetAlbinoAI()
+	{
+		if (this.albinoToControl != null && this.albinoAI == null)
+		{
+			this.albinoAI = this.albinoToControl.GetAllocatedAlbinoAI();
+			if (this.albinoAI == null)
+			{
+				this.hasAlbino = false;
+				return false;
+			}
+			this.hasAlbino = true;
+			if (this.albinoAI.aiMode == AlbinoAI.AIMode.SpawnedButWaiting)
+			{
+				this.albinoAI.SetRemotePuppet(true);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x060000E4 RID: 228 RVA: 0x000109EC File Offset: 0x0000EBEC
+	private void UpdateInCage(float deltaTime)
+	{
+		AnimcontrolledCharacter character = this.albinoAI.GetCharacter();
+		if (this.cageRigidBody != null)
+		{
+			Vector3 vector = this.albinoAI.transform.InverseTransformDirection(this.cageRigidBody.velocity);
+			float num = this.speed;
+			this.speed = vector.z;
+			float num2 = this.speed - num;
+			float num3 = 0.15f * num2 / deltaTime;
+			num3 = Mathf.Clamp(num3, -1f, 1f);
+			if (Mathf.Abs(this.lastWantedAccel) < Mathf.Abs(num3))
+			{
+				this.lastWantedAccel = num3;
+			}
+			else
+			{
+				this.lastWantedAccel += (num3 - this.lastWantedAccel) * deltaTime * 1f;
+			}
+			this.accelVel += (this.lastWantedAccel - this.accel) * deltaTime * 25f;
+			this.accelVel *= 1f - deltaTime * 2f;
+			this.accel += this.accelVel * deltaTime;
+			this.accel *= 1f - deltaTime * 3f;
+			if (Mathf.Abs(this.accel) > 1f)
+			{
+				this.accelVel = 0f;
+			}
+			this.accel = Mathf.Clamp(this.accel, -1f, 1f);
+			float y = base.transform.up.y;
+			character.GetBlendHelper().SetBlendParameter(10, this.accel);
+			character.GetBlendHelper().SetBlendParameter(11, y);
+		}
+	}
+
+	// Token: 0x060000E5 RID: 229 RVA: 0x00010B90 File Offset: 0x0000ED90
+	private void Update()
+	{
+		if (!this.activated && this.albinoToControl.GetHasSpawned())
+		{
+			this.Init();
+		}
+		if (this.hasAlbino && (this.albinoAI.cachedWantedPos.y - ScriptGlobals.boy.pos.y > 5f || FastMath.Abs(this.albinoAI.cachedWantedPos.x - ScriptGlobals.boy.pos.x) > 30f))
+		{
+			return;
+		}
+		if ((LevelGlobals.mindHatOnHead == null || LevelGlobals.mindHatOnHead.IsAttached()) && this.hasAlbino && this.activated && Mathf.Abs(ScriptGlobals.boy.pos.x - this.albinoAI.cachedWantedPos.x) < 7f && Mathf.Abs(ScriptGlobals.boy.pos.y - this.albinoAI.cachedWantedPos.y) < 3f && !this.woken)
+		{
+			this.OnWakeUpAlbino();
+		}
+		float deltaTime;
+		if (this.activated && this.hasAlbino && (deltaTime = Time.deltaTime) > 0f)
+		{
+			AnimcontrolledCharacter character = this.albinoAI.GetCharacter();
+			character.SetStaticAnimWantedBasePos(base.gameObject, true);
+			if (this.albinoState == AlbinoInCageAI.AlbinoCageState.InCage)
+			{
+				this.UpdateInCage(deltaTime);
+			}
+		}
+	}
+
+	// Token: 0x04000117 RID: 279
+	public AlbinoSpawner albinoToControl;
+
+	// Token: 0x04000118 RID: 280
+	public string animationSet = "A";
+
+	// Token: 0x04000119 RID: 281
+	public Rigidbody cageRigidBody;
+
+	// Token: 0x0400011A RID: 282
+	private AlbinoAI albinoAI;
+
+	// Token: 0x0400011B RID: 283
+	private bool hasAlbino;
+
+	// Token: 0x0400011C RID: 284
+	private bool activated;
+
+	// Token: 0x0400011D RID: 285
+	private AlbinoInCageAI.AlbinoCageState albinoState;
+
+	// Token: 0x0400011E RID: 286
+	private float speed;
+
+	// Token: 0x0400011F RID: 287
+	private float accel;
+
+	// Token: 0x04000120 RID: 288
+	private float accelVel;
+
+	// Token: 0x04000121 RID: 289
+	private float lastWantedAccel;
+
+	// Token: 0x04000122 RID: 290
+	private SignalIn wakeUpAlbino;
+
+	// Token: 0x04000123 RID: 291
+	private SignalIn playFallAnim;
+
+	// Token: 0x04000124 RID: 292
+	private SignalIn disableAlbino;
+
+	// Token: 0x04000125 RID: 293
+	private bool woken;
+
+	// Token: 0x02000010 RID: 16
+	private enum AlbinoCageState
+	{
+		// Token: 0x04000127 RID: 295
+		InCage,
+		// Token: 0x04000128 RID: 296
+		Falling
+	}
+}

@@ -1,0 +1,106 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000106 RID: 262
+public class AdditiveAnimationTrigger : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060007E6 RID: 2022 RVA: 0x000551D0 File Offset: 0x000533D0
+	public bool PreAwake(int callcount)
+	{
+		this.enable = SignalIn.Create("enable", base.gameObject, new Action(this.OnEnableTrigger));
+		this.disable = SignalIn.Create("disable", base.gameObject, new Action(this.OnDisableTrigger));
+		return true;
+	}
+
+	// Token: 0x060007E7 RID: 2023 RVA: 0x00055224 File Offset: 0x00053424
+	private void Start()
+	{
+		this.additiveAnim.fps = 0f;
+	}
+
+	// Token: 0x060007E8 RID: 2024 RVA: 0x00055238 File Offset: 0x00053438
+	private void FixedUpdate()
+	{
+		if (this.boy == null)
+		{
+			this.boy = ScriptGlobals.boy;
+		}
+		AnimClipNode animClipNode = this.boy.visualBoy.additiveAnim as AnimClipNode;
+		AnimClipNode animClipNode2 = null;
+		if (this.isEnabled && this.boyInside && this.boy.state is BoyRunState)
+		{
+			float x = base.transform.position.x;
+			float x2 = this.boy.pos.x;
+			float num = (x - x2) * -this.boy.facing;
+			float num2 = this.fractionCurve.Evaluate(num);
+			this.fraction += (num2 - this.fraction) * Time.deltaTime * this.fractionBlendSpeed;
+			animClipNode2 = this.additiveAnim;
+		}
+		if (animClipNode2 != animClipNode)
+		{
+			this.boy.visualBoy.additiveAnim = animClipNode2;
+			if (animClipNode2 == null)
+			{
+				this.fraction = 0f;
+			}
+		}
+		this.additiveAnim.frame = this.additiveAnim.numFrames * this.fraction;
+	}
+
+	// Token: 0x060007E9 RID: 2025 RVA: 0x0005536C File Offset: 0x0005356C
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.boyInside = true;
+		}
+	}
+
+	// Token: 0x060007EA RID: 2026 RVA: 0x00055388 File Offset: 0x00053588
+	private void OnTriggerExit(Collider collider)
+	{
+		if (collider.GetComponent<BoyProbe>())
+		{
+			this.boyInside = false;
+		}
+	}
+
+	// Token: 0x060007EB RID: 2027 RVA: 0x000553A4 File Offset: 0x000535A4
+	private void OnEnableTrigger()
+	{
+		this.isEnabled = true;
+	}
+
+	// Token: 0x060007EC RID: 2028 RVA: 0x000553B0 File Offset: 0x000535B0
+	private void OnDisableTrigger()
+	{
+		this.isEnabled = false;
+	}
+
+	// Token: 0x04000DA3 RID: 3491
+	public AnimClipNode additiveAnim;
+
+	// Token: 0x04000DA4 RID: 3492
+	public AnimationCurve fractionCurve;
+
+	// Token: 0x04000DA5 RID: 3493
+	public float fractionBlendSpeed = 3f;
+
+	// Token: 0x04000DA6 RID: 3494
+	public bool isEnabled = true;
+
+	// Token: 0x04000DA7 RID: 3495
+	private SignalIn enable;
+
+	// Token: 0x04000DA8 RID: 3496
+	private SignalIn disable;
+
+	// Token: 0x04000DA9 RID: 3497
+	private bool boyInside;
+
+	// Token: 0x04000DAA RID: 3498
+	private Boy boy;
+
+	// Token: 0x04000DAB RID: 3499
+	private float fraction;
+}

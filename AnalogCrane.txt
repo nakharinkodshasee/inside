@@ -1,0 +1,462 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001CA RID: 458
+public class AnalogCrane : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000D8F RID: 3471 RVA: 0x00082084 File Offset: 0x00080284
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObjCrane = AudioUtils.EnsureAkGameObj(this.craneHolder.gameObject, null);
+		this.audioStartMovingUp = new AudioEventSimpleLocal("env_city_3Dcrane_crane_startMovingUp", this.akGameObjCrane);
+		this.audioStopMovingUp = new AudioEventSimpleLocal("env_city_3Dcrane_crane_stopMovingUp", this.akGameObjCrane);
+		this.audioStartMovingDown = new AudioEventSimpleLocal("env_city_3Dcrane_crane_startMovingDown", this.akGameObjCrane);
+		this.audioStopMovingDown = new AudioEventSimpleLocal("env_city_3Dcrane_crane_stopMovingDown", this.akGameObjCrane);
+		this.audioMaxUp = new AudioEventSimpleLocal("env_city_3Dcrane_crane_maxUp", this.akGameObjCrane);
+		this.audioMaxDown = new AudioEventSimpleLocal("env_city_3Dcrane_crane_maxDown", this.akGameObjCrane);
+	}
+
+	// Token: 0x06000D90 RID: 3472 RVA: 0x00082140 File Offset: 0x00080340
+	public bool PreAwake(int callcount)
+	{
+		this.loadComplete = SignalIn.Create("loadComplete", base.gameObject, new Action(this.OnLoad));
+		return true;
+	}
+
+	// Token: 0x06000D91 RID: 3473 RVA: 0x00082168 File Offset: 0x00080368
+	private void Awake()
+	{
+		this.OnPreProcess();
+		SpringJoint component = this.craneWeight.GetComponent<SpringJoint>();
+		if (component != null)
+		{
+			component.spring = 162.5f;
+		}
+	}
+
+	// Token: 0x06000D92 RID: 3474 RVA: 0x000821A0 File Offset: 0x000803A0
+	private void Start()
+	{
+		this.animFoldState = this.anim[this.animFold.name];
+		this.animFoldState.layer = 0;
+		this.animFoldState.speed = 0f;
+		this.animAdditiveWaveState = this.anim[this.animAdditiveWave.name];
+		this.animAdditiveWaveState.blendMode = 1;
+		this.animAdditiveWaveState.layer = 1;
+		this.boy = ScriptGlobals.boy;
+		this.soundState = AnalogCrane.State.Still;
+	}
+
+	// Token: 0x06000D93 RID: 3475 RVA: 0x0008222C File Offset: 0x0008042C
+	private void SetStillState()
+	{
+		if (this.currentMoveDir > 0)
+		{
+			this.audioStopMovingUp.PostFast();
+		}
+		else
+		{
+			this.audioStopMovingDown.PostFast();
+		}
+		this.currentMoveDir = 0;
+		this.soundState = AnalogCrane.State.Still;
+	}
+
+	// Token: 0x06000D94 RID: 3476 RVA: 0x00082268 File Offset: 0x00080468
+	private void StillState()
+	{
+		if (this.currentlyMoving)
+		{
+			this.SetMoveState();
+		}
+	}
+
+	// Token: 0x06000D95 RID: 3477 RVA: 0x0008227C File Offset: 0x0008047C
+	private void SetMoveState()
+	{
+		if (this.previousBlendTarget > 0f)
+		{
+			this.currentMoveDir = 1;
+			this.audioStartMovingUp.PostFast();
+		}
+		else
+		{
+			this.currentMoveDir = -1;
+			this.audioStartMovingDown.PostFast();
+		}
+		this.changeTimer = this.changeDelay;
+		this.soundState = AnalogCrane.State.Move;
+	}
+
+	// Token: 0x06000D96 RID: 3478 RVA: 0x000822D8 File Offset: 0x000804D8
+	private void MoveState()
+	{
+		if (this.maxReached)
+		{
+			this.SetMaxState();
+		}
+		else if (!this.currentlyMoving)
+		{
+			this.changeTimer -= Time.deltaTime;
+			if (this.changeTimer < 0f)
+			{
+				this.SetStillState();
+			}
+		}
+		else
+		{
+			this.changeTimer = this.changeDelay;
+			if (Mathf.Sign(this.previousBlendTarget) != (float)this.currentMoveDir)
+			{
+				this.SetMoveState();
+			}
+		}
+	}
+
+	// Token: 0x06000D97 RID: 3479 RVA: 0x0008235C File Offset: 0x0008055C
+	private void SetMaxState()
+	{
+		if (this.currentMoveDir > 0)
+		{
+			this.audioMaxUp.PostFast();
+		}
+		else
+		{
+			this.audioMaxDown.PostFast();
+		}
+		this.soundState = AnalogCrane.State.Max;
+	}
+
+	// Token: 0x06000D98 RID: 3480 RVA: 0x0008239C File Offset: 0x0008059C
+	private void MaxState()
+	{
+		if (!this.maxReached && this.currentlyMoving)
+		{
+			this.SetMoveState();
+		}
+	}
+
+	// Token: 0x06000D99 RID: 3481 RVA: 0x000823BC File Offset: 0x000805BC
+	private void Update()
+	{
+		this.UpdateWirePosition();
+	}
+
+	// Token: 0x06000D9A RID: 3482 RVA: 0x000823C4 File Offset: 0x000805C4
+	private void FixedUpdate()
+	{
+		this.AddForceFromBoy();
+		Vector3 position = this.craneHolder.position;
+		float targetBlend = this.lever.GetTargetBlend();
+		float num = (position.y - this.downPos.position.y) / 0.7f;
+		num = 1f - Mathf.Clamp(num, 0f, 1f);
+		this.animFoldState.normalizedTime = num;
+		if (targetBlend == 0f)
+		{
+			float num2 = this.craneHolder.transform.position.y - this.holderSafetyPosition.transform.position.y;
+			if (Mathf.Abs(num2) < this.holderSafetyOffset)
+			{
+				targetBlend = this.previousBlendTarget;
+			}
+		}
+		if (num <= 0f && this.previousFoldDiff > 0f)
+		{
+			this.anim.Stop(this.animAdditiveWaveState.name);
+		}
+		else if (targetBlend == this.previousBlendTarget)
+		{
+			if (num > 0.2f && this.allowShake)
+			{
+				this.StartWaveAnimation();
+				this.allowShake = false;
+			}
+		}
+		else
+		{
+			this.allowShake = true;
+		}
+		this.previousBlendTarget = targetBlend;
+		this.previousFoldDiff = num;
+		this.currentlyMoving = (Mathf.Abs(targetBlend) > 0.1f);
+		if (this.currentlyMoving)
+		{
+			float num3 = ((targetBlend <= 0f) ? this.downPos.position : this.upPos.position).y - position.y;
+			this.maxReached = (Mathf.Abs(num3) < 0.05f);
+			if (!this.maxReached)
+			{
+				float num4 = Mathf.Abs(targetBlend) * this.maxSpeed;
+				position.y += Mathf.Sign(num3) * num4 * Time.deltaTime;
+				this.craneHolder.MovePosition(position);
+			}
+			this.lastTargetBlend = targetBlend;
+			this.lastTargetChecked = false;
+		}
+		switch (this.soundState)
+		{
+		case AnalogCrane.State.Move:
+			this.MoveState();
+			break;
+		case AnalogCrane.State.Max:
+			this.MaxState();
+			break;
+		case AnalogCrane.State.Still:
+			this.StillState();
+			break;
+		}
+		float value = Mathf.Abs(this.craneHolder.velocity.y) * 100f;
+		SoundEngine.RTPCs.phyMove.SetFast(value, this.akGameObjCrane, 0f);
+	}
+
+	// Token: 0x06000D9B RID: 3483 RVA: 0x00082644 File Offset: 0x00080844
+	private void AddForceFromBoy()
+	{
+		if (!this.boy.isCharacterActive)
+		{
+			return;
+		}
+		Collider groundCollider = this.boy.status.groundCollider;
+		if (this.boy.visualBoy.state as VisualBoyLand && !(this.previousVisualState as VisualBoyLand) && groundCollider == this.craneWeightCollider)
+		{
+			float num = Mathf.Clamp(this.boy.velocity3.magnitude / 1.5f, 0.35f, 1f);
+			this.PokeCrane(-Vector3.up, this.landForce * num);
+			this.PokeCrane(Vector3.right * -this.boy.facing, 5f);
+		}
+		if (this.boy.state as BoyJumpState)
+		{
+			if (!(this.previousState is BoyJumpState) && this.previousGroundCollider == this.craneWeightCollider)
+			{
+				this.PokeCrane(-Vector3.up, this.jumpForce);
+				this.PokeCrane(Vector3.right * -this.boy.facing, 7f);
+			}
+		}
+		else
+		{
+			BoyGrabPlateauState boyGrabPlateauState = this.boy.state as BoyGrabPlateauState;
+			if (boyGrabPlateauState != null && !(this.previousState is BoyGrabPlateauState) && boyGrabPlateauState.plateau.collider.attachedRigidbody == this.craneWeight)
+			{
+				if (this.previousGroundCollider == this.craneWeightCollider)
+				{
+					this.PokeCrane(-Vector3.up, this.climbDownForce);
+				}
+				else
+				{
+					this.PokeCrane(-Vector3.up, this.grabPlateauForce);
+				}
+			}
+		}
+		if (groundCollider != null)
+		{
+			this.previousGroundCollider = groundCollider;
+		}
+		this.previousState = this.boy.state;
+		this.previousVisualState = this.boy.visualBoy.state;
+	}
+
+	// Token: 0x06000D9C RID: 3484 RVA: 0x00082860 File Offset: 0x00080A60
+	public void PokeCrane(Vector3 dir, float amount)
+	{
+		Vector3 vector = dir * amount;
+		this.craneWeight.AddForceAtPosition(vector, this.pokePos.position);
+	}
+
+	// Token: 0x06000D9D RID: 3485 RVA: 0x0008288C File Offset: 0x00080A8C
+	private void UpdateWirePosition()
+	{
+		Vector3 position = this.wirePos.position;
+		Vector3 localEulerAngles = this.wire.localEulerAngles;
+		localEulerAngles.y = this.wirePos.eulerAngles.y;
+		this.wire.position = position;
+		this.wire.localRotation = Quaternion.Euler(localEulerAngles);
+	}
+
+	// Token: 0x06000D9E RID: 3486 RVA: 0x000828E8 File Offset: 0x00080AE8
+	private void StartWaveAnimation()
+	{
+		AnimationState animationState = this.anim.CrossFadeQueued(this.animAdditiveWaveState.name, 0.2f, 2);
+		animationState.blendMode = 1;
+		animationState.layer = 1;
+	}
+
+	// Token: 0x06000D9F RID: 3487 RVA: 0x00082920 File Offset: 0x00080B20
+	private void OnLoad()
+	{
+		Vector3 vector = this.craneWeight.transform.position - this.craneHolder.position;
+		Vector3 position = this.loadPos.position + vector;
+		this.craneHolder.transform.position = this.loadPos.position;
+		this.craneWeight.transform.position = position;
+		this.craneWeight.rotation = Quaternion.Euler(0f, -22f, 0f);
+	}
+
+	// Token: 0x04001800 RID: 6144
+	public Rigidbody craneHolder;
+
+	// Token: 0x04001801 RID: 6145
+	public Rigidbody craneWeight;
+
+	// Token: 0x04001802 RID: 6146
+	public Collider craneWeightCollider;
+
+	// Token: 0x04001803 RID: 6147
+	public LeverAnalog lever;
+
+	// Token: 0x04001804 RID: 6148
+	public Animation anim;
+
+	// Token: 0x04001805 RID: 6149
+	public AnimationClip animFold;
+
+	// Token: 0x04001806 RID: 6150
+	public AnimationClip animAdditiveWave;
+
+	// Token: 0x04001807 RID: 6151
+	public Transform upPos;
+
+	// Token: 0x04001808 RID: 6152
+	public Transform downPos;
+
+	// Token: 0x04001809 RID: 6153
+	public Transform holderSafetyPosition;
+
+	// Token: 0x0400180A RID: 6154
+	public float holderSafetyOffset = 0.08f;
+
+	// Token: 0x0400180B RID: 6155
+	public Transform loadPos;
+
+	// Token: 0x0400180C RID: 6156
+	public Transform wire;
+
+	// Token: 0x0400180D RID: 6157
+	public Transform wirePos;
+
+	// Token: 0x0400180E RID: 6158
+	public Transform pokePos;
+
+	// Token: 0x0400180F RID: 6159
+	public float maxSpeed = 2f;
+
+	// Token: 0x04001810 RID: 6160
+	public float jumpForce = 25f;
+
+	// Token: 0x04001811 RID: 6161
+	public float climbDownForce = 25f;
+
+	// Token: 0x04001812 RID: 6162
+	public float grabPlateauForce = 20f;
+
+	// Token: 0x04001813 RID: 6163
+	public float landForce = 40f;
+
+	// Token: 0x04001814 RID: 6164
+	private SignalIn loadComplete;
+
+	// Token: 0x04001815 RID: 6165
+	private AnimationState animFoldState;
+
+	// Token: 0x04001816 RID: 6166
+	private AnimationState animAdditiveWaveState;
+
+	// Token: 0x04001817 RID: 6167
+	private float previousBlendTarget;
+
+	// Token: 0x04001818 RID: 6168
+	private bool allowShake;
+
+	// Token: 0x04001819 RID: 6169
+	private Boy boy;
+
+	// Token: 0x0400181A RID: 6170
+	private BoyState previousState;
+
+	// Token: 0x0400181B RID: 6171
+	private VisualBoyNode previousVisualState;
+
+	// Token: 0x0400181C RID: 6172
+	private Collider previousGroundCollider;
+
+	// Token: 0x0400181D RID: 6173
+	private float previousFoldDiff;
+
+	// Token: 0x0400181E RID: 6174
+	private AnalogCrane.State soundState;
+
+	// Token: 0x0400181F RID: 6175
+	private bool currentlyMoving;
+
+	// Token: 0x04001820 RID: 6176
+	private int currentMoveDir;
+
+	// Token: 0x04001821 RID: 6177
+	private float changeTimer;
+
+	// Token: 0x04001822 RID: 6178
+	private float changeDelay = 0.15f;
+
+	// Token: 0x04001823 RID: 6179
+	private bool maxReached;
+
+	// Token: 0x04001824 RID: 6180
+	private float lastTargetBlend;
+
+	// Token: 0x04001825 RID: 6181
+	private bool lastTargetChecked = true;
+
+	// Token: 0x04001826 RID: 6182
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStartMovingUp;
+
+	// Token: 0x04001827 RID: 6183
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStopMovingUp;
+
+	// Token: 0x04001828 RID: 6184
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStartMovingDown;
+
+	// Token: 0x04001829 RID: 6185
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStopMovingDown;
+
+	// Token: 0x0400182A RID: 6186
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioMaxUp;
+
+	// Token: 0x0400182B RID: 6187
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioMaxDown;
+
+	// Token: 0x0400182C RID: 6188
+	[SerializeField]
+	[HideInInspector]
+	private AkGameObj akGameObjCrane;
+
+	// Token: 0x0400182D RID: 6189
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x020001CB RID: 459
+	private enum State
+	{
+		// Token: 0x0400182F RID: 6191
+		None,
+		// Token: 0x04001830 RID: 6192
+		Move,
+		// Token: 0x04001831 RID: 6193
+		Max,
+		// Token: 0x04001832 RID: 6194
+		Still
+	}
+}

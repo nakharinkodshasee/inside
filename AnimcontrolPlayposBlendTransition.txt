@@ -1,0 +1,56 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200002D RID: 45
+public class AnimcontrolPlayposBlendTransition : AnimcontrolTransition
+{
+	// Token: 0x06000173 RID: 371 RVA: 0x000150A4 File Offset: 0x000132A4
+	public override AnimcontrolStateInfo.TransitionData TransitionMet(AnimationBlendHelper blendHelper, AnimcontrolTransitionManager manager)
+	{
+		float num = blendHelper.blendParameters[4];
+		if (num < this.animPlayPos || num > this.animPlayPos2)
+		{
+			return null;
+		}
+		AnimcontrolStateInfo.TransitionData transitionData = base.TransitionMet(blendHelper, manager);
+		if (transitionData != null)
+		{
+			float num2 = this.animPlayPos2 - this.animPlayPos;
+			if (num2 > 0f)
+			{
+				transitionData.startPos = this.overrideStartPos + (num - this.animPlayPos) / num2 * (this.overrideStartPos2 - this.overrideStartPos);
+			}
+		}
+		return transitionData;
+	}
+
+	// Token: 0x06000174 RID: 372 RVA: 0x00015128 File Offset: 0x00013328
+	public override string GetTransitionString()
+	{
+		this.overrideStartPos = Mathf.Max(this.overrideStartPos, 0f);
+		string transitionString = base.GetTransitionString();
+		base.name = string.Concat(new object[]
+		{
+			"T [",
+			this.animPlayPos,
+			",",
+			this.animPlayPos2,
+			"]->[",
+			this.overrideStartPos,
+			",",
+			this.overrideStartPos2,
+			"]: ",
+			transitionString
+		});
+		return transitionString;
+	}
+
+	// Token: 0x04000222 RID: 546
+	public float animPlayPos;
+
+	// Token: 0x04000223 RID: 547
+	public float overrideStartPos2 = 1f;
+
+	// Token: 0x04000224 RID: 548
+	public float animPlayPos2 = 1f;
+}

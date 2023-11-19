@@ -1,0 +1,37 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000092 RID: 146
+public class AlbinoEffectMaterialTrigger : MonoBehaviour
+{
+	// Token: 0x060004EC RID: 1260 RVA: 0x00036224 File Offset: 0x00034424
+	private void OnTriggerEnter(Collider coll)
+	{
+		AlbinoAI component = coll.GetComponent<AlbinoAI>();
+		if (component != null)
+		{
+			GenericDudeAudio componentInChildren = component.transform.parent.GetComponentInChildren<GenericDudeAudio>();
+			if (componentInChildren != null)
+			{
+				componentInChildren.OverideEffectMaterial(this.material);
+			}
+		}
+	}
+
+	// Token: 0x060004ED RID: 1261 RVA: 0x00036270 File Offset: 0x00034470
+	private void OnTriggerExit(Collider coll)
+	{
+		AlbinoAI component = coll.GetComponent<AlbinoAI>();
+		if (component != null)
+		{
+			GenericDudeAudio componentInChildren = component.transform.parent.GetComponentInChildren<GenericDudeAudio>();
+			if (componentInChildren != null)
+			{
+				componentInChildren.OverideEffectMaterial(EffectMaterial.Material.None);
+			}
+		}
+	}
+
+	// Token: 0x04000859 RID: 2137
+	public EffectMaterial.Material material;
+}

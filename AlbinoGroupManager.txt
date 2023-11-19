@@ -1,0 +1,3495 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x0200000C RID: 12
+public class AlbinoGroupManager : MonoBehaviour, IFastEventExListener<GameManager.Load>, IFastEventExListener<Savepoint>, IPreAwake
+{
+	// Token: 0x0600006D RID: 109 RVA: 0x0000A058 File Offset: 0x00008258
+	public bool CanISpawnAlbino(bool doubleFrameWait = false)
+	{
+		if (GameManager.IsLoading())
+		{
+			return true;
+		}
+		bool result = !this.albinoSpawnedThisFrame;
+		this.albinoSpawnedThisFrame = true;
+		if (doubleFrameWait)
+		{
+			this.doubleWait = true;
+		}
+		return result;
+	}
+
+	// Token: 0x0600006E RID: 110 RVA: 0x0000A090 File Offset: 0x00008290
+	public void SetAlbinoJumpAimTarget(BoyJumpAimTrigger target)
+	{
+		this.albinoJumpAimTarget = target;
+	}
+
+	// Token: 0x0600006F RID: 111 RVA: 0x0000A09C File Offset: 0x0000829C
+	public bool GetAndClearPlayAlbinoFallSound()
+	{
+		bool result = this.playAlbinoFallSound;
+		this.playAlbinoFallSound = false;
+		return result;
+	}
+
+	// Token: 0x06000070 RID: 112 RVA: 0x0000A0B8 File Offset: 0x000082B8
+	public void SetPlayAlbinoFallSound(bool valToSet)
+	{
+		this.playAlbinoFallSound = valToSet;
+	}
+
+	// Token: 0x06000071 RID: 113 RVA: 0x0000A0C4 File Offset: 0x000082C4
+	public FastList<AlbinoAI> GetActiveAlbinos()
+	{
+		return this.activeAlbinos;
+	}
+
+	// Token: 0x06000072 RID: 114 RVA: 0x0000A0CC File Offset: 0x000082CC
+	public void AddGenericDudeAudio(GenericDudeAudio gda)
+	{
+		this.genericDudeAudio.Add(gda);
+	}
+
+	// Token: 0x06000073 RID: 115 RVA: 0x0000A0DC File Offset: 0x000082DC
+	public List<GenericDudeAudio> GetGenericDudeAudios()
+	{
+		return this.genericDudeAudio;
+	}
+
+	// Token: 0x06000074 RID: 116 RVA: 0x0000A0E4 File Offset: 0x000082E4
+	public void AddAvoidObject(AlbinoAvoidObject objToAvoid)
+	{
+		if (!this.avoidObjects.Contains(objToAvoid))
+		{
+			this.avoidObjects.Add(objToAvoid);
+		}
+	}
+
+	// Token: 0x06000075 RID: 117 RVA: 0x0000A104 File Offset: 0x00008304
+	public void RemoveAvoidObject(AlbinoAvoidObject objToAvoid)
+	{
+		this.avoidObjects.Remove(objToAvoid);
+	}
+
+	// Token: 0x06000076 RID: 118 RVA: 0x0000A114 File Offset: 0x00008314
+	public void SetDelayedBoyKill()
+	{
+		this.delayedBoyKill = true;
+	}
+
+	// Token: 0x06000077 RID: 119 RVA: 0x0000A120 File Offset: 0x00008320
+	public bool GetDelayedBoyKill()
+	{
+		return this.delayedBoyKill;
+	}
+
+	// Token: 0x17000003 RID: 3
+	// (get) Token: 0x06000078 RID: 120 RVA: 0x0000A128 File Offset: 0x00008328
+	public AlbinoMultiInteraction multiInteraction
+	{
+		get
+		{
+			return this.internalMultiInteraction;
+		}
+	}
+
+	// Token: 0x17000004 RID: 4
+	// (get) Token: 0x06000079 RID: 121 RVA: 0x0000A130 File Offset: 0x00008330
+	public Rigidbody grabBody
+	{
+		get
+		{
+			return (!(ScriptGlobals.boy.state is BoyGrabState) && !(this.overrideGrabBodyCollider != null)) ? null : this.internalGrabBody;
+		}
+	}
+
+	// Token: 0x0600007A RID: 122 RVA: 0x0000A164 File Offset: 0x00008364
+	public void SetOverrideGrabBodyCollider(Collider overrideCollider)
+	{
+		if (overrideCollider != null && this.overrideGrabBodyCollider != overrideCollider)
+		{
+			this.mLastObjectGrabbed = null;
+		}
+		this.overrideGrabBodyCollider = overrideCollider;
+	}
+
+	// Token: 0x0600007B RID: 123 RVA: 0x0000A194 File Offset: 0x00008394
+	public Collider GetOverrideGrabBodyCollider()
+	{
+		return this.overrideGrabBodyCollider;
+	}
+
+	// Token: 0x0600007C RID: 124 RVA: 0x0000A19C File Offset: 0x0000839C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioAlbinosAwakeArray = new AudioEventSimple[this.albinos.Count];
+		int i = 0;
+		int count = this.albinos.Count;
+		while (i < count)
+		{
+			this.audioAlbinosAwakeArray[i] = new AudioEventSimple("env_mines_albinosAwake" + i);
+			i++;
+		}
+	}
+
+	// Token: 0x0600007D RID: 125 RVA: 0x0000A210 File Offset: 0x00008410
+	public void AlbinoAwakeAudioEvent(int count, AkGameObj akGameObj)
+	{
+		this.audioAlbinosAwakeArray[count].PostFast(akGameObj);
+	}
+
+	// Token: 0x0600007E RID: 126 RVA: 0x0000A220 File Offset: 0x00008420
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		this.albinosAI = new FastList<AlbinoAI>(this.albinos.Count, FastListExpandMode.Exponential, 100);
+		int i = 0;
+		int count = this.albinos.Count;
+		while (i < count)
+		{
+			AnimcontrolledProperties animcontrolledProperties = this.albinos[i];
+			if (animcontrolledProperties != null)
+			{
+				this.albinosAI.Add(animcontrolledProperties.GetComponentsInChildren<AlbinoAI>(true)[0]);
+			}
+			i++;
+		}
+		AlbinoGroupManager.mInstance = this;
+		return true;
+	}
+
+	// Token: 0x0600007F RID: 127 RVA: 0x0000A2A0 File Offset: 0x000084A0
+	private void Awake()
+	{
+		if (ScriptGlobals.boy != null)
+		{
+			Boy.spawnStateEvent += this.TestAlbinoClimbingStateUpdate;
+		}
+	}
+
+	// Token: 0x06000080 RID: 128 RVA: 0x0000A2C4 File Offset: 0x000084C4
+	private void Start()
+	{
+		if (ScriptGlobals.boy != null && ScriptGlobals.boy.visualBoy != null)
+		{
+			Transform childComponentAE = ScriptGlobals.boy.visualBoy.transform.GetChildComponentAE("Themes");
+			this.storedInsideCrowdTheme = childComponentAE.GetChildComponentAE("InsideCrowd");
+		}
+		GameManager.prepareLoad.Register(this, ref this.prepareLoadHandle);
+		GameManager.allScenesLoaded += this.PersistentData_Load;
+		Savegame.savepointSavedEnhanced.Register(this, ref this.savedEnhancedHandle);
+		int i = 0;
+		int count = this.albinos.Count;
+		while (i < count)
+		{
+			AnimcontrolledProperties animcontrolledProperties = this.albinos[i];
+			if (animcontrolledProperties)
+			{
+				AnimcontrolledCharacter componentInChildren = animcontrolledProperties.gameObject.GetComponentInChildren<AnimcontrolledCharacter>();
+				componentInChildren.Init();
+				animcontrolledProperties.gameObject.SetActive(false);
+			}
+			i++;
+		}
+		this.huddleFakeLifter = new GameObject("HuddleFakeLifter");
+		this.huddleFakeLifter.transform.parent = base.transform;
+		this.huddleFakeLifter.AddComponent<BoxCollider>();
+		this.huddleFakeLifter.AddComponent<HuddleLegIgnoreCollision>();
+		this.huddleFakeLifter.layer = CollisionUtils.Layers.item;
+		this.huddleFakeLifter.transform.localScale = new Vector3(4f, 0.1f, 4f);
+		this.huddleFakeLifter.SetActive(false);
+		if (ScriptGlobals.huddle != null && ScriptGlobals.huddle.visualHuddle != null)
+		{
+			ScriptGlobals.huddle.visualHuddle.legs.huddleBeingLifted = false;
+		}
+		AlbinoGroupManager.mStarted = true;
+	}
+
+	// Token: 0x06000081 RID: 129 RVA: 0x0000A468 File Offset: 0x00008668
+	private void OnDestroy()
+	{
+		GameManager.prepareLoad.Unregister(ref this.prepareLoadHandle);
+		GameManager.allScenesLoaded -= this.PersistentData_Load;
+		Savegame.savepointSavedEnhanced.Unregister(ref this.savedEnhancedHandle);
+		SubsceneCullingManager.instance.RemoveLoadOverlapping(new SubsceneCullingManager.OverLapCallback(this.RefreshSubscenesToBeVisible));
+	}
+
+	// Token: 0x06000082 RID: 130 RVA: 0x0000A4BC File Offset: 0x000086BC
+	public void OnFastEventEx(FastEventEx<Savepoint> sender, ref Savepoint indices)
+	{
+		if (sender == Savegame.savepointSavedEnhanced)
+		{
+			this.PersistentData_Save(ref indices);
+		}
+	}
+
+	// Token: 0x06000083 RID: 131 RVA: 0x0000A4D0 File Offset: 0x000086D0
+	public void OnFastEventEx(FastEventEx<GameManager.Load> sender, ref GameManager.Load arg)
+	{
+		if (sender == GameManager.prepareLoad)
+		{
+			this.PrepareLoad();
+		}
+	}
+
+	// Token: 0x06000084 RID: 132 RVA: 0x0000A4E4 File Offset: 0x000086E4
+	private void PrepareLoad()
+	{
+		this.delayedBoyKill = false;
+		int i = 0;
+		int count = this.albinos.Count;
+		while (i < count)
+		{
+			AnimcontrolledProperties animcontrolledProperties = this.albinos[i];
+			animcontrolledProperties.transform.position = Vector3Fast.zero;
+			animcontrolledProperties.gameObject.SetActive(false);
+			i++;
+		}
+		this.activeAlbinos.Clear();
+		this.avoidObjects.Clear();
+		this.internalMultiInteraction = null;
+		this.internalGrabBody = null;
+		this.overrideGrabBodyCollider = null;
+		this.activeFollowers = false;
+		this.restrictAlbinoLiftTrigger = null;
+		this.allowAlbinoCatchRepositioning = true;
+		this.allowAlbinoClutterAround = true;
+		this.lastBoyFacing = 0f;
+		this.doAnOffsetRecalc = false;
+		this.mLastObjectGrabbed = null;
+		this.mPrevGrabbedObjectFlag = false;
+		this.boyWasJustGrabbing = false;
+		this.boyXWhileGrabbing = 0f;
+		SubsceneCullingManager.instance.RemoveLoadOverlapping(new SubsceneCullingManager.OverLapCallback(this.RefreshSubscenesToBeVisible));
+		this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.Inactive;
+	}
+
+	// Token: 0x06000085 RID: 133 RVA: 0x0000A5D8 File Offset: 0x000087D8
+	private void PersistentData_Save(ref Savepoint savepoint)
+	{
+		AlbinoPersistentData albinoPersistentData = PersistentDataManager.Get<AlbinoPersistentData>("AlbinoPersistentData", () => new AlbinoPersistentData());
+		albinoPersistentData.albinoDataList.Clear();
+		bool flag = savepoint.gameObject.GetComponent<SavePointAddonNeverSpawnAlbinosHere>() != null;
+		bool flag2 = false;
+		Vector3 zero = Vector3Fast.zero;
+		if (flag)
+		{
+			int i = 0;
+			int size = this.albinosAI.size;
+			while (i < size)
+			{
+				AnimcontrolledProperties animcontrolledProperties = this.albinos[i];
+				AlbinoAI albinoAI = this.albinosAI.raw[i];
+				if (animcontrolledProperties.gameObject.activeSelf && (albinoAI.aiMode != AlbinoAI.AIMode.SpawnedButWaiting || albinoAI.initAnimPlaying))
+				{
+					flag2 = albinoAI.IsInsideWaitTrigger(ref zero);
+					if (flag2)
+					{
+						break;
+					}
+				}
+				i++;
+			}
+		}
+		int j = 0;
+		int size2 = this.albinosAI.size;
+		while (j < size2)
+		{
+			AnimcontrolledProperties animcontrolledProperties2 = this.albinos[j];
+			AlbinoAI albinoAI2 = this.albinosAI[j];
+			AlbinoPersistentData.AlbinoState albinoState = new AlbinoPersistentData.AlbinoState();
+			if (albinoAI2.albinoCompleted)
+			{
+				albinoState.state = AlbinoPersistentData.SpawnState.albinoCompleted;
+				albinoState.position = albinoAI2.cachedWantedPos;
+				AlbinoPersistentData.AlbinoState albinoState2 = albinoState;
+				albinoState2.position.y = albinoState2.position.y - 0.75f;
+			}
+			else if (animcontrolledProperties2.gameObject.activeSelf)
+			{
+				if (albinoAI2.aiMode == AlbinoAI.AIMode.SpawnedButWaiting && !albinoAI2.initAnimPlaying)
+				{
+					albinoState.state = AlbinoPersistentData.SpawnState.spawnedButWaiting;
+				}
+				else
+				{
+					Vector3 zero2 = Vector3Fast.zero;
+					if (!albinoAI2.IsInsideWaitTrigger(ref zero2))
+					{
+						if (flag)
+						{
+							albinoState.state = AlbinoPersistentData.SpawnState.insideWaitTrigger;
+							if (flag2)
+							{
+								albinoState.position = zero;
+							}
+							else
+							{
+								albinoState.state = AlbinoPersistentData.SpawnState.insideWaitTriggerNoRandomize;
+								albinoState.position = albinoAI2.cachedWantedPos;
+								AlbinoPersistentData.AlbinoState albinoState3 = albinoState;
+								albinoState3.position.y = albinoState3.position.y - 0.75f;
+							}
+						}
+						else
+						{
+							albinoState.state = AlbinoPersistentData.SpawnState.followBoy;
+						}
+					}
+					else
+					{
+						albinoState.state = AlbinoPersistentData.SpawnState.insideWaitTrigger;
+						albinoState.position = zero2;
+					}
+				}
+				albinoAI2.initAnimPlaying = false;
+			}
+			albinoPersistentData.albinoDataList.Add(albinoState);
+			j++;
+		}
+	}
+
+	// Token: 0x06000086 RID: 134 RVA: 0x0000A81C File Offset: 0x00008A1C
+	private void SpawnEntryAtLoad(int albinoId, AlbinoPersistentData.AlbinoState entry)
+	{
+		bool flag = false;
+		Vector3 vector = Vector3Fast.zero;
+		Vector3 vector2;
+		if (ScriptGlobals.mainCharacter is Huddle)
+		{
+			vector2 = ScriptGlobals.huddle.pos3 + Vector3.down;
+		}
+		else
+		{
+			vector2 = ScriptGlobals.boy.pos3 + Vector3.down * ScriptGlobals.boy.properties.height * 0.5f;
+		}
+		switch (entry.state)
+		{
+		case AlbinoPersistentData.SpawnState.followBoy:
+			vector = vector2 + Vector3.down * 0.1f;
+			flag = true;
+			break;
+		case AlbinoPersistentData.SpawnState.insideWaitTrigger:
+		case AlbinoPersistentData.SpawnState.insideWaitTriggerNoRandomize:
+			vector = entry.position;
+			flag = true;
+			break;
+		case AlbinoPersistentData.SpawnState.albinoCompleted:
+			vector = entry.position;
+			flag = true;
+			break;
+		}
+		Vector3 frozenWaitTriggerPos = vector;
+		if (flag)
+		{
+			if (entry.state != AlbinoPersistentData.SpawnState.albinoCompleted)
+			{
+				if (entry.state == AlbinoPersistentData.SpawnState.followBoy)
+				{
+					float num = Random.Range(-0.7f, 0.7f);
+					if (Mathf.Abs(num) < 0.3f)
+					{
+						num = Mathf.Sign(num) * 0.3f;
+					}
+					float num2 = Random.Range(-0.7f, 0.7f);
+					if (Mathf.Abs(num2) < 0.3f)
+					{
+						num2 = Mathf.Sign(num2) * 0.3f;
+					}
+					vector.x += num;
+					vector.z += num2;
+				}
+				else if (entry.state != AlbinoPersistentData.SpawnState.insideWaitTriggerNoRandomize)
+				{
+					vector.x += Random.Range(-1.5f, 1.5f);
+					vector.z += Random.Range(-1.5f, 1.5f);
+				}
+			}
+			AnimcontrolledProperties animcontrolledProperties = this.albinos[albinoId];
+			animcontrolledProperties.transform.position = Vector3Fast.zero;
+			animcontrolledProperties.gameObject.SetActive(true);
+			AlbinoAI component = animcontrolledProperties.aiNode.GetComponent<AlbinoAI>();
+			if (component != null)
+			{
+				component.GetCharacter().transform.position = vector;
+				component.transform.position = vector + Vector3.up * 0.75f;
+				component.cachedWantedPos = vector + Vector3.up * 0.75f;
+				if (entry.state == AlbinoPersistentData.SpawnState.insideWaitTrigger || entry.state == AlbinoPersistentData.SpawnState.insideWaitTriggerNoRandomize)
+				{
+					component.frozenWaitTriggerPos = frozenWaitTriggerPos;
+				}
+				component.GetCharacter().Reset(true);
+				if (entry.state == AlbinoPersistentData.SpawnState.albinoCompleted)
+				{
+					component.GetCharacter().transform.localEulerAngles = Vector3Fast.zero;
+					component.albinoCompleted = true;
+					component.completedPos = vector;
+				}
+				component.ActivateCullingControl(entry.state == AlbinoPersistentData.SpawnState.insideWaitTrigger || entry.state == AlbinoPersistentData.SpawnState.insideWaitTriggerNoRandomize);
+				AnimcontrolledCharacter character = component.GetCharacter();
+				character.transform.position = vector;
+				Vector3 vector3 = vector2 - vector;
+				vector3.y = 0f;
+				vector3.Normalize();
+				character.transform.rotation = Quaternion.LookRotation(vector3, Vector3.up);
+				component.GetCharacter().Respawned();
+				component.SetNudgeTimer(1.5f);
+			}
+		}
+	}
+
+	// Token: 0x06000087 RID: 135 RVA: 0x0000AB50 File Offset: 0x00008D50
+	private void PersistentData_Load()
+	{
+		if (ScriptGlobals.boy != null && ScriptGlobals.boy.visualBoy != null)
+		{
+			Transform childComponentAE = ScriptGlobals.boy.visualBoy.transform.GetChildComponentAE("Themes");
+			this.storedInsideCrowdTheme = childComponentAE.GetChildComponentAE("InsideCrowd");
+		}
+		SavepointManager.SavepointIndex currentSavepoint = Savegame.GetCurrentSavepoint();
+		if (!SavepointManager.IsSavepointValid(currentSavepoint))
+		{
+			return;
+		}
+		if (!SavepointManager.IsSavepointDynamic(currentSavepoint.subscene, currentSavepoint.savepoint))
+		{
+			return;
+		}
+		AlbinoPersistentData albinoPersistentData = PersistentDataManager.Get<AlbinoPersistentData>("AlbinoPersistentData", () => new AlbinoPersistentData());
+		int i = 0;
+		int count = albinoPersistentData.albinoDataList.Count;
+		while (i < count)
+		{
+			AlbinoPersistentData.AlbinoState entry = albinoPersistentData.albinoDataList[i];
+			this.SpawnEntryAtLoad(i, entry);
+			i++;
+		}
+		int num = albinoPersistentData.albinoDataList.Count((AlbinoPersistentData.AlbinoState x) => x.state == AlbinoPersistentData.SpawnState.followBoy || x.state == AlbinoPersistentData.SpawnState.insideWaitTrigger || x.state == AlbinoPersistentData.SpawnState.insideWaitTriggerNoRandomize);
+		if (num > 0)
+		{
+			this.AlbinoAwakeAudioEvent(num, AudioKeyObject.AkGameObjs.global);
+		}
+	}
+
+	// Token: 0x06000088 RID: 136 RVA: 0x0000AC78 File Offset: 0x00008E78
+	public void MarkAllAlbinosAsComplete(int from, int to)
+	{
+		int i = 0;
+		int count = this.albinos.Count;
+		while (i < count)
+		{
+			if (i >= from && i <= to)
+			{
+				AnimcontrolledProperties animcontrolledProperties = this.albinos[i];
+				GameObject aiNode = animcontrolledProperties.aiNode;
+				if (aiNode != null)
+				{
+					AlbinoAI component = aiNode.GetComponent<AlbinoAI>();
+					if (component != null)
+					{
+						component.CompleteAlbino();
+					}
+				}
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06000089 RID: 137 RVA: 0x0000ACF0 File Offset: 0x00008EF0
+	public void UnspawnAllAlbinos(int from, int to)
+	{
+		int i = 0;
+		int count = this.albinos.Count;
+		while (i < count)
+		{
+			if (i >= from && i <= to)
+			{
+				AnimcontrolledProperties animcontrolledProperties = this.albinos[i];
+				GameObject aiNode = animcontrolledProperties.aiNode;
+				if (aiNode != null)
+				{
+					AlbinoAI component = aiNode.GetComponent<AlbinoAI>();
+					if (component != null)
+					{
+						component.unspawnAlbino();
+					}
+				}
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x0600008A RID: 138 RVA: 0x0000AD68 File Offset: 0x00008F68
+	public bool TestAndSpawnAlbino(AlbinoSpawner spawner, bool forceSpawn = false)
+	{
+		if (spawner.albinoID < 0 || spawner.albinoID >= this.albinos.Count)
+		{
+			return false;
+		}
+		AnimcontrolledProperties animcontrolledProperties = this.albinos[spawner.albinoID];
+		if (animcontrolledProperties.gameObject.activeSelf)
+		{
+			return true;
+		}
+		AlbinoAI component = animcontrolledProperties.aiNode.GetComponent<AlbinoAI>();
+		component.currentSpawner = spawner;
+		AlbinoPersistentData albinoPersistentData = null;
+		if (spawner.usePersistentSpawnData)
+		{
+			albinoPersistentData = PersistentDataManager.Get<AlbinoPersistentData>("AlbinoPersistentData", () => new AlbinoPersistentData());
+		}
+		Vector3 vector = spawner.transform.position;
+		bool flag = spawner.startAwake || forceSpawn;
+		bool flag2 = spawner.instantlyFollowBoy;
+		bool flag3 = true;
+		AnimcontrolledCharacter character = component.GetCharacter();
+		if (albinoPersistentData != null && spawner.albinoID < albinoPersistentData.albinoDataList.Count)
+		{
+			AlbinoPersistentData.AlbinoState albinoState = albinoPersistentData.albinoDataList[spawner.albinoID];
+			flag3 = (albinoState.state == AlbinoPersistentData.SpawnState.uninitialized || albinoState.state == AlbinoPersistentData.SpawnState.spawnedButWaiting);
+			flag = (flag || albinoState.state != AlbinoPersistentData.SpawnState.uninitialized);
+			switch (albinoState.state)
+			{
+			case AlbinoPersistentData.SpawnState.spawnedButWaiting:
+				vector = spawner.transform.position;
+				flag2 = false;
+				break;
+			case AlbinoPersistentData.SpawnState.followBoy:
+			{
+				vector = ScriptGlobals.boy.pos3 + Vector3.down * (ScriptGlobals.boy.properties.height * 0.5f + 0.1f);
+				float num = Random.Range(-0.4f, 0.4f);
+				float num2 = Random.Range(-0.4f, 0.4f);
+				vector.x += num;
+				vector.z += num2;
+				flag2 = true;
+				break;
+			}
+			case AlbinoPersistentData.SpawnState.insideWaitTrigger:
+				vector = albinoState.position;
+				component.frozenWaitTriggerPos = vector;
+				component.SetFrozenInsideWaitTrigger();
+				vector.x += Random.Range(-1.5f, 1.5f);
+				vector.z += Random.Range(-1.5f, 1.5f);
+				flag2 = true;
+				break;
+			case AlbinoPersistentData.SpawnState.insideWaitTriggerNoRandomize:
+				vector = albinoState.position;
+				component.frozenWaitTriggerPos = vector;
+				flag2 = true;
+				break;
+			case AlbinoPersistentData.SpawnState.albinoCompleted:
+				component.albinoCompleted = true;
+				vector = albinoState.position;
+				component.completedPos = albinoState.position;
+				flag2 = true;
+				break;
+			}
+		}
+		if (flag)
+		{
+			animcontrolledProperties.transform.position = Vector3Fast.zero;
+			character.transform.position = vector;
+			component.transform.position = vector + Vector3.up * 0.75f;
+			component.cachedWantedPos = vector + Vector3.up * 0.75f;
+			if (!flag2 && component != null)
+			{
+				component.aiMode = AlbinoAI.AIMode.SpawnedButWaiting;
+				if (spawner.initialAnimation.Length > 0)
+				{
+					AnimationState animationState = character.animChar.GetComponent<Animation>()[spawner.initialAnimation];
+					if (animationState != null && animationState.wrapMode != 2)
+					{
+						component.initAnimPlaying = true;
+					}
+					if (spawner.initAnimStatic)
+					{
+						character.onGround = true;
+						character.ForceToAnimation(spawner.initialAnimation, spawner.gameObject, 0f, 0f, false);
+					}
+					else
+					{
+						character.ForceToAnimation(spawner.initialAnimation, null, 0f, 0f, false);
+					}
+					character.GetBlendHelper().UpdateAnimationBlends(0.001f);
+				}
+			}
+			animcontrolledProperties.gameObject.SetActive(true);
+			if (component != null)
+			{
+				this.AddAlbino(component);
+				component.ActivateCullingControl(false);
+				AnimcontrolledCharacter animcontrolledCharacter = character;
+				animcontrolledCharacter.transform.position = vector;
+				component.cachedWantedPos = vector + Vector3.up * 0.75f;
+				if (flag3)
+				{
+					animcontrolledCharacter.transform.rotation = spawner.transform.rotation;
+					animcontrolledCharacter.transform.Rotate(0f, 90f, 0f);
+				}
+				else
+				{
+					Vector3 vector2 = ScriptGlobals.boy.pos3 - vector;
+					vector2.y = 0f;
+					vector2.Normalize();
+					float num3 = Vector3.Angle(Vector3.right, vector2);
+					animcontrolledCharacter.transform.eulerAngles = new Vector3(0f, num3 + 90f, 0f);
+				}
+				character.Respawned();
+				component.Respawned();
+			}
+		}
+		return true;
+	}
+
+	// Token: 0x0600008B RID: 139 RVA: 0x0000B208 File Offset: 0x00009408
+	public void TimeSliceInitialization(IRoundRobinInitializationable animCtrl)
+	{
+		if (!this.timesliceInitList.Contains(animCtrl))
+		{
+			this.timesliceInitList.Add(animCtrl);
+			this.roundRobinWaitFrame = true;
+		}
+	}
+
+	// Token: 0x0600008C RID: 140 RVA: 0x0000B23C File Offset: 0x0000943C
+	public void RemoveTimeSliceInitialization(IRoundRobinInitializationable animCtrl)
+	{
+		this.timesliceInitList.Remove(animCtrl);
+	}
+
+	// Token: 0x0600008D RID: 141 RVA: 0x0000B24C File Offset: 0x0000944C
+	private bool RefreshSubscenesToBeVisible(ref Bounds bounds)
+	{
+		bool flag = false;
+		if (this.activeFollowers)
+		{
+			int i = 0;
+			int size = this.activeAlbinos.size;
+			while (i < size)
+			{
+				AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+				if (albinoAI.CloseToMainCharacter())
+				{
+					if (!flag)
+					{
+						flag = true;
+						bounds.extents = Vector3.one;
+						bounds.center = albinoAI.cachedWantedPos;
+					}
+					else
+					{
+						bounds.Encapsulate(albinoAI.cachedWantedPos);
+					}
+				}
+				i++;
+			}
+			bounds.Expand(Vector3.one * 3f);
+		}
+		return flag;
+	}
+
+	// Token: 0x0600008E RID: 142 RVA: 0x0000B2EC File Offset: 0x000094EC
+	public void AddAlbino(AlbinoAI albinoToAdd)
+	{
+		if (!this.activeAlbinos.Contains(albinoToAdd))
+		{
+			this.activeAlbinos.Add(albinoToAdd);
+		}
+		this.activeFollowers = true;
+		this.doNewOffsetNextTime = true;
+		SubsceneCullingManager.instance.AddLoadOverlapping(new SubsceneCullingManager.OverLapCallback(this.RefreshSubscenesToBeVisible));
+	}
+
+	// Token: 0x0600008F RID: 143 RVA: 0x0000B33C File Offset: 0x0000953C
+	public void RemoveAlbino(AlbinoAI albinoToRemove)
+	{
+		this.activeAlbinos.Remove(albinoToRemove);
+		this.activeFollowers = (this.activeAlbinos.size == 0);
+		if (!this.activeFollowers)
+		{
+			SubsceneCullingManager.instance.RemoveLoadOverlapping(new SubsceneCullingManager.OverLapCallback(this.RefreshSubscenesToBeVisible));
+		}
+	}
+
+	// Token: 0x06000090 RID: 144 RVA: 0x0000B38C File Offset: 0x0000958C
+	public int GetAlbinosFollowingBoy()
+	{
+		return this.albinosFollowingBoy;
+	}
+
+	// Token: 0x06000091 RID: 145 RVA: 0x0000B394 File Offset: 0x00009594
+	public int CountAlbinosFollowingBoy()
+	{
+		int num = 0;
+		Vector3 zero = Vector3Fast.zero;
+		int i = 0;
+		int size = this.activeAlbinos.size;
+		while (i < size)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			if (albinoAI.aiMode != AlbinoAI.AIMode.SpawnedButWaiting && albinoAI.overrideTarget == null && !albinoAI.IsInsideWaitTrigger(ref zero))
+			{
+				num++;
+			}
+			i++;
+		}
+		this.albinosFollowingBoy = num;
+		return this.albinosFollowingBoy;
+	}
+
+	// Token: 0x06000092 RID: 146 RVA: 0x0000B414 File Offset: 0x00009614
+	public int CountAlbinosInBadFollowPosition(float maxY)
+	{
+		int num = 0;
+		Vector3 zero = Vector3Fast.zero;
+		int i = 0;
+		int size = this.activeAlbinos.size;
+		while (i < size)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			if (albinoAI.aiMode != AlbinoAI.AIMode.SpawnedButWaiting && !albinoAI.IsInsideWaitTrigger(ref zero) && albinoAI.lastPos.y < maxY)
+			{
+				num++;
+			}
+			i++;
+		}
+		return num;
+	}
+
+	// Token: 0x06000093 RID: 147 RVA: 0x0000B488 File Offset: 0x00009688
+	public bool AreAllAlbinosAwake()
+	{
+		int i = 0;
+		int size = this.activeAlbinos.size;
+		while (i < size)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			if (albinoAI.aiMode == AlbinoAI.AIMode.SpawnedButWaiting)
+			{
+				return false;
+			}
+			i++;
+		}
+		return true;
+	}
+
+	// Token: 0x06000094 RID: 148 RVA: 0x0000B4D0 File Offset: 0x000096D0
+	public FastList<AlbinoAI> GetAlbinoAIsFollowingBoy()
+	{
+		this.relevantAlbinos.size = 0;
+		Vector3 zero = Vector3Fast.zero;
+		int i = 0;
+		int size = this.activeAlbinos.size;
+		while (i < size)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			if (albinoAI.aiMode != AlbinoAI.AIMode.SpawnedButWaiting && albinoAI.overrideTarget == null && !albinoAI.IsInsideWaitTrigger(ref zero) && !albinoAI.IsInsideABlocker() && !albinoAI.albinoCompleted)
+			{
+				this.relevantAlbinos.Add(albinoAI);
+			}
+			i++;
+		}
+		return this.relevantAlbinos;
+	}
+
+	// Token: 0x06000095 RID: 149 RVA: 0x0000B570 File Offset: 0x00009770
+	public bool AlbinoDistanceCheck(Vector3 pos, float insideDistance)
+	{
+		Vector3 zero = Vector3Fast.zero;
+		int i = 0;
+		int size = this.activeAlbinos.size;
+		while (i < size)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			if (albinoAI.aiMode != AlbinoAI.AIMode.SpawnedButWaiting && albinoAI.overrideTarget == null && !albinoAI.IsInsideWaitTrigger(ref zero) && !albinoAI.IsInsideABlocker() && !albinoAI.albinoCompleted)
+			{
+				Vector3 cachedWantedPos = albinoAI.cachedWantedPos;
+				if (Mathf.Abs(pos.y - cachedWantedPos.y) <= insideDistance)
+				{
+					if (Mathf.Abs(pos.x - cachedWantedPos.x) > insideDistance)
+					{
+						return false;
+					}
+				}
+			}
+			i++;
+		}
+		return true;
+	}
+
+	// Token: 0x06000096 RID: 150 RVA: 0x0000B634 File Offset: 0x00009834
+	private void SetBoyOffsets()
+	{
+		this.CountAlbinosFollowingBoy();
+		if (this.albinosFollowingBoy < 1)
+		{
+			return;
+		}
+		float num = 0f;
+		if (ScriptGlobals.mainCharacter is Huddle)
+		{
+			num = 2f;
+		}
+		List<float> list = new List<float>();
+		int i;
+		for (i = this.albinosFollowingBoy; i > 6; i--)
+		{
+			list.Add(Random.Range(-1.6f - num, 0.6f + num));
+		}
+		while (i > 3)
+		{
+			list.Add(Random.Range(-0.8f - num, 1.5f + num));
+			i--;
+		}
+		while (i > 1)
+		{
+			list.Add(Random.Range(0f + num, 1.5f + num));
+			i--;
+		}
+		list.Add(-0.8f);
+		list.Sort();
+		int num2 = 0;
+		Vector3 zero = Vector3Fast.zero;
+		for (int j = 0; j < this.activeAlbinos.size; j++)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[j];
+			if (albinoAI.aiMode != AlbinoAI.AIMode.SpawnedButWaiting && albinoAI.overrideTarget == null && !albinoAI.IsInsideWaitTrigger(ref zero))
+			{
+				albinoAI.SetNewOffset(list[num2], Random.Range(0f, 0.8f));
+				albinoAI.followBoySpeedFactor = 0.8f + (float)(num2 + 1) * 0.7f / (float)this.albinosFollowingBoy;
+				num2++;
+			}
+		}
+	}
+
+	// Token: 0x06000097 RID: 151 RVA: 0x0000B7B0 File Offset: 0x000099B0
+	private void FlipFollowerOffsets()
+	{
+		int size = this.activeAlbinos.size;
+		if (size < 1)
+		{
+			return;
+		}
+		int size2 = this.activeAlbinos.size;
+		for (int i = 0; i < size2; i++)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			if (albinoAI.overrideTarget == null)
+			{
+				albinoAI.SetNewOffset(-albinoAI.offset, Random.Range(0f, 0f));
+			}
+		}
+	}
+
+	// Token: 0x06000098 RID: 152 RVA: 0x0000B82C File Offset: 0x00009A2C
+	private bool IsFreeDistanceToSpecificBoy(Vector3 yourPos, Vector3 target, Vector3 dir, float radius, float minIgnoreDist)
+	{
+		Vector3 vector;
+		vector.x = target.x - yourPos.x;
+		vector.y = target.y - yourPos.y;
+		vector.z = target.z - yourPos.z;
+		float num = dir.x * vector.x + dir.y * vector.y + dir.z * vector.z;
+		if (num > 0f)
+		{
+			float num2 = vector.x * vector.x + vector.y * vector.y + vector.z * vector.z;
+			if (num2 <= radius * radius && num2 < minIgnoreDist * minIgnoreDist)
+			{
+				float num3 = radius * 0.8f;
+				if (num2 <= num3 * num3)
+				{
+					return false;
+				}
+				float num4 = Mathf.Sqrt(num2);
+				vector.x /= num4;
+				vector.y /= num4;
+				vector.z /= num4;
+				num = dir.x * vector.x + dir.y * vector.y + dir.z * vector.z;
+				if (num > 0.1f)
+				{
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	// Token: 0x06000099 RID: 153 RVA: 0x0000B988 File Offset: 0x00009B88
+	public Vector3 GetOffsetToAllBoys(AlbinoAI you, Vector3 moveDir, float deltaTime, ref Vector3 wantedPos)
+	{
+		Vector3 vector = moveDir;
+		Vector3 cachedWantedPos = you.cachedWantedPos;
+		cachedWantedPos.y += 0.75f;
+		int size = this.avoidObjects.size;
+		for (int i = 0; i < size; i++)
+		{
+			AlbinoAvoidObject albinoAvoidObject = this.avoidObjects.raw[i];
+			Vector3 cachedPos = albinoAvoidObject.cachedPos;
+			Vector3 vector2 = cachedPos;
+			vector2.y -= cachedWantedPos.y;
+			if (FastMath.Abs(vector2.y) < 5f)
+			{
+				vector2.y = 0f;
+				vector2.x -= cachedWantedPos.x;
+				if (FastMath.Abs(vector2.x) < albinoAvoidObject.radius)
+				{
+					vector2.z -= cachedWantedPos.z;
+					if (Vector3.Dot(vector, vector2) >= 0f)
+					{
+						float magnitude = vector2.magnitude;
+						if (magnitude > 0.001f && magnitude < albinoAvoidObject.radius)
+						{
+							you.forceUpdate = true;
+							bool flag = false;
+							if (magnitude > albinoAvoidObject.radius * 0.1f && ScriptGlobals.mainCharacter == ScriptGlobals.boy && !this.IsBoyBeingLifted() && magnitude < albinoAvoidObject.radius - 0.1f)
+							{
+								Vector3 vector3 = cachedPos;
+								Vector3 pos = ScriptGlobals.boy.pos3;
+								vector3.x -= pos.x;
+								vector3.y -= pos.y;
+								vector3.z -= pos.z;
+								if (FastMath.Abs(vector3.y) < 5f)
+								{
+									vector3.y = 0f;
+									if (vector3.magnitude < albinoAvoidObject.radius - 0.1f)
+									{
+										flag = true;
+									}
+								}
+							}
+							if (flag)
+							{
+								Vector3 vector4 = vector2;
+								float num = (albinoAvoidObject.radius - 0.1f) / magnitude;
+								vector4.x *= num;
+								vector4.y *= num;
+								vector4.z *= num;
+								Vector3 vector5 = cachedPos;
+								vector5.x -= vector4.x;
+								vector5.y -= vector4.y;
+								vector5.z -= vector4.z;
+								wantedPos.x = vector5.x;
+								wantedPos.z = vector5.z;
+							}
+							else
+							{
+								float magnitude2 = vector.magnitude;
+								float num2 = deltaTime * 10f * ((albinoAvoidObject.radius - magnitude) / albinoAvoidObject.radius);
+								vector.x -= num2 * vector2.x;
+								vector.y -= num2 * vector2.y;
+								vector.z -= num2 * vector2.z;
+								float magnitude3 = vector.magnitude;
+								if (magnitude3 < magnitude2)
+								{
+									vector = vector.normalized * magnitude2;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		if (vector.x != 0f || vector.y != 0f || vector.z != 0f)
+		{
+			size = you.albinoDetector.albinosInside.size;
+			for (int j = 0; j < size; j++)
+			{
+				AlbinoAI albinoAI = you.albinoDetector.albinosInside.raw[j];
+				Vector3 cachedWantedPos2 = albinoAI.cachedWantedPos;
+				cachedWantedPos2.y += 0.75f;
+				cachedWantedPos2.x -= cachedWantedPos.x;
+				cachedWantedPos2.y -= cachedWantedPos.y;
+				cachedWantedPos2.z -= cachedWantedPos.z;
+				if (Vector3.Dot(vector, cachedWantedPos2) > 0f)
+				{
+					float num3 = cachedWantedPos2.x * cachedWantedPos2.x + cachedWantedPos2.y * cachedWantedPos2.y + cachedWantedPos2.z * cachedWantedPos2.z;
+					if (num3 < 0.09f && num3 > 0.0001f)
+					{
+						float num4 = Mathf.Sqrt(num3);
+						float num5 = deltaTime * 5f * ((0.3f - num4) / num4);
+						vector.x -= -num5 * cachedWantedPos2.x;
+						vector.y -= -num5 * cachedWantedPos2.y;
+						vector.z -= -num5 * cachedWantedPos2.z;
+						if (vector.x == 0f && vector.y == 0f && vector.z == 0f)
+						{
+							break;
+						}
+					}
+				}
+			}
+		}
+		return vector;
+	}
+
+	// Token: 0x0600009A RID: 154 RVA: 0x0000BE80 File Offset: 0x0000A080
+	public GameObject GetObstructor(AlbinoAI you, Vector3 dir, float minIgnoreDist, float radiusToFollowers, out bool isAlbinoAvoid)
+	{
+		int size = this.avoidObjects.size;
+		isAlbinoAvoid = true;
+		for (int i = 0; i < size; i++)
+		{
+			AlbinoAvoidObject albinoAvoidObject = this.avoidObjects.raw[i];
+			if (!this.IsFreeDistanceToSpecificBoy(you.cachedWantedPos, albinoAvoidObject.cachedPos, dir, albinoAvoidObject.radius + 0.2f, albinoAvoidObject.radius + 0.3f))
+			{
+				return albinoAvoidObject.gameObject;
+			}
+		}
+		isAlbinoAvoid = false;
+		bool flag = this.IsInAlbinoJumpState() && ScriptGlobals.mainCharacter is Huddle;
+		if (!you.IsCloseToClutterRestriction() && !this.huddleWantsToBeLifted && !flag)
+		{
+			size = you.albinoDetector.albinosInside.size;
+			for (int j = 0; j < size; j++)
+			{
+				AlbinoAI albinoAI = you.albinoDetector.albinosInside.raw[j];
+				if (albinoAI != you && !this.IsFreeDistanceToSpecificBoy(you.cachedWantedPos, albinoAI.cachedWantedPos, dir, radiusToFollowers, minIgnoreDist))
+				{
+					return albinoAI.gameObject;
+				}
+			}
+		}
+		return null;
+	}
+
+	// Token: 0x0600009B RID: 155 RVA: 0x0000BFA0 File Offset: 0x0000A1A0
+	private bool CloseToBoy(Vector3 you, Vector3 target, Vector3 wantedPos, ref bool veryClose, float sizeFactor = 1f)
+	{
+		Vector3 vector = target;
+		vector.x -= you.x;
+		vector.y -= you.y;
+		vector.z -= you.z;
+		float num = wantedPos.x - you.x;
+		veryClose = false;
+		bool flag = FastMath.Abs(target.x - you.x) < 1.2f * sizeFactor && FastMath.Abs(you.z - target.z) < 0.7f * sizeFactor && vector.x * num > 0f;
+		if (flag && vector.sqrMagnitude < 0.04f)
+		{
+			veryClose = true;
+		}
+		return flag;
+	}
+
+	// Token: 0x0600009C RID: 156 RVA: 0x0000C074 File Offset: 0x0000A274
+	private float AlignBoyNextToOneOtherBoy(Vector3 you, Vector3 targetBoy, float lenToTarget, float extraspace = 1f)
+	{
+		float num = 0.7f * extraspace;
+		float val = targetBoy.z - you.z;
+		if (FastMath.Abs(val) >= num)
+		{
+			return you.z;
+		}
+		if (targetBoy.z < you.z)
+		{
+			return targetBoy.z + num * Mathf.Max(1f, lenToTarget * 0.5f);
+		}
+		return targetBoy.z - num * Mathf.Max(1f, lenToTarget * 0.5f);
+	}
+
+	// Token: 0x0600009D RID: 157 RVA: 0x0000C0F8 File Offset: 0x0000A2F8
+	private void SetTheme(string themeName)
+	{
+		VisualBoy visualBoy = ScriptGlobals.boy.visualBoy;
+		if (themeName == string.Empty)
+		{
+			visualBoy.SetTheme(null, VisualBoy.ThemePriority.LowPlusOne);
+			this.inTheme = false;
+		}
+		else
+		{
+			Transform childComponentAE = visualBoy.transform.GetChildComponentAE("Themes");
+			Transform childComponentAE2 = childComponentAE.GetChildComponentAE(themeName);
+			visualBoy.SetTheme(childComponentAE2, VisualBoy.ThemePriority.LowPlusOne);
+			this.inTheme = true;
+		}
+	}
+
+	// Token: 0x0600009E RID: 158 RVA: 0x0000C15C File Offset: 0x0000A35C
+	public void JetCrateJustStarted(GameObject jetCrate)
+	{
+		Vector3 position = jetCrate.transform.position;
+		int size = this.activeAlbinos.size;
+		for (int i = 0; i < size; i++)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			if (albinoAI.aiMode != AlbinoAI.AIMode.SpawnedButWaiting)
+			{
+				Vector3 vector = albinoAI.cachedWantedPos - position;
+				if (FastMath.Abs(vector.y) < 3f && FastMath.Abs(vector.x) < 2f && FastMath.Abs(vector.z) < 2f)
+				{
+					albinoAI.PushedBackByThis(jetCrate);
+				}
+			}
+		}
+		if (this.IsBoyBeingLifted())
+		{
+			Vector3 vector2 = position - ScriptGlobals.boy.pos3;
+			vector2.y = 0f;
+			if (vector2.magnitude < 1.5f)
+			{
+				BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+				this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.Inactive;
+			}
+		}
+	}
+
+	// Token: 0x0600009F RID: 159 RVA: 0x0000C254 File Offset: 0x0000A454
+	public void RemoveOverridePointForAlbino(AlbinoAI albino)
+	{
+		albino.overrideTarget = null;
+		albino.allowMoveClose = true;
+	}
+
+	// Token: 0x060000A0 RID: 160 RVA: 0x0000C264 File Offset: 0x0000A464
+	public void RemoveOverridePointForAlbinos(GameObject overridePoint)
+	{
+		if (overridePoint == null)
+		{
+			return;
+		}
+		int size = this.activeAlbinos.size;
+		float num = float.MaxValue;
+		float num2 = float.MinValue;
+		float x = ScriptGlobals.boy.pos3.x;
+		List<AlbinoAI> list = new List<AlbinoAI>();
+		for (int i = 0; i < size; i++)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			if (albinoAI.overrideTarget == overridePoint)
+			{
+				albinoAI.overrideTarget = null;
+				albinoAI.allowMoveClose = true;
+				list.Add(albinoAI);
+				float num3 = FastMath.Abs(albinoAI.cachedWantedPos.x - x);
+				num = Mathf.Min(num3, num);
+				num2 = Mathf.Max(num3, num2);
+			}
+		}
+		float num4 = num2 - num;
+		if (num4 > 0f)
+		{
+			float num5 = 1f / num4;
+			int j = 0;
+			int count = list.Count;
+			while (j < count)
+			{
+				AlbinoAI albinoAI2 = list[j];
+				float num6 = FastMath.Abs(albinoAI2.cachedWantedPos.x - x);
+				albinoAI2.SetNewStandStillDeadzone(Random.Range(0f, 0.4f) + (num6 - num) * num5 * 0.7f);
+				j++;
+			}
+		}
+		this.SetBoyOffsets();
+	}
+
+	// Token: 0x060000A1 RID: 161 RVA: 0x0000C3B0 File Offset: 0x0000A5B0
+	public void SetOverridePointForAlbino(GameObject overridePoint, float distance, AlbinoAI albino)
+	{
+		float x = overridePoint.transform.position.x;
+		albino.overrideTarget = overridePoint;
+		albino.allowMoveClose = true;
+		if (distance <= 0f)
+		{
+			albino.SetNewOffset(Random.Range(-1.5f, 1.5f), 0f);
+		}
+		else if (overridePoint != null)
+		{
+			albino.allowMoveClose = false;
+			float num = albino.cachedWantedPos.x - x;
+			if (FastMath.Abs(num) <= distance)
+			{
+				albino.SetNewOffset(num, 0f);
+			}
+			else
+			{
+				albino.SetNewOffset(Random.Range(-distance * 0.5f, distance * 0.5f), 0f);
+			}
+		}
+	}
+
+	// Token: 0x060000A2 RID: 162 RVA: 0x0000C468 File Offset: 0x0000A668
+	public void SetOverridePointForAllActiveAlbinos(GameObject overridePoint, float distance = 0f)
+	{
+		int size = this.activeAlbinos.size;
+		for (int i = 0; i < size; i++)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			if (albinoAI.aiMode != AlbinoAI.AIMode.SpawnedButWaiting)
+			{
+				this.SetOverridePointForAlbino(overridePoint, distance, albinoAI);
+			}
+		}
+	}
+
+	// Token: 0x060000A3 RID: 163 RVA: 0x0000C4BC File Offset: 0x0000A6BC
+	public void BoyRunningThroughAlbinos()
+	{
+		if (FastMath.Abs(ScriptGlobals.boy.velocity.x) > 0.5f && ScriptGlobals.boy.input.looseDir.x != 0f)
+		{
+			this.stopCrowdThemeTimer = 0.16f;
+		}
+	}
+
+	// Token: 0x060000A4 RID: 164 RVA: 0x0000C518 File Offset: 0x0000A718
+	public float GetLiftingOffset()
+	{
+		return Mathf.Clamp(this.liftingOffset * 0.5f, -1.2f, 1.2f);
+	}
+
+	// Token: 0x060000A5 RID: 165 RVA: 0x0000C538 File Offset: 0x0000A738
+	public bool DoesHuddleWantToBeLifted()
+	{
+		return this.huddleWantsToBeLifted || (this.IsInAlbinoJumpState() && ScriptGlobals.mainCharacter is Huddle);
+	}
+
+	// Token: 0x060000A6 RID: 166 RVA: 0x0000C564 File Offset: 0x0000A764
+	public Vector3 GetFollowTarget(AlbinoAI albinoAI, bool preferNegativeDisplacement = false)
+	{
+		Vector3 pos;
+		float num;
+		if (ScriptGlobals.mainCharacter is Huddle)
+		{
+			if (this.liftOffsetFrame != (float)Time.frameCount)
+			{
+				this.huddleWantsToBeLifted = false;
+			}
+			pos = ScriptGlobals.huddle.pos3;
+			pos.y -= 1.2f;
+			pos.z = ScriptGlobals.huddle.playfield.posz;
+			if (FastMath.Abs(ScriptGlobals.huddle.velocity.x) < 0.4f)
+			{
+				num = this.lastBoyFacing;
+			}
+			else
+			{
+				num = Mathf.Sign(ScriptGlobals.huddle.velocity.x);
+			}
+			if (this.liftOffsetFrame != (float)Time.frameCount && ScriptGlobals.huddle.velocity3.x < 1f && ScriptGlobals.huddle.input.looseDir.y > 0.5f)
+			{
+				this.huddleWantsToBeLifted = true;
+				pos.z -= 1f;
+				if (this.liftingOffset != 0f)
+				{
+					pos.x -= this.GetLiftingOffset();
+				}
+			}
+			this.liftOffsetFrame = (float)Time.frameCount;
+		}
+		else
+		{
+			this.huddleWantsToBeLifted = false;
+			pos = ScriptGlobals.boy.pos3;
+			pos.y -= 0.7f;
+			num = ScriptGlobals.boy.facing;
+		}
+		AlbinoNarrowPathTrigger currentNarrowPath = albinoAI.GetCurrentNarrowPath();
+		float offset = albinoAI.offset;
+		Vector3 cachedWantedPos = albinoAI.cachedWantedPos;
+		Vector3 vector = Vector3Fast.zero;
+		if (albinoAI.overrideTarget != null)
+		{
+			vector = albinoAI.overrideTarget.transform.position;
+			vector.x += offset;
+			vector.y = cachedWantedPos.y;
+		}
+		else
+		{
+			vector = pos;
+			vector.x += this.mCenterOfMassOffset + offset * num;
+			vector.y -= 0.7f;
+		}
+		bool flag = false;
+		if (currentNarrowPath != null)
+		{
+			vector.z = currentNarrowPath.transform.position.z;
+		}
+		if (preferNegativeDisplacement)
+		{
+			vector.z -= 0.1f;
+		}
+		else
+		{
+			vector.z += 0.1f;
+		}
+		float num2 = FastMath.Abs(vector.x - cachedWantedPos.x);
+		this.boysToAvoid.size = 0;
+		if (!flag)
+		{
+			bool flag2 = false;
+			float sizeFactor = 1f;
+			if (ScriptGlobals.mainCharacter is Huddle)
+			{
+				sizeFactor = 2.5f;
+			}
+			if (this.CloseToBoy(cachedWantedPos, pos, vector, ref flag2, sizeFactor))
+			{
+				if (flag2)
+				{
+					return cachedWantedPos;
+				}
+				this.boysToAvoid.Add(ScriptGlobals.mainCharacter.gameObject);
+			}
+			int size = albinoAI.albinoDetector.albinosInside.size;
+			for (int i = 0; i < size; i++)
+			{
+				AlbinoAI albinoAI2 = albinoAI.albinoDetector.albinosInside.raw[i];
+				if (albinoAI != albinoAI2 && this.CloseToBoy(cachedWantedPos, albinoAI2.cachedWantedPos, vector, ref flag2, 1f))
+				{
+					if (flag2)
+					{
+						return cachedWantedPos;
+					}
+					this.boysToAvoid.Add(albinoAI2.gameObject);
+				}
+			}
+		}
+		if (this.huddleWantsToBeLifted && vector.z > ScriptGlobals.huddle.pos3.z && vector.z < ScriptGlobals.huddle.pos3.z + 1.5f)
+		{
+			vector.z = Mathf.Min(-vector.z, -1f);
+		}
+		if (this.boysToAvoid.size > 0)
+		{
+			if (currentNarrowPath != null && FastMath.Abs(currentNarrowPath.transform.position.z - cachedWantedPos.z) > currentNarrowPath.width * 0.5f)
+			{
+				Vector3 vector2 = vector;
+				vector2.x -= cachedWantedPos.x;
+				vector2.y -= cachedWantedPos.y;
+				vector2.z -= cachedWantedPos.z;
+				float sqrMagnitude = vector2.sqrMagnitude;
+				if (sqrMagnitude > 1f)
+				{
+					vector = cachedWantedPos + vector2 / Mathf.Sqrt(sqrMagnitude);
+				}
+			}
+			else if (this.boysToAvoid.size == 1)
+			{
+				vector.z = this.AlignBoyNextToOneOtherBoy(cachedWantedPos, this.boysToAvoid.raw[0].transform.position, num2, 1.5f);
+			}
+			else
+			{
+				GameObject gameObject = null;
+				GameObject gameObject2 = null;
+				Vector3 targetBoy = Vector3Fast.zero;
+				targetBoy.z = float.MaxValue;
+				Vector3 targetBoy2 = Vector3Fast.zero;
+				targetBoy2.z = float.MinValue;
+				int count = this.boysToAvoid.Count;
+				float extraspace = 2.5f;
+				if (ScriptGlobals.mainCharacter is Huddle)
+				{
+					extraspace = 6f;
+				}
+				for (int j = 0; j < count; j++)
+				{
+					GameObject gameObject3 = this.boysToAvoid.raw[j];
+					Vector3 position = gameObject3.transform.position;
+					if (position.z < cachedWantedPos.z)
+					{
+						if (gameObject == null || targetBoy.z < position.z)
+						{
+							gameObject = gameObject3;
+							targetBoy = position;
+						}
+					}
+					else if (gameObject2 == null || targetBoy2.z > position.z)
+					{
+						gameObject2 = gameObject3;
+						targetBoy2 = position;
+					}
+				}
+				if (gameObject != null && gameObject2 != null)
+				{
+					if (gameObject == ScriptGlobals.mainCharacter.gameObject)
+					{
+						vector.z = this.AlignBoyNextToOneOtherBoy(cachedWantedPos, ScriptGlobals.mainCharacter.pos3, num2, extraspace);
+					}
+					else if (gameObject2 == ScriptGlobals.mainCharacter.gameObject)
+					{
+						vector.z = this.AlignBoyNextToOneOtherBoy(cachedWantedPos, ScriptGlobals.mainCharacter.pos3, num2, extraspace);
+					}
+					else
+					{
+						float num3 = (!albinoAI.GetDisplaceNegative()) ? 0.4f : -0.4f;
+						float num4 = targetBoy2.z - targetBoy.z;
+						if (num4 > 0.3f)
+						{
+							num3 = num4 * 0.5f - cachedWantedPos.z;
+						}
+						vector.z = cachedWantedPos.z + num3 * Mathf.Max(1f, num2 * 0.5f);
+					}
+				}
+				else if (gameObject != null)
+				{
+					vector.z = this.AlignBoyNextToOneOtherBoy(cachedWantedPos, targetBoy, num2, 1f);
+				}
+				else
+				{
+					vector.z = this.AlignBoyNextToOneOtherBoy(cachedWantedPos, targetBoy2, num2, 1f);
+				}
+			}
+		}
+		else if (currentNarrowPath != null && FastMath.Abs(currentNarrowPath.transform.position.z - cachedWantedPos.z) > currentNarrowPath.width * 0.5f)
+		{
+			vector.z = currentNarrowPath.transform.position.z;
+			float num5 = vector.x - cachedWantedPos.x;
+			if (FastMath.Abs(num5) > 2.5f)
+			{
+				vector.x = cachedWantedPos.x + Mathf.Sign(num5) * 2.5f;
+			}
+		}
+		else if (!flag)
+		{
+			if (FastMath.Abs(vector.x - cachedWantedPos.x) >= 1f || FastMath.Abs(albinoAI.lastMoveSpeed.x) >= 1f || FastMath.Abs(vector.z - cachedWantedPos.z) <= 1.5f)
+			{
+				if ((double)FastMath.Abs(albinoAI.lastMoveSpeed.x) > 0.1)
+				{
+					vector.z = cachedWantedPos.z * 0.15f + vector.z * 0.85f;
+				}
+				else
+				{
+					vector.z = cachedWantedPos.z * 0.6f + vector.z * 0.4f;
+				}
+			}
+		}
+		int size2 = this.avoidObjects.size;
+		for (int k = 0; k < size2; k++)
+		{
+			AlbinoAvoidObject albinoAvoidObject = this.avoidObjects.raw[k];
+			Vector3 vector3 = albinoAvoidObject.transform.position - cachedWantedPos;
+			Vector3 vector4 = vector - cachedWantedPos;
+			if (FastMath.Abs(vector3.y) < 5f)
+			{
+				vector3.y = 0f;
+				if (Vector3.Dot(vector3, vector4) > 0f)
+				{
+					float sqrMagnitude2 = vector3.sqrMagnitude;
+					float num6 = albinoAvoidObject.radius + 2.5f;
+					if ((FastMath.Abs(vector3.x) < albinoAvoidObject.radius + num6 && FastMath.Abs(vector3.z) < albinoAvoidObject.radius) || sqrMagnitude2 < albinoAvoidObject.radius * albinoAvoidObject.radius)
+					{
+						if (sqrMagnitude2 > albinoAvoidObject.radius * albinoAvoidObject.radius)
+						{
+							float num7 = FastMath.Abs(vector4.x);
+							if (num7 > 0f)
+							{
+								float num8 = (num6 - FastMath.Abs(vector3.x)) / (num6 - albinoAvoidObject.radius);
+								vector.z -= Mathf.Sign(vector3.z) * num8 * 1.25f * num7;
+							}
+						}
+						else
+						{
+							float num9 = (albinoAvoidObject.radius - FastMath.Abs(vector3.z)) / albinoAvoidObject.radius;
+							vector.z -= 0.4f * Mathf.Sign(vector3.z) * num9 * FastMath.Abs(vector4.x);
+						}
+					}
+				}
+			}
+		}
+		this.boysToAvoid.size = 0;
+		return vector;
+	}
+
+	// Token: 0x060000A7 RID: 167 RVA: 0x0000CF98 File Offset: 0x0000B198
+	public int GetVeryCloseAlbinos()
+	{
+		int num = 0;
+		int i = 0;
+		int size = this.activeAlbinos.size;
+		while (i < size)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			if (albinoAI.closeToBoy)
+			{
+				num++;
+			}
+			i++;
+		}
+		return num;
+	}
+
+	// Token: 0x060000A8 RID: 168 RVA: 0x0000CFE4 File Offset: 0x0000B1E4
+	private static float GetGrabbableZArea(GameObject grabbedObject)
+	{
+		float num = Mathf.Floor(grabbedObject.transform.lossyScale.z / 0.5f);
+		if ((int)num % 2 == 0)
+		{
+			num -= 1f;
+		}
+		return num * 0.5f;
+	}
+
+	// Token: 0x060000A9 RID: 169 RVA: 0x0000D028 File Offset: 0x0000B228
+	private void CreateGrabSlots(GameObject grabbedObject, ref List<AlbinoGroupManager.GrabSlot> grabSlotList)
+	{
+		grabSlotList.Clear();
+		bool flag = grabbedObject.GetComponent<Collider>() != null;
+		float alignOffset = 0f;
+		float yOffset = 0f;
+		if (grabbedObject.GetComponent<Collider>() != null)
+		{
+			Vector3 extents = grabbedObject.GetComponent<Collider>().bounds.extents;
+			alignOffset = extents.x + 0.28f;
+			yOffset = ScriptGlobals.boy.properties.height * 0.5f + 0.02f - extents.y;
+		}
+		float grabbableZArea = AlbinoGroupManager.GetGrabbableZArea(grabbedObject);
+		int num = FastMath.Min((int)(grabbableZArea / 0.5f), this.activeAlbinos.size + 1);
+		if (num % 2 == 0)
+		{
+			num++;
+		}
+		for (int i = 0; i < num; i++)
+		{
+			AlbinoGroupManager.GrabSlot grabSlot = new AlbinoGroupManager.GrabSlot();
+			grabSlot.zOffset = ((float)i - Mathf.Floor((float)num * 0.5f)) * 0.5f;
+			if (grabSlot.zOffset != 0f)
+			{
+				grabSlot.owner = null;
+				if (flag)
+				{
+					grabSlot.alignObject = grabbedObject;
+				}
+				grabSlot.alignOffset = alignOffset;
+				grabSlot.yOffset = yOffset;
+				grabSlotList.Add(grabSlot);
+			}
+		}
+	}
+
+	// Token: 0x060000AA RID: 170 RVA: 0x0000D164 File Offset: 0x0000B364
+	public void SetAlbinoMultiInteraction(AlbinoMultiInteraction multiInteractionToSet)
+	{
+		if (this.internalMultiInteraction != multiInteractionToSet)
+		{
+			if (multiInteractionToSet != null)
+			{
+				multiInteractionToSet.UnReserveAllInteractions();
+				this.CreateGrabSlots(multiInteractionToSet.gameObject, ref this.mMultiGrabSlots);
+			}
+			else if (this.internalMultiInteraction != null)
+			{
+				this.internalMultiInteraction.UnReserveAllInteractions();
+			}
+		}
+		this.internalMultiInteraction = multiInteractionToSet;
+	}
+
+	// Token: 0x060000AB RID: 171 RVA: 0x0000D1D0 File Offset: 0x0000B3D0
+	public bool RoomLeftForMultiInteractionWhileFarAway(AlbinoAI albinoAI)
+	{
+		float val = ScriptGlobals.boy.pos.x - albinoAI.cachedWantedPos.x;
+		return FastMath.Abs(val) >= this.grabPrepareDistance + 0.2f && this.multiInteraction != null && this.multiInteraction.RoomLeftForMultiInteraction();
+	}
+
+	// Token: 0x060000AC RID: 172 RVA: 0x0000D234 File Offset: 0x0000B434
+	public bool ShouldMultiInteract(AlbinoAI albinoAI)
+	{
+		if (this.multiInteraction != null)
+		{
+			float num = ScriptGlobals.boy.pos.x - albinoAI.cachedWantedPos.x;
+			if (FastMath.Abs(num) < this.grabPrepareDistance + 0.2f && (num * ScriptGlobals.boy.facing > 0f || FastMath.Abs(num) < 0.7f))
+			{
+				return this.multiInteraction.TestAndReserveInteraction(albinoAI.gameObject);
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x060000AD RID: 173 RVA: 0x0000D2C4 File Offset: 0x0000B4C4
+	public AlbinoGroupManager.GrabSlot GetTargetGrabSlot(List<AlbinoGroupManager.GrabSlot> gsList, AlbinoAI albino)
+	{
+		if (gsList.Count == 0)
+		{
+			return null;
+		}
+		float num = float.MaxValue;
+		int index = 0;
+		for (int i = 0; i < gsList.Count; i++)
+		{
+			if (gsList[i].owner == albino)
+			{
+				return gsList[i];
+			}
+			if (gsList[i].owner == null)
+			{
+				float zdistanceTo = gsList[i].GetZDistanceTo(albino.cachedWantedPos);
+				if (zdistanceTo < num)
+				{
+					num = zdistanceTo;
+					index = i;
+				}
+			}
+		}
+		if (num != 3.4028235E+38f)
+		{
+			return gsList[index];
+		}
+		return null;
+	}
+
+	// Token: 0x060000AE RID: 174 RVA: 0x0000D368 File Offset: 0x0000B568
+	private bool AllSlotsFilled(List<AlbinoGroupManager.GrabSlot> gsList)
+	{
+		return gsList.All((AlbinoGroupManager.GrabSlot o) => o.AtPosition);
+	}
+
+	// Token: 0x060000AF RID: 175 RVA: 0x0000D390 File Offset: 0x0000B590
+	public bool AllGrabSlotsAtPosition()
+	{
+		return this.AllSlotsFilled(this.mGrabSlots);
+	}
+
+	// Token: 0x060000B0 RID: 176 RVA: 0x0000D3A0 File Offset: 0x0000B5A0
+	public void IAmGrabbing(AlbinoAI albinoAI)
+	{
+		AlbinoGroupManager.GrabSlot grabSlot = this.mGrabSlots.Find((AlbinoGroupManager.GrabSlot o) => o.owner == albinoAI);
+		if (grabSlot != null)
+		{
+			grabSlot.AtPosition = true;
+		}
+	}
+
+	// Token: 0x060000B1 RID: 177 RVA: 0x0000D3E0 File Offset: 0x0000B5E0
+	public bool AmIGrabbing(AlbinoAI albinoAI)
+	{
+		return this.mGrabSlots.Find((AlbinoGroupManager.GrabSlot o) => o.owner == albinoAI) != null;
+	}
+
+	// Token: 0x060000B2 RID: 178 RVA: 0x0000D418 File Offset: 0x0000B618
+	private AlbinoGroupManager.GrabSlot ClaimGrabSlot(List<AlbinoGroupManager.GrabSlot> gsList, AlbinoAI albino)
+	{
+		AlbinoGroupManager.GrabSlot targetGrabSlot = this.GetTargetGrabSlot(gsList, albino);
+		if (targetGrabSlot != null)
+		{
+			targetGrabSlot.owner = albino;
+		}
+		return targetGrabSlot;
+	}
+
+	// Token: 0x060000B3 RID: 179 RVA: 0x0000D43C File Offset: 0x0000B63C
+	public Vector3 GetMultiInteractGrabSlotTarget(AlbinoAI albinoAI)
+	{
+		AlbinoGroupManager.GrabSlot grabSlot = this.mMultiGrabSlots.FirstOrDefault((AlbinoGroupManager.GrabSlot o) => o.owner == albinoAI);
+		if (grabSlot == null)
+		{
+			grabSlot = this.ClaimGrabSlot(this.mMultiGrabSlots, albinoAI);
+		}
+		if (grabSlot == null || this.multiInteraction == null)
+		{
+			return albinoAI.cachedWantedPos;
+		}
+		return this.multiInteraction.GetOffsetPos(grabSlot.zOffset, albinoAI.scaleFactor);
+	}
+
+	// Token: 0x060000B4 RID: 180 RVA: 0x0000D4C8 File Offset: 0x0000B6C8
+	private bool AmICloseToAGrabTarget(AlbinoAI albinoAI)
+	{
+		if (this.mGrabSlots.Count < 1)
+		{
+			return false;
+		}
+		Debug.DrawLine(this.mGrabSlots[0].GetWorldPosition(null), this.mGrabSlots[0].GetWorldPosition(null) + Vector3.up);
+		float x = this.mGrabSlots[0].GetWorldPosition(null).x;
+		if (ScriptGlobals.boy.state is BoyGrabState)
+		{
+			x = ScriptGlobals.boy.pos.x;
+		}
+		float num = albinoAI.cachedWantedPos.x - x;
+		float num2 = FastMath.Abs(num);
+		int num3 = 0;
+		int i = 0;
+		int size = this.activeAlbinos.size;
+		while (i < size)
+		{
+			AlbinoAI testAlbino = this.activeAlbinos.raw[i];
+			if (testAlbino != albinoAI && !testAlbino.remotePuppet && testAlbino.aiMode != AlbinoAI.AIMode.SpawnedButWaiting)
+			{
+				float num4 = testAlbino.cachedWantedPos.x - x;
+				if (FastMath.Abs(num4) < num2 && num4 * num > 0f && this.mGrabSlots.FirstOrDefault((AlbinoGroupManager.GrabSlot o) => o.owner == testAlbino) == null)
+				{
+					num3++;
+					if (num3 > 2)
+					{
+						return false;
+					}
+				}
+			}
+			i++;
+		}
+		return true;
+	}
+
+	// Token: 0x060000B5 RID: 181 RVA: 0x0000D648 File Offset: 0x0000B848
+	public Vector3 GetGrabSlotTarget(AlbinoAI albinoAI, ref Vector3 wantedPos)
+	{
+		AlbinoGroupManager.GrabSlot grabSlot = this.mGrabSlots.FirstOrDefault((AlbinoGroupManager.GrabSlot o) => o.owner == albinoAI);
+		if (grabSlot == null && this.AmICloseToAGrabTarget(albinoAI))
+		{
+			grabSlot = this.ClaimGrabSlot(this.mGrabSlots, albinoAI);
+		}
+		if (grabSlot != null)
+		{
+			Vector3 worldPosition = grabSlot.GetWorldPosition(albinoAI);
+			if ((double)FastMath.Abs(worldPosition.x - albinoAI.cachedWantedPos.x) < 0.02)
+			{
+				grabSlot.AtPosition = true;
+			}
+			return worldPosition;
+		}
+		if (this.multiInteraction != null)
+		{
+			if (FastMath.Abs(wantedPos.z) > 1.5f)
+			{
+				wantedPos.z *= 1f - Mathf.Min(FastMath.Abs(wantedPos.z) - 1.5f, 1f) * Time.deltaTime * 0.5f;
+			}
+			return wantedPos;
+		}
+		if (FastMath.Abs(wantedPos.z) > 1.5f)
+		{
+			wantedPos.z *= 1f - FastMath.Min(FastMath.Abs(wantedPos.z) - 0.5f, 1f) * Time.deltaTime * 0.5f;
+		}
+		float num = FastMath.Abs(ScriptGlobals.boy.pos.x - wantedPos.x);
+		float num2 = (2f - num) * 0.6f;
+		if (FastMath.Abs(wantedPos.z) < num2)
+		{
+			wantedPos.z += (Mathf.Sign(wantedPos.z) * num2 - wantedPos.z) * Time.deltaTime * 3f;
+		}
+		int i = 0;
+		int count = this.mGrabSlots.Count;
+		while (i < count)
+		{
+			AlbinoGroupManager.GrabSlot grabSlot2 = this.mGrabSlots[i];
+			if (grabSlot2.AtPosition)
+			{
+				AlbinoAI owner = grabSlot2.owner;
+				if (owner != null)
+				{
+					Vector3 result = wantedPos;
+					result.x = owner.cachedWantedPos.x + owner.GetTransform().forward.x * 0.3f;
+					return result;
+				}
+			}
+			i++;
+		}
+		return wantedPos;
+	}
+
+	// Token: 0x060000B6 RID: 182 RVA: 0x0000D8A8 File Offset: 0x0000BAA8
+	private void AddForceToGrabBody(Rigidbody grabBody, bool nullIt = false)
+	{
+		if (this.internalGrabBody == null || this.mGrabSlots.Count == 0)
+		{
+			return;
+		}
+		bool flag = ScriptGlobals.boy.state is BoyGrabState || this.overrideGrabBodyCollider != null;
+		bool flag2 = false;
+		float num = ScriptGlobals.boy.input.looseDir.x;
+		if (nullIt)
+		{
+			num = 0f;
+		}
+		AlbinoPushForces component = grabBody.gameObject.GetComponent<AlbinoPushForces>();
+		if (component != null && component.inertiaTime > 0f && FastMath.Abs(this.internalGrabBody.velocity.x) > 0.5f)
+		{
+			flag2 = !flag;
+			float num2 = 1f;
+			if (num * this.lastStickDir <= 0f)
+			{
+				num2 *= 3f;
+			}
+			if (!flag && this.lastStickDir * (ScriptGlobals.boy.pos.x - this.internalGrabBody.position.x) > 0f)
+			{
+				num = -this.lastStickDir * 2f;
+			}
+			else if (!flag)
+			{
+				num2 *= 0.5f;
+			}
+			float num3 = Mathf.Min(1f, Time.deltaTime * num2 / component.inertiaTime);
+			num = num * num3 + this.lastStickDir * (1f - num3);
+		}
+		this.lastStickDir = num;
+		if (this.overrideGrabBodyCollider != null)
+		{
+			num = 0f;
+		}
+		else if (num == 0f)
+		{
+			return;
+		}
+		int num4 = 0;
+		if (!flag2)
+		{
+			int count = this.mGrabSlots.Count;
+			for (int i = 0; i < count; i++)
+			{
+				AlbinoGroupManager.GrabSlot grabSlot = this.mGrabSlots[i];
+				if (grabSlot.owner != null && grabSlot.owner.isGrabbing())
+				{
+					if (num == 0f)
+					{
+						num = Mathf.Sign(grabBody.position.x - grabSlot.owner.cachedWantedPos.x);
+					}
+					num4++;
+				}
+			}
+			if (num4 == 0)
+			{
+				return;
+			}
+		}
+		else
+		{
+			num4 = 5;
+		}
+		float num5 = (float)num4;
+		if (component != null)
+		{
+			num5 = component.GetAlbinoForce(num4);
+		}
+		BoyGrabState boyGrabState = ScriptGlobals.boy.state as BoyGrabState;
+		if (!flag2 && (boyGrabState == null || num != ScriptGlobals.boy.input.looseDir.x))
+		{
+			num5 += 2f;
+		}
+		num5 *= num * 3f;
+		float x = this.internalGrabBody.velocity.x;
+		if (x * num > 0f)
+		{
+			num5 *= Mathf.Max(0f, 2f - FastMath.Abs(x)) / 2f;
+		}
+		float deltaTime = Time.deltaTime;
+		this.internalGrabBody.AddForceAtPosition(Vector3.right * num5 * deltaTime, this.mGrabSlots[0].GetWorldPosition(null), 1);
+	}
+
+	// Token: 0x060000B7 RID: 183 RVA: 0x0000DBEC File Offset: 0x0000BDEC
+	public bool BoyJustGrabbed()
+	{
+		return this.boyWasJustGrabbing && this.multiInteraction == null;
+	}
+
+	// Token: 0x060000B8 RID: 184 RVA: 0x0000DC08 File Offset: 0x0000BE08
+	private bool ShouldBoyBeInCrowdTheme()
+	{
+		int size = this.activeAlbinos.size;
+		float num = 0f;
+		if (this.inTheme)
+		{
+			num = 0.1f;
+		}
+		for (int i = 0; i < size; i++)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			if (albinoAI.aiMode != AlbinoAI.AIMode.SpawnedButWaiting)
+			{
+				Vector3 vector = albinoAI.cachedWantedPos - ScriptGlobals.boy.pos3;
+				if (FastMath.Abs(vector.z) < 0.7f + num && FastMath.Abs(vector.y) < 1f && FastMath.Abs(vector.x) < 0.4f + num && vector.x * ScriptGlobals.boy.facing > 0f)
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x060000B9 RID: 185 RVA: 0x0000DCE0 File Offset: 0x0000BEE0
+	public bool IsInAlbinoJumpState()
+	{
+		return this.albinoJumpState != AlbinoGroupManager.AlbinoJumpState.Inactive;
+	}
+
+	// Token: 0x060000BA RID: 186 RVA: 0x0000DCF0 File Offset: 0x0000BEF0
+	public bool IsBoyBeingLifted()
+	{
+		return this.albinoJumpState == AlbinoGroupManager.AlbinoJumpState.climbingAlbinos || this.albinoJumpState == AlbinoGroupManager.AlbinoJumpState.balancingOnAlbinos;
+	}
+
+	// Token: 0x060000BB RID: 187 RVA: 0x0000DD0C File Offset: 0x0000BF0C
+	public AlbinoGroupManager.AlbinoJumpState GetJumpState()
+	{
+		return this.albinoJumpState;
+	}
+
+	// Token: 0x060000BC RID: 188 RVA: 0x0000DD14 File Offset: 0x0000BF14
+	public bool AllowAlbinoClimbAlignment()
+	{
+		return (double)this.carryAlignerX < 0.03;
+	}
+
+	// Token: 0x060000BD RID: 189 RVA: 0x0000DD28 File Offset: 0x0000BF28
+	public void SafetyReleaseAllAlbinos()
+	{
+		this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.Inactive;
+		this.ReleaseAllAlbinosFromThrowMode();
+	}
+
+	// Token: 0x060000BE RID: 190 RVA: 0x0000DD38 File Offset: 0x0000BF38
+	private void ReleaseAllAlbinosFromThrowMode()
+	{
+		int i = 0;
+		int size = this.activeAlbinos.size;
+		while (i < size)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			if (albinoAI.aiMode == AlbinoAI.AIMode.ThrowBoy)
+			{
+				albinoAI.GetCharacter().GoToDefaultAnimation();
+				albinoAI.aiMode = AlbinoAI.AIMode.FollowBoy;
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x060000BF RID: 191 RVA: 0x0000DD90 File Offset: 0x0000BF90
+	private void StopAlbinoRepositioning()
+	{
+		int i = 0;
+		int size = this.activeAlbinos.size;
+		while (i < size)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			albinoAI.AllowReposition(false);
+			i++;
+		}
+	}
+
+	// Token: 0x060000C0 RID: 192 RVA: 0x0000DDD0 File Offset: 0x0000BFD0
+	public bool IsAlbinoLongJumping()
+	{
+		return false;
+	}
+
+	// Token: 0x060000C1 RID: 193 RVA: 0x0000DDD4 File Offset: 0x0000BFD4
+	public void OffsetJumpAnim(vector2f offset)
+	{
+	}
+
+	// Token: 0x060000C2 RID: 194 RVA: 0x0000DDD8 File Offset: 0x0000BFD8
+	private void SetCurrentJumpAnim(AnimClipNode jumpAnim)
+	{
+		this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.Inactive;
+		this.currentAlbinoJumpAnim = jumpAnim;
+		this.currentAlbinoJumpAnim.frame = 0f;
+		BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.currentAlbinoJumpAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.inTheme = false;
+		this.inAlbinoJumpTheme = true;
+		Transform theme = VisualBoyThemeController.GetTheme(ScriptGlobals.boy.visualBoy, "AlbinoJump");
+		ScriptGlobals.boy.visualBoy.SetTheme(theme, VisualBoy.ThemePriority.HighPlusOne);
+		int i = 0;
+		int size = this.activeAlbinos.size;
+		while (i < size)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			if (albinoAI.aiMode == AlbinoAI.AIMode.ThrowBoy)
+			{
+				switch (this.throwAlbinoAnimIndex)
+				{
+				case 0:
+					albinoAI.GetCharacter().ForceToAnimation("AidBoyJumpA", null, -1f, 0f, false);
+					break;
+				case 1:
+					albinoAI.GetCharacter().ForceToAnimation("AidBoyJumpB", null, -1f, 0f, false);
+					break;
+				case 2:
+					albinoAI.GetCharacter().ForceToAnimation("AidBoyJumpC", null, -1f, 0f, false);
+					break;
+				case 3:
+					albinoAI.GetCharacter().ForceToAnimation("AidBoyJumpD", null, -1f, 0f, false);
+					break;
+				case 4:
+					albinoAI.GetCharacter().ForceToAnimation("AidBoyJumpE", null, -1f, 0f, false);
+					break;
+				}
+				this.throwAlbinoAnimIndex = (this.throwAlbinoAnimIndex + 1) % 5;
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x060000C3 RID: 195 RVA: 0x0000DF6C File Offset: 0x0000C16C
+	private void TestForAlbinoLift(bool jumping, bool jumpForward)
+	{
+		if (this.restrictAlbinoLiftTrigger != null)
+		{
+			bool flag = false;
+			if (jumping && this.restrictAlbinoLiftTrigger.allowJumpLift)
+			{
+				flag = true;
+			}
+			if (!jumping && this.restrictAlbinoLiftTrigger.allowStickLift)
+			{
+				flag = true;
+			}
+			if (!flag)
+			{
+				return;
+			}
+		}
+		bool flag2 = false;
+		bool flag3 = false;
+		bool flag4 = false;
+		if (ScriptGlobals.mainCharacter is Huddle)
+		{
+			flag3 = true;
+			flag4 = true;
+			flag2 = (ScriptGlobals.huddle.input.stick.y > 0.5f && (ScriptGlobals.huddle.input.looseDir.x == 0f || (ScriptGlobals.huddle.input.looseDir.x < 0f && Mathf.Abs(ScriptGlobals.huddle.velocity.x) < 0.1f)));
+		}
+		else if (ScriptGlobals.boy != null)
+		{
+			flag3 = (ScriptGlobals.boy.state is BoyRunState || jumping);
+			flag2 = (ScriptGlobals.boy.input.stick.y > 0.5f && ScriptGlobals.boy.input.looseDir.x == 0f);
+		}
+		if (flag3 && ((ScriptGlobals.mainCharacter.velocity3.x < 1f && flag2) || jumping))
+		{
+			List<AlbinoAI> list = new List<AlbinoAI>();
+			List<AlbinoAI> list2 = new List<AlbinoAI>();
+			int i = 0;
+			int size = this.activeAlbinos.size;
+			while (i < size)
+			{
+				AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+				if (albinoAI.closeToBoy)
+				{
+					list.Add(albinoAI);
+				}
+				else if (albinoAI.almostCloseToBoy)
+				{
+					list2.Add(albinoAI);
+				}
+				i++;
+			}
+			int num = list.Count;
+			int num2 = 1;
+			if (num < 5 && !flag4)
+			{
+				num2 = 2;
+				int num3 = 0;
+				while (num3 < list2.Count && num3 < 5 - num)
+				{
+					list.Add(list2[num3]);
+					num++;
+					num3++;
+				}
+			}
+			if (num >= num2)
+			{
+				bool flag5 = true;
+				if (jumpForward)
+				{
+					flag5 = false;
+				}
+				if (flag5)
+				{
+					this.carryAlignerX = 0f;
+					bool flag6 = true;
+					float x = ScriptGlobals.mainCharacter.pos3.x;
+					float num4 = 0f;
+					this.allowAlbinoJump = !jumping;
+					for (int j = 0; j < num; j++)
+					{
+						AlbinoAI albinoAI2 = list[j];
+						float num5 = albinoAI2.cachedWantedPos.x - x;
+						if (num5 * num4 < 0f)
+						{
+							flag6 = false;
+						}
+						if (num5 != 0f)
+						{
+							num4 = num5;
+						}
+						if (flag4)
+						{
+							albinoAI2.GetCharacter().ForceToAnimation("AidHuddleLiftReadyA", null, -1f, 0f, false);
+						}
+						else
+						{
+							float sqrMagnitude = (albinoAI2.cachedWantedPos - ScriptGlobals.boy.pos3).sqrMagnitude;
+							if (sqrMagnitude > 1.2f)
+							{
+								albinoAI2.GetCharacter().ForceToAnimation("AidBoyClimbableFast", null, -1f, 0f, false);
+							}
+							else
+							{
+								albinoAI2.GetCharacter().ForceToAnimation("AidBoyClimbable", null, -1f, 0f, false);
+							}
+						}
+						albinoAI2.SetThrowMode();
+					}
+					if (flag6)
+					{
+						this.carryAlignerX = Mathf.Sign(num4) * 0.4f;
+					}
+					if (jumping)
+					{
+						this.currentClimbAnim = this.jumpUpAlbinos;
+						this.carryAlignerX += ScriptGlobals.mainCharacter.velocity3.x * 0.5f;
+					}
+					else
+					{
+						this.currentClimbAnim = this.climbUpAlbinos;
+					}
+					if (!(ScriptGlobals.mainCharacter is Huddle))
+					{
+						BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.currentClimbAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+					}
+					this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.climbingAlbinos;
+				}
+			}
+		}
+	}
+
+	// Token: 0x060000C4 RID: 196 RVA: 0x0000E3B4 File Offset: 0x0000C5B4
+	public float GetLiftCounter()
+	{
+		return this.liftCounter;
+	}
+
+	// Token: 0x060000C5 RID: 197 RVA: 0x0000E3BC File Offset: 0x0000C5BC
+	public bool IsHuddleFullyLifted()
+	{
+		return this.liftCounter > 1.8f;
+	}
+
+	// Token: 0x060000C6 RID: 198 RVA: 0x0000E3CC File Offset: 0x0000C5CC
+	private void UpdateHuddleOnAlbinos(float deltaTime)
+	{
+		bool flag = ScriptGlobals.huddle.input.looseDir.x != 0f;
+		bool flag2 = ScriptGlobals.huddle.input.looseDir.y <= 0f;
+		if (flag && CollisionUtils.DefaultCollisionTest(ScriptGlobals.huddle.pos3, Vector3.right * ScriptGlobals.huddle.input.looseDir.x, 2.5f))
+		{
+			flag = false;
+			flag2 = (ScriptGlobals.huddle.input.looseDir.y < 0f);
+		}
+		bool flag3 = ScriptGlobals.huddle.state is HuddleClimbState && ScriptGlobals.huddle.pos.y - this.huddleFakeLifter.transform.position.y > 2.5f;
+		if (flag || flag2 || flag3)
+		{
+			this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.Inactive;
+			this.huddleFakeLifter.SetActive(false);
+			ScriptGlobals.huddle.visualHuddle.legs.huddleBeingLifted = false;
+			if (this.liftCounter > 1f)
+			{
+				Vector3 pos = ScriptGlobals.huddle.pos3;
+				int i = 0;
+				int size = this.activeAlbinos.size;
+				while (i < size)
+				{
+					AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+					if (albinoAI.aiMode == AlbinoAI.AIMode.ThrowBoy)
+					{
+						if (!flag3)
+						{
+							albinoAI.AvoidBoy(pos, 0.4f);
+							albinoAI.SetNudgeTimer(0.4f);
+						}
+						else
+						{
+							albinoAI.GetCharacter().ForceToAnimation("IdleA", null, 0.6f, 0f, false);
+						}
+						albinoAI.SetFollowBoy();
+					}
+					i++;
+				}
+			}
+		}
+		else
+		{
+			if (!this.huddleFakeLifter.activeSelf)
+			{
+				this.huddleXWhileLifting = ScriptGlobals.huddle.pos.x;
+				if (ScriptGlobals.huddle.status.ground.bottomCollision != null)
+				{
+					this.groundStartY = ScriptGlobals.huddle.status.ground.bottomCollision.pos.y;
+				}
+				this.liftCounter = 0f;
+				ScriptGlobals.huddle.visualHuddle.legs.huddleBeingLifted = true;
+				this.huddleFakeLifter.SetActive(true);
+			}
+			if (this.liftCounter == 0f)
+			{
+				int num = 0;
+				int j = 0;
+				int size2 = this.activeAlbinos.size;
+				while (j < size2)
+				{
+					AlbinoAI albinoAI2 = this.activeAlbinos.raw[j];
+					if (albinoAI2.ReadyForHuddleLifting())
+					{
+						num++;
+					}
+					j++;
+				}
+				if (num > 7)
+				{
+					int k = 0;
+					int size3 = this.activeAlbinos.size;
+					while (k < size3)
+					{
+						AlbinoAI albinoAI3 = this.activeAlbinos.raw[k];
+						if (albinoAI3.aiMode == AlbinoAI.AIMode.ThrowBoy)
+						{
+							albinoAI3.GetCharacter().ForceToAnimation("AidBoyHuddleClimbable", null, -1f, 0.21f, false);
+						}
+						k++;
+					}
+					this.liftCounter = 0.3f;
+				}
+			}
+			else
+			{
+				this.liftCounter += deltaTime;
+			}
+			Vector3 pos2 = ScriptGlobals.huddle.pos3;
+			float num2 = (Mathf.Clamp(this.liftCounter, 0.3f, 1.8f) - 0.3f) / 1.5f;
+			float num3 = num2 * 1.7f;
+			pos2.y = this.groundStartY + (num3 - 0.05f);
+			this.huddleFakeLifter.transform.position = pos2;
+			Vector3 vector = (this.huddleXWhileLifting - ScriptGlobals.huddle.pos.x) * Vector3.right;
+			if (Vector3.Dot(vector, ScriptGlobals.huddle.velocity3) < 0.01f)
+			{
+				ScriptGlobals.huddle.AddVelocity(vector * Time.deltaTime - ScriptGlobals.huddle.velocity3 * Time.deltaTime * 4f);
+			}
+			int l = 0;
+			int size4 = this.activeAlbinos.size;
+			while (l < size4)
+			{
+				AlbinoAI albinoAI4 = this.activeAlbinos.raw[l];
+				if (albinoAI4.closeToBoy && albinoAI4.aiMode != AlbinoAI.AIMode.ThrowBoy)
+				{
+					float num4 = albinoAI4.cachedWantedPos.x - ScriptGlobals.huddle.pos.x;
+					bool flag4 = num4 * this.liftingOffset < 0f || FastMath.Abs(albinoAI4.lastMoveSpeed.x) < 0.3f;
+					if (!flag4)
+					{
+						Vector3 vector2 = albinoAI4.cachedWantedPos - ScriptGlobals.huddle.pos3;
+						vector2.y = 0f;
+						if (vector2.magnitude < 1.2f)
+						{
+							flag4 = true;
+						}
+					}
+					if (this.liftCounter == 0f)
+					{
+						if (flag4)
+						{
+							albinoAI4.GetCharacter().ForceToAnimation("AidHuddleLiftReadyA", null, -1f, 0f, false);
+						}
+					}
+					else if (this.liftCounter < 1.4f)
+					{
+						if (flag4)
+						{
+							albinoAI4.GetCharacter().ForceToAnimation("AidBoyHuddleClimbable", null, -1f, 0.2f + 0.7f * (this.liftCounter - 0.3f) / 1.5f, false);
+						}
+					}
+					else
+					{
+						albinoAI4.GetCharacter().ForceToAnimation("AidBoyHuddleCarry", null, -1f, 0f, false);
+					}
+					albinoAI4.SetThrowMode();
+				}
+				l++;
+			}
+		}
+	}
+
+	// Token: 0x060000C7 RID: 199 RVA: 0x0000E998 File Offset: 0x0000CB98
+	private void UpdateClimbingOrBalancingAlbinos(float deltaTime)
+	{
+		bool flag = false;
+		bool flag2 = true;
+		bool flag3 = true;
+		bool flag4 = false;
+		bool flag5 = false;
+		if (this.albinoJumpState == AlbinoGroupManager.AlbinoJumpState.climbingAlbinos)
+		{
+			float frame = this.currentClimbAnim.frame;
+			flag3 = (frame > 29f);
+			if (frame < 20f)
+			{
+				flag2 = false;
+			}
+			if (this.currentClimbAnim.frame > this.currentClimbAnim.numFrames - 5f)
+			{
+				this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.balancingOnAlbinos;
+				this.runOffSideTimer = 0f;
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.carriedByAlbinos, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				return;
+			}
+			if (this.currentClimbAnim == this.climbUpAlbinos && this.currentClimbAnim.frame < 10f)
+			{
+				flag = true;
+			}
+		}
+		if (this.quickTapPlaying)
+		{
+			if (this.jumpAlbinoAidedQuickTap.frame > this.jumpAlbinoAidedQuickTap.numFrames - 5f)
+			{
+				this.quickTapPlaying = false;
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.carriedByAlbinos, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			}
+			if (this.jumpAlbinoAidedQuickTap.frame < 10f)
+			{
+				flag3 = false;
+			}
+		}
+		if (this.smallJumpAnimPlaying && this.jumpAlbinoAidedSmallUp.frame > this.jumpAlbinoAidedSmallUp.numFrames - 5f)
+		{
+			this.smallJumpAnimPlaying = false;
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.carriedByAlbinos, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		bool flag6 = false;
+		if (!flag2)
+		{
+			this.runOffSideTimer = 0f;
+		}
+		else if (ScriptGlobals.boy.input.looseDir.x != 0f)
+		{
+			flag6 = true;
+			if (this.albinoJumpAimTarget != null)
+			{
+				if ((this.albinoJumpAimTarget.preferRightThrow && ScriptGlobals.boy.input.looseDir.x > 0.5f) || (this.albinoJumpAimTarget.preferLeftThrow && ScriptGlobals.boy.input.looseDir.x < -0.5f))
+				{
+					this.runOffSideTimer += Time.deltaTime;
+					if (ScriptGlobals.boy.facing * ScriptGlobals.boy.input.looseDir.x < 0f)
+					{
+						this.runOffSideTimer += 2f * Time.deltaTime;
+					}
+					if (this.runOffSideTimer < 0.3f)
+					{
+						flag6 = false;
+					}
+				}
+			}
+			else
+			{
+				this.runOffSideTimer = 0f;
+			}
+		}
+		else
+		{
+			this.runOffSideTimer = 0f;
+		}
+		if (this.currentClimbAnim.frame > 15f && (ScriptGlobals.boy.input.looseDir.y < 0f || (!ScriptGlobals.boy.input.rawJump && ScriptGlobals.boy.input.looseDir.y == 0f && (flag6 || (ScriptGlobals.boy.input.looseDir.x == 0f && flag)))))
+		{
+			if (this.albinoJumpState == AlbinoGroupManager.AlbinoJumpState.climbingAlbinos)
+			{
+				int i = 0;
+				int size = this.activeAlbinos.size;
+				while (i < size)
+				{
+					AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+					if (albinoAI.aiMode == AlbinoAI.AIMode.ThrowBoy)
+					{
+						if (FastMath.Abs(albinoAI.GetCharacter().GetMovableGroundVelocity().y) > 0.2f)
+						{
+							flag2 = false;
+						}
+						break;
+					}
+					i++;
+				}
+			}
+			this.smallJumpAnimPlaying = false;
+			this.quickTapPlaying = false;
+			if (this.currentClimbAnim.frame < 25f || ScriptGlobals.boy.input.looseDir.x == 0f || !flag2)
+			{
+				this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.Inactive;
+				this.ReleaseAllAlbinosFromThrowMode();
+				flag4 = true;
+			}
+			else
+			{
+				this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.beingDropped;
+			}
+			if (ScriptGlobals.boy.input.looseDir.x != 0f && flag2)
+			{
+				this.StopAlbinoRepositioning();
+				if (ScriptGlobals.boy.input.looseDir.x * ScriptGlobals.boy.facing > 0f)
+				{
+					this.currentBeingDroppedAnim = this.runningOffAlbinosFW;
+				}
+				else
+				{
+					this.currentBeingDroppedAnim = this.runningOffAlbinosBW;
+				}
+				this.currentBeingDroppedAnim.frame = 0f;
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.currentBeingDroppedAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				flag5 = true;
+			}
+			else
+			{
+				BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+				if (ScriptGlobals.boy.velocity.y > 1f)
+				{
+					ScriptGlobals.boy.AddVelocity(new vector2f(0f, -ScriptGlobals.boy.velocity.y), null, 1f);
+				}
+				flag5 = true;
+			}
+		}
+		else if (flag3 && ScriptGlobals.boy.input.rawJump)
+		{
+			flag5 = true;
+			this.SetJumping(true);
+		}
+		if (!flag4 && !flag5)
+		{
+			int j = 0;
+			int size2 = this.activeAlbinos.size;
+			while (j < size2)
+			{
+				AlbinoAI albinoAI2 = this.activeAlbinos.raw[j];
+				if (albinoAI2.closeToBoy && (albinoAI2.aiMode != AlbinoAI.AIMode.ThrowBoy || albinoAI2.headHasBeenLow))
+				{
+					bool flag7 = true;
+					if (this.albinoJumpState == AlbinoGroupManager.AlbinoJumpState.climbingAlbinos && this.currentClimbAnim.frame < 20f)
+					{
+						flag7 = false;
+					}
+					if (flag7)
+					{
+						albinoAI2.GetCharacter().ForceToAnimation("AidBoyCarry", null, -1f, 0f, false);
+					}
+					else
+					{
+						albinoAI2.GetCharacter().ForceToAnimation("AidBoyClimbableFast", null, -1f, 0f, false);
+					}
+					albinoAI2.SetThrowMode();
+				}
+				j++;
+			}
+		}
+	}
+
+	// Token: 0x060000C8 RID: 200 RVA: 0x0000EFD0 File Offset: 0x0000D1D0
+	private float GetClosestCarryAlbinoDist()
+	{
+		float num = float.MaxValue;
+		float x = ScriptGlobals.boy.pos.x;
+		int i = 0;
+		int size = this.activeAlbinos.size;
+		while (i < size)
+		{
+			AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+			if (albinoAI.aiMode == AlbinoAI.AIMode.ThrowBoy)
+			{
+				float num2 = FastMath.Abs(albinoAI.cachedWantedPos.x - x);
+				if (num2 < num)
+				{
+					num = num2;
+				}
+			}
+			i++;
+		}
+		return num;
+	}
+
+	// Token: 0x060000C9 RID: 201 RVA: 0x0000F054 File Offset: 0x0000D254
+	private void UpdateBeingDropped()
+	{
+		if (this.currentBeingDroppedAnim.frame > 20f || this.currentBeingDroppedAnim.frame >= this.currentBeingDroppedAnim.numFrames)
+		{
+			this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.Inactive;
+			this.ReleaseAllAlbinosFromThrowMode();
+		}
+		else if (ScriptGlobals.boy.input.rawJump)
+		{
+			BoyCustomAnimState boyCustomAnimState = ScriptGlobals.boy.state as BoyCustomAnimState;
+			if (boyCustomAnimState != null)
+			{
+				AnimClipNode animClipNode = boyCustomAnimState.anim as AnimClipNode;
+				this.carryAlignerY = animClipNode.clip.poses[0][0].pos.y - animClipNode.clip.poses[(int)(animClipNode.frame / (float)animClipNode.frameFactor)][0].pos.y;
+			}
+			float closestCarryAlbinoDist = this.GetClosestCarryAlbinoDist();
+			this.SetJumping(closestCarryAlbinoDist < 0.3f);
+		}
+	}
+
+	// Token: 0x060000CA RID: 202 RVA: 0x0000F140 File Offset: 0x0000D340
+	private bool ForceStraightUpThrow()
+	{
+		if (GameInput.controllerType == GameController.Type.Digital)
+		{
+			return false;
+		}
+		Vector3 position = this.albinoJumpAimTarget.target.transform.position;
+		Vector3 pos = ScriptGlobals.boy.pos3;
+		if (FastMath.Abs(position.x - pos.x) < 1.35f)
+		{
+			Vector3 normalized = (position - pos).normalized;
+			Vector3 vector = MathUtils.v3(ScriptGlobals.boy.input.stick.normalized, 0f);
+			float num = Vector3.Dot(normalized, vector);
+			if (num > 0.5f)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x060000CB RID: 203 RVA: 0x0000F1E8 File Offset: 0x0000D3E8
+	private void SetJumping(bool allowReCatch_in = true)
+	{
+		this.allowReCatch = allowReCatch_in;
+		if (this.allowAlbinoJump)
+		{
+			this.smallJumpAnimPlaying = false;
+			this.quickTapPlaying = false;
+			float num = ScriptGlobals.boy.input.stick.x;
+			float num2 = 0.5f;
+			if (this.albinoJumpAimTarget != null && this.albinoJumpAimTarget.isActive)
+			{
+				if (num < 0f && this.albinoJumpAimTarget.preferLeftThrow)
+				{
+					num2 = 0.3f;
+				}
+				else if (num > 0f && this.albinoJumpAimTarget.preferRightThrow)
+				{
+					num2 = 0.3f;
+				}
+				if (this.ForceStraightUpThrow())
+				{
+					num = 0f;
+				}
+			}
+			if (FastMath.Abs(num) < num2)
+			{
+				this.SetCurrentJumpAnim(this.jumpAlbinoAided);
+			}
+			else if (num * ScriptGlobals.boy.facing > 0f)
+			{
+				this.SetCurrentJumpAnim(this.jumpAlbinoAidedForward);
+			}
+			else
+			{
+				this.SetCurrentJumpAnim(this.jumpAlbinoAidedBackward);
+			}
+			this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.jumping;
+		}
+	}
+
+	// Token: 0x060000CC RID: 204 RVA: 0x0000F304 File Offset: 0x0000D504
+	private void UpdateJumping()
+	{
+		if (this.currentAlbinoJumpAnim == null)
+		{
+			this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.Inactive;
+			return;
+		}
+		float num = Mathf.Max(this.currentAlbinoJumpAnim.frame, 0f);
+		if (num > 15f)
+		{
+			if (this.currentAlbinoJumpAnim != this.jumpAlbinoAided)
+			{
+				this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.Inactive;
+			}
+			else if (this.albinoJumpAimTarget != null && this.albinoJumpAimTarget.isActive && num > 17f)
+			{
+				float num2 = this.albinoJumpAimTarget.target.transform.position.x - ScriptGlobals.boy.pos.x;
+				if (FastMath.Abs(num2) <= this.albinoJumpAimTarget.maxXCorrectionDist && (this.albinoJumpAimTarget.allowBackwardAutoAim || num2 * ScriptGlobals.boy.facing > 0f))
+				{
+					BoyCustomAnimState boyCustomAnimState = ScriptGlobals.boy.state as BoyCustomAnimState;
+					if (boyCustomAnimState)
+					{
+						this.allowVelocityOffset = false;
+						float num3 = 1f;
+						if (num < 20f)
+						{
+							num3 = (num - 17f) / 3f;
+						}
+						boyCustomAnimState.velocityOffset = Vector3.right * (num2 * 2f * num3);
+					}
+				}
+				if (num >= this.currentAlbinoJumpAnim.numFrames)
+				{
+					this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.Inactive;
+				}
+			}
+		}
+		else if (!ScriptGlobals.boy.input.rawJump && num < 6f)
+		{
+			if (this.allowReCatch)
+			{
+				this.runOffSideTimer = 0f;
+				this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.balancingOnAlbinos;
+				int i = 0;
+				int size = this.activeAlbinos.size;
+				while (i < size)
+				{
+					AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+					if (albinoAI.aiMode == AlbinoAI.AIMode.ThrowBoy)
+					{
+						albinoAI.GetCharacter().ForceToAnimation("AidBoyCarry", null, -1f, 0f, false);
+					}
+					i++;
+				}
+				this.quickTapPlaying = true;
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.jumpAlbinoAidedQuickTap, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			}
+			else
+			{
+				this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.Inactive;
+				this.ReleaseAllAlbinosFromThrowMode();
+				BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+			}
+		}
+		else if (!ScriptGlobals.boy.input.rawJump && num < 12f)
+		{
+			if (this.allowReCatch)
+			{
+				this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.smallJump;
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.jumpAlbinoAidedSmallUp, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				string[] array = new string[]
+				{
+					"AidBoySmallJumpA",
+					"AidBoySmallJumpB",
+					"AidBoySmallJumpA"
+				};
+				int j = 0;
+				int size2 = this.activeAlbinos.size;
+				while (j < size2)
+				{
+					AlbinoAI albinoAI2 = this.activeAlbinos.raw[j];
+					if (albinoAI2.aiMode == AlbinoAI.AIMode.ThrowBoy)
+					{
+						AnimationBlendHelper blendHelper = albinoAI2.GetCharacter().GetBlendHelper();
+						ABDefinition definition = blendHelper.GetDefinition(array[this.smallThrowAlbinoAnimIndex], true);
+						if (blendHelper.CanTransitTo(definition))
+						{
+							albinoAI2.GetCharacter().ForceToAnimation(definition, false, Vector3Fast.zero, Vector3Fast.zero, -1f, 0f, false);
+						}
+						else
+						{
+							albinoAI2.GetCharacter().ForceToAnimation(array[this.smallThrowAlbinoAnimIndex + 1], null, -1f, 0f, false);
+						}
+						this.smallThrowAlbinoAnimIndex = (this.smallThrowAlbinoAnimIndex + 1) % 2;
+					}
+					j++;
+				}
+			}
+			else
+			{
+				this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.Inactive;
+				this.ReleaseAllAlbinosFromThrowMode();
+				BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+			}
+		}
+		else
+		{
+			float num4 = ScriptGlobals.boy.input.stick.x;
+			float num5 = 0.5f;
+			if (this.albinoJumpAimTarget != null)
+			{
+				if (num4 < 0f && this.albinoJumpAimTarget.preferLeftThrow)
+				{
+					num5 = 0.3f;
+				}
+				else if (num4 > 0f && this.albinoJumpAimTarget.preferRightThrow)
+				{
+					num5 = 0.3f;
+				}
+				if (this.ForceStraightUpThrow())
+				{
+					num4 = 0f;
+				}
+			}
+			if (FastMath.Abs(num4) < num5)
+			{
+				num4 = 0f;
+			}
+			float num6 = num4 * ScriptGlobals.boy.facing;
+			bool flag = false;
+			if (num6 < 0f && this.currentAlbinoJumpAnim != this.jumpAlbinoAidedBackward)
+			{
+				this.currentAlbinoJumpAnim = this.jumpAlbinoAidedBackward;
+				flag = true;
+			}
+			else if (num6 == 0f && this.currentAlbinoJumpAnim != this.jumpAlbinoAided)
+			{
+				this.currentAlbinoJumpAnim = this.jumpAlbinoAided;
+				flag = true;
+			}
+			else if (num6 > 0f && this.currentAlbinoJumpAnim != this.jumpAlbinoAidedForward)
+			{
+				this.currentAlbinoJumpAnim = this.jumpAlbinoAidedForward;
+				flag = true;
+			}
+			if (flag)
+			{
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.currentAlbinoJumpAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				this.currentAlbinoJumpAnim.frame = num;
+			}
+		}
+	}
+
+	// Token: 0x060000CD RID: 205 RVA: 0x0000F83C File Offset: 0x0000DA3C
+	private void UpdateSmallJumping()
+	{
+		this.smallJumpAnimPlaying = true;
+		float frame = this.jumpAlbinoAidedSmallUp.frame;
+		if (frame > 42f)
+		{
+			this.runOffSideTimer = 0f;
+			this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.balancingOnAlbinos;
+		}
+	}
+
+	// Token: 0x060000CE RID: 206 RVA: 0x0000F87C File Offset: 0x0000DA7C
+	private void SetAlbinoOffsets()
+	{
+		if (!this.activeFollowers)
+		{
+			return;
+		}
+		float num = 0f;
+		float num2 = this.lastBoyFacing;
+		if (ScriptGlobals.mainCharacter is Huddle)
+		{
+			num = ScriptGlobals.huddle.pos.x;
+			if (FastMath.Abs(ScriptGlobals.huddle.velocity.x) > 0.5f)
+			{
+				num2 = Mathf.Sign(ScriptGlobals.huddle.velocity.x);
+			}
+		}
+		else if (ScriptGlobals.boy != null)
+		{
+			num = ScriptGlobals.boy.pos.x;
+			num2 = ScriptGlobals.boy.facing;
+		}
+		float num3 = num - num2 * 1.5f;
+		if (FastMath.Abs(num3 - this.logicCenterOfMass) > 4f)
+		{
+			this.logicCenterOfMass = num3;
+		}
+		if (ScriptGlobals.boy.facing > 0f)
+		{
+			this.logicCenterOfMass = Mathf.Max(this.logicCenterOfMass, num3);
+		}
+		else
+		{
+			this.logicCenterOfMass = Mathf.Min(this.logicCenterOfMass, num3);
+		}
+		this.mCenterOfMassOffset = this.logicCenterOfMass - num3;
+		this.mCenterOfMassOffset = 0f;
+		if (num2 != this.lastBoyFacing)
+		{
+			this.lastBoyFacing = num2;
+			this.doAnOffsetRecalc = true;
+			this.FlipFollowerOffsets();
+		}
+		if (this.doNewOffsetNextTime || (this.doAnOffsetRecalc && FastMath.Abs(num3 - this.logicCenterOfMass) < 0.3f))
+		{
+			this.SetBoyOffsets();
+			this.doAnOffsetRecalc = false;
+			this.doNewOffsetNextTime = false;
+		}
+	}
+
+	// Token: 0x060000CF RID: 207 RVA: 0x0000FA14 File Offset: 0x0000DC14
+	private void FixedUpdate()
+	{
+		if (ScriptGlobals.huddle && !ScriptGlobals.huddle.gameObject.activeInHierarchy && !ScriptGlobals.boy.gameObject.activeInHierarchy)
+		{
+			return;
+		}
+		this.TestAlbinoClimbing(false);
+		this.TestAlbinoCatching();
+	}
+
+	// Token: 0x060000D0 RID: 208 RVA: 0x0000FA68 File Offset: 0x0000DC68
+	private void TestAlbinoClimbing(bool isStateUpdate = true)
+	{
+		this.allowVelocityOffset = true;
+		int size = this.activeAlbinos.size;
+		this.SetAlbinoOffsets();
+		if (ScriptGlobals.boy == null || size == 0)
+		{
+			return;
+		}
+		bool flag = false;
+		bool jumpForward = false;
+		if (isStateUpdate)
+		{
+			BoyJumpState boyJumpState = ScriptGlobals.boy.state as BoyJumpState;
+			if (boyJumpState != null && boyJumpState.state != BoyJumpState.State.JumpDown)
+			{
+				flag = true;
+				if (boyJumpState.state == BoyJumpState.State.JumpForward)
+				{
+					jumpForward = true;
+				}
+			}
+		}
+		bool jumping = false;
+		if (!(ScriptGlobals.mainCharacter is Huddle) && ScriptGlobals.boy.gameObject.activeInHierarchy)
+		{
+			if (this.wasJumping && isStateUpdate)
+			{
+				this.currentAlbinoJumpAnim = null;
+				if (this.inAlbinoJumpTheme)
+				{
+					this.inAlbinoJumpTheme = false;
+					ScriptGlobals.boy.visualBoy.SetTheme(null, VisualBoy.ThemePriority.HighPlusOne);
+				}
+				if (this.albinoJumpState == AlbinoGroupManager.AlbinoJumpState.jumping || this.albinoJumpState == AlbinoGroupManager.AlbinoJumpState.smallJump)
+				{
+					this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.Inactive;
+				}
+			}
+			this.wasJumping = (ScriptGlobals.boy.state is BoyJumpState);
+			if (isStateUpdate && !flag)
+			{
+				return;
+			}
+			if (ScriptGlobals.boy.input != null && !ScriptGlobals.boy.input.rawJump)
+			{
+				this.allowAlbinoJump = true;
+			}
+			jumping = flag;
+			bool flag2 = ScriptGlobals.boy.state is BoyRunState;
+			if (flag2)
+			{
+				this.albinoJumpState = AlbinoGroupManager.AlbinoJumpState.Inactive;
+			}
+			if (ScriptGlobals.boy.status.groundBody != null)
+			{
+				this.lastGroundCol = ScriptGlobals.boy.status.groundBody;
+			}
+			else if (this.albinoJumpState == AlbinoGroupManager.AlbinoJumpState.Inactive && !this.wasJumping && !this.inAlbinoJumpTheme)
+			{
+				this.lastGroundCol = null;
+			}
+		}
+		switch (this.albinoJumpState)
+		{
+		case AlbinoGroupManager.AlbinoJumpState.Inactive:
+			this.TestForAlbinoLift(jumping, jumpForward);
+			break;
+		case AlbinoGroupManager.AlbinoJumpState.climbingAlbinos:
+		case AlbinoGroupManager.AlbinoJumpState.balancingOnAlbinos:
+			if (ScriptGlobals.mainCharacter is Huddle)
+			{
+				this.UpdateHuddleOnAlbinos(Time.deltaTime);
+			}
+			else
+			{
+				this.UpdateClimbingOrBalancingAlbinos(Time.deltaTime);
+			}
+			break;
+		case AlbinoGroupManager.AlbinoJumpState.beingDropped:
+			this.UpdateBeingDropped();
+			break;
+		case AlbinoGroupManager.AlbinoJumpState.jumping:
+			this.UpdateJumping();
+			break;
+		case AlbinoGroupManager.AlbinoJumpState.smallJump:
+			this.UpdateSmallJumping();
+			break;
+		}
+		if (this.albinoJumpState != AlbinoGroupManager.AlbinoJumpState.Inactive || this.inAlbinoJumpTheme)
+		{
+			BoyCustomAnimState boyCustomAnimState = ScriptGlobals.boy.state as BoyCustomAnimState;
+			if (boyCustomAnimState != null && this.allowVelocityOffset)
+			{
+				boyCustomAnimState.velocityOffset = Vector3Fast.zero;
+				if (FastMath.Abs(this.carryAlignerX) > 0.02f)
+				{
+					float num = this.carryAlignerX * Time.deltaTime * 2.5f;
+					BoyCustomAnimState boyCustomAnimState2 = boyCustomAnimState;
+					boyCustomAnimState2.velocityOffset.x = boyCustomAnimState2.velocityOffset.x + num / Time.deltaTime;
+					this.carryAlignerX -= num;
+				}
+				if (this.carryAlignerY > 0f)
+				{
+					float num2 = this.carryAlignerY * Time.deltaTime * 3f;
+					BoyCustomAnimState boyCustomAnimState3 = boyCustomAnimState;
+					boyCustomAnimState3.velocityOffset.y = boyCustomAnimState3.velocityOffset.y + num2 / Time.deltaTime;
+					this.carryAlignerY -= num2;
+				}
+				if (this.lastGroundCol != null)
+				{
+					boyCustomAnimState.velocityOffset += this.lastGroundCol.velocity;
+				}
+			}
+			else if (ScriptGlobals.boy.state is BoyJumpState && this.lastGroundCol != null)
+			{
+				Vector3 vector = this.lastGroundCol.velocity - this.lastGroundVel;
+				vector2f dv = new vector2f(vector.x, vector.y);
+				ScriptGlobals.boy.AddVelocity(dv, null, 1f);
+			}
+		}
+		if (this.lastGroundCol != null)
+		{
+			this.lastGroundVel = this.lastGroundCol.velocity;
+		}
+		else
+		{
+			this.lastGroundVel = Vector3Fast.zero;
+		}
+	}
+
+	// Token: 0x060000D1 RID: 209 RVA: 0x0000FE70 File Offset: 0x0000E070
+	private void TestAlbinoCatching()
+	{
+		if (this.delayedBoyKill)
+		{
+			return;
+		}
+		if (ScriptGlobals.boy && ScriptGlobals.boy.state is BoyJumpState)
+		{
+			if (this.allowCatchForce)
+			{
+				int num = 0;
+				AnimcontrolledCharacter animcontrolledCharacter = null;
+				int i = 0;
+				int size = this.activeAlbinos.size;
+				while (i < size)
+				{
+					AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+					if (albinoAI.aiMode == AlbinoAI.AIMode.ThrowBoy && FastMath.Abs(ScriptGlobals.boy.pos.x + ScriptGlobals.boy.velocity.x * 0.5f - albinoAI.cachedWantedPos.x) < 2f)
+					{
+						animcontrolledCharacter = albinoAI.GetCharacter();
+						ABDefinition topDefinition = animcontrolledCharacter.GetBlendHelper().GetTopDefinition();
+						if (!topDefinition.debugName.StartsWith("AidBoyJump"))
+						{
+							num++;
+						}
+					}
+					i++;
+				}
+				if (num > 2)
+				{
+					float val = ScriptGlobals.boy.pos.y - animcontrolledCharacter.transform.position.y;
+					float y = animcontrolledCharacter.GetMovableGroundVelocity().y;
+					if (FastMath.Abs(val) < 2f && FastMath.Abs(val) > 0.7f)
+					{
+						float y2 = ScriptGlobals.boy.velocity.y;
+						float num2 = y2 - y;
+						if (num2 < -1f)
+						{
+							ScriptGlobals.boy.AddVelocity(-vector2f.up * num2, null, 1f);
+							if (num2 < -7f)
+							{
+								RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightThenLeft, 1f, 0.45f, 0, 0f);
+							}
+							else
+							{
+								RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftThenRight, 0.3f, -1f, 0, 0f);
+							}
+							VisualBoyJump visualBoyJump = ScriptGlobals.boy.visualBoy.state as VisualBoyJump;
+							if (visualBoyJump != null)
+							{
+								visualBoyJump.CaughtByAlbinos();
+							}
+							this.allowCatchForce = false;
+						}
+						else
+						{
+							this.allowCatchForce = false;
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			this.allowCatchForce = true;
+		}
+	}
+
+	// Token: 0x060000D2 RID: 210 RVA: 0x000100AC File Offset: 0x0000E2AC
+	private void TestAlbinoClimbingStateUpdate()
+	{
+		if (ScriptGlobals.boy != null)
+		{
+			this.TestAlbinoClimbing(true);
+		}
+	}
+
+	// Token: 0x060000D3 RID: 211 RVA: 0x000100C8 File Offset: 0x0000E2C8
+	private void Update()
+	{
+		if (this.doubleWait)
+		{
+			this.doubleWait = false;
+		}
+		else
+		{
+			this.albinoSpawnedThisFrame = false;
+		}
+		AlbinoAI.masterUpdateCount = (AlbinoAI.masterUpdateCount + 1) % 5;
+		AnimcontrolledCharacter.masterPhysicsUpdateCount = (AnimcontrolledCharacter.masterPhysicsUpdateCount + 1) % 6;
+		if (this.timesliceInitList.Count > 0)
+		{
+			if (!this.roundRobinWaitFrame)
+			{
+				this.timesliceInitList[0].Init();
+				this.timesliceInitList.RemoveAt(0);
+			}
+			this.roundRobinWaitFrame = false;
+		}
+		if (ScriptGlobals.boy == null)
+		{
+			return;
+		}
+		if (this.multiInteraction != null)
+		{
+			this.boyWasJustGrabbing = true;
+			this.boyXWhileGrabbing = ScriptGlobals.boy.pos.x;
+		}
+		else if (this.boyWasJustGrabbing && FastMath.Abs(ScriptGlobals.boy.pos.x - this.boyXWhileGrabbing) > 1f)
+		{
+			this.boyWasJustGrabbing = false;
+		}
+		if (ScriptGlobals.boy.gameObject.activeInHierarchy && this.stopCrowdThemeTimer <= 0f)
+		{
+			Transform theme = ScriptGlobals.boy.visualBoy.theme;
+			if (theme == this.storedInsideCrowdTheme && theme != null)
+			{
+				ScriptGlobals.boy.visualBoy.SetTheme(null, ScriptGlobals.boy.visualBoy.GetThemePriority());
+			}
+		}
+		if (this.stopCrowdThemeTimer > 0f)
+		{
+			this.stopCrowdThemeTimer -= Time.deltaTime;
+			if (this.stopCrowdThemeTimer <= 0f)
+			{
+				if (this.inTheme)
+				{
+					if (!this.ShouldBoyBeInCrowdTheme())
+					{
+						this.SetTheme(string.Empty);
+					}
+					else
+					{
+						this.stopCrowdThemeTimer = 0.16f;
+					}
+				}
+			}
+			else if (!this.inTheme && !this.inAlbinoJumpTheme && !(ScriptGlobals.boy.state is BoyJumpState))
+			{
+				this.SetTheme("InsideCrowd");
+			}
+		}
+		else if (!this.inAlbinoJumpTheme && this.ShouldBoyBeInCrowdTheme() && !(ScriptGlobals.boy.state is BoyJumpState))
+		{
+			this.stopCrowdThemeTimer = 0.16f;
+			this.SetTheme("InsideCrowd");
+		}
+		BoyGrabState boyGrabState = ScriptGlobals.boy.state as BoyGrabState;
+		if (boyGrabState != null || this.overrideGrabBodyCollider != null)
+		{
+			if (this.overrideGrabBodyCollider != null)
+			{
+				this.internalGrabBody = this.overrideGrabBodyCollider.attachedRigidbody;
+			}
+			else
+			{
+				this.internalGrabBody = boyGrabState.body;
+			}
+			this.AddForceToGrabBody(this.internalGrabBody, false);
+			if (this.internalGrabBody != this.mLastObjectGrabbed)
+			{
+				if (this.overrideGrabBodyCollider != null)
+				{
+					this.CreateGrabSlots(this.overrideGrabBodyCollider.gameObject, ref this.mGrabSlots);
+				}
+				else
+				{
+					this.CreateGrabSlots(this.internalGrabBody.gameObject, ref this.mGrabSlots);
+				}
+				this.mLastObjectGrabbed = this.internalGrabBody;
+			}
+		}
+		else if (this.internalGrabBody != null)
+		{
+			if (FastMath.Abs(this.lastStickDir) > 0.1f)
+			{
+				this.AddForceToGrabBody(this.internalGrabBody, true);
+			}
+			else
+			{
+				if (this.overrideGrabBodyCollider != null)
+				{
+					this.CreateGrabSlots(this.overrideGrabBodyCollider.gameObject, ref this.mGrabSlots);
+				}
+				else
+				{
+					this.CreateGrabSlots(this.internalGrabBody.gameObject, ref this.mGrabSlots);
+				}
+				this.lastStickDir = 0f;
+				this.internalGrabBody = null;
+			}
+		}
+		this.liftingOffset = 0f;
+		if (ScriptGlobals.mainCharacter is Huddle)
+		{
+			float x = ScriptGlobals.huddle.pos3.x;
+			int i = 0;
+			int size = this.activeAlbinos.size;
+			while (i < size)
+			{
+				AlbinoAI albinoAI = this.activeAlbinos.raw[i];
+				if (albinoAI.aiMode == AlbinoAI.AIMode.ThrowBoy)
+				{
+					this.liftingOffset += albinoAI.cachedWantedPos.x - x;
+				}
+				i++;
+			}
+		}
+		this.mPrevGrabbedObjectFlag = (boyGrabState != null);
+	}
+
+	// Token: 0x040000AC RID: 172
+	private const float mDistanceBetweenGrabSlots = 0.5f;
+
+	// Token: 0x040000AD RID: 173
+	private const float liftStart = 0.3f;
+
+	// Token: 0x040000AE RID: 174
+	private const float liftEnd = 1.8f;
+
+	// Token: 0x040000AF RID: 175
+	public string persistentSaveDataName = "AlbinoPersistentData";
+
+	// Token: 0x040000B0 RID: 176
+	public List<Mesh> albinoMeshes;
+
+	// Token: 0x040000B1 RID: 177
+	public List<Material> albinoMaterial;
+
+	// Token: 0x040000B2 RID: 178
+	public List<GameObject> headGearPrefabs;
+
+	// Token: 0x040000B3 RID: 179
+	public List<GameObject> hairPrefabs;
+
+	// Token: 0x040000B4 RID: 180
+	public List<AnimcontrolledProperties> albinos;
+
+	// Token: 0x040000B5 RID: 181
+	[NonSerialized]
+	public FastList<AlbinoAI> albinosAI;
+
+	// Token: 0x040000B6 RID: 182
+	public AnimClipNode jumpAlbinoAidedQuickTap;
+
+	// Token: 0x040000B7 RID: 183
+	public AnimClipNode jumpAlbinoAidedSmallUp;
+
+	// Token: 0x040000B8 RID: 184
+	public AnimClipNode jumpAlbinoAided;
+
+	// Token: 0x040000B9 RID: 185
+	public AnimClipNode jumpAlbinoAidedForward;
+
+	// Token: 0x040000BA RID: 186
+	public AnimClipNode jumpAlbinoAidedBackward;
+
+	// Token: 0x040000BB RID: 187
+	public AnimClipNode climbUpAlbinos;
+
+	// Token: 0x040000BC RID: 188
+	public AnimClipNode jumpUpAlbinos;
+
+	// Token: 0x040000BD RID: 189
+	public AnimClipNode carriedByAlbinos;
+
+	// Token: 0x040000BE RID: 190
+	public AnimClipNode runningOffAlbinosFW;
+
+	// Token: 0x040000BF RID: 191
+	public AnimClipNode runningOffAlbinosBW;
+
+	// Token: 0x040000C0 RID: 192
+	public static AlbinoGroupManager mInstance;
+
+	// Token: 0x040000C1 RID: 193
+	public static bool mStarted;
+
+	// Token: 0x040000C2 RID: 194
+	private List<IRoundRobinInitializationable> timesliceInitList = new List<IRoundRobinInitializationable>();
+
+	// Token: 0x040000C3 RID: 195
+	private GameObject huddleFakeLifter;
+
+	// Token: 0x040000C4 RID: 196
+	private bool albinoSpawnedThisFrame;
+
+	// Token: 0x040000C5 RID: 197
+	private bool doubleWait;
+
+	// Token: 0x040000C6 RID: 198
+	private BoyJumpAimTrigger albinoJumpAimTarget;
+
+	// Token: 0x040000C7 RID: 199
+	private bool playAlbinoFallSound;
+
+	// Token: 0x040000C8 RID: 200
+	public bool allowAlbinoCatchRepositioning = true;
+
+	// Token: 0x040000C9 RID: 201
+	public BoyRestrictAlbinoLiftTrigger restrictAlbinoLiftTrigger;
+
+	// Token: 0x040000CA RID: 202
+	public bool allowAlbinoClutterAround = true;
+
+	// Token: 0x040000CB RID: 203
+	public Transform noClutterTrans;
+
+	// Token: 0x040000CC RID: 204
+	public bool roundRobinWaitFrame;
+
+	// Token: 0x040000CD RID: 205
+	private FastList<AlbinoAI> activeAlbinos = new FastList<AlbinoAI>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040000CE RID: 206
+	private List<GenericDudeAudio> genericDudeAudio = new List<GenericDudeAudio>();
+
+	// Token: 0x040000CF RID: 207
+	private FastList<AlbinoAvoidObject> avoidObjects = new FastList<AlbinoAvoidObject>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040000D0 RID: 208
+	private bool delayedBoyKill;
+
+	// Token: 0x040000D1 RID: 209
+	private AlbinoMultiInteraction internalMultiInteraction;
+
+	// Token: 0x040000D2 RID: 210
+	private Rigidbody internalGrabBody;
+
+	// Token: 0x040000D3 RID: 211
+	private Collider overrideGrabBodyCollider;
+
+	// Token: 0x040000D4 RID: 212
+	private bool activeFollowers;
+
+	// Token: 0x040000D5 RID: 213
+	private float lastBoyFacing;
+
+	// Token: 0x040000D6 RID: 214
+	private float logicCenterOfMass;
+
+	// Token: 0x040000D7 RID: 215
+	private float mCenterOfMassOffset;
+
+	// Token: 0x040000D8 RID: 216
+	private bool doAnOffsetRecalc;
+
+	// Token: 0x040000D9 RID: 217
+	private List<AlbinoGroupManager.GrabSlot> mGrabSlots = new List<AlbinoGroupManager.GrabSlot>();
+
+	// Token: 0x040000DA RID: 218
+	private List<AlbinoGroupManager.GrabSlot> mMultiGrabSlots = new List<AlbinoGroupManager.GrabSlot>();
+
+	// Token: 0x040000DB RID: 219
+	private Rigidbody mLastObjectGrabbed;
+
+	// Token: 0x040000DC RID: 220
+	private bool mPrevGrabbedObjectFlag;
+
+	// Token: 0x040000DD RID: 221
+	private float grabPrepareDistance = 2f;
+
+	// Token: 0x040000DE RID: 222
+	private bool boyWasJustGrabbing;
+
+	// Token: 0x040000DF RID: 223
+	private float boyXWhileGrabbing;
+
+	// Token: 0x040000E0 RID: 224
+	private float huddleXWhileLifting;
+
+	// Token: 0x040000E1 RID: 225
+	private int prepareLoadHandle = -1;
+
+	// Token: 0x040000E2 RID: 226
+	private int savedEnhancedHandle = -1;
+
+	// Token: 0x040000E3 RID: 227
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple[] audioAlbinosAwakeArray;
+
+	// Token: 0x040000E4 RID: 228
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x040000E5 RID: 229
+	private Transform storedInsideCrowdTheme;
+
+	// Token: 0x040000E6 RID: 230
+	private int albinosFollowingBoy;
+
+	// Token: 0x040000E7 RID: 231
+	private FastList<AlbinoAI> relevantAlbinos = new FastList<AlbinoAI>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040000E8 RID: 232
+	private float stopCrowdThemeTimer;
+
+	// Token: 0x040000E9 RID: 233
+	private bool inTheme;
+
+	// Token: 0x040000EA RID: 234
+	private bool inAlbinoJumpTheme;
+
+	// Token: 0x040000EB RID: 235
+	private FastList<GameObject> boysToAvoid = new FastList<GameObject>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x040000EC RID: 236
+	private float liftingOffset;
+
+	// Token: 0x040000ED RID: 237
+	private float liftOffsetFrame;
+
+	// Token: 0x040000EE RID: 238
+	private bool huddleWantsToBeLifted;
+
+	// Token: 0x040000EF RID: 239
+	private float lastStickDir;
+
+	// Token: 0x040000F0 RID: 240
+	private bool wasJumping;
+
+	// Token: 0x040000F1 RID: 241
+	private bool allowAlbinoJump = true;
+
+	// Token: 0x040000F2 RID: 242
+	private AnimClipNode currentAlbinoJumpAnim;
+
+	// Token: 0x040000F3 RID: 243
+	private AnimClipNode currentBeingDroppedAnim;
+
+	// Token: 0x040000F4 RID: 244
+	private float carryAlignerX;
+
+	// Token: 0x040000F5 RID: 245
+	private float carryAlignerY;
+
+	// Token: 0x040000F6 RID: 246
+	private bool quickTapPlaying;
+
+	// Token: 0x040000F7 RID: 247
+	private bool smallJumpAnimPlaying;
+
+	// Token: 0x040000F8 RID: 248
+	private Rigidbody lastGroundCol;
+
+	// Token: 0x040000F9 RID: 249
+	private Vector3 lastGroundVel;
+
+	// Token: 0x040000FA RID: 250
+	private AlbinoGroupManager.AlbinoJumpState albinoJumpState;
+
+	// Token: 0x040000FB RID: 251
+	private AnimClipNode currentClimbAnim;
+
+	// Token: 0x040000FC RID: 252
+	private int throwAlbinoAnimIndex;
+
+	// Token: 0x040000FD RID: 253
+	private int smallThrowAlbinoAnimIndex;
+
+	// Token: 0x040000FE RID: 254
+	private float groundStartY;
+
+	// Token: 0x040000FF RID: 255
+	private float liftCounter;
+
+	// Token: 0x04000100 RID: 256
+	private float runOffSideTimer;
+
+	// Token: 0x04000101 RID: 257
+	private bool allowReCatch = true;
+
+	// Token: 0x04000102 RID: 258
+	public bool doNewOffsetNextTime;
+
+	// Token: 0x04000103 RID: 259
+	private bool allowVelocityOffset = true;
+
+	// Token: 0x04000104 RID: 260
+	private bool allowCatchForce = true;
+
+	// Token: 0x0200000D RID: 13
+	public class GrabSlot
+	{
+		// Token: 0x060000DA RID: 218 RVA: 0x00010578 File Offset: 0x0000E778
+		public float GetXDistanceTo(Vector3 aPosition)
+		{
+			float num = (!(this.alignObject == null)) ? this.alignObject.transform.position.x : ScriptGlobals.boy.pos.x;
+			float num2 = num + Mathf.Sign(aPosition.x - num) * this.alignOffset;
+			return FastMath.Abs(aPosition.x - num2);
+		}
+
+		// Token: 0x060000DB RID: 219 RVA: 0x000105EC File Offset: 0x0000E7EC
+		public float GetZDistanceTo(Vector3 aPosition)
+		{
+			Vector3 vector = (!(this.alignObject == null)) ? this.alignObject.transform.position : ScriptGlobals.boy.pos3;
+			Vector3 vector2 = vector + this.zOffset * Vector3.forward;
+			Vector3 vector3 = aPosition - vector2;
+			return 2f * FastMath.Abs(vector3.x) + FastMath.Abs(vector3.z);
+		}
+
+		// Token: 0x060000DC RID: 220 RVA: 0x00010668 File Offset: 0x0000E868
+		public Vector3 GetWorldPosition(AlbinoAI aRequestingAlbino = null)
+		{
+			Vector3 vector = (!(this.alignObject == null)) ? this.alignObject.transform.position : ScriptGlobals.boy.pos3;
+			Vector3 vector2;
+			if (aRequestingAlbino == null)
+			{
+				vector2 = Vector3Fast.zero;
+			}
+			else
+			{
+				float num = aRequestingAlbino.cachedWantedPos.x - vector.x;
+				vector2 = Vector3.right * Mathf.Sign(num) * this.alignOffset;
+				if (this.alignObject != null)
+				{
+					vector2 += Vector3.up * this.yOffset;
+				}
+			}
+			return vector + Vector3.forward * this.zOffset + vector2;
+		}
+
+		// Token: 0x0400010A RID: 266
+		public AlbinoAI owner;
+
+		// Token: 0x0400010B RID: 267
+		public GameObject alignObject;
+
+		// Token: 0x0400010C RID: 268
+		public float alignOffset;
+
+		// Token: 0x0400010D RID: 269
+		public float zOffset;
+
+		// Token: 0x0400010E RID: 270
+		public float yOffset;
+
+		// Token: 0x0400010F RID: 271
+		public bool AtPosition;
+	}
+
+	// Token: 0x0200000E RID: 14
+	public enum AlbinoJumpState
+	{
+		// Token: 0x04000111 RID: 273
+		Inactive,
+		// Token: 0x04000112 RID: 274
+		climbingAlbinos,
+		// Token: 0x04000113 RID: 275
+		balancingOnAlbinos,
+		// Token: 0x04000114 RID: 276
+		beingDropped,
+		// Token: 0x04000115 RID: 277
+		jumping,
+		// Token: 0x04000116 RID: 278
+		smallJump
+	}
+}

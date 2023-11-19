@@ -1,0 +1,11 @@
+using System;
+
+// Token: 0x020000ED RID: 237
+public class ActionBehaviourTemplate : HybridBehaviour<ActionBehaviorHybridTemplate>
+{
+	// Token: 0x0600075F RID: 1887 RVA: 0x000520D4 File Offset: 0x000502D4
+	public override void Initialize()
+	{
+	}
+}
+

@@ -1,0 +1,594 @@
+using System;
+using System.Collections.Generic;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x02000017 RID: 23
+public class AlbinoMultiPullBoards : AlbinoMultiInteraction, IPreAwake
+{
+	// Token: 0x0600010F RID: 271 RVA: 0x00011F10 File Offset: 0x00010110
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.helperBoySetups = new List<AlbinoMultiPullBoards.HelperBoySetup>();
+		this.CreateHelperBoySetups();
+	}
+
+	// Token: 0x06000110 RID: 272 RVA: 0x00011F44 File Offset: 0x00010144
+	public bool PreAwake(int callcount)
+	{
+		this.boardPulledOff = SignalOut.Create("boardPulledOff", base.gameObject);
+		this.loadedCompleted = SignalIn.Create("loadedCompleted", base.gameObject, new Action(this.OnLoadedCompleted));
+		return true;
+	}
+
+	// Token: 0x06000111 RID: 273 RVA: 0x00011F8C File Offset: 0x0001018C
+	protected override void Start()
+	{
+		this.OnPreProcess();
+		base.Start();
+		this.pullBoardState = AlbinoMultiPullBoards.PullBoardState.InitialMode;
+	}
+
+	// Token: 0x06000112 RID: 274 RVA: 0x00011FA4 File Offset: 0x000101A4
+	public override Vector3 GetOffsetPos(float offset, float scalefactor)
+	{
+		return this.alignNode.TransformPoint(offset, 0f, -(0.14f - (scalefactor - 1f) * 0.14f));
+	}
+
+	// Token: 0x06000113 RID: 275 RVA: 0x00011FCC File Offset: 0x000101CC
+	public override void ControlMe(AlbinoAI albino, float zPos)
+	{
+		if (this.helperBoySetups.Find((AlbinoMultiPullBoards.HelperBoySetup o) => o.helperBoy == albino) == null)
+		{
+			base.ControlMe(albino, zPos);
+			this.helperBoySetups[this.internalHelpersInteracting - 1].helperBoy = albino;
+			this.helperBoySetups[this.internalHelpersInteracting - 1].zOffset = zPos - ScriptGlobals.boy.pos3.z;
+		}
+	}
+
+	// Token: 0x06000114 RID: 276 RVA: 0x0001205C File Offset: 0x0001025C
+	private void CreateHelperBoySetups()
+	{
+		for (int i = 0; i < this.maxHelpersInteracting; i++)
+		{
+			this.helperBoySetups.Add(new AlbinoMultiPullBoards.HelperBoySetup());
+		}
+	}
+
+	// Token: 0x06000115 RID: 277 RVA: 0x00012090 File Offset: 0x00010290
+	private void OnLoadedCompleted()
+	{
+		this.pullBoardState = AlbinoMultiPullBoards.PullBoardState.Opened;
+		if (this.board)
+		{
+			this.board.GetComponent<Animation>().Play("OpenUp");
+			this.board.GetComponent<Animation>()["OpenUp"].normalizedTime = 1f;
+		}
+	}
+
+	// Token: 0x06000116 RID: 278 RVA: 0x000120EC File Offset: 0x000102EC
+	private string GetHelperAnimNameFromCurrentState(AlbinoMultiPullBoards.BoyAnimStates curState, AlbinoMultiPullBoards.HelperBoySetup helperSetup)
+	{
+		AlbinoAI helperBoy = helperSetup.helperBoy;
+		AlbinoAI.GrabState grabState = AlbinoAI.GrabState.grabIdle;
+		if (curState == AlbinoMultiPullBoards.BoyAnimStates.BoyAnimPullingIdle)
+		{
+			grabState = AlbinoAI.GrabState.grabPull;
+		}
+		else if (curState == AlbinoMultiPullBoards.BoyAnimStates.BoyAnimAnticipate)
+		{
+			grabState = AlbinoAI.GrabState.grabPush;
+		}
+		if (helperSetup.currentGrabState == grabState)
+		{
+			return string.Empty;
+		}
+		helperSetup.currentGrabState = grabState;
+		if (grabState == AlbinoAI.GrabState.grabIdle)
+		{
+			return "GiantBoardIdle";
+		}
+		if (grabState == AlbinoAI.GrabState.grabPull)
+		{
+			return "GiantBoardPull";
+		}
+		return "GiantBoardAnticipate";
+	}
+
+	// Token: 0x06000117 RID: 279 RVA: 0x00012154 File Offset: 0x00010354
+	private void UpdateHelperBoyAnimations(AlbinoMultiPullBoards.BoyAnimStates currentState)
+	{
+		if (this.pullBoardState == AlbinoMultiPullBoards.PullBoardState.Opened || this.pullBoardState == AlbinoMultiPullBoards.PullBoardState.ClimbThrough)
+		{
+			return;
+		}
+		int i = 0;
+		int count = this.helperBoySetups.Count;
+		while (i < count)
+		{
+			AlbinoMultiPullBoards.HelperBoySetup helperBoySetup = this.helperBoySetups[i];
+			if (helperBoySetup.helperBoy != null)
+			{
+				string helperAnimNameFromCurrentState = this.GetHelperAnimNameFromCurrentState(currentState, helperBoySetup);
+				if (helperAnimNameFromCurrentState != string.Empty)
+				{
+					AnimcontrolledCharacter character = helperBoySetup.helperBoy.GetCharacter();
+					ABDefinition definition = helperBoySetup.helperBoy.GetCharacter().GetBlendHelper().GetDefinition(helperAnimNameFromCurrentState, false);
+					if (definition != null)
+					{
+						Vector3 offsetPos = this.GetOffsetPos(helperBoySetup.zOffset, helperBoySetup.helperBoy.scaleFactor);
+						offsetPos.y = helperBoySetup.helperBoy.GetCharacter().transform.position.y;
+						float startPos = (float)i * 0.333f;
+						Vector3 eulerAngles = this.alignNode.eulerAngles;
+						character.ForceToAnimation(definition, true, offsetPos, eulerAngles, -1f, startPos, false);
+					}
+					else
+					{
+						helperBoySetup.helperBoy.GetCharacter().GoToDefaultAnimation();
+					}
+				}
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06000118 RID: 280 RVA: 0x0001227C File Offset: 0x0001047C
+	private void ClearHelperBoySetups()
+	{
+		foreach (AlbinoMultiPullBoards.HelperBoySetup helperBoySetup in this.helperBoySetups)
+		{
+			helperBoySetup.currentGrabState = AlbinoAI.GrabState.grabUndefined;
+			helperBoySetup.helperBoy = null;
+		}
+	}
+
+	// Token: 0x06000119 RID: 281 RVA: 0x000122EC File Offset: 0x000104EC
+	private void PullOffBoard()
+	{
+		if (this.board != null)
+		{
+			this.board.GetComponent<Animation>().Play("OpenUp");
+		}
+		int i = 0;
+		int count = this.helperBoySetups.Count;
+		while (i < count)
+		{
+			AlbinoMultiPullBoards.HelperBoySetup helperBoySetup = this.helperBoySetups[i];
+			if (helperBoySetup.helperBoy != null)
+			{
+				AnimcontrolledCharacter character = helperBoySetup.helperBoy.GetCharacter();
+				if (i == 0)
+				{
+					character.ForceToAnimation("RandomPushBackState", null, -1f, 0f, false);
+				}
+				else if (i == 1)
+				{
+					character.ForceToAnimation("PushedBackB_Fall", null, -1f, 0f, false);
+				}
+				else
+				{
+					character.ForceToAnimation("PushedBackC_Fall", null, -1f, 0f, false);
+				}
+			}
+			i++;
+		}
+		Device.SetVoiceNone();
+		BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.throwOpenAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.4f, 0.2f, 0, 0f);
+		this.boyAnimState = AlbinoMultiPullBoards.BoyAnimStates.BoyAnimThrowOpen;
+		if (this.conflictingClimbController)
+		{
+			this.conflictingClimbController.SetClimbAllowed(true);
+		}
+		AlbinoGroupManager.mInstance.SetAlbinoMultiInteraction(null);
+		this.pullBoardState = AlbinoMultiPullBoards.PullBoardState.Opened;
+		this.boardPulledOff.Signal();
+	}
+
+	// Token: 0x0600011A RID: 282 RVA: 0x00012440 File Offset: 0x00010640
+	private bool TestForGrabFinish()
+	{
+		bool flag = false;
+		if (ScriptGlobals.boy.isDead)
+		{
+			ScriptGlobals.boy.Kill();
+			flag = true;
+		}
+		if (this.grabStunTimer <= 0f && !GameInput.rawAction)
+		{
+			BoyUtils.ClearState(ScriptGlobals.boy, 0.3f);
+			flag = true;
+		}
+		this.grabStunTimer = Mathf.Max(this.grabStunTimer - Time.deltaTime, 0f);
+		if (flag)
+		{
+			Device.SetVoiceNone();
+			if (this.conflictingClimbController)
+			{
+				this.conflictingClimbController.SafetyStopClimbing();
+				this.conflictingClimbController.SetClimbAllowed(true);
+			}
+			this.pullBoardState = AlbinoMultiPullBoards.PullBoardState.InitialMode;
+			this.releaseTimer = 0.15f;
+			AlbinoGroupManager.mInstance.SetAlbinoMultiInteraction(null);
+			foreach (AlbinoMultiPullBoards.HelperBoySetup helperBoySetup in this.helperBoySetups)
+			{
+				if (helperBoySetup.helperBoy != null)
+				{
+					helperBoySetup.helperBoy.GetCharacter().GoToDefaultAnimation();
+				}
+				helperBoySetup.helperBoy = null;
+			}
+			return true;
+		}
+		return false;
+	}
+
+	// Token: 0x0600011B RID: 283 RVA: 0x00012580 File Offset: 0x00010780
+	private void UpdatePullBoardState()
+	{
+		if (this.TestForGrabFinish())
+		{
+			return;
+		}
+		AlbinoGroupManager.mInstance.SetAlbinoMultiInteraction(this);
+		if (ScriptGlobals.boy.input.looseDir.x > 0.5f)
+		{
+			if (this.boyAnimState == AlbinoMultiPullBoards.BoyAnimStates.BoyAnimIdleGrabbing || this.boyAnimState == AlbinoMultiPullBoards.BoyAnimStates.BoyAnimAnticipate)
+			{
+				if (!Device.IsVoiceActive())
+				{
+					Device.SetVoiceActive();
+				}
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.pullingIdleAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				this.boyAnimState = AlbinoMultiPullBoards.BoyAnimStates.BoyAnimPullingIdle;
+			}
+			if (this.internalHelpersInteracting >= this.helpersNeededToInteract)
+			{
+				this.pullCounter += Time.deltaTime;
+				if (this.pullCounter >= this.pullTime)
+				{
+					this.PullOffBoard();
+				}
+			}
+		}
+		else if (ScriptGlobals.boy.input.looseDir.x < -0.5f)
+		{
+			if (this.boyAnimState == AlbinoMultiPullBoards.BoyAnimStates.BoyAnimIdleGrabbing || this.boyAnimState == AlbinoMultiPullBoards.BoyAnimStates.BoyAnimPullingIdle)
+			{
+				if (!Device.IsVoiceActive())
+				{
+					Device.SetVoiceActive();
+				}
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.anticipateAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				this.boyAnimState = AlbinoMultiPullBoards.BoyAnimStates.BoyAnimAnticipate;
+			}
+		}
+		else
+		{
+			this.pullCounter = Mathf.Clamp(this.pullCounter - Time.deltaTime * 3f, 0f, 0.5f * this.pullTime);
+			if (this.boyAnimState != AlbinoMultiPullBoards.BoyAnimStates.BoyAnimIdleGrabbing)
+			{
+				if (!Device.IsVoicePassive())
+				{
+					Device.SetVoicePassive();
+				}
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.idleGrabbingAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				this.boyAnimState = AlbinoMultiPullBoards.BoyAnimStates.BoyAnimIdleGrabbing;
+			}
+		}
+	}
+
+	// Token: 0x0600011C RID: 284 RVA: 0x00012720 File Offset: 0x00010920
+	private void UpdateWaitForGrabFinishState()
+	{
+		if (this.TestForGrabFinish())
+		{
+			return;
+		}
+		AlbinoGroupManager.mInstance.SetAlbinoMultiInteraction(this);
+		bool flag = this.idleToGrabAnim.frame > 12f && ScriptGlobals.boy.input.looseDir.x != 0f;
+		if (!this.idleToGrabAnim.animFinished && !flag)
+		{
+			return;
+		}
+		BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.idleGrabbingAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		Device.SetVoicePassive();
+		this.boyAnimState = AlbinoMultiPullBoards.BoyAnimStates.BoyAnimIdleGrabbing;
+		this.pullCounter = 0f;
+		this.pullBoardState = AlbinoMultiPullBoards.PullBoardState.PullBoardState;
+	}
+
+	// Token: 0x0600011D RID: 285 RVA: 0x000127CC File Offset: 0x000109CC
+	private void UpdateInitial()
+	{
+		if (!this.mBoyInsideTrigger || !GameInput.rawAction || ScriptGlobals.boy.isDead || this.releaseTimer > 0f || ScriptGlobals.boy.facing * base.transform.right.x > 0f || !ScriptGlobals.boy.visualBoy.IsPoseFacing(-1f, 100f))
+		{
+			this.releaseTimer = Mathf.Max(this.releaseTimer - Time.deltaTime, 0f);
+			return;
+		}
+		if (AlbinoGroupManager.mInstance.IsInAlbinoJumpState())
+		{
+			return;
+		}
+		this.internalHelpersInteracting = 0;
+		this.ClearHelperBoySetups();
+		AlbinoGroupManager.mInstance.SetAlbinoMultiInteraction(this);
+		if (this.conflictingClimbController)
+		{
+			this.conflictingClimbController.SetClimbAllowed(false);
+		}
+		this.boyAnimState = AlbinoMultiPullBoards.BoyAnimStates.BoyAnimIdleToGrab;
+		BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.idleToGrabAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		Device.SetVoiceActive();
+		this.pullBoardState = AlbinoMultiPullBoards.PullBoardState.WaitForGrabFinishState;
+		this.grabStunTimer = 0.15f;
+		if (this.conflictingClimbController != null)
+		{
+			this.conflictingClimbController.SafetyStopClimbing();
+		}
+	}
+
+	// Token: 0x0600011E RID: 286 RVA: 0x00012908 File Offset: 0x00010B08
+	private void TestForClimbThrough()
+	{
+		if (this.mBoyInsideTrigger)
+		{
+			bool flag = false;
+			float num = ScriptGlobals.boy.pos.x - this.climbThroughLeftAnim.transform.position.x;
+			if (num < -0.4f && num > -0.8f && ScriptGlobals.boy.input.looseDir.x < -0.5f && ScriptGlobals.boy.input.looseDir.y <= 0f)
+			{
+				flag = true;
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.climbThroughLeftAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				this.climbingLeft = true;
+			}
+			num = ScriptGlobals.boy.pos.x - this.climbThroughRightAnim.transform.position.x;
+			if (num > -2.95f && num < -1f && (ScriptGlobals.boy.input.looseDir.x > 0.5f || (ScriptGlobals.boy.velocity.x > 0.1f && Mathf.Abs(ScriptGlobals.boy.velocity.y) > 0.3f)))
+			{
+				flag = true;
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.climbThroughRightAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				this.climbingLeft = false;
+			}
+			if (flag)
+			{
+				this.boyAnimState = AlbinoMultiPullBoards.BoyAnimStates.BoyAnimClimbThrough;
+				this.pullBoardState = AlbinoMultiPullBoards.PullBoardState.ClimbThrough;
+				Device.SetVoiceActive();
+				if (this.conflictingClimbController != null)
+				{
+					this.conflictingClimbController.SafetyStopClimbing();
+					this.conflictingClimbController.SetClimbAllowed(false);
+				}
+			}
+		}
+	}
+
+	// Token: 0x0600011F RID: 287 RVA: 0x00012AD0 File Offset: 0x00010CD0
+	private void UpdateClimbThrough()
+	{
+		if (this.conflictingClimbController && this.conflictingClimbController.IsBoyclimbing())
+		{
+			this.pullBoardState = AlbinoMultiPullBoards.PullBoardState.Opened;
+			this.boyAnimState = AlbinoMultiPullBoards.BoyAnimStates.BoyAnimNoAnimSet;
+			AlbinoGroupManager.mInstance.SetAlbinoMultiInteraction(null);
+			return;
+		}
+		bool flag = false;
+		if (this.climbingLeft)
+		{
+			if (this.conflictingClimbController != null)
+			{
+				if (this.climbThroughLeftAnim.frame < 15f && ScriptGlobals.boy.input.looseDir.y > 0.5f)
+				{
+					this.conflictingClimbController.SetClimbAllowed(true);
+				}
+				else
+				{
+					this.conflictingClimbController.SetClimbAllowed(false);
+				}
+			}
+			if (this.climbThroughLeftAnim.animFinished || !(ScriptGlobals.boy.state is BoyCustomAnimState))
+			{
+				flag = true;
+			}
+			if (this.climbThroughLeftAnim.frame > 60f && !Device.IsVoiceNone())
+			{
+				Device.SetVoiceNone();
+			}
+		}
+		else
+		{
+			if (this.climbThroughRightAnim.animFinished || !(ScriptGlobals.boy.state is BoyCustomAnimState))
+			{
+				flag = true;
+			}
+			if (this.climbThroughRightAnim.frame > 60f && !Device.IsVoiceNone())
+			{
+				Device.SetVoiceNone();
+			}
+		}
+		if (flag)
+		{
+			Device.SetVoiceNone();
+			this.pullBoardState = AlbinoMultiPullBoards.PullBoardState.Opened;
+			if (this.conflictingClimbController != null)
+			{
+				this.conflictingClimbController.SetClimbAllowed(true);
+			}
+		}
+	}
+
+	// Token: 0x06000120 RID: 288 RVA: 0x00012C50 File Offset: 0x00010E50
+	private void FixedUpdate()
+	{
+		if (this.conflictingClimbController != null && this.conflictingClimbController.IsBoyclimbing() && (this.pullBoardState == AlbinoMultiPullBoards.PullBoardState.WaitForGrabFinishState || this.pullBoardState == AlbinoMultiPullBoards.PullBoardState.PullBoardState))
+		{
+			this.pullBoardState = AlbinoMultiPullBoards.PullBoardState.InitialMode;
+			AlbinoGroupManager.mInstance.SetAlbinoMultiInteraction(null);
+		}
+		switch (this.pullBoardState)
+		{
+		case AlbinoMultiPullBoards.PullBoardState.InitialMode:
+			this.UpdateInitial();
+			break;
+		case AlbinoMultiPullBoards.PullBoardState.WaitForGrabFinishState:
+			this.UpdateWaitForGrabFinishState();
+			break;
+		case AlbinoMultiPullBoards.PullBoardState.PullBoardState:
+			this.UpdatePullBoardState();
+			break;
+		case AlbinoMultiPullBoards.PullBoardState.Opened:
+			this.TestForClimbThrough();
+			return;
+		case AlbinoMultiPullBoards.PullBoardState.ClimbThrough:
+			this.UpdateClimbThrough();
+			break;
+		}
+		this.UpdateHelperBoyAnimations(this.boyAnimState);
+	}
+
+	// Token: 0x06000121 RID: 289 RVA: 0x00012D10 File Offset: 0x00010F10
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.attachedRigidbody != null && coll.attachedRigidbody.GetComponent<Boy>() == ScriptGlobals.boy)
+		{
+			this.mBoyInsideTrigger = true;
+		}
+	}
+
+	// Token: 0x06000122 RID: 290 RVA: 0x00012D50 File Offset: 0x00010F50
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.attachedRigidbody != null && coll.attachedRigidbody.GetComponent<Boy>() == ScriptGlobals.boy)
+		{
+			this.mBoyInsideTrigger = false;
+		}
+	}
+
+	// Token: 0x0400016C RID: 364
+	private const int numberOfAnims = 5;
+
+	// Token: 0x0400016D RID: 365
+	public AnimClipNode idleToGrabAnim;
+
+	// Token: 0x0400016E RID: 366
+	public AnimClipNode idleGrabbingAnim;
+
+	// Token: 0x0400016F RID: 367
+	public AnimClipNode anticipateAnim;
+
+	// Token: 0x04000170 RID: 368
+	public AnimClipNode pullingIdleAnim;
+
+	// Token: 0x04000171 RID: 369
+	public AnimClipNode throwOpenAnim;
+
+	// Token: 0x04000172 RID: 370
+	public AnimClipNode climbThroughLeftAnim;
+
+	// Token: 0x04000173 RID: 371
+	public AnimClipNode climbThroughRightAnim;
+
+	// Token: 0x04000174 RID: 372
+	public Transform alignNode;
+
+	// Token: 0x04000175 RID: 373
+	public ClimbController conflictingClimbController;
+
+	// Token: 0x04000176 RID: 374
+	public GameObject board;
+
+	// Token: 0x04000177 RID: 375
+	public float pullTime = 1f;
+
+	// Token: 0x04000178 RID: 376
+	private SignalOut boardPulledOff;
+
+	// Token: 0x04000179 RID: 377
+	private SignalIn loadedCompleted;
+
+	// Token: 0x0400017A RID: 378
+	private bool mBoyInsideTrigger;
+
+	// Token: 0x0400017B RID: 379
+	private AlbinoMultiPullBoards.BoyAnimStates boyAnimState;
+
+	// Token: 0x0400017C RID: 380
+	private AlbinoMultiPullBoards.PullBoardState pullBoardState;
+
+	// Token: 0x0400017D RID: 381
+	[SerializeField]
+	[HideInInspector]
+	private List<AlbinoMultiPullBoards.HelperBoySetup> helperBoySetups;
+
+	// Token: 0x0400017E RID: 382
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x0400017F RID: 383
+	private float pullCounter;
+
+	// Token: 0x04000180 RID: 384
+	private float grabStunTimer;
+
+	// Token: 0x04000181 RID: 385
+	private float releaseTimer;
+
+	// Token: 0x04000182 RID: 386
+	private bool climbingLeft;
+
+	// Token: 0x02000018 RID: 24
+	private enum BoyAnimStates
+	{
+		// Token: 0x04000184 RID: 388
+		BoyAnimNoAnimSet,
+		// Token: 0x04000185 RID: 389
+		BoyAnimIdleGrabbing,
+		// Token: 0x04000186 RID: 390
+		BoyAnimIdleToGrab,
+		// Token: 0x04000187 RID: 391
+		BoyAnimAnticipate,
+		// Token: 0x04000188 RID: 392
+		BoyAnimPullingIdle,
+		// Token: 0x04000189 RID: 393
+		BoyAnimThrowOpen,
+		// Token: 0x0400018A RID: 394
+		BoyAnimClimbThrough
+	}
+
+	// Token: 0x02000019 RID: 25
+	private enum PullBoardState
+	{
+		// Token: 0x0400018C RID: 396
+		InitialMode,
+		// Token: 0x0400018D RID: 397
+		WaitForGrabFinishState,
+		// Token: 0x0400018E RID: 398
+		PullBoardState,
+		// Token: 0x0400018F RID: 399
+		Opened,
+		// Token: 0x04000190 RID: 400
+		ClimbThrough
+	}
+
+	// Token: 0x0200001A RID: 26
+	[Serializable]
+	private class HelperBoySetup
+	{
+		// Token: 0x04000191 RID: 401
+		public AlbinoAI helperBoy;
+
+		// Token: 0x04000192 RID: 402
+		public float zOffset;
+
+		// Token: 0x04000193 RID: 403
+		public AlbinoAI.GrabState currentGrabState;
+	}
+}

@@ -1,0 +1,93 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004B3 RID: 1203
+public class AlbinoPlatformClimb : AlbinoTrigger, IPreAwake
+{
+	// Token: 0x06001F84 RID: 8068 RVA: 0x0010D174 File Offset: 0x0010B374
+	public override bool PreAwake(int callcount)
+	{
+		base.PreAwake(callcount);
+		this.enableClimbHighTrigger = SignalOut.Create("enableClimbHighTrigger", base.gameObject);
+		this.enableClimbTrigger = SignalOut.Create("enableClimbTrigger", base.gameObject);
+		this.disableClimbTrigger = SignalOut.Create("disableClimbTrigger", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001F85 RID: 8069 RVA: 0x0010D1CC File Offset: 0x0010B3CC
+	public override void Start()
+	{
+		base.Start();
+		this.platformTransform = base.transform;
+		this.disableClimbTrigger.Signal();
+	}
+
+	// Token: 0x06001F86 RID: 8070 RVA: 0x0010D1EC File Offset: 0x0010B3EC
+	private void FixedUpdate()
+	{
+		float y = this.platformTransform.position.y;
+		if (!base.enabled || y < this.albinoClimbEndPos.position.y || y > this.albinoClimbStartPos.position.y)
+		{
+			this.SetHeightState(0);
+		}
+		else if (y < this.albinoClimbHighPos.position.y)
+		{
+			this.SetHeightState(1);
+		}
+		else if (this.albinosInside.Count > 0)
+		{
+			this.SetHeightState(2);
+		}
+	}
+
+	// Token: 0x06001F87 RID: 8071 RVA: 0x0010D294 File Offset: 0x0010B494
+	private void SetHeightState(int state)
+	{
+		if (state != this.heightState)
+		{
+			this.heightState = state;
+			if (state == 1)
+			{
+				this.enableClimbTrigger.Signal();
+			}
+			else if (state == 2)
+			{
+				this.enableClimbHighTrigger.Signal();
+			}
+			else
+			{
+				this.disableClimbTrigger.Signal();
+			}
+		}
+	}
+
+	// Token: 0x06001F88 RID: 8072 RVA: 0x0010D2F0 File Offset: 0x0010B4F0
+	private void OnDrawGizmos()
+	{
+		Gizmos.DrawSphere(base.transform.position, 0.2f);
+	}
+
+	// Token: 0x04003A70 RID: 14960
+	public Transform albinoClimbStartPos;
+
+	// Token: 0x04003A71 RID: 14961
+	public Transform albinoClimbHighPos;
+
+	// Token: 0x04003A72 RID: 14962
+	public Transform albinoClimbEndPos;
+
+	// Token: 0x04003A73 RID: 14963
+	private SignalOut enableClimbHighTrigger;
+
+	// Token: 0x04003A74 RID: 14964
+	private SignalOut enableClimbTrigger;
+
+	// Token: 0x04003A75 RID: 14965
+	private SignalOut disableClimbTrigger;
+
+	// Token: 0x04003A76 RID: 14966
+	private Transform platformTransform;
+
+	// Token: 0x04003A77 RID: 14967
+	private int heightState;
+}

@@ -1,0 +1,158 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000090 RID: 144
+public class AlbinoBlocker : AlbinoTrigger
+{
+	// Token: 0x060004DC RID: 1244 RVA: 0x00035700 File Offset: 0x00033900
+	public override void Start()
+	{
+		base.Start();
+	}
+
+	// Token: 0x060004DD RID: 1245 RVA: 0x00035708 File Offset: 0x00033908
+	public bool BadMoveInBlocker(float xPos, float dir)
+	{
+		if (this.oneWay)
+		{
+			return !this.IsOneWayDir(dir);
+		}
+		float num = base.transform.position.x - xPos;
+		return num * dir > 0f;
+	}
+
+	// Token: 0x060004DE RID: 1246 RVA: 0x0003574C File Offset: 0x0003394C
+	public bool BlockedByWall(float xPos, float direction, float extraPenetration, out float wallPos)
+	{
+		wallPos = 0f;
+		if (direction != 0f && this.IsOneWayDir(direction))
+		{
+			return false;
+		}
+		float num = base.transform.TransformDirection(Vector3.right).x;
+		num = Mathf.Sign(num);
+		float x = base.transform.position.x;
+		float num2 = xPos - x;
+		if (!this.oneWay)
+		{
+			num = Mathf.Sign(num2);
+		}
+		Vector3 extents = base.GetComponent<Collider>().bounds.extents;
+		float num3 = this.penetration;
+		if (!this.oneWay && num3 + 0.3f > extents.x)
+		{
+			num3 = extents.x - (num3 + 0.3f - extents.x) - 0.3f;
+		}
+		wallPos = x + num * (extents.x - (num3 + extraPenetration));
+		if (this.oneWay)
+		{
+			if ((wallPos - xPos) * num > 0f)
+			{
+				return true;
+			}
+		}
+		else
+		{
+			if (direction * num > 0f)
+			{
+				return false;
+			}
+			if ((wallPos - xPos) * num >= 0f)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x060004DF RID: 1247 RVA: 0x0003587C File Offset: 0x00033A7C
+	public bool IsOneWayDir(float heading)
+	{
+		float x = base.transform.TransformDirection(Vector3.right).x;
+		return this.oneWay && x * heading > 0f;
+	}
+
+	// Token: 0x060004E0 RID: 1248 RVA: 0x000358BC File Offset: 0x00033ABC
+	private void DrawArrow(Vector3 center, float direction)
+	{
+		Gizmos.color = new Color(1f, 1f, 1f, 0.5f);
+		Gizmos.DrawLine(center, center + direction * 0.5f * Vector3.right);
+		Gizmos.DrawLine(center + 0.5f * direction * Vector3.right, center + direction * 0.4f * Vector3.right + 0.1f * Vector3.up);
+		Gizmos.DrawLine(center + 0.5f * direction * Vector3.right, center + direction * 0.4f * Vector3.right - 0.1f * Vector3.up);
+	}
+
+	// Token: 0x060004E1 RID: 1249 RVA: 0x00035994 File Offset: 0x00033B94
+	private void OnDrawGizmos()
+	{
+		if (EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			if (base.GetComponent<Collider>() == null)
+			{
+				Gizmos.color = Color.red;
+				Gizmos.DrawLine(base.transform.position + (Vector3.left + Vector3.down) * 0.5f, base.transform.position + (Vector3.right + Vector3.up) * 0.5f);
+				Gizmos.DrawLine(base.transform.position + (Vector3.left + Vector3.up) * 0.5f, base.transform.position + (Vector3.right + Vector3.down) * 0.5f);
+				Gizmos.DrawWireSphere(base.transform.position, 0.4f);
+			}
+			else
+			{
+				Vector3 extents = base.GetComponent<Collider>().bounds.extents;
+				if (base.gameObject.layer != LayerMask.NameToLayer("NPC+"))
+				{
+					Gizmos.color = new Color(1f, 0f, 0f, 0.6f);
+					Gizmos.DrawCube(base.transform.position, base.GetComponent<Collider>().bounds.size);
+					return;
+				}
+				Vector3 position = base.transform.position;
+				Vector3 vector;
+				vector..ctor(extents.x - (this.penetration + 0.3f), 0f, 0f);
+				extents.x = 0f;
+				extents.z += 0.3f;
+				if (Application.isPlaying)
+				{
+					Gizmos.color = ((!this.isEnabled) ? new Color(0.2f, 1f, 0.2f, 0.5f) : new Color(1f, 0.5f, 0.5f, 0.5f));
+				}
+				else
+				{
+					Gizmos.color = (this.startDisabled ? new Color(0.2f, 1f, 0.2f, 0.5f) : new Color(1f, 0.5f, 0.5f, 0.5f));
+				}
+				if (Mathf.Abs(base.transform.TransformDirection(Vector3.right).x) < 0.2f)
+				{
+					Gizmos.color = new Color(1f, 0.7f, 0.4f, 0.8f);
+				}
+				if (!this.oneWay)
+				{
+					Gizmos.DrawCube(base.transform.position + vector, extents * 2f);
+					Gizmos.DrawCube(base.transform.position - vector, extents * 2f);
+					Gizmos.DrawLine(base.transform.position + vector + Vector3.back * extents.z + Vector3.down * extents.y, base.transform.position + vector + Vector3.forward * extents.z + Vector3.up * extents.y);
+					Gizmos.DrawLine(base.transform.position + vector + Vector3.back * extents.z + Vector3.up * extents.y, base.transform.position + vector + Vector3.forward * extents.z + Vector3.down * extents.y);
+					Gizmos.DrawLine(base.transform.position - vector + Vector3.back * extents.z + Vector3.down * extents.y, base.transform.position - vector + Vector3.forward * extents.z + Vector3.up * extents.y);
+					Gizmos.DrawLine(base.transform.position - vector + Vector3.back * extents.z + Vector3.up * extents.y, base.transform.position - vector + Vector3.forward * extents.z + Vector3.down * extents.y);
+				}
+				else
+				{
+					float num = base.transform.TransformDirection(Vector3.right).x;
+					num = Mathf.Sign(num);
+					vector *= num;
+					Gizmos.DrawCube(base.transform.position + vector, extents * 2f);
+					Gizmos.DrawLine(base.transform.position + vector + Vector3.back * extents.z + Vector3.down * extents.y, base.transform.position + vector + Vector3.forward * extents.z + Vector3.up * extents.y);
+					Gizmos.DrawLine(base.transform.position + vector + Vector3.back * extents.z + Vector3.up * extents.y, base.transform.position + vector + Vector3.forward * extents.z + Vector3.down * extents.y);
+					this.DrawArrow(base.transform.position + vector, num);
+					for (float num2 = 1f; num2 < extents.z; num2 += 1f)
+					{
+						this.DrawArrow(base.transform.position + vector + num2 * Vector3.forward, num);
+						this.DrawArrow(base.transform.position + vector - num2 * Vector3.forward, num);
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x0400084C RID: 2124
+	public float penetration = 0.5f;
+
+	// Token: 0x0400084D RID: 2125
+	public bool oneWay;
+
+	// Token: 0x0400084E RID: 2126
+	public bool alwaysPushOut;
+}

@@ -1,0 +1,232 @@
+using System;
+using System.Collections.Generic;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x0200003B RID: 59
+public class AnimcontrolledRandomStateWaypoint : AnimcontrolWaypoint
+{
+	// Token: 0x060001DB RID: 475 RVA: 0x00018F08 File Offset: 0x00017108
+	private int GetCurrentAnimIndex(AnimcontrolledCharacter acCharacter)
+	{
+		int result = -2;
+		AnimationBlendHelper blendHelper = acCharacter.GetBlendHelper();
+		int topDefinitionID = blendHelper.GetTopDefinitionID();
+		if (this.uniqueAnimDefID == topDefinitionID)
+		{
+			result = -1;
+		}
+		for (int i = 0; i < this.randomAnimations.Count; i++)
+		{
+			AnimcontrolledRandomStateWaypoint.RandomAnimationEntry randomAnimationEntry = this.randomAnimations[i];
+			if (randomAnimationEntry.animationName.Length > 0 && randomAnimationEntry.GetDefinitionID(blendHelper, acCharacter) == topDefinitionID)
+			{
+				if (randomAnimationEntry.currentStayTime <= 0f)
+				{
+					randomAnimationEntry.RerandomizeStayTime();
+				}
+				return i;
+			}
+		}
+		return result;
+	}
+
+	// Token: 0x060001DC RID: 476 RVA: 0x00018F9C File Offset: 0x0001719C
+	private float GetTotalWeight()
+	{
+		float num = 0f;
+		int i = 0;
+		int count = this.randomAnimations.Count;
+		while (i < count)
+		{
+			AnimcontrolledRandomStateWaypoint.RandomAnimationEntry randomAnimationEntry = this.randomAnimations[i];
+			num += randomAnimationEntry.weight;
+			i++;
+		}
+		return num;
+	}
+
+	// Token: 0x060001DD RID: 477 RVA: 0x00018FE4 File Offset: 0x000171E4
+	private int GetRangedIndex(float totalIndex)
+	{
+		float num = Random.Range(0f, totalIndex);
+		float num2 = 0f;
+		for (int i = 0; i < this.randomAnimations.Count - 1; i++)
+		{
+			num2 += this.randomAnimations[i].weight;
+			if (num < num2)
+			{
+				return i;
+			}
+		}
+		return this.randomAnimations.Count - 1;
+	}
+
+	// Token: 0x060001DE RID: 478 RVA: 0x0001904C File Offset: 0x0001724C
+	private int SetNewRandomAnimation(AnimationBlendHelper blendHelper, AnimcontrolledCharacter acCharacter, ref int newIndex)
+	{
+		int count = this.randomAnimations.Count;
+		newIndex = 0;
+		float totalWeight = this.GetTotalWeight();
+		if (totalWeight == 0f)
+		{
+			newIndex = Random.Range(0, this.randomAnimations.Count);
+		}
+		else
+		{
+			newIndex = this.GetRangedIndex(totalWeight);
+		}
+		int definitionID = this.randomAnimations[newIndex].GetDefinitionID(blendHelper, acCharacter);
+		int topDefinitionID = blendHelper.GetTopDefinitionID();
+		if (definitionID == topDefinitionID)
+		{
+			return -1;
+		}
+		this.randomAnimations[newIndex].RerandomizeStayTime();
+		return definitionID;
+	}
+
+	// Token: 0x060001DF RID: 479 RVA: 0x000190DC File Offset: 0x000172DC
+	public bool containsThisRandomAnim(int uniqueAnimationID)
+	{
+		int i = 0;
+		int count = this.randomAnimations.Count;
+		while (i < count)
+		{
+			AnimcontrolledRandomStateWaypoint.RandomAnimationEntry randomAnimationEntry = this.randomAnimations[i];
+			if (randomAnimationEntry.definitionID == uniqueAnimationID || randomAnimationEntry.definitionID == -uniqueAnimationID)
+			{
+				return true;
+			}
+			i++;
+		}
+		return false;
+	}
+
+	// Token: 0x060001E0 RID: 480 RVA: 0x00019130 File Offset: 0x00017330
+	public override bool DissalowAutoContinueDueToUniqueAnimation(Transform follower, int uniqueAnimationID)
+	{
+		return uniqueAnimationID == this.uniqueAnimDefID || this.uniqueAnimDefID == -uniqueAnimationID || (this.nextWaypoint == null && this.containsThisRandomAnim(uniqueAnimationID));
+	}
+
+	// Token: 0x060001E1 RID: 481 RVA: 0x00019174 File Offset: 0x00017374
+	public override bool customWaypointHandling_Callback(Transform wayPointFollower)
+	{
+		if (this.randomAnimations.Count == 0)
+		{
+			return false;
+		}
+		AnimcontrolledCharacter component = wayPointFollower.gameObject.GetComponent<AnimcontrolledCharacter>();
+		if (component == null)
+		{
+			return false;
+		}
+		int num = this.GetCurrentAnimIndex(component);
+		if (num >= -1)
+		{
+			float currentStayTime = this.defaultAnimationStayTime;
+			if (num >= 0)
+			{
+				currentStayTime = this.randomAnimations[num].currentStayTime;
+				if (this.randomAnimations.Count == 1)
+				{
+					return false;
+				}
+			}
+			AnimationBlendHelper blendHelper = component.GetBlendHelper();
+			ABHelperData latestAnimData = blendHelper.GetLatestAnimData();
+			float num2 = 0f;
+			bool flag = false;
+			if (latestAnimData != null)
+			{
+				num2 = latestAnimData.totalPlayTime;
+				if (latestAnimData.normalizedAnimPos >= 1f && !latestAnimData.topIsLooped)
+				{
+					flag = true;
+				}
+			}
+			if (num2 > currentStayTime || flag)
+			{
+				num = 0;
+				int num3 = this.SetNewRandomAnimation(blendHelper, component, ref num);
+				if (num3 >= 0)
+				{
+					float num4 = this.randomAnimations[num].overrideTransitTime;
+					if (num4 <= 0f)
+					{
+						num4 = -1f;
+					}
+					bool flag2 = blendHelper.blendDefinitions[num3].autoFallback = false;
+					component.SetUniqueAnimation(num3, base.gameObject, this.arrivalLineMode, this.uniqueAnimCustomParameter, num4, 0f);
+				}
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x040002B4 RID: 692
+	public List<AnimcontrolledRandomStateWaypoint.RandomAnimationEntry> randomAnimations = new List<AnimcontrolledRandomStateWaypoint.RandomAnimationEntry>();
+
+	// Token: 0x040002B5 RID: 693
+	public float defaultAnimationStayTime;
+
+	// Token: 0x040002B6 RID: 694
+	private int uniqueAnimID = -1;
+
+	// Token: 0x0200003C RID: 60
+	[Serializable]
+	public class RandomAnimationEntry
+	{
+		// Token: 0x060001E3 RID: 483 RVA: 0x000192E4 File Offset: 0x000174E4
+		public int GetDefinitionID(AnimationBlendHelper blendHelper, AnimcontrolledCharacter acCharacter)
+		{
+			if (this.definitionID <= 0 && this.animationName.Length > 0)
+			{
+				ABDefinition abdefinition = blendHelper.GetDefinition(this.animationName, true);
+				if (abdefinition == null)
+				{
+					abdefinition = acCharacter.OnTheFlyCreateDef(this.animationName);
+				}
+				if (abdefinition != null)
+				{
+					this.definitionID = abdefinition.definitionID;
+				}
+				else
+				{
+					this.definitionID = -1;
+				}
+			}
+			return this.definitionID;
+		}
+
+		// Token: 0x060001E4 RID: 484 RVA: 0x00019354 File Offset: 0x00017554
+		public void RerandomizeStayTime()
+		{
+			this.currentStayTime = Random.Range(this.minStayTime, this.maxStayTime);
+		}
+
+		// Token: 0x040002B7 RID: 695
+		public string animationName;
+
+		// Token: 0x040002B8 RID: 696
+		public float weight = 1f;
+
+		// Token: 0x040002B9 RID: 697
+		public float minStayTime;
+
+		// Token: 0x040002BA RID: 698
+		public float maxStayTime;
+
+		// Token: 0x040002BB RID: 699
+		public float overrideTransitTime;
+
+		// Token: 0x040002BC RID: 700
+		[HideInInspector]
+		public int definitionID = -1;
+
+		// Token: 0x040002BD RID: 701
+		[HideInInspector]
+		public float currentStayTime;
+	}
+}

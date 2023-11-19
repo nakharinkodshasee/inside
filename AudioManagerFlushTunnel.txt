@@ -1,0 +1,221 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200047F RID: 1151
+public class AudioManagerFlushTunnel : MonoBehaviour
+{
+	// Token: 0x06001E31 RID: 7729 RVA: 0x0010351C File Offset: 0x0010171C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioDoorOpen = new AudioEventSimple("env_lab_labEntranceFlush_doorOpen");
+		this.audioDoorClose = new AudioEventSimple("env_lab_labEntranceFlush_doorClose");
+	}
+
+	// Token: 0x06001E32 RID: 7730 RVA: 0x00103554 File Offset: 0x00101754
+	private void Awake()
+	{
+		this.OnPreProcess();
+		this.isActive = true;
+		this.UpdateActiveStatus();
+	}
+
+	// Token: 0x06001E33 RID: 7731 RVA: 0x0010356C File Offset: 0x0010176C
+	private void UpdateRTPC()
+	{
+		this.distRTPC = Mathf.InverseLerp(this.distanceBounds, 0f, this.boyToCenterDistance) * 100f;
+		SoundEngine.RTPCs.puzzleTransition.SetFast(this.distRTPC, AudioKeyObject.AkGameObjs.global, 0f);
+	}
+
+	// Token: 0x06001E34 RID: 7732 RVA: 0x001035B8 File Offset: 0x001017B8
+	private void SetNewOffset()
+	{
+		float num = PersistentBehaviour<GlobalAudio>.instance.music.GetMusicPosition_s() + 2f;
+		this.openTime = num % 16f;
+		this.closeTime = (num + 7f) % 16f;
+		this.openCheck.SetEventTime(this.openTime);
+		this.closeCheck.SetEventTime(this.closeTime);
+		this.openDoorTime = (num + 0.5f) % 16f;
+		this.closeDoorTime = (num + 7.7f) % 16f;
+		this.openDoorCheck.SetEventTime(this.openDoorTime);
+		this.closeDoorCheck.SetEventTime(this.closeDoorTime);
+	}
+
+	// Token: 0x06001E35 RID: 7733 RVA: 0x00103668 File Offset: 0x00101868
+	private void UpdateActiveStatus()
+	{
+		this.boyX = ScriptGlobals.boy.pos3.x;
+		this.boyToCenterDistance = (ScriptGlobals.boy.pos3 - this.center.position).magnitude;
+		if (this.boyToCenterDistance < this.distanceBounds)
+		{
+			if (this.boyX > this.boyXposLastFrame && this.boyX > this.rightLimit.position.x)
+			{
+				SoundEngine.RTPCs.puzzleTransition.SetFast(0f, AudioKeyObject.AkGameObjs.global, 0f);
+				this.isActive = false;
+			}
+			else if (this.boyX < this.boyXposLastFrame && this.boyX < this.rightLimit.position.x)
+			{
+				this.isActive = true;
+			}
+		}
+		if (this.boyX < this.center.position.x)
+		{
+			if (this.boyToCenterDistance < this.distanceBounds && this.distToCenterLastFrame > this.distanceBounds)
+			{
+				this.isActive = true;
+			}
+			else if (this.boyToCenterDistance > this.distanceBounds && this.distToCenterLastFrame < this.distanceBounds)
+			{
+				SoundEngine.RTPCs.puzzleTransition.SetFast(0f, AudioKeyObject.AkGameObjs.global, 0f);
+				this.isActive = false;
+			}
+		}
+		this.boyXposLastFrame = this.boyX;
+		this.distToCenterLastFrame = this.boyToCenterDistance;
+		this.activeLastFrame = this.isActive;
+	}
+
+	// Token: 0x06001E36 RID: 7734 RVA: 0x00103804 File Offset: 0x00101A04
+	private void Update()
+	{
+		this.UpdateActiveStatus();
+		this.loopLength = PersistentBehaviour<GlobalAudio>.instance.music.GetLoopLength_s();
+		if (this.lastFrameLoopLength != this.loopLength)
+		{
+			this.SetNewOffset();
+		}
+		this.lastFrameLoopLength = this.loopLength;
+		if (!this.isActive)
+		{
+			return;
+		}
+		this.UpdateRTPC();
+		this.UpdateMusicEvents();
+	}
+
+	// Token: 0x06001E37 RID: 7735 RVA: 0x00103868 File Offset: 0x00101A68
+	private void UpdateMusicEvents()
+	{
+		if (this.loopLength > 15f)
+		{
+			this.openCheck.Update();
+			this.closeCheck.Update();
+			this.openDoorCheck.Update();
+			this.closeDoorCheck.Update();
+			if (this.openCheck.didEventOccurThisUpdate && LevelGlobals.waterFlushTunnel != null)
+			{
+				LevelGlobals.waterFlushTunnel.SetStreamStartingOrFullOnState();
+			}
+			if (this.closeCheck.didEventOccurThisUpdate && LevelGlobals.waterFlushTunnel != null)
+			{
+				LevelGlobals.waterFlushTunnel.SetStreamStoppingOrStoppedState();
+			}
+			if (this.openDoorCheck.didEventOccurThisUpdate && (!ScriptGlobals.boy.isDead || PersistentBehaviour<GlobalAudio>.instance.audioState.current.fade < 0.1f))
+			{
+				this.audioDoorOpen.PostFast(AudioKeyObject.AkGameObjs.global);
+			}
+			if (this.closeDoorCheck.didEventOccurThisUpdate && (!ScriptGlobals.boy.isDead || PersistentBehaviour<GlobalAudio>.instance.audioState.current.fade < 0.1f))
+			{
+				this.audioDoorClose.PostFast(AudioKeyObject.AkGameObjs.global);
+			}
+		}
+	}
+
+	// Token: 0x06001E38 RID: 7736 RVA: 0x001039A0 File Offset: 0x00101BA0
+	private void OnDrawGizmos()
+	{
+		if (EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			if (this.center)
+			{
+				Gizmos.color = Color.green;
+				Gizmos.DrawWireSphere(this.center.position, this.distanceBounds);
+			}
+			if (this.rightLimit)
+			{
+				Gizmos.color = Color.red;
+				Gizmos.DrawLine(this.rightLimit.position + Vector3.up * 150f, this.rightLimit.position + Vector3.down * 150f);
+			}
+		}
+	}
+
+	// Token: 0x040037A9 RID: 14249
+	public Transform center;
+
+	// Token: 0x040037AA RID: 14250
+	public float distanceBounds;
+
+	// Token: 0x040037AB RID: 14251
+	public Transform rightLimit;
+
+	// Token: 0x040037AC RID: 14252
+	private MusicEventChecker openCheck = new MusicEventChecker(0f);
+
+	// Token: 0x040037AD RID: 14253
+	private MusicEventChecker closeCheck = new MusicEventChecker(7f);
+
+	// Token: 0x040037AE RID: 14254
+	private float openTime;
+
+	// Token: 0x040037AF RID: 14255
+	private float closeTime;
+
+	// Token: 0x040037B0 RID: 14256
+	private MusicEventChecker openDoorCheck = new MusicEventChecker(0.5f);
+
+	// Token: 0x040037B1 RID: 14257
+	private MusicEventChecker closeDoorCheck = new MusicEventChecker(7.7f);
+
+	// Token: 0x040037B2 RID: 14258
+	private float openDoorTime;
+
+	// Token: 0x040037B3 RID: 14259
+	private float closeDoorTime;
+
+	// Token: 0x040037B4 RID: 14260
+	private bool isActive;
+
+	// Token: 0x040037B5 RID: 14261
+	private bool activeLastFrame;
+
+	// Token: 0x040037B6 RID: 14262
+	private float distRTPC;
+
+	// Token: 0x040037B7 RID: 14263
+	private float boyX;
+
+	// Token: 0x040037B8 RID: 14264
+	private float boyXposLastFrame;
+
+	// Token: 0x040037B9 RID: 14265
+	private float boyToCenterDistance;
+
+	// Token: 0x040037BA RID: 14266
+	private float distToCenterLastFrame;
+
+	// Token: 0x040037BB RID: 14267
+	private float loopLength;
+
+	// Token: 0x040037BC RID: 14268
+	private float lastFrameLoopLength = 4f;
+
+	// Token: 0x040037BD RID: 14269
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioDoorOpen;
+
+	// Token: 0x040037BE RID: 14270
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioDoorClose;
+
+	// Token: 0x040037BF RID: 14271
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

@@ -1,0 +1,239 @@
+using System;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x02000013 RID: 19
+public class AlbinoMineCartAI : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060000F0 RID: 240 RVA: 0x000111B4 File Offset: 0x0000F3B4
+	public bool PreAwake(int callcount)
+	{
+		this.throwOutOfMineCar = SignalIn.Create("throwOutOfMineCar", base.gameObject, new Action(this.OnThrowOutOfMineCar));
+		this.loadCompleted = SignalIn.Create("loadCompleted", base.gameObject, new Action(this.OnLoadCompleted));
+		PersistentBool.PersistentData persistentData = PersistentDataManager.Get<PersistentBool.PersistentData>("AlbinosInMineCartIsDown", () => new PersistentBool.PersistentData());
+		if (persistentData.value)
+		{
+			base.gameObject.SetActive(false);
+		}
+		return true;
+	}
+
+	// Token: 0x060000F1 RID: 241 RVA: 0x00011248 File Offset: 0x0000F448
+	private void Init()
+	{
+		this.activated = this.SetAlbinoAI();
+		if (this.albinoAI != null && this.activated && !this.isCompleted)
+		{
+			this.albinoAI.GetCharacter().ForceToAnimation("MinecartIdleBlend" + this.animationSet, base.gameObject, 0.01f, Random.Range(0f, 1f), false);
+		}
+		Vector3 position = base.transform.position;
+	}
+
+	// Token: 0x060000F2 RID: 242 RVA: 0x000112D0 File Offset: 0x0000F4D0
+	private void OnThrowOutOfMineCar()
+	{
+	}
+
+	// Token: 0x060000F3 RID: 243 RVA: 0x000112D4 File Offset: 0x0000F4D4
+	private void OnLoadCompleted()
+	{
+		this.isCompleted = true;
+	}
+
+	// Token: 0x060000F4 RID: 244 RVA: 0x000112E0 File Offset: 0x0000F4E0
+	private bool SetAlbinoAI()
+	{
+		if (this.albinoToControl != null && this.albinoAI == null)
+		{
+			this.albinoAI = this.albinoToControl.GetAllocatedAlbinoAI();
+			if (this.albinoAI == null)
+			{
+				return false;
+			}
+			if (this.albinoAI.aiMode == AlbinoAI.AIMode.SpawnedButWaiting)
+			{
+				this.albinoAI.SetRemotePuppet(true);
+				this.stopDef = this.albinoAI.GetCharacter().GetBlendHelper().GetDefinition("MinecartStop" + this.animationSet, true);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x060000F5 RID: 245 RVA: 0x00011380 File Offset: 0x0000F580
+	private void OnDisable()
+	{
+		if (this.activated && this.albinoState == AlbinoMineCartAI.AlbinoCarState.ThrownOut)
+		{
+			this.ReleaseAlbino();
+			this.activated = false;
+		}
+	}
+
+	// Token: 0x060000F6 RID: 246 RVA: 0x000113B4 File Offset: 0x0000F5B4
+	private void ReleaseAlbino()
+	{
+		if (this.albinoAI != null)
+		{
+			this.albinoAI.SetWasOnGround(true);
+			this.albinoAI.SetRemotePuppet(false);
+			this.albinoAI.SetFollowBoy();
+		}
+	}
+
+	// Token: 0x060000F7 RID: 247 RVA: 0x000113F8 File Offset: 0x0000F5F8
+	private void UpdateThrownOut(float deltaTime)
+	{
+		if (this.landDef != null)
+		{
+			AnimationBlendHelper blendHelper = this.albinoAI.GetCharacter().GetBlendHelper();
+			if (blendHelper.GetTopDefinition() == this.landDef && blendHelper.GetLatestAnimData().normalizedAnimPos < 0.98f)
+			{
+				return;
+			}
+		}
+		this.albinoAI.safeMode = true;
+		this.ReleaseAlbino();
+		this.activated = false;
+	}
+
+	// Token: 0x060000F8 RID: 248 RVA: 0x00011464 File Offset: 0x0000F664
+	private void UpdateInCar(float deltaTime)
+	{
+		AnimcontrolledCharacter character = this.albinoAI.GetCharacter();
+		if (this.albinoAI.GetCurrentMineCartTrigger() != null)
+		{
+			float magnitude = (this.albinoAI.GetCharacter().transform.position - this.dropAlign.transform.position).magnitude;
+			if (magnitude >= this.bestDistToDrop)
+			{
+				this.albinoState = AlbinoMineCartAI.AlbinoCarState.ThrownOut;
+				this.landDef = character.ForceToAnimation("MinecartFallLandAnim" + this.animationSet, this.dropAlign, 0.2f, 0f, false);
+				this.albinoAI.aiMode = AlbinoAI.AIMode.FollowBoy;
+				return;
+			}
+			this.bestDistToDrop = magnitude;
+		}
+		if (this.playingStopAnim)
+		{
+			ABDefinition topDefinition = character.GetBlendHelper().GetTopDefinition();
+			if (topDefinition != this.stopDef || (double)character.GetBlendHelper().GetLatestAnimData().normalizedAnimPos > 0.85)
+			{
+				this.playingStopAnim = false;
+				character.ForceToAnimation("MinecartIdleBlend" + this.animationSet, base.gameObject, 0.7f, Random.Range(0f, 1f), false);
+			}
+		}
+		if (this.mineCarRigidBody != null)
+		{
+			Vector3 vector = this.albinoAI.transform.InverseTransformDirection(this.mineCarRigidBody.velocity);
+			float num = this.speed;
+			this.speed = vector.z;
+			float num2 = this.speed - num;
+			if (Mathf.Abs(num2) > 2f)
+			{
+				character.ForceToAnimation(this.stopDef, true, base.gameObject.transform.position, base.gameObject.transform.rotation.eulerAngles, -1f, 0f, false);
+				this.playingStopAnim = true;
+			}
+			float num3 = 0.55f * num2 / deltaTime;
+			num3 = Mathf.Clamp(num3, -1f, 1f);
+			this.lastWantedAccel += (num3 - this.lastWantedAccel) * deltaTime * 5f;
+			this.accel += (this.lastWantedAccel - this.accel) * deltaTime * 9f;
+			character.GetBlendHelper().SetBlendParameter(10, this.accel);
+		}
+		character.SetStaticAnimWantedBasePos(base.gameObject, true);
+	}
+
+	// Token: 0x060000F9 RID: 249 RVA: 0x000116C0 File Offset: 0x0000F8C0
+	private void Update()
+	{
+		if (!this.activated && this.albinoToControl.GetHasSpawned())
+		{
+			this.Init();
+		}
+		float num;
+		if (this.activated && this.albinoAI != null && (num = Time.deltaTime) > 0f && !this.isCompleted)
+		{
+			if (this.albinoState == AlbinoMineCartAI.AlbinoCarState.InCar)
+			{
+				this.UpdateInCar(num);
+			}
+			else if (this.albinoState == AlbinoMineCartAI.AlbinoCarState.ThrownOut)
+			{
+				while (num > 0f)
+				{
+					float deltaTime = Mathf.Min(num, 0.1f);
+					this.UpdateThrownOut(deltaTime);
+					num -= 0.1f;
+				}
+			}
+		}
+	}
+
+	// Token: 0x04000136 RID: 310
+	public AlbinoSpawner albinoToControl;
+
+	// Token: 0x04000137 RID: 311
+	public string animationSet = "A";
+
+	// Token: 0x04000138 RID: 312
+	public Rigidbody mineCarRigidBody;
+
+	// Token: 0x04000139 RID: 313
+	public GameObject dropAlign;
+
+	// Token: 0x0400013A RID: 314
+	private SignalIn throwOutOfMineCar;
+
+	// Token: 0x0400013B RID: 315
+	private SignalIn loadCompleted;
+
+	// Token: 0x0400013C RID: 316
+	private ABDefinition stopDef;
+
+	// Token: 0x0400013D RID: 317
+	private AlbinoAI albinoAI;
+
+	// Token: 0x0400013E RID: 318
+	private bool activated;
+
+	// Token: 0x0400013F RID: 319
+	private bool isCompleted;
+
+	// Token: 0x04000140 RID: 320
+	private float speed;
+
+	// Token: 0x04000141 RID: 321
+	private float accel;
+
+	// Token: 0x04000142 RID: 322
+	private float lastWantedAccel;
+
+	// Token: 0x04000143 RID: 323
+	private Vector3 lastPos;
+
+	// Token: 0x04000144 RID: 324
+	private bool firstFrame = true;
+
+	// Token: 0x04000145 RID: 325
+	private float blendPos;
+
+	// Token: 0x04000146 RID: 326
+	private bool playingStopAnim;
+
+	// Token: 0x04000147 RID: 327
+	private AlbinoMineCartAI.AlbinoCarState albinoState;
+
+	// Token: 0x04000148 RID: 328
+	private ABDefinition landDef;
+
+	// Token: 0x04000149 RID: 329
+	private float bestDistToDrop = float.MaxValue;
+
+	// Token: 0x02000014 RID: 20
+	private enum AlbinoCarState
+	{
+		// Token: 0x0400014C RID: 332
+		InCar,
+		// Token: 0x0400014D RID: 333
+		ThrownOut
+	}
+}

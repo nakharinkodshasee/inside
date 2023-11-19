@@ -1,0 +1,82 @@
+using System;
+
+// Token: 0x02000028 RID: 40
+public class AnimcontrolCondition : AnimcontrolConditionDefinition
+{
+	// Token: 0x06000169 RID: 361 RVA: 0x00014DDC File Offset: 0x00012FDC
+	public override bool ConditionMet(AnimationBlendHelper blendHelper)
+	{
+		float num = blendHelper.blendParameters[(int)this.blendProperty];
+		switch (this.comparison)
+		{
+		case AnimcontrolCondition.Comparison.LessThan:
+			return num < this.value;
+		case AnimcontrolCondition.Comparison.LessThanOrEqual:
+			return num <= this.value;
+		case AnimcontrolCondition.Comparison.Equal:
+			return num == this.value;
+		case AnimcontrolCondition.Comparison.GreaterThanOrEqual:
+			return num >= this.value;
+		case AnimcontrolCondition.Comparison.GreaterThan:
+			return num > this.value;
+		default:
+			return true;
+		}
+	}
+
+	// Token: 0x0600016A RID: 362 RVA: 0x00014E5C File Offset: 0x0001305C
+	public override string GetConditionString()
+	{
+		string text = this.blendProperty.ToString() + " ";
+		switch (this.comparison)
+		{
+		case AnimcontrolCondition.Comparison.LessThan:
+			text += "< ";
+			break;
+		case AnimcontrolCondition.Comparison.LessThanOrEqual:
+			text += "<= ";
+			break;
+		case AnimcontrolCondition.Comparison.Equal:
+			text += "== ";
+			break;
+		case AnimcontrolCondition.Comparison.GreaterThanOrEqual:
+			text += ">= ";
+			break;
+		case AnimcontrolCondition.Comparison.GreaterThan:
+			text += "> ";
+			break;
+		}
+		text += this.value;
+		base.name = text;
+		return text;
+	}
+
+	// Token: 0x0600016B RID: 363 RVA: 0x00014F1C File Offset: 0x0001311C
+	private void Start()
+	{
+	}
+
+	// Token: 0x04000214 RID: 532
+	public AnimcontrolledCharacterBase.AnimControlBlendProperties blendProperty;
+
+	// Token: 0x04000215 RID: 533
+	public AnimcontrolCondition.Comparison comparison;
+
+	// Token: 0x04000216 RID: 534
+	public float value;
+
+	// Token: 0x02000029 RID: 41
+	public enum Comparison
+	{
+		// Token: 0x04000218 RID: 536
+		LessThan,
+		// Token: 0x04000219 RID: 537
+		LessThanOrEqual,
+		// Token: 0x0400021A RID: 538
+		Equal,
+		// Token: 0x0400021B RID: 539
+		GreaterThanOrEqual,
+		// Token: 0x0400021C RID: 540
+		GreaterThan
+	}
+}

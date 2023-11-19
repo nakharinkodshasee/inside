@@ -1,0 +1,467 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000311 RID: 785
+[ExecuteInEditMode]
+public class AnimateCookieTexture : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001666 RID: 5734 RVA: 0x000C4BC0 File Offset: 0x000C2DC0
+	private void OnDisable()
+	{
+		if (this.foundLight)
+		{
+			if (this.cookieBase != null)
+			{
+				this.cookieLight.cookie = this.cookieBase;
+			}
+			else
+			{
+				this.cookieLight.cookie = null;
+			}
+		}
+		if (this.foundGCube)
+		{
+			this.gCube.CookieOverride = null;
+		}
+		int i = 0;
+		int count = this.extraCookieLights.Count;
+		while (i < count)
+		{
+			if (!(this.extraCookieLights[i] == null))
+			{
+				this.extraCookieLights[i].cookie = null;
+			}
+			i++;
+		}
+		this.foundGCube = false;
+		this.foundLight = false;
+		this.foundMI = false;
+		this.foundShader = false;
+		PDUtilities.Destroy(this.renderMaterial);
+		PDUtilities.Destroy(this.renderCookieTex);
+	}
+
+	// Token: 0x06001667 RID: 5735 RVA: 0x000C4CA0 File Offset: 0x000C2EA0
+	private void OnDestroy()
+	{
+		if (this.lightCookieBackup != null && this.cookieLight != null)
+		{
+			this.cookieLight.cookie = this.lightCookieBackup;
+		}
+	}
+
+	// Token: 0x06001668 RID: 5736 RVA: 0x000C4CD8 File Offset: 0x000C2ED8
+	public bool PreAwake(int callcount)
+	{
+		this.play = SignalIn.Create("play", base.gameObject, new Action(this.OnPlay));
+		this.pause = SignalIn.Create("pause", base.gameObject, new Action(this.OnPause));
+		this.stop = SignalIn.Create("stop", base.gameObject, new Action(this.OnStop));
+		return true;
+	}
+
+	// Token: 0x06001669 RID: 5737 RVA: 0x000C4D4C File Offset: 0x000C2F4C
+	private void OnEnable()
+	{
+		this.foundGCube = false;
+		this.foundLight = false;
+		this.foundMI = false;
+		this.foundShader = false;
+		if (this.renderCookieShader == null && this.initShader)
+		{
+			this.renderCookieShader = Shader.Find("Playdead/Post/Anim Cookie Blend");
+			this.initShader = false;
+		}
+		this.renderCookieTex = new RenderTexture(this.renderTexSize, this.renderTexSize, 0, 0);
+		this.renderCookieTex.Create();
+		if (this.renderCookieShader != null)
+		{
+			this.renderMaterial = new Material(this.renderCookieShader);
+			this.BlitCookie();
+			this.foundShader = true;
+		}
+		this.gCube = base.GetComponent<LightVolumeFog>();
+		if (this.gCube != null)
+		{
+			if (this.initGCubeCookie && this.gCube.CookieOverride != null && this.gCube.CookieOverride is Texture2D)
+			{
+				this.gCubeCookieBackup = this.gCube.CookieOverride;
+				this.cookieBase = (Texture2D)this.gCube.CookieOverride;
+			}
+			this.initGCubeCookie = false;
+			this.gCube.CookieOverride = this.renderCookieTex;
+			if (this.gCube.AssociatedLight != null)
+			{
+				this.foundGCube = true;
+			}
+		}
+		this.cookieLight = base.GetComponent<Light>();
+		if (this.cookieLight != null)
+		{
+			if (this.initLightCookie && this.cookieLight.cookie != null && this.cookieLight.cookie is Texture2D)
+			{
+				this.lightCookieBackup = this.cookieLight.cookie;
+				this.cookieBase = (Texture2D)this.cookieLight.cookie;
+			}
+			this.initLightCookie = false;
+			this.cookieLight.cookie = this.renderCookieTex;
+			this.foundLight = true;
+		}
+		if (this.foundLight || this.foundGCube)
+		{
+			int i = 0;
+			int count = this.extraCookieLights.Count;
+			while (i < count)
+			{
+				if (!(this.extraCookieLights[i] == null))
+				{
+					this.extraCookieLights[i].cookie = this.renderCookieTex;
+				}
+				i++;
+			}
+		}
+		if (!this.foundGCube && !this.foundLight)
+		{
+			this.playing = false;
+		}
+		int j = 0;
+		int count2 = this.materialInstances.Count;
+		while (j < count2)
+		{
+			if (this.materialInstances[j] != null)
+			{
+				MaterialInstance.TextureProperty orAddTextureProperty = this.materialInstances[j].GetOrAddTextureProperty(this.texturePropertyName);
+				this.materialInstances[j].SetTextureProperty(orAddTextureProperty, this.renderCookieTex);
+				this.foundMI = true;
+			}
+			j++;
+		}
+	}
+
+	// Token: 0x0600166A RID: 5738 RVA: 0x000C5038 File Offset: 0x000C3238
+	private void OnPause()
+	{
+		this.playing = !this.playing;
+	}
+
+	// Token: 0x0600166B RID: 5739 RVA: 0x000C504C File Offset: 0x000C324C
+	private void OnPlay()
+	{
+		this.playing = true;
+	}
+
+	// Token: 0x0600166C RID: 5740 RVA: 0x000C5058 File Offset: 0x000C3258
+	private void OnStop()
+	{
+		this.playing = false;
+		this.toFrame = 0;
+	}
+
+	// Token: 0x0600166D RID: 5741 RVA: 0x000C5068 File Offset: 0x000C3268
+	private int RampTexID()
+	{
+		if (this.m_ramptex_id < 0)
+		{
+			this.m_ramptex_id = Shader.PropertyToID("_RampTex");
+		}
+		return this.m_ramptex_id;
+	}
+
+	// Token: 0x0600166E RID: 5742 RVA: 0x000C5098 File Offset: 0x000C3298
+	private int CookieFrame1ID()
+	{
+		if (this.m_cookie1_id < 0)
+		{
+			this.m_cookie1_id = Shader.PropertyToID("_CookieFrame1");
+		}
+		return this.m_cookie1_id;
+	}
+
+	// Token: 0x0600166F RID: 5743 RVA: 0x000C50C8 File Offset: 0x000C32C8
+	private int CookieFrame2ID()
+	{
+		if (this.m_cookie2_id < 0)
+		{
+			this.m_cookie2_id = Shader.PropertyToID("_CookieFrame2");
+		}
+		return this.m_cookie2_id;
+	}
+
+	// Token: 0x06001670 RID: 5744 RVA: 0x000C50F8 File Offset: 0x000C32F8
+	private int parmsID()
+	{
+		if (this.m_parms_id < 0)
+		{
+			this.m_parms_id = Shader.PropertyToID("_Parms");
+		}
+		return this.m_parms_id;
+	}
+
+	// Token: 0x06001671 RID: 5745 RVA: 0x000C5128 File Offset: 0x000C3328
+	private void BlitCookie()
+	{
+		if (this.renderMaterial != null && this.foundShader)
+		{
+			RenderTexture active = RenderTexture.active;
+			if (this.cookieBase != null)
+			{
+				this.renderMaterial.SetTexture(this.RampTexID(), this.cookieBase);
+			}
+			if (this.cookieTextures.Length > 0)
+			{
+				this.renderMaterial.SetTexture(this.CookieFrame1ID(), this.cookieTextures[this.fromFrame]);
+				this.renderMaterial.SetTexture(this.CookieFrame2ID(), this.cookieTextures[this.toFrame]);
+			}
+			this.renderMaterial.SetVector(this.parmsID(), new Vector4(Mathf.Clamp01(this.frameBlend), this.animIntensity, this.textureTiling.x, this.textureTiling.y));
+			Graphics.Blit(this.cookieBase, this.renderCookieTex, this.renderMaterial);
+			RenderTexture.active = active;
+		}
+	}
+
+	// Token: 0x06001672 RID: 5746 RVA: 0x000C5224 File Offset: 0x000C3424
+	private void LateUpdate()
+	{
+		if (!Application.isPlaying)
+		{
+			this.BlitCookie();
+			return;
+		}
+		bool flag = false;
+		int i = 0;
+		int count = this.extraCookieLights.Count;
+		while (i < count)
+		{
+			if (SubsceneCullingManager.instance.InsideViewfrustum(this.extraCookieLights[i].Bounds()))
+			{
+				flag = true;
+			}
+			i++;
+		}
+		if (flag)
+		{
+			this.BlitCookie();
+			return;
+		}
+		if (this.foundLight && SubsceneCullingManager.instance.InsideViewfrustum(this.cookieLight.Bounds()))
+		{
+			this.BlitCookie();
+			return;
+		}
+		if (this.foundGCube && SubsceneCullingManager.instance.InsideViewfrustum(this.gCube.AssociatedLight.Bounds()))
+		{
+			this.BlitCookie();
+		}
+	}
+
+	// Token: 0x06001673 RID: 5747 RVA: 0x000C52F0 File Offset: 0x000C34F0
+	private float Frac(float value)
+	{
+		return value - Mathf.Floor(value);
+	}
+
+	// Token: 0x06001674 RID: 5748 RVA: 0x000C52FC File Offset: 0x000C34FC
+	private void Update()
+	{
+		if ((this.foundGCube || this.foundLight || this.foundMI) && this.playing && this.foundShader)
+		{
+			if (this.cookieTextures.Length <= 1)
+			{
+				this.toFrame = 0;
+				this.fromFrame = 0;
+				this.frameBlend = 0f;
+				return;
+			}
+			if (this.useFancyAnimSpeed)
+			{
+				float time = Time.time;
+				int num = this.cookieTextures.Length;
+				this.oldFrame = this.toFrame;
+				this.toFrame = Mathf.FloorToInt(this.Frac(time * this.animSpeed / (float)num) * (float)num);
+				if (this.oldFrame != this.toFrame)
+				{
+					this.fromFrame = this.oldFrame;
+				}
+				this.frameBlend = Mathf.Abs(time * this.animSpeed % 1f);
+			}
+			else if (this.frameBlend < 1f)
+			{
+				this.frameBlend += Time.deltaTime * this.fps;
+			}
+			else
+			{
+				this.fromFrame = this.toFrame;
+				switch (this.animMode)
+				{
+				case AnimateCookieTexture.AnimMode.forward:
+					this.toFrame++;
+					this.frameBlend = 0f;
+					if (this.toFrame >= this.cookieTextures.Length)
+					{
+						this.toFrame = 0;
+					}
+					break;
+				case AnimateCookieTexture.AnimMode.backward:
+					this.toFrame--;
+					this.frameBlend = 0f;
+					if (this.toFrame < 0)
+					{
+						this.toFrame = this.cookieTextures.Length - 1;
+					}
+					break;
+				case AnimateCookieTexture.AnimMode.pingpong:
+					this.toFrame += this.playDirection;
+					this.frameBlend = 0f;
+					if (this.toFrame >= this.cookieTextures.Length)
+					{
+						this.playDirection = -1;
+						this.toFrame = this.cookieTextures.Length - 2;
+					}
+					if (this.toFrame < 0)
+					{
+						this.playDirection = 1;
+						this.toFrame = 1;
+					}
+					break;
+				case AnimateCookieTexture.AnimMode.random:
+					this.toFrame = Random.Range(0, this.cookieTextures.Length);
+					this.frameBlend = 0f;
+					break;
+				}
+			}
+		}
+	}
+
+	// Token: 0x04002784 RID: 10116
+	public Texture2D[] cookieTextures = new Texture2D[0];
+
+	// Token: 0x04002785 RID: 10117
+	public float fps = 15f;
+
+	// Token: 0x04002786 RID: 10118
+	public float animSpeed = 15f;
+
+	// Token: 0x04002787 RID: 10119
+	public bool useFancyAnimSpeed;
+
+	// Token: 0x04002788 RID: 10120
+	public Vector2 textureTiling = Vector2.one;
+
+	// Token: 0x04002789 RID: 10121
+	[Range(0f, 2f)]
+	public float animIntensity = 1f;
+
+	// Token: 0x0400278A RID: 10122
+	public bool playing = true;
+
+	// Token: 0x0400278B RID: 10123
+	public AnimateCookieTexture.AnimMode animMode;
+
+	// Token: 0x0400278C RID: 10124
+	public List<Light> extraCookieLights = new List<Light>();
+
+	// Token: 0x0400278D RID: 10125
+	private LightVolumeFog gCube;
+
+	// Token: 0x0400278E RID: 10126
+	private Light cookieLight;
+
+	// Token: 0x0400278F RID: 10127
+	private bool initLightCookie = true;
+
+	// Token: 0x04002790 RID: 10128
+	private bool initGCubeCookie = true;
+
+	// Token: 0x04002791 RID: 10129
+	private bool initShader = true;
+
+	// Token: 0x04002792 RID: 10130
+	private Texture lightCookieBackup;
+
+	// Token: 0x04002793 RID: 10131
+	private Texture gCubeCookieBackup;
+
+	// Token: 0x04002794 RID: 10132
+	private RenderTexture renderCookieTex;
+
+	// Token: 0x04002795 RID: 10133
+	public int renderTexSize = 256;
+
+	// Token: 0x04002796 RID: 10134
+	public Shader renderCookieShader;
+
+	// Token: 0x04002797 RID: 10135
+	private Material renderMaterial;
+
+	// Token: 0x04002798 RID: 10136
+	public Texture2D cookieBase;
+
+	// Token: 0x04002799 RID: 10137
+	public List<MaterialInstance> materialInstances = new List<MaterialInstance>();
+
+	// Token: 0x0400279A RID: 10138
+	public string texturePropertyName = "_MainTex";
+
+	// Token: 0x0400279B RID: 10139
+	private bool foundLight;
+
+	// Token: 0x0400279C RID: 10140
+	private bool foundGCube;
+
+	// Token: 0x0400279D RID: 10141
+	private bool foundShader;
+
+	// Token: 0x0400279E RID: 10142
+	private bool foundMI;
+
+	// Token: 0x0400279F RID: 10143
+	public SignalIn play;
+
+	// Token: 0x040027A0 RID: 10144
+	public SignalIn pause;
+
+	// Token: 0x040027A1 RID: 10145
+	public SignalIn stop;
+
+	// Token: 0x040027A2 RID: 10146
+	public bool debug;
+
+	// Token: 0x040027A3 RID: 10147
+	private int m_ramptex_id = -1;
+
+	// Token: 0x040027A4 RID: 10148
+	private int m_cookie1_id = -1;
+
+	// Token: 0x040027A5 RID: 10149
+	private int m_cookie2_id = -1;
+
+	// Token: 0x040027A6 RID: 10150
+	private int m_parms_id = -1;
+
+	// Token: 0x040027A7 RID: 10151
+	private int toFrame;
+
+	// Token: 0x040027A8 RID: 10152
+	private int fromFrame;
+
+	// Token: 0x040027A9 RID: 10153
+	private float frameBlend;
+
+	// Token: 0x040027AA RID: 10154
+	private int playDirection = 1;
+
+	// Token: 0x040027AB RID: 10155
+	private int oldFrame;
+
+	// Token: 0x02000312 RID: 786
+	public enum AnimMode
+	{
+		// Token: 0x040027AD RID: 10157
+		forward,
+		// Token: 0x040027AE RID: 10158
+		backward,
+		// Token: 0x040027AF RID: 10159
+		pingpong,
+		// Token: 0x040027B0 RID: 10160
+		random
+	}
+}

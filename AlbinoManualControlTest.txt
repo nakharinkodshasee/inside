@@ -1,0 +1,81 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000012 RID: 18
+public class AlbinoManualControlTest : MonoBehaviour
+{
+	// Token: 0x060000EB RID: 235 RVA: 0x0001101C File Offset: 0x0000F21C
+	private void Start()
+	{
+		this.SetAlbinoAI();
+	}
+
+	// Token: 0x060000EC RID: 236 RVA: 0x00011024 File Offset: 0x0000F224
+	private void SetAlbinoAI()
+	{
+		if (this.albinoToControl != null)
+		{
+			this.albinoAI = this.albinoToControl.GetAllocatedAlbinoAI();
+			if (this.albinoAI != null)
+			{
+				this.activated = true;
+				this.albinoAI.SetRemotePuppet(true);
+			}
+		}
+	}
+
+	// Token: 0x060000ED RID: 237 RVA: 0x00011078 File Offset: 0x0000F278
+	private void ReleaseAlbino()
+	{
+		if (this.albinoAI != null)
+		{
+			this.albinoAI.SetRemotePuppet(false);
+		}
+	}
+
+	// Token: 0x060000EE RID: 238 RVA: 0x00011098 File Offset: 0x0000F298
+	private void Update()
+	{
+		if (this.albinoAI != null && this.activated)
+		{
+			AnimcontrolledCharacter character = this.albinoAI.GetCharacter();
+			if (ScriptGlobals.boy.input.rawAction)
+			{
+				if (!this.playingIdleDown)
+				{
+					this.playingIdleDown = true;
+					this.playingsleep = false;
+					character.ForceToAnimation("GateIdleDown", base.gameObject, -1f, 0f, false);
+				}
+			}
+			else if (!this.playingsleep)
+			{
+				this.playingsleep = true;
+				this.playingIdleDown = false;
+				character.ForceToAnimation("SleepingA", base.gameObject, -1f, 0f, false);
+			}
+			character.SetStaticAnimWantedBasePos(base.gameObject, true);
+			if (ScriptGlobals.boy.input.rawJump)
+			{
+				this.albinoAI.SetRemotePuppet(false);
+				character.GoToDefaultAnimation();
+				this.activated = false;
+			}
+		}
+	}
+
+	// Token: 0x04000131 RID: 305
+	public AlbinoSpawner albinoToControl;
+
+	// Token: 0x04000132 RID: 306
+	private AlbinoAI albinoAI;
+
+	// Token: 0x04000133 RID: 307
+	private bool activated;
+
+	// Token: 0x04000134 RID: 308
+	private bool playingsleep;
+
+	// Token: 0x04000135 RID: 309
+	private bool playingIdleDown;
+}

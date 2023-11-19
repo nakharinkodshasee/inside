@@ -1,0 +1,136 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000123 RID: 291
+public class AudioLight : AudioTriggerBehaviour, IPlayerBehaviour
+{
+	// Token: 0x060008BC RID: 2236 RVA: 0x0005C7B0 File Offset: 0x0005A9B0
+	[EarlyProcessBuild(0)]
+	private void OnPreprocess()
+	{
+		if (this.preprocessed)
+		{
+			return;
+		}
+		this.lightObject = base.GetComponent<Light>();
+		GameObject gameObject = this.lightObject.gameObject;
+		this.audioTransform = this.lightObject.transform;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(gameObject, this);
+		if (!this.lightObject)
+		{
+			this.lightObject = base.gameObject.GetComponentInParents<Light>();
+		}
+		float maxRange = base.props.maxRange;
+		this.player = new ContinuousEventPlayer(akGameObj, this.playerConfig, this.eventTypeValue != AudioEventNameType.None, base.GetPrefix(), "light", "env_intensity", maxRange, this.eventTypeValue == AudioEventNameType.Test);
+		this.preprocessed = true;
+	}
+
+	// Token: 0x060008BD RID: 2237 RVA: 0x0005C868 File Offset: 0x0005AA68
+	protected override void Awake()
+	{
+		base.Awake();
+		if (!this.preprocessed)
+		{
+			this.OnPreprocess();
+		}
+	}
+
+	// Token: 0x060008BE RID: 2238 RVA: 0x0005C884 File Offset: 0x0005AA84
+	private void OnDisable()
+	{
+		this.player.StopSound();
+	}
+
+	// Token: 0x060008BF RID: 2239 RVA: 0x0005C894 File Offset: 0x0005AA94
+	private void FixedUpdate()
+	{
+		float intensity = this.lightObject.intensity;
+		Vector3 position = this.audioTransform.position;
+		Vector3 vector = (!(ScriptGlobals.mainCharacter is Huddle)) ? ScriptGlobals.boy.pos3 : ScriptGlobals.huddle.pos3;
+		float num = vector.x - position.x;
+		float num2 = vector.y - position.y;
+		float num3 = vector.z - position.z;
+		float distSqrd = num * num + num2 * num2 + num3 * num3;
+		this.player.OnUpdate(this.playerConfig, distSqrd);
+		this.player.SetValue(intensity, EffectMaterial.Material.None);
+	}
+
+	// Token: 0x060008C0 RID: 2240 RVA: 0x0005C948 File Offset: 0x0005AB48
+	public string[] GetEvents()
+	{
+		return ContinuousEventPlayer.GetEvents(base.playEvents, base.GetPrefix(), "light", base.useTestEvents);
+	}
+
+	// Token: 0x060008C1 RID: 2241 RVA: 0x0005C974 File Offset: 0x0005AB74
+	public string[] GetRTPCs()
+	{
+		return ContinuousEventPlayer.GetRTPCs(base.GetPrefix(), "env_intensity", base.useTestEvents);
+	}
+
+	// Token: 0x060008C2 RID: 2242 RVA: 0x0005C98C File Offset: 0x0005AB8C
+	virtual GameObject get_gameObject()
+	{
+		return base.gameObject;
+	}
+
+	// Token: 0x060008C3 RID: 2243 RVA: 0x0005C994 File Offset: 0x0005AB94
+	virtual AudioEventNameType get_eventNameType()
+	{
+		return base.eventNameType;
+	}
+
+	// Token: 0x060008C4 RID: 2244 RVA: 0x0005C99C File Offset: 0x0005AB9C
+	virtual void set_eventNameType(AudioEventNameType value)
+	{
+		base.eventNameType = value;
+	}
+
+	// Token: 0x060008C5 RID: 2245 RVA: 0x0005C9A8 File Offset: 0x0005ABA8
+	virtual string get_prefix()
+	{
+		return base.prefix;
+	}
+
+	// Token: 0x060008C6 RID: 2246 RVA: 0x0005C9B0 File Offset: 0x0005ABB0
+	virtual void set_prefix(string value)
+	{
+		base.prefix = value;
+	}
+
+	// Token: 0x060008C7 RID: 2247 RVA: 0x0005C9BC File Offset: 0x0005ABBC
+	virtual string GetPrefix()
+	{
+		return base.GetPrefix();
+	}
+
+	// Token: 0x04000ED7 RID: 3799
+	private const string eventNameStub = "light";
+
+	// Token: 0x04000ED8 RID: 3800
+	private const string rtpcNameStub = "env_intensity";
+
+	// Token: 0x04000ED9 RID: 3801
+	public ContinuousEventPlayer.Config playerConfig = new ContinuousEventPlayer.Config(0.01f, 60f, 0, 0);
+
+	// Token: 0x04000EDA RID: 3802
+	public float sensitivity = 60f;
+
+	// Token: 0x04000EDB RID: 3803
+	public float threshold = 0.01f;
+
+	// Token: 0x04000EDC RID: 3804
+	[SerializeField]
+	private ContinuousEventPlayer player;
+
+	// Token: 0x04000EDD RID: 3805
+	[SerializeField]
+	private Light lightObject;
+
+	// Token: 0x04000EDE RID: 3806
+	[SerializeField]
+	private bool preprocessed;
+
+	// Token: 0x04000EDF RID: 3807
+	[SerializeField]
+	private Transform audioTransform;
+}

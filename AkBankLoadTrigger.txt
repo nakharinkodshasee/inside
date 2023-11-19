@@ -1,0 +1,34 @@
+using System;
+using Playdead.Audio;
+using UnityEngine;
+
+// Token: 0x020005F1 RID: 1521
+public class AkBankLoadTrigger : MonoBehaviour
+{
+	// Token: 0x06002657 RID: 9815 RVA: 0x00137ACC File Offset: 0x00135CCC
+	private void OnTriggerEnter(Collider other)
+	{
+		SoundEngine.LoadBank(this.bankName, (!this.async) ? OperationType.Sync : OperationType.Async);
+	}
+
+	// Token: 0x06002658 RID: 9816 RVA: 0x00137AEC File Offset: 0x00135CEC
+	private void OnTriggerExit(Collider other)
+	{
+		IntPtr zero = IntPtr.Zero;
+		SoundEngine.UnloadBank(this.bankName);
+	}
+
+	// Token: 0x06002659 RID: 9817 RVA: 0x00137B0C File Offset: 0x00135D0C
+	private void BankCallback(uint in_bankID, IntPtr in_InMemoryBankPtr, AKRESULT in_eLoadResult, uint in_memPoolId, object in_Cookie)
+	{
+	}
+
+	// Token: 0x040045B7 RID: 17847
+	public string bankName = string.Empty;
+
+	// Token: 0x040045B8 RID: 17848
+	public bool async = true;
+
+	// Token: 0x040045B9 RID: 17849
+	private uint m_BankID;
+}

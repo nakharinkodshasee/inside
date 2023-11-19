@@ -1,0 +1,112 @@
+using System;
+using System.Collections.Generic;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x02000036 RID: 54
+public class AnimcontrolledAnimBlend : MonoBehaviour
+{
+	// Token: 0x0600019F RID: 415 RVA: 0x00015E08 File Offset: 0x00014008
+	public ABDefinition.ABLevel CreateBlendLevel(AnimationBlendHelper blendHelper, GameObject character, AnimationMovementInfo animDB, AnimationMovementInfo animDBGeneric, float blendVal, string levelName, FastList<int> blendParamIndexes, List<string> manuallyCreatedAnims)
+	{
+		if (this.blendDef.Count == 0)
+		{
+			return null;
+		}
+		ABDefinition.ABLevel ablevel = new ABDefinition.ABLevel(blendVal, levelName);
+		if (!this.randomMode && !blendParamIndexes.Contains((int)this.blendProperty))
+		{
+			blendParamIndexes.Add((int)this.blendProperty);
+		}
+		ablevel.randomMode = this.randomMode;
+		ablevel.reRandomizeMinTime = this.reRandomizeMinTime;
+		ablevel.reRandomizeMaxTime = this.reRandomizeMaxTime;
+		ablevel.randomCrossBlend = this.randomAnimCrossBlend;
+		int i = 0;
+		int count = this.blendDef.Count;
+		while (i < count)
+		{
+			AnimcontrolledAnimBlend.AnimcontrolledBlendDefinition animcontrolledBlendDefinition = this.blendDef[i];
+			if (animcontrolledBlendDefinition != null && animcontrolledBlendDefinition.target != null)
+			{
+				AnimationClip animationClip = animcontrolledBlendDefinition.target as AnimationClip;
+				if (animationClip != null)
+				{
+					if (animDB == null && animDBGeneric == null)
+					{
+						AnimationState animationState = character.GetComponent<Animation>()[animationClip.name];
+						if (animationState == null)
+						{
+						}
+						ablevel.CreateAndAddNode(blendHelper, animationState, animcontrolledBlendDefinition.blendPosition, animcontrolledBlendDefinition.speedFactor, null);
+					}
+					else if (animDB != null && animDB.GetMovementData(animationClip.name) != null)
+					{
+						ablevel.CreateAndAddNode(blendHelper, character.GetComponent<Animation>()[animationClip.name], animcontrolledBlendDefinition.blendPosition, animcontrolledBlendDefinition.speedFactor, animDB);
+					}
+					else
+					{
+						ablevel.CreateAndAddNode(blendHelper, character.GetComponent<Animation>()[animationClip.name], animcontrolledBlendDefinition.blendPosition, animcontrolledBlendDefinition.speedFactor, animDBGeneric);
+					}
+					if (!manuallyCreatedAnims.Contains(animationClip.name))
+					{
+						manuallyCreatedAnims.Add(animationClip.name);
+					}
+				}
+				else
+				{
+					GameObject gameObject = animcontrolledBlendDefinition.target as GameObject;
+					if (!gameObject)
+					{
+						return null;
+					}
+					AnimcontrolledAnimBlend component = gameObject.GetComponent<AnimcontrolledAnimBlend>();
+					if (!component)
+					{
+						return null;
+					}
+					ABDefinition.ABLevel ablevel2 = component.CreateBlendLevel(blendHelper, character, animDB, animDBGeneric, animcontrolledBlendDefinition.blendPosition, "dummy", blendParamIndexes, manuallyCreatedAnims);
+					if (ablevel2 == null)
+					{
+						return null;
+					}
+					ablevel.AddNode(ablevel2);
+				}
+			}
+			i++;
+		}
+		return ablevel;
+	}
+
+	// Token: 0x0400024F RID: 591
+	public AnimcontrolledCharacterBase.AnimControlBlendProperties blendProperty;
+
+	// Token: 0x04000250 RID: 592
+	public bool randomMode;
+
+	// Token: 0x04000251 RID: 593
+	public float reRandomizeMinTime;
+
+	// Token: 0x04000252 RID: 594
+	public float reRandomizeMaxTime;
+
+	// Token: 0x04000253 RID: 595
+	public float randomAnimCrossBlend = -1f;
+
+	// Token: 0x04000254 RID: 596
+	public List<AnimcontrolledAnimBlend.AnimcontrolledBlendDefinition> blendDef = new List<AnimcontrolledAnimBlend.AnimcontrolledBlendDefinition>();
+
+	// Token: 0x02000037 RID: 55
+	[Serializable]
+	public class AnimcontrolledBlendDefinition
+	{
+		// Token: 0x04000255 RID: 597
+		public float blendPosition;
+
+		// Token: 0x04000256 RID: 598
+		public Object target;
+
+		// Token: 0x04000257 RID: 599
+		public float speedFactor = 1f;
+	}
+}

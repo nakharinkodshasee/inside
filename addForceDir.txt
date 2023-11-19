@@ -1,0 +1,88 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200054D RID: 1357
+public class addForceDir : MonoBehaviour
+{
+	// Token: 0x0600232E RID: 9006 RVA: 0x00125FE8 File Offset: 0x001241E8
+	private void Update()
+	{
+		bool flag = false;
+		if (GameInput.rawAction)
+		{
+			this.distHR = Vector3.Distance(this.handR.transform.position, this.applyTowards.transform.position);
+			this.distFR = Vector3.Distance(this.footR.transform.position, this.applyTowards.transform.position);
+			if (this.distHR < this.distFR)
+			{
+				this.applyTo = this.handR;
+				this.dist = this.distHR;
+			}
+			else
+			{
+				this.applyTo = this.footR;
+				this.dist = this.distFR;
+			}
+			flag = (this.dist < this.grabDist);
+			if (flag)
+			{
+				this.fDir = this.applyTowards.transform.position - this.applyTo.transform.position;
+				this.applyTo.GetComponent<Rigidbody>().AddForce(Vector3.ClampMagnitude(this.fDir * this.forceMult, this.forceClamp), 0);
+				this.applyTo.transform.position = this.applyTowards.transform.position;
+			}
+		}
+		if (flag != this.prevWithinGrab)
+		{
+			if (flag)
+			{
+				ThemeUtils.SetBoyTheme(ScriptGlobals.boy.visualBoy, "DragRagdollR", VisualBoy.ThemePriority.High);
+			}
+			else
+			{
+				ThemeUtils.SetBoyTheme(ScriptGlobals.boy.visualBoy, string.Empty, VisualBoy.ThemePriority.High);
+			}
+		}
+		this.prevWithinGrab = flag;
+	}
+
+	// Token: 0x040041C6 RID: 16838
+	public GameObject handR;
+
+	// Token: 0x040041C7 RID: 16839
+	public GameObject footR;
+
+	// Token: 0x040041C8 RID: 16840
+	private GameObject applyTo;
+
+	// Token: 0x040041C9 RID: 16841
+	public GameObject applyTowards;
+
+	// Token: 0x040041CA RID: 16842
+	public float grabDist = 1f;
+
+	// Token: 0x040041CB RID: 16843
+	public float forceClamp = 1f;
+
+	// Token: 0x040041CC RID: 16844
+	public float forceMult = 2f;
+
+	// Token: 0x040041CD RID: 16845
+	private Vector3 fDir;
+
+	// Token: 0x040041CE RID: 16846
+	private float dist;
+
+	// Token: 0x040041CF RID: 16847
+	private float distHR;
+
+	// Token: 0x040041D0 RID: 16848
+	private float distHL;
+
+	// Token: 0x040041D1 RID: 16849
+	private float distFR;
+
+	// Token: 0x040041D2 RID: 16850
+	private float distFL;
+
+	// Token: 0x040041D3 RID: 16851
+	private bool prevWithinGrab;
+}

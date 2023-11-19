@@ -1,0 +1,68 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004B4 RID: 1204
+public class AlbinoPushBlockWeightCheat : MonoBehaviour
+{
+	// Token: 0x06001F8A RID: 8074 RVA: 0x0010D318 File Offset: 0x0010B518
+	private void OnDisable()
+	{
+		this.noOfProbesInside = 0;
+	}
+
+	// Token: 0x06001F8B RID: 8075 RVA: 0x0010D324 File Offset: 0x0010B524
+	private void addProbe()
+	{
+		this.noOfProbesInside++;
+		if (this.noOfProbesInside == this.targetCount)
+		{
+			this.wagonNoGrab.noPushPull = false;
+		}
+	}
+
+	// Token: 0x06001F8C RID: 8076 RVA: 0x0010D354 File Offset: 0x0010B554
+	private void substractProbe()
+	{
+		this.noOfProbesInside--;
+		if (this.noOfProbesInside == this.targetCount - 1)
+		{
+			this.wagonNoGrab.noPushPull = true;
+		}
+	}
+
+	// Token: 0x06001F8D RID: 8077 RVA: 0x0010D384 File Offset: 0x0010B584
+	private bool IsValidCollider(Collider coll)
+	{
+		return coll.GetComponent<AlbinoAI>();
+	}
+
+	// Token: 0x06001F8E RID: 8078 RVA: 0x0010D39C File Offset: 0x0010B59C
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (this.IsValidCollider(collider))
+		{
+			this.addProbe();
+		}
+	}
+
+	// Token: 0x06001F8F RID: 8079 RVA: 0x0010D3B0 File Offset: 0x0010B5B0
+	private void OnTriggerExit(Collider collider)
+	{
+		if (this.IsValidCollider(collider))
+		{
+			this.substractProbe();
+		}
+	}
+
+	// Token: 0x04003A78 RID: 14968
+	public int targetCount = 1;
+
+	// Token: 0x04003A79 RID: 14969
+	public NoGrab wagonNoGrab;
+
+	// Token: 0x04003A7A RID: 14970
+	private int noOfProbesInside;
+
+	// Token: 0x04003A7B RID: 14971
+	private NoGrab noGrab;
+}

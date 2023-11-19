@@ -1,0 +1,1830 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x02000038 RID: 56
+public class AnimcontrolledCharacter : AnimcontrolledCharacterBase
+{
+	// Token: 0x060001A3 RID: 419 RVA: 0x0001615C File Offset: 0x0001435C
+	public Vector3 GetCachedPos()
+	{
+		return this.cachedPosLastFrame;
+	}
+
+	// Token: 0x060001A4 RID: 420 RVA: 0x00016164 File Offset: 0x00014364
+	public void SetStaticAnimWantedBasePos(Vector3 wantedPos, bool teleport = false)
+	{
+		this.staticAnimWantedBasePos = wantedPos;
+		if (teleport)
+		{
+			this.staticAnimBasePos = wantedPos;
+		}
+	}
+
+	// Token: 0x060001A5 RID: 421 RVA: 0x0001617C File Offset: 0x0001437C
+	public void SetStaticAnimWantedBaseRot(Vector3 wantedBaseRot, bool teleport = false)
+	{
+		this.staticAnimWantedBaseRot = wantedBaseRot;
+		if (teleport)
+		{
+			this.staticAnimBaseRot = wantedBaseRot;
+		}
+	}
+
+	// Token: 0x060001A6 RID: 422 RVA: 0x00016194 File Offset: 0x00014394
+	public void SetStaticAnimWantedBasePos(GameObject wantedObject, bool teleport = false)
+	{
+		this.staticAnimWantedBasePos = wantedObject.transform.position;
+		this.staticAnimWantedBaseRot = wantedObject.transform.rotation.eulerAngles;
+		if (teleport)
+		{
+			this.staticAnimBasePos = this.staticAnimWantedBasePos;
+			this.staticAnimBaseRot = this.staticAnimWantedBaseRot;
+		}
+	}
+
+	// Token: 0x17000006 RID: 6
+	// (get) Token: 0x060001A7 RID: 423 RVA: 0x000161EC File Offset: 0x000143EC
+	private GameController mController
+	{
+		get
+		{
+			if (this.mControllerLazy == null)
+			{
+				this.mControllerLazy = new MixedGameController();
+			}
+			return this.mControllerLazy;
+		}
+	}
+
+	// Token: 0x060001A8 RID: 424 RVA: 0x0001620C File Offset: 0x0001440C
+	private void LateUpdate()
+	{
+		if (this.headScale && this.headBone != null)
+		{
+			this.headTransform.localScale = this.wantedHeadLocalTransform;
+		}
+		if (this.animControlledAI != null)
+		{
+			this.animControlledAI.DoLateUpdate();
+		}
+	}
+
+	// Token: 0x060001A9 RID: 425 RVA: 0x00016264 File Offset: 0x00014464
+	public void Respawned()
+	{
+		this.lastGroundCollider = null;
+		this.lastGroundPos = this._transform.position;
+		this.controls.stick = Vector2.zero;
+	}
+
+	// Token: 0x060001AA RID: 426 RVA: 0x0001629C File Offset: 0x0001449C
+	public void SetFreefallMovement(bool freefall)
+	{
+		if (freefall && !this.freefallMode)
+		{
+			Vector3 lastMoveSpeed = this.GetLastMoveSpeed();
+			if (this.groundVelocity.x * lastMoveSpeed.x <= 0f)
+			{
+				this.freefallMoveSpeed = lastMoveSpeed;
+			}
+			else
+			{
+				this.freefallMoveSpeed = lastMoveSpeed + this.groundVelocity;
+			}
+		}
+		this.freefallMode = freefall;
+	}
+
+	// Token: 0x060001AB RID: 427 RVA: 0x00016304 File Offset: 0x00014504
+	public void ClearFreeFallSpeed()
+	{
+		this.freefallMoveSpeed = Vector3Fast.zero;
+	}
+
+	// Token: 0x060001AC RID: 428 RVA: 0x00016314 File Offset: 0x00014514
+	public Vector3 GetFreefallSpeed()
+	{
+		return this.freefallMoveSpeed;
+	}
+
+	// Token: 0x060001AD RID: 429 RVA: 0x0001631C File Offset: 0x0001451C
+	public void PushCharacter(Vector3 speed, float deltaTime)
+	{
+		if (this.freefallMode)
+		{
+			this.freefallMoveSpeed += speed;
+		}
+		else
+		{
+			this._transform.position += speed * deltaTime;
+		}
+	}
+
+	// Token: 0x060001AE RID: 430 RVA: 0x00016368 File Offset: 0x00014568
+	public bool isFreefall()
+	{
+		return this.freefallMode;
+	}
+
+	// Token: 0x060001AF RID: 431 RVA: 0x00016370 File Offset: 0x00014570
+	public bool FollowingWaypoint()
+	{
+		this.ValidateInit();
+		return this.animControlledAI.isFollowingAWaypoint();
+	}
+
+	// Token: 0x060001B0 RID: 432 RVA: 0x00016384 File Offset: 0x00014584
+	public GameObject GetCurrentWaypoint()
+	{
+		this.ValidateInit();
+		return this.animControlledAI.GetCurrentWaypoint();
+	}
+
+	// Token: 0x060001B1 RID: 433 RVA: 0x00016398 File Offset: 0x00014598
+	public void FollowWaypoint(GameObject wayPointToFollow)
+	{
+		this.ValidateInit();
+		if (this.animControlledAI != null)
+		{
+			this.animControlledAI.FollowWaypoint(wayPointToFollow);
+		}
+	}
+
+	// Token: 0x060001B2 RID: 434 RVA: 0x000163C0 File Offset: 0x000145C0
+	public void GoToDefaultAnimation()
+	{
+		this.ValidateInit();
+		if (this.transitionManager != null)
+		{
+			ABDefinition defaultAnimationDefinition = this.transitionManager.GetDefaultAnimationDefinition();
+			if (defaultAnimationDefinition != null)
+			{
+				AnimcontrolStateInfo defaultAnimationState = this.transitionManager.defaultAnimationState;
+				if (defaultAnimationState)
+				{
+					base.TransitIfPossible(this.transitionManager.GetDefaultAnimationDefinition(), defaultAnimationState.transitIntoTime, 0f);
+				}
+				else
+				{
+					base.TransitIfPossible(this.transitionManager.GetDefaultAnimationDefinition(), 0.4f, 0f);
+				}
+			}
+		}
+		else
+		{
+			ABDefinition definition = this.blendHelper.GetDefinition(this.defaultAnimation, false);
+			if (definition != null)
+			{
+				this.blendHelper.TransitToBlendDefinition(definition, 0.4f, 0f);
+			}
+		}
+	}
+
+	// Token: 0x060001B3 RID: 435 RVA: 0x00016484 File Offset: 0x00014684
+	public AnimcontrolStateInfo.TransitionData TestAndConvertDefinition(ABDefinition defToTest)
+	{
+		if (defToTest != null)
+		{
+			bool flag = true;
+			AnimcontrolStateInfo animcontrolStateInfo = null;
+			if (this.transitionManager != null)
+			{
+				animcontrolStateInfo = this.transitionManager.GetState(defToTest);
+			}
+			if (animcontrolStateInfo != null && !animcontrolStateInfo.RequirementsMet(this.blendHelper, false))
+			{
+				flag = false;
+			}
+			if (flag)
+			{
+				AnimcontrolStateInfo.TransitionData transitionData = new AnimcontrolStateInfo.TransitionData();
+				transitionData.definition = defToTest;
+				if (animcontrolStateInfo != null)
+				{
+					transitionData.transitTime = animcontrolStateInfo.transitIntoTime;
+				}
+				return transitionData;
+			}
+		}
+		return null;
+	}
+
+	// Token: 0x060001B4 RID: 436 RVA: 0x00016508 File Offset: 0x00014708
+	public Vector3 GetMovableGroundVelocity()
+	{
+		return this.groundVelocity;
+	}
+
+	// Token: 0x060001B5 RID: 437 RVA: 0x00016510 File Offset: 0x00014710
+	private AnimcontrolStateInfo.TransitionData CreateTransitionData(ABDefinition def)
+	{
+		if (def == null)
+		{
+			return null;
+		}
+		AnimcontrolStateInfo.TransitionData transitionData = new AnimcontrolStateInfo.TransitionData();
+		transitionData.definition = def;
+		transitionData.startPos = 0f;
+		AnimcontrolStateInfo animcontrolStateInfo = null;
+		if (this.transitionManager != null)
+		{
+			animcontrolStateInfo = this.transitionManager.GetState(def);
+		}
+		if (animcontrolStateInfo != null)
+		{
+			transitionData.transitTime = animcontrolStateInfo.transitIntoTime;
+		}
+		return transitionData;
+	}
+
+	// Token: 0x060001B6 RID: 438 RVA: 0x00016578 File Offset: 0x00014778
+	private AnimcontrolStateInfo.TransitionData GetDefaultButtonTransition()
+	{
+		if (this.debugJoystickControl)
+		{
+			if (this.mController.A.Pressed)
+			{
+				AnimcontrolStateInfo.TransitionData transitionData = this.CreateTransitionData(this.blendHelper.GetDefinition(this.debugAnimA, true));
+				if (transitionData != null)
+				{
+					return transitionData;
+				}
+			}
+			if (this.mController.B.Pressed)
+			{
+				AnimcontrolStateInfo.TransitionData transitionData = this.CreateTransitionData(this.blendHelper.GetDefinition(this.debugAnimB, true));
+				if (transitionData != null)
+				{
+					return transitionData;
+				}
+			}
+			if (this.mController.X.Pressed)
+			{
+				AnimcontrolStateInfo.TransitionData transitionData = this.CreateTransitionData(this.blendHelper.GetDefinition(this.debugAnimX, true));
+				if (transitionData != null)
+				{
+					return transitionData;
+				}
+			}
+			if (this.mController.Y.Pressed)
+			{
+				AnimcontrolStateInfo.TransitionData transitionData = this.CreateTransitionData(this.blendHelper.GetDefinition(this.debugAnimY, true));
+				if (transitionData != null)
+				{
+					return transitionData;
+				}
+			}
+		}
+		return null;
+	}
+
+	// Token: 0x060001B7 RID: 439 RVA: 0x0001666C File Offset: 0x0001486C
+	private void SetupCustomTransitionFunction(ABDefinition defToUse, AnimcontrolledCharacter.CustomTransitionFunction function)
+	{
+		if (defToUse != null)
+		{
+			this.customTransitionFunctions[defToUse.definitionID] = function;
+		}
+	}
+
+	// Token: 0x060001B8 RID: 440 RVA: 0x00016688 File Offset: 0x00014888
+	private void SetupCustomPositioningFunction(ABDefinition defToUse, AnimcontrolledCharacter.CustomPositioningFunction function)
+	{
+		if (defToUse != null)
+		{
+			this.customPositioningFunctions[defToUse.definitionID] = function;
+		}
+	}
+
+	// Token: 0x060001B9 RID: 441 RVA: 0x000166A4 File Offset: 0x000148A4
+	private void SetupCustomStaticPositionFunction(ABDefinition defToUse, AnimcontrolledCharacter.CustomStaticPositionFunction function)
+	{
+		if (defToUse != null)
+		{
+			this.customStaticPositionFunctions[defToUse.definitionID] = function;
+		}
+	}
+
+	// Token: 0x060001BA RID: 442 RVA: 0x000166C0 File Offset: 0x000148C0
+	public GameObject FindHeadBone()
+	{
+		Transform transform = this.animCharTransform.Find("bones/Logic/Root/SpineA/SpineB/SpineC/Neck/Head");
+		if (transform != null)
+		{
+			return transform.gameObject;
+		}
+		return null;
+	}
+
+	// Token: 0x060001BB RID: 443 RVA: 0x000166F4 File Offset: 0x000148F4
+	private bool AttachHeadStuff(List<GameObject> stuffList, float probability, int specificObject, bool isHair = false)
+	{
+		int num = specificObject;
+		GameObject gameObject = null;
+		if (specificObject >= 0 && specificObject < stuffList.Count)
+		{
+			gameObject = stuffList[specificObject];
+		}
+		if (gameObject == null && probability > 0f && Random.Range(0f, 1f) <= probability)
+		{
+			num = Random.Range(0, stuffList.Count);
+			gameObject = stuffList[num];
+		}
+		if (gameObject != null)
+		{
+			AnimcontrolledProperties component = this._transform.parent.gameObject.GetComponent<AnimcontrolledProperties>();
+			if (isHair)
+			{
+				component.specificHair = num;
+			}
+			else
+			{
+				component.specificHeadGear = num;
+			}
+			GameObject gameObject2 = Object.Instantiate<GameObject>(gameObject);
+			gameObject2.transform.parent = this.headBone.transform;
+			gameObject2.transform.localPosition = Vector3Fast.zero;
+			gameObject2.transform.localEulerAngles = Vector3Fast.zero;
+			gameObject2.transform.localScale = new Vector3(1f, 1f, 1f);
+			if (isHair && gameObject.name.CompareTo("AlbinoHairTufts") == 0)
+			{
+				this.configurationToUse = -FastMath.Clamp(FastMath.Abs(this.configurationToUse), 0.2f, 1f);
+				component.configuration = this.configurationToUse;
+			}
+			if (isHair)
+			{
+				Hair[] componentsInChildren = gameObject2.GetComponentsInChildren<Hair>();
+				int i = 0;
+				int num2 = componentsInChildren.Length;
+				while (i < num2)
+				{
+					componentsInChildren[i].owner = this;
+					i++;
+				}
+			}
+			return true;
+		}
+		return false;
+	}
+
+	// Token: 0x060001BC RID: 444 RVA: 0x0001687C File Offset: 0x00014A7C
+	public override void Reset(bool keepTriggers = false)
+	{
+		if (this._transform.parent != null)
+		{
+		}
+		Stopwatch stopwatch = new Stopwatch();
+		stopwatch.Start();
+		base.Reset(keepTriggers);
+		this.bFirstFrame = true;
+		this.onGround = false;
+		this.angleLastFrame = 0f;
+		this.magnitudeLastFrame = 0f;
+		this.fallspeed = 0f;
+		this.staticAnimBasePos = Vector3Fast.zero;
+		this.staticAnimBaseRot = Vector3Fast.zero;
+		this.staticAnimWantedBasePos = Vector3Fast.zero;
+		this.staticAnimWantedBaseRot = Vector3Fast.zero;
+		this.lastGroundCollider = null;
+		this.lastGroundPos = Vector3Fast.zero;
+		this.groundVelocity = Vector3Fast.zero;
+		this.staticAnimCustomParameter = 0f;
+		this.bIsForceStoppingCharacter = false;
+		this.animDefToSetAfterStop = null;
+		this.slopeLastFrame = 0f;
+		this.freefallMode = false;
+		this.freefallMoveSpeed = Vector3Fast.zero;
+		this.lastMoveStep = Vector3Fast.zero;
+		this.animControlledAI.Reset(keepTriggers);
+		stopwatch.Stop();
+		long elapsedMilliseconds = stopwatch.ElapsedMilliseconds;
+		AnimcontrolledCharacter.resetStopWatchTime += elapsedMilliseconds;
+		base.transform.localPosition = Vector3Fast.zero;
+		base.transform.localEulerAngles = Vector3Fast.zero;
+		this.controls.stick = Vector2.zero;
+	}
+
+	// Token: 0x060001BD RID: 445 RVA: 0x000169C0 File Offset: 0x00014BC0
+	public override void Init()
+	{
+		if (this.initialized)
+		{
+			return;
+		}
+		if (this.animControlledAI is AlbinoAI)
+		{
+			this.isAlbino = true;
+			this.albinoAI = (this.animControlledAI as AlbinoAI);
+		}
+		base.Init();
+		this.animCharTransform = this.animChar.transform;
+		if (this.fastSetPos)
+		{
+			this.fastBonesTransform = null;
+			int i = 0;
+			int childCount = this.animCharTransform.childCount;
+			while (i < childCount)
+			{
+				Transform child = this.animCharTransform.GetChild(i);
+				if (child.name == "bones")
+				{
+					this.fastBonesTransform = child;
+				}
+				i++;
+			}
+		}
+		this._transform = base.transform;
+		this._rigidbody = base.GetComponent<Rigidbody>();
+		this.testRigidBody = (this._rigidbody != null);
+		this.onGround = false;
+		this.colMask = (1 << CollisionUtils.Layers.ungrouped | 1 << CollisionUtils.Layers.environment | 1 << CollisionUtils.Layers.item | 1 << CollisionUtils.Layers.defaultLayer);
+		if (this.animControlledAI == null)
+		{
+			this.animControlledAI = new GameObject("animControlledAI")
+			{
+				transform = 
+				{
+					parent = base.transform,
+					localPosition = Vector3Fast.zero,
+					localRotation = Quaternion.identity
+				}
+			}.AddComponent<AnimcontrolledAI>();
+		}
+		if (this.headBone == null)
+		{
+			this.headBone = this.FindHeadBone();
+		}
+		if (this.customCodeManager != null)
+		{
+			int largestDefinitionID = this.blendHelper.GetLargestDefinitionID();
+			this.customTransitionFunctions = new FastList<AnimcontrolledCharacter.CustomTransitionFunction>(largestDefinitionID, FastListExpandMode.Exponential, 100);
+			while (this.customTransitionFunctions.Count < largestDefinitionID)
+			{
+				this.customTransitionFunctions.Add(null);
+			}
+			this.customPositioningFunctions = new FastList<AnimcontrolledCharacter.CustomPositioningFunction>(largestDefinitionID, FastListExpandMode.Exponential, 100);
+			while (this.customPositioningFunctions.Count < largestDefinitionID)
+			{
+				this.customPositioningFunctions.Add(null);
+			}
+			this.customStaticPositionFunctions = new FastList<AnimcontrolledCharacter.CustomStaticPositionFunction>(largestDefinitionID, FastListExpandMode.Exponential, 100);
+			while (this.customStaticPositionFunctions.Count < largestDefinitionID)
+			{
+				this.customStaticPositionFunctions.Add(null);
+			}
+			this.customCodeManager.acCharacter = this;
+			int j = 0;
+			int count = this.blendHelper.blendDefinitions.Count;
+			while (j < count)
+			{
+				ABDefinition abdefinition = this.blendHelper.blendDefinitions[j];
+				if (abdefinition != null)
+				{
+					AnimcontrolledCharacter.CustomTransitionFunction customTransitFunction = this.customCodeManager.GetCustomTransitFunction(abdefinition.debugName);
+					if (customTransitFunction != null)
+					{
+						this.SetupCustomTransitionFunction(abdefinition, customTransitFunction);
+					}
+					AnimcontrolledCharacter.CustomPositioningFunction customPositioningFunction = this.customCodeManager.GetCustomPositioningFunction(abdefinition.debugName);
+					if (customPositioningFunction != null)
+					{
+						this.SetupCustomPositioningFunction(abdefinition, customPositioningFunction);
+					}
+					AnimcontrolledCharacter.CustomStaticPositionFunction customStaticPositionFunction = this.customCodeManager.GetCustomStaticPositionFunction(abdefinition.debugName);
+					if (customStaticPositionFunction != null)
+					{
+						this.SetupCustomStaticPositionFunction(abdefinition, customStaticPositionFunction);
+					}
+				}
+				j++;
+			}
+		}
+		this.configurationToUse = Random.Range(-1f, 1f);
+		this.ApplyProperties();
+		this.initialized = true;
+		this.animControlledAI.InitAnimcontrolledAI(this);
+	}
+
+	// Token: 0x060001BE RID: 446 RVA: 0x00016CF0 File Offset: 0x00014EF0
+	public void ApplyProperties()
+	{
+		AnimcontrolledProperties component = this._transform.parent.gameObject.GetComponent<AnimcontrolledProperties>();
+		if (component != null)
+		{
+			this.meshRenderer = this.animChar.GetComponentInChildren<SkinnedMeshRenderer>();
+			component.aiNode = this.animControlledAI.gameObject;
+			if (this.meshRenderer != null)
+			{
+				if (component.materialToUse >= 0 && component.materialToUse < AlbinoGroupManager.mInstance.albinoMaterial.Count)
+				{
+					this.meshRenderer.material = AlbinoGroupManager.mInstance.albinoMaterial[component.materialToUse];
+				}
+				if (component.textureOffset.x < 0f || component.textureOffset.y < 0f)
+				{
+					component.textureOffset.x = (float)Random.Range(0, 2) * 0.5f;
+					component.textureOffset.y = (float)Random.Range(0, 2) * 0.5f;
+				}
+				this.meshRenderer.GetComponent<Renderer>().material.mainTextureOffset = component.textureOffset;
+				if (component.meshToUse < 0 || component.meshToUse >= AlbinoGroupManager.mInstance.albinoMeshes.Count)
+				{
+					if (AlbinoGroupManager.mInstance != null)
+					{
+						int index = Random.Range(0, AlbinoGroupManager.mInstance.albinoMeshes.Count);
+						Mesh mesh = AlbinoGroupManager.mInstance.albinoMeshes[index];
+						if (this.meshRenderer.sharedMesh != mesh)
+						{
+							this.meshRenderer.sharedMesh = mesh;
+						}
+						this.meshRenderer.gameObject.layer = CollisionUtils.Layers.player;
+					}
+				}
+				else
+				{
+					Mesh mesh2 = AlbinoGroupManager.mInstance.albinoMeshes[component.meshToUse];
+					if (this.meshRenderer.sharedMesh != mesh2)
+					{
+						this.meshRenderer.sharedMesh = mesh2;
+					}
+					this.meshRenderer.gameObject.layer = CollisionUtils.Layers.player;
+				}
+			}
+			if (this.headBone != null && AlbinoGroupManager.mInstance != null)
+			{
+				bool flag = this.AttachHeadStuff(AlbinoGroupManager.mInstance.headGearPrefabs, component.headGearPossibility, component.specificHeadGear, false);
+				if (!flag)
+				{
+					flag = this.AttachHeadStuff(AlbinoGroupManager.mInstance.hairPrefabs, component.hairPossibility, component.specificHair, true);
+				}
+				if (flag)
+				{
+					Animation component2 = this.animChar.GetComponent<Animation>();
+					if (component2 && component2.fastPath)
+					{
+						component2.RebuildFastPath();
+					}
+				}
+			}
+			if (component.configuration >= -1f)
+			{
+				this.configurationToUse = component.configuration;
+			}
+			if (component.scale < 0f)
+			{
+				component.scale = Random.Range(1.15f, 1.4f);
+			}
+			this.animCharTransform.localScale *= component.scale;
+			if (this.isAlbino)
+			{
+				this.albinoAI.scaleFactor = component.scale;
+			}
+			if (this.headScale && this.headBone != null)
+			{
+				this.headTransform = this.headBone.transform;
+				this.wantedHeadLocalTransform = new Vector3(1.65f, 1.65f, 1.65f) - this.animCharTransform.localScale * 0.5f;
+			}
+		}
+		else if (this.meshRenderer != null)
+		{
+			this.meshRenderer.material.mainTextureOffset = this.textureOffset;
+		}
+	}
+
+	// Token: 0x060001BF RID: 447 RVA: 0x00017094 File Offset: 0x00015294
+	private void OnEnable()
+	{
+		if (this.roundRobinPhysics)
+		{
+			this.UpdateColliders();
+		}
+	}
+
+	// Token: 0x060001C0 RID: 448 RVA: 0x000170A8 File Offset: 0x000152A8
+	private void Awake()
+	{
+		if (this.stopModeVisualization != null)
+		{
+			this.stopModeVisualization.SetActive(false);
+		}
+		this.timeSliceStart = !GameManager.IsLoading();
+		if (!this.initialized && GlobalCachedAnimationMovementInfo.mInstance != null)
+		{
+			if (this.timeSliceStart)
+			{
+				AlbinoGroupManager.mInstance.TimeSliceInitialization(this);
+			}
+			else
+			{
+				this.Init();
+			}
+		}
+		if (this.fastSetPos && this.animControlledAI != null)
+		{
+			this.animAITransform = this.animControlledAI.transform;
+			this.animAITransform.parent = base.transform.parent;
+		}
+	}
+
+	// Token: 0x060001C1 RID: 449 RVA: 0x00017160 File Offset: 0x00015360
+	private void Start()
+	{
+		this.physicsUpdateCount = AnimcontrolledCharacter.masterPhysicsUpdateCount;
+		AnimcontrolledCharacter.masterPhysicsUpdateCount = (AnimcontrolledCharacter.masterPhysicsUpdateCount + 1) % 6;
+		if (!this.initialized)
+		{
+			if (this.timeSliceStart)
+			{
+				AlbinoGroupManager.mInstance.TimeSliceInitialization(this);
+			}
+			else
+			{
+				this.Init();
+			}
+		}
+	}
+
+	// Token: 0x060001C2 RID: 450 RVA: 0x000171B4 File Offset: 0x000153B4
+	private void ValidateInit()
+	{
+		if (!this.initialized)
+		{
+			AlbinoGroupManager.mInstance.RemoveTimeSliceInitialization(this);
+			this.Init();
+		}
+	}
+
+	// Token: 0x060001C3 RID: 451 RVA: 0x000171D4 File Offset: 0x000153D4
+	public AnimationBlendHelper GetBlendHelper()
+	{
+		this.ValidateInit();
+		return this.blendHelper;
+	}
+
+	// Token: 0x060001C4 RID: 452 RVA: 0x000171E4 File Offset: 0x000153E4
+	public Collider GetLastGroundCollider()
+	{
+		return this.lastGroundCollider;
+	}
+
+	// Token: 0x060001C5 RID: 453 RVA: 0x000171EC File Offset: 0x000153EC
+	public void ForceToAnimation(ABDefinition def, bool specialAlign, Vector3 alignPos, Vector3 alignRot, float transitTime = -1f, float startPos = 0f, bool stopBeforePlay = false)
+	{
+		this.ValidateInit();
+		this.staticAnimBasePos = this._transform.position;
+		this.staticAnimBaseRot = MathUtils.FixAngles(this._transform.rotation.eulerAngles);
+		float transitTime2;
+		if (def != null && this.transitionManager != null && transitTime < 0f)
+		{
+			transitTime2 = 0.4f;
+			AnimcontrolStateInfo state = this.transitionManager.GetState(def);
+			if (state != null)
+			{
+				transitTime2 = ((transitTime < 0f) ? state.transitIntoTime : transitTime);
+			}
+		}
+		else
+		{
+			transitTime2 = ((transitTime < 0f) ? 0.4f : transitTime);
+		}
+		if (stopBeforePlay)
+		{
+			this.bIsForceStoppingCharacter = true;
+			this.animDefToSetAfterStop = def;
+			this.customParameterAfterStop = 0f;
+			this.transitTimeAfterStop = transitTime2;
+		}
+		else
+		{
+			if (!specialAlign)
+			{
+				if (def.isStatic)
+				{
+					this.staticAnimWantedBasePos = this.staticAnimBasePos;
+					this.staticAnimWantedBaseRot = this.staticAnimBaseRot;
+				}
+			}
+			else
+			{
+				def.isStatic = true;
+				this.staticAnimWantedBasePos = alignPos;
+				this.staticAnimWantedBaseRot = alignRot;
+			}
+			this.blendHelper.TransitToBlendDefinition(def, transitTime2, FastMath.Max(startPos, 0f));
+			this.blendHelper.SetBlendParameter(4, this.blendHelper.GetAnimPos());
+		}
+	}
+
+	// Token: 0x060001C6 RID: 454 RVA: 0x00017350 File Offset: 0x00015550
+	public ABDefinition ForceToAnimation(string animToSet, GameObject alignToPivot = null, float transitTime = -1f, float startPos = 0f, bool stopBeforePlay = false)
+	{
+		this.ValidateInit();
+		ABDefinition definition = this.blendHelper.GetDefinition(animToSet, true);
+		if (definition == null)
+		{
+			this.GoToDefaultAnimation();
+			return null;
+		}
+		if (alignToPivot != null)
+		{
+			Transform transform = alignToPivot.transform;
+			Vector3 vector = transform.position;
+			AnimcontrolStateInfo animcontrolStateInfo = null;
+			if (this.transitionManager != null)
+			{
+				animcontrolStateInfo = this.transitionManager.GetState(definition);
+			}
+			if (animcontrolStateInfo != null && animcontrolStateInfo.staticAlignToEnd)
+			{
+				MovementData movementData = definition.GetMovementData();
+				vector -= transform.TransformDirection(movementData.totalMovement);
+			}
+			this.ForceToAnimation(definition, true, vector, MathUtils.FixAngles(transform.rotation.eulerAngles), transitTime, startPos, stopBeforePlay);
+		}
+		else
+		{
+			this.ForceToAnimation(definition, false, Vector3Fast.zero, Vector3Fast.zero, transitTime, startPos, stopBeforePlay);
+		}
+		return definition;
+	}
+
+	// Token: 0x060001C7 RID: 455 RVA: 0x0001742C File Offset: 0x0001562C
+	public void SetUniqueAnimation(int animToSet, GameObject initialAlignementPivot = null, bool linearPlacement = false, float customParameter = 0f, float transitTime = -1f, float animStartPos = 0f)
+	{
+		this.ValidateInit();
+		ABDefinition abdefinition = this.blendHelper.blendDefinitions[animToSet];
+		if (abdefinition != null)
+		{
+			float num = abdefinition.transitTime;
+			if (num <= 0f)
+			{
+				AnimcontrolStateInfo animcontrolStateInfo = null;
+				if (this.transitionManager != null)
+				{
+					animcontrolStateInfo = this.transitionManager.GetState(abdefinition);
+				}
+				if (animcontrolStateInfo != null && animcontrolStateInfo.transitIntoTime >= 0f)
+				{
+					num = animcontrolStateInfo.transitIntoTime;
+				}
+				else
+				{
+					num = 0.4f;
+				}
+			}
+			if (transitTime > 0f)
+			{
+				num = transitTime;
+			}
+			if (initialAlignementPivot != null)
+			{
+				AnimcontrolWaypoint component = initialAlignementPivot.GetComponent<AnimcontrolWaypoint>();
+				if (component != null && component.stopBeforePlayingUniqueAnim)
+				{
+					this.bIsForceStoppingCharacter = true;
+					this.animDefToSetAfterStop = abdefinition;
+					this.customParameterAfterStop = customParameter;
+					this.transitTimeAfterStop = num;
+					return;
+				}
+			}
+			this.SetStaticAnimation(abdefinition, initialAlignementPivot, linearPlacement, customParameter, num, animStartPos);
+		}
+	}
+
+	// Token: 0x060001C8 RID: 456 RVA: 0x00017524 File Offset: 0x00015724
+	public void UpdateStaticPosFromStoredPivot()
+	{
+		if (this.staticAligner != null)
+		{
+			this.staticAnimWantedBasePos.y = this.staticAligner.transform.position.y;
+		}
+	}
+
+	// Token: 0x060001C9 RID: 457 RVA: 0x00017568 File Offset: 0x00015768
+	protected override void SetStaticAnimation(ABDefinition def, GameObject initialAlignementPivot = null, bool linearPlacement = false, float customParameter = 0f, float transitTime = 0.4f, float animStartPos = 0f)
+	{
+		this.staticAnimBasePos = this._transform.position;
+		this.staticAnimBaseRot = MathUtils.FixAngles(this._transform.rotation.eulerAngles);
+		this.staticAnimCustomParameter = customParameter;
+		if (initialAlignementPivot == null)
+		{
+			this.staticAligner = null;
+			this.staticAnimWantedBasePos = this.staticAnimBasePos;
+			this.staticAnimWantedBaseRot = this.staticAnimBaseRot;
+		}
+		else
+		{
+			this.staticAligner = initialAlignementPivot;
+			bool flag = false;
+			AnimcontrolStateInfo animcontrolStateInfo = null;
+			if (this.transitionManager != null)
+			{
+				animcontrolStateInfo = this.transitionManager.GetState(def);
+			}
+			if (animcontrolStateInfo && animcontrolStateInfo.staticAlignToEnd)
+			{
+				flag = true;
+			}
+			if (linearPlacement)
+			{
+				Vector3 vector = initialAlignementPivot.transform.InverseTransformPoint(this.staticAnimBasePos);
+				vector.z = 0f;
+				vector.y = 0f;
+				this.staticAnimWantedBasePos = initialAlignementPivot.transform.TransformPoint(vector);
+			}
+			else
+			{
+				this.staticAnimWantedBasePos = initialAlignementPivot.transform.position;
+			}
+			if (flag)
+			{
+				MovementData movementData = def.GetMovementData();
+				this.staticAnimWantedBasePos -= initialAlignementPivot.transform.TransformDirection(movementData.totalMovement);
+			}
+			this.staticAnimWantedBaseRot = MathUtils.FixAngles(initialAlignementPivot.transform.rotation.eulerAngles);
+		}
+		float startpos = (animStartPos >= 0f) ? animStartPos : 0f;
+		this.blendHelper.TransitToBlendDefinition(def, transitTime, startpos);
+	}
+
+	// Token: 0x060001CA RID: 458 RVA: 0x000176F0 File Offset: 0x000158F0
+	public void UpdateColliders()
+	{
+		if (this.cachedColliders.Count == 0)
+		{
+			this.colliders.Clear();
+			Vector3 center = this.posAtStartOfFrame;
+			center.y += 2f;
+			if (Time.deltaTime > 0.12f)
+			{
+				CollisionUtils.AddCollidersInSphere(center, 5f, CollisionUtils.Type.Solid, this.colliders, this.colMask, true, false);
+			}
+			else
+			{
+				CollisionUtils.AddCollidersInSphere(center, 2.8f, CollisionUtils.Type.Solid, this.colliders, this.colMask, true, false);
+			}
+		}
+		else if (this.colliders.Count != this.cachedColliders.Count)
+		{
+			int i = 0;
+			int count = this.cachedColliders.Count;
+			while (i < count)
+			{
+				this.colliders.Add(this.cachedColliders[i]);
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x060001CB RID: 459 RVA: 0x000177D0 File Offset: 0x000159D0
+	private bool GroundTest(Vector3 pos, float range, ref RaycastHit retval)
+	{
+		if (this.forceNextColliderUpdate || !this.roundRobinPhysics || this.physicsUpdateCount == AnimcontrolledCharacter.masterPhysicsUpdateCount || Time.deltaTime > 0.05f || (this.freefallMode && this.lastFallspeed < -6f) || Time.deltaTime > 0.12f)
+		{
+			this.UpdateColliders();
+			this.forceNextColliderUpdate = false;
+		}
+		float num = float.MaxValue;
+		this.rayToCast.origin = pos;
+		bool flag = false;
+		Vector3 vector = Vector3Fast.zero;
+		int i = 0;
+		int size = this.colliders.size;
+		while (i < size)
+		{
+			Collider collider = this.colliders.raw[i];
+			RaycastHit raycastHit;
+			if (collider != null && collider.Raycast(this.rayToCast, ref raycastHit, range))
+			{
+				float distance = raycastHit.distance;
+				if (distance < num && (!this.testRigidBody || raycastHit.collider.attachedRigidbody != this._rigidbody))
+				{
+					num = distance;
+					Vector3 normal = raycastHit.normal;
+					if (normal.y < 0.3f)
+					{
+						if (this.freefallMode)
+						{
+							normal.y = 0f;
+							if (this.freefallMoveSpeed.x * normal.x + this.freefallMoveSpeed.z * normal.z < 8f)
+							{
+								vector = normal;
+							}
+						}
+						flag = false;
+					}
+					else
+					{
+						retval = raycastHit;
+						flag = true;
+					}
+				}
+			}
+			i++;
+		}
+		if (this.freefallMode && !flag)
+		{
+			this.freefallMoveSpeed.x = this.freefallMoveSpeed.x + vector.x;
+			this.freefallMoveSpeed.y = this.freefallMoveSpeed.y + vector.y;
+			this.freefallMoveSpeed.z = this.freefallMoveSpeed.z + vector.z;
+		}
+		return flag;
+	}
+
+	// Token: 0x060001CC RID: 460 RVA: 0x000179C8 File Offset: 0x00015BC8
+	private bool UpdatePhysics(float deltaTime, ref Vector3 wantedPos)
+	{
+		if (this.fastSetPos)
+		{
+			wantedPos = this._transform.localPosition;
+		}
+		else
+		{
+			wantedPos = this._transform.position;
+		}
+		this.posAtStartOfFrame = wantedPos;
+		float y = wantedPos.y;
+		this.groundVelocity = Vector3Fast.zero;
+		float num = FastMath.Max(-this.fallspeed * Time.deltaTime, 0f);
+		Vector3 vector = Vector3Fast.zero;
+		if (this.lastGroundCollider != null)
+		{
+			Rigidbody attachedRigidbody = this.lastGroundCollider.attachedRigidbody;
+			if (attachedRigidbody != null)
+			{
+				Vector3 position = attachedRigidbody.transform.position;
+				wantedPos.x += position.x - this.lastGroundPos.x;
+				wantedPos.y += position.y - this.lastGroundPos.y;
+				wantedPos.z += position.z - this.lastGroundPos.z;
+				float num2 = FastMath.Max(position.y - this.lastGroundPos.y, 0f);
+				num2 = Mathf.Max(num2, -attachedRigidbody.velocity.y * Time.deltaTime);
+				num += num2;
+				this.groundVelocity = attachedRigidbody.velocity;
+				this.lastGroundPos = position;
+				float num3 = 0f;
+				if (attachedRigidbody.interpolation != null)
+				{
+					num3 = (float)(Time.timeDbl - Time.fixedTimeDbl);
+				}
+				if (attachedRigidbody.interpolation == 1)
+				{
+					num3 -= Time.fixedDeltaTime;
+				}
+				vector = attachedRigidbody.velocity;
+				vector.x *= num3;
+				vector.y *= num3;
+				vector.z *= num3;
+			}
+		}
+		Vector3 pos = wantedPos;
+		pos.y += 0.8f;
+		float num4 = 0f;
+		bool flag = this.GroundTest(pos, num + 0.85f, ref this.hit);
+		if (flag)
+		{
+			Collider collider = this.hit.collider;
+			Rigidbody attachedRigidbody2 = collider.attachedRigidbody;
+			if (attachedRigidbody2 != null)
+			{
+				this.lastGroundPos = attachedRigidbody2.transform.position;
+				float num5 = 0f;
+				if (attachedRigidbody2.interpolation != null)
+				{
+					num5 = (float)(Time.timeDbl - Time.fixedTimeDbl);
+				}
+				if (attachedRigidbody2.interpolation == 1)
+				{
+					num5 -= Time.fixedDeltaTime;
+				}
+				vector = attachedRigidbody2.velocity;
+				vector.x *= num5;
+				vector.y *= num5;
+				vector.z *= num5;
+			}
+			if (collider != this.lastGroundCollider && this.lastGroundCollider != null)
+			{
+				this.edgeInterpolateTimer = 0.2f - deltaTime;
+			}
+			float y2 = wantedPos.y;
+			this.lastGroundCollider = collider;
+			wantedPos = this.hit.point;
+			wantedPos.x += vector.x;
+			wantedPos.y += vector.y;
+			wantedPos.z += vector.z;
+			Vector3 vector2 = wantedPos;
+			if (this.hit.normal.y < 0.999f)
+			{
+				num4 = -FastMath.Asin(this._transform.InverseTransformDirection(this.hit.normal).normalized.z) * 57.29578f;
+			}
+			this.fallspeed = FastMath.Clamp((vector2.y - y) / deltaTime, -10f, 10f);
+			float num6 = 1f;
+			if (this.edgeInterpolateTimer > 0f)
+			{
+				num6 = (0.2f - this.edgeInterpolateTimer) / 0.2f;
+				num6 = MathUtils.SmoothFraction(num6);
+				this.edgeInterpolateTimer -= deltaTime;
+			}
+			wantedPos.y = vector2.y * num6 + y2 * (1f - num6);
+			this.onGround = true;
+		}
+		else
+		{
+			bool flag2 = false;
+			if (this.onGround)
+			{
+				Vector3 normalized = this.lastMoveStep.normalized;
+				pos.x += normalized.x * 0.1f;
+				pos.y += normalized.y * 0.1f;
+				pos.z += normalized.z * 0.1f;
+				flag = this.GroundTest(pos, num + 0.85f, ref this.hit);
+				if (flag)
+				{
+					flag2 = true;
+				}
+			}
+			if (!flag2)
+			{
+				wantedPos.y += this.fallspeed * deltaTime;
+				this.fallspeed -= 10f * deltaTime;
+				if (this.isAlbino && this.fallspeed > 0.5f)
+				{
+					this.fallspeed = 0.5f;
+				}
+				this.lastFallspeed = this.fallspeed;
+				this.blendHelper.SetBlendParameter(7, 0f);
+				this.onGround = false;
+				if (this.freefallMode)
+				{
+					this.lastGroundCollider = null;
+				}
+			}
+		}
+		this.slopeLastFrame += (num4 - this.slopeLastFrame) * FastMath.Min(deltaTime * 4f, 1f);
+		this.blendHelper.SetBlendParameter(7, this.slopeLastFrame);
+		return true;
+	}
+
+	// Token: 0x060001CD RID: 461 RVA: 0x00017F4C File Offset: 0x0001614C
+	private void SetForceStoppingBlendParameters(float deltaTime)
+	{
+		this.magnitudeLastFrame = 0f;
+		this.blendHelper.SetBlendParameter(1, 0f);
+		this.blendHelper.SetBlendParameter(8, 0f);
+		this.blendHelper.SetBlendParameter(3, this.angleLastFrame);
+	}
+
+	// Token: 0x060001CE RID: 462 RVA: 0x00017F98 File Offset: 0x00016198
+	private void SetBlendParameters(float deltaTime)
+	{
+		Vector2 stick = this.controls.stick;
+		bool flag = false;
+		float num = stick.magnitude;
+		this.blendHelper.SetBlendParameter(8, num);
+		if (num <= 0f)
+		{
+			flag = true;
+		}
+		float num2 = this.angleLastFrame;
+		float value = 0f;
+		if (!flag)
+		{
+			Vector3 vector = Vector3Fast.zero;
+			vector.x = stick.x;
+			vector.z = stick.y;
+			vector = this._transform.InverseTransformDirection(vector);
+			vector.y = 0f;
+			num2 = Vector3.Angle(Vector3Fast.forward, vector);
+			float animPos = this.blendHelper.GetAnimPos();
+			if (vector.x < 0f)
+			{
+				num2 = -num2;
+			}
+			value = num2;
+		}
+		float num3 = 5f * deltaTime * 1f;
+		this.angleLastFrame = value;
+		this.blendHelper.SetBlendParameter(3, value);
+		num = num * num3 * 2f + this.magnitudeLastFrame * (1f - num3 * 2f);
+		this.magnitudeLastFrame = num;
+		float value2 = num;
+		if (this.debugJoystickControl)
+		{
+			value2 = FastMath.Max(0f, (num - this.stickDeadZone) / (1f - this.stickDeadZone));
+		}
+		this.blendHelper.SetBlendParameter(1, value2);
+	}
+
+	// Token: 0x060001CF RID: 463 RVA: 0x000180E4 File Offset: 0x000162E4
+	private void UpdateInput(float deltaTime, ref Vector3 wantedPos)
+	{
+		if (this.debugJoystickControl)
+		{
+			this.mController.Update(deltaTime);
+			Vector2 vector;
+			vector..ctor(this.mController.LeftStick.x, this.mController.LeftStick.y);
+			float magnitude = vector.magnitude;
+			if (magnitude < this.stickDeadZone)
+			{
+				vector = Vector2.zero;
+			}
+			else
+			{
+				vector *= (magnitude - this.stickDeadZone) / (1f - this.stickDeadZone);
+			}
+			this.controls.stick = vector;
+		}
+		else if (this.bIsForceStoppingCharacter)
+		{
+			this.controls.stick = Vector2.zero;
+		}
+		else
+		{
+			this.animControlledAI.UpdateInput(this.controls, deltaTime, ref wantedPos);
+		}
+	}
+
+	// Token: 0x060001D0 RID: 464 RVA: 0x000181B0 File Offset: 0x000163B0
+	public Vector3 GetLastMoveSpeed()
+	{
+		ABHelperData latestAnimData = this.blendHelper.GetLatestAnimData();
+		if (latestAnimData != null)
+		{
+			Vector3 localMoveSpeed = latestAnimData.localMoveSpeed;
+			Vector3 localScale = this.animCharTransform.localScale;
+			localMoveSpeed.x *= localScale.x;
+			localMoveSpeed.y *= localScale.y;
+			localMoveSpeed.z *= localScale.z;
+			return this._transform.TransformDirection(localMoveSpeed);
+		}
+		return Vector3Fast.zero;
+	}
+
+	// Token: 0x060001D1 RID: 465 RVA: 0x00018234 File Offset: 0x00016434
+	public void FastSetRotation(Quaternion rot)
+	{
+		if (this.fastSetPos)
+		{
+			this.rotToSet = rot;
+			this.setNewRotation = true;
+		}
+		else
+		{
+			this._transform.localRotation = rot;
+		}
+	}
+
+	// Token: 0x060001D2 RID: 466 RVA: 0x0001826C File Offset: 0x0001646C
+	public void FastPosUpdateNodes(bool allowExpensive = true)
+	{
+		if (this.fastSetPos)
+		{
+			Quaternion identity = QuaternionFast.identity;
+			Vector3 zero = Vector3Fast.zero;
+			this.animCharTransform.SetLocalPositionNoNotify(zero);
+			this.animCharTransform.SetLocalRotationNoNotify(identity);
+			if (this.fastBonesTransform)
+			{
+				this.fastBonesTransform.SetLocalPositionNoNotify(zero);
+				this.fastBonesTransform.SetLocalRotationNoNotify(identity);
+			}
+			else
+			{
+				int i = 0;
+				int childCount = this.animCharTransform.childCount;
+				while (i < childCount)
+				{
+					Transform child = this.animCharTransform.GetChild(i);
+					child.SetLocalPositionNoNotify(zero);
+					child.SetLocalRotationNoNotify(identity);
+					i++;
+				}
+			}
+			bool flag = this.isAlbino && this.albinoAI.RoundRobinUpdating();
+			Vector3 localPosition = this._transform.localPosition;
+			localPosition.y += 0.75f;
+			if (flag && allowExpensive)
+			{
+				this.animAITransform.SetLocalPositionRotation(localPosition, this._transform.localRotation);
+			}
+			else
+			{
+				this.animAITransform.SetLocalPositionNoNotify(localPosition);
+				this.animAITransform.SetLocalRotationNoNotify(this._transform.localRotation);
+				int j = 0;
+				int childCount2 = this.animAITransform.childCount;
+				while (j < childCount2)
+				{
+					Transform child2 = this.animAITransform.GetChild(j);
+					child2.SetLocalPositionNoNotify(child2.localPosition);
+					child2.SetLocalRotationNoNotify(child2.localRotation);
+					j++;
+				}
+			}
+		}
+	}
+
+	// Token: 0x060001D3 RID: 467 RVA: 0x000183F0 File Offset: 0x000165F0
+	private void DoTheUpdate(bool isFixedUpdate)
+	{
+		if (GameManager.IsLoadingScenes())
+		{
+			return;
+		}
+		if (!this.initialized)
+		{
+			return;
+		}
+		if (this.bFirstFrame)
+		{
+			this.configurationSinus = Random.Range(0f, 6.28f);
+			this.confSinusUpdateSpeed = Random.Range(0.3f, 2f);
+			this.confSinusFactor = Random.Range(0.2f, 0.4f);
+			if (this.initialWaypoint != null)
+			{
+				this.animControlledAI.FollowWaypoint(this.initialWaypoint.gameObject);
+			}
+		}
+		if (!this.animControlledAI.AllowUpdate())
+		{
+			this.forceNextColliderUpdate = true;
+			if (this.bFirstFrame)
+			{
+				this.blendHelper.UpdateAnimationBlends(Time.deltaTime);
+			}
+			this.bFirstFrame = false;
+			if (this.debugPlayPosition)
+			{
+			}
+			return;
+		}
+		this.bFirstFrame = false;
+		float num = Time.deltaTime;
+		if (!this.characterModel || num == 0f)
+		{
+			return;
+		}
+		while (num > 0f)
+		{
+			float num2 = FastMath.Min(num, 0.1f);
+			ABDefinition topDefinition = this.blendHelper.GetTopDefinition();
+			bool flag = true;
+			Vector3 vector = Vector3Fast.zero;
+			if (this.groundPhysics && !topDefinition.isStatic)
+			{
+				flag = this.UpdatePhysics(num2, ref vector);
+			}
+			else
+			{
+				vector = this._transform.position;
+				this.posAtStartOfFrame = vector;
+				this.lastGroundCollider = null;
+			}
+			if (flag)
+			{
+				this.UpdateInput(num2, ref vector);
+			}
+			else
+			{
+				this.controls.stick = Vector2.zero;
+			}
+			topDefinition = this.blendHelper.GetTopDefinition();
+			if (topDefinition == null)
+			{
+				return;
+			}
+			if (this.bIsForceStoppingCharacter)
+			{
+				this.SetForceStoppingBlendParameters(num2);
+			}
+			else
+			{
+				this.SetBlendParameters(num2);
+			}
+			this.configurationSinus += num2 * this.confSinusUpdateSpeed;
+			this.blendHelper.SetBlendParameter(2, Random.Range(0f, 1f));
+			this.blendHelper.SetBlendParameter(9, this.configurationToUse + FastMath.Sin(this.configurationSinus) * this.confSinusFactor);
+			this.blendHelper.SetBlendParameter(4, this.blendHelper.GetAnimPos());
+			ABHelperData abhelperData = this.blendHelper.UpdateAnimationBlends(num2);
+			this.blendHelper.SetBlendParameter(4, abhelperData.normalizedAnimPos);
+			if (this.debugPlayPosition)
+			{
+			}
+			this.blendHelper.SetBlendParameter(5, abhelperData.totalPlayTime);
+			this.blendHelper.SetBlendParameter(6, abhelperData.topBlendWeight);
+			bool flag2 = false;
+			if (this.setNewRotation)
+			{
+				this.setNewRotation = false;
+				this._transform.SetLocalRotationNoNotify(this.rotToSet);
+				flag2 = true;
+			}
+			if (abhelperData != null)
+			{
+				bool flag3 = true;
+				if (this.transitionManager != null)
+				{
+					AnimcontrolStateInfo currentState = this.transitionManager.GetCurrentState();
+					if (currentState != null)
+					{
+						flag3 = currentState.useAnimationMovement;
+					}
+				}
+				if (!this.disableMovement)
+				{
+					bool flag4 = false;
+					if (!topDefinition.isStatic)
+					{
+						this.staticAligner = null;
+						float num3 = 0f;
+						if (topDefinition.alignmentRotateSpeed > 0f)
+						{
+							num3 = this.blendHelper.blendParameters.raw[3] * num2 * topDefinition.alignmentRotateSpeed;
+						}
+						Vector3 vector2;
+						if (!flag)
+						{
+							vector2 = Vector3Fast.zero;
+						}
+						else if (this.freefallMode)
+						{
+							vector2 = this.freefallMoveSpeed;
+						}
+						else if (!flag3)
+						{
+							vector2 = Vector3Fast.zero;
+						}
+						else
+						{
+							vector2 = this.GetLastMoveSpeed();
+						}
+						if (this.bIsForceStoppingCharacter && vector2.sqrMagnitude < 0.05f)
+						{
+							this.bIsForceStoppingCharacter = false;
+							this.SetStaticAnimation(this.animDefToSetAfterStop, null, false, this.customParameterAfterStop, this.transitTimeAfterStop, 0f);
+						}
+						vector2.x *= num2;
+						vector2.y *= num2;
+						vector2.z *= num2;
+						vector2 = this.animControlledAI.AIUpdateFinalMoveVector(vector2, num2, ref vector);
+						this.lastMoveStep = vector2;
+						if (vector2 != Vector3Fast.zero || this.freefallMode || !flag || this.posAtStartOfFrame != vector)
+						{
+							Vector3 vector3 = vector;
+							vector3.x += vector2.x;
+							vector3.y += vector2.y;
+							vector3.z += vector2.z;
+							if (this.fastSetPos)
+							{
+								this._transform.SetLocalPositionNoNotify(vector3);
+							}
+							else
+							{
+								this._transform.position = vector3;
+							}
+							flag4 = true;
+							this.cachedPosLastFrame = vector3;
+						}
+						else
+						{
+							this.cachedPosLastFrame = vector;
+						}
+						float y = abhelperData.localRotationSpeed.y;
+						float num4 = y * num2 + num3;
+						if (this.tiltOnSlopes || FastMath.Abs(num4) > 0.01f)
+						{
+							Vector3 localEulerAngles = this._transform.localEulerAngles;
+							float x = 0f;
+							if (this.tiltOnSlopes)
+							{
+								x = -this.slopeLastFrame;
+							}
+							localEulerAngles.x = x;
+							localEulerAngles.y += num4;
+							localEulerAngles.z = 0f;
+							if (this.fastSetPos)
+							{
+								this._transform.SetLocalRotationNoNotify(Quaternion.Euler(localEulerAngles));
+							}
+							else
+							{
+								this._transform.localEulerAngles = localEulerAngles;
+							}
+							flag4 = true;
+						}
+						if (this.customPositioningFunctions.size > topDefinition.definitionID)
+						{
+							AnimcontrolledCharacter.CustomPositioningFunction customPositioningFunction = this.customPositioningFunctions.raw[topDefinition.definitionID];
+							if (customPositioningFunction != null)
+							{
+								customPositioningFunction(this, num2);
+								flag4 = true;
+							}
+						}
+					}
+					else
+					{
+						if (this.isAlbino)
+						{
+							this.albinoAI.lastPos = vector;
+						}
+						float num5 = topDefinition.blendWeight;
+						num5 = MathUtils.SmoothFraction(num5);
+						AnimcontrolledCharacter.CustomStaticPositionFunction customStaticPositionFunction = null;
+						if (this.customStaticPositionFunctions.size > topDefinition.definitionID)
+						{
+							customStaticPositionFunction = this.customStaticPositionFunctions.raw[topDefinition.definitionID];
+						}
+						Vector3 vector4 = this.staticAnimBasePos;
+						if (customStaticPositionFunction != null)
+						{
+							vector4 = customStaticPositionFunction(this, this.staticAnimBasePos, this.staticAnimWantedBasePos);
+						}
+						else
+						{
+							float num6 = 1f - num5;
+							this.staticAnimBasePos.x = this.staticAnimWantedBasePos.x * num5 + this.staticAnimBasePos.x * num6;
+							this.staticAnimBasePos.y = this.staticAnimWantedBasePos.y * num5 + this.staticAnimBasePos.y * num6;
+							this.staticAnimBasePos.z = this.staticAnimWantedBasePos.z * num5 + this.staticAnimBasePos.z * num6;
+							vector4 = this.staticAnimBasePos;
+						}
+						Vector3 angles = this.staticAnimWantedBaseRot - this.staticAnimBaseRot;
+						angles = MathUtils.GetShortestAngleDistance(angles);
+						float num7 = FastMath.Min(num2 * 7f, 1f);
+						this.staticAnimBaseRot.x = this.staticAnimBaseRot.x + angles.x * num7;
+						this.staticAnimBaseRot.y = this.staticAnimBaseRot.y + angles.y * num7;
+						this.staticAnimBaseRot.z = this.staticAnimBaseRot.z + angles.z * num7;
+						if (flag3)
+						{
+							Vector3 vector5 = Quaternion.Euler(this.staticAnimBaseRot) * abhelperData.localPosition;
+							if (topDefinition.useStaticScale)
+							{
+								Vector3 localScale = this.animCharTransform.localScale;
+								vector5.x *= localScale.x;
+								vector5.y *= localScale.y;
+								vector5.z *= localScale.z;
+							}
+							Vector3 vector6 = vector4;
+							vector6.x += vector5.x;
+							vector6.y += vector5.y;
+							vector6.z += vector5.z;
+							flag4 = (vector6 != this.cachedPosLastFrame);
+							this.cachedPosLastFrame = vector6;
+							if (this.fastSetPos)
+							{
+								this._transform.SetLocalPositionNoNotify(vector6);
+							}
+							else
+							{
+								this._transform.position = vector6;
+							}
+						}
+						else
+						{
+							if (this.fastSetPos)
+							{
+								this._transform.SetLocalPositionNoNotify(vector4);
+							}
+							else
+							{
+								this._transform.position = vector4;
+							}
+							flag4 = (vector4 != this.cachedPosLastFrame);
+							this.cachedPosLastFrame = vector4;
+						}
+						Vector3 vector7 = this.staticAnimBaseRot;
+						Vector3 localRotation = abhelperData.localRotation;
+						vector7.x += localRotation.x;
+						vector7.y += localRotation.y;
+						vector7.z += localRotation.z;
+						if (this.fastSetPos)
+						{
+							Quaternion quaternion = Quaternion.Euler(vector7);
+							if (quaternion != this._transform.localRotation)
+							{
+								flag4 = true;
+							}
+							this._transform.SetLocalRotationNoNotify(Quaternion.Euler(vector7));
+						}
+						else
+						{
+							this._transform.eulerAngles = vector7;
+						}
+					}
+					if (this.isAlbino && !flag4 && this.albinoAI.justWoken && this.albinoAI.RoundRobinUpdating())
+					{
+						flag4 = true;
+						this.albinoAI.justWoken = false;
+					}
+					if (flag4 || flag2)
+					{
+						this.FastPosUpdateNodes(true);
+					}
+				}
+				AnimcontrolStateInfo.TransitionData transitionData = this.GetDefaultButtonTransition();
+				if (transitionData == null)
+				{
+					if (this.customTransitionFunctions.size > topDefinition.definitionID)
+					{
+						AnimcontrolledCharacter.CustomTransitionFunction customTransitionFunction = this.customTransitionFunctions.raw[topDefinition.definitionID];
+						if (customTransitionFunction != null)
+						{
+							transitionData = customTransitionFunction(this);
+						}
+					}
+					if (transitionData == null && this.transitionManager != null)
+					{
+						transitionData = this.transitionManager.TestTransitions(topDefinition, this.blendHelper);
+					}
+				}
+				base.DoTransition(transitionData, topDefinition, abhelperData.normalizedAnimPos);
+			}
+			num -= 0.1f;
+		}
+	}
+
+	// Token: 0x060001D4 RID: 468 RVA: 0x00018E14 File Offset: 0x00017014
+	protected override void OnDestroyInternal()
+	{
+		if (!this.initialized)
+		{
+			AlbinoGroupManager.mInstance.RemoveTimeSliceInitialization(this);
+		}
+	}
+
+	// Token: 0x060001D5 RID: 469 RVA: 0x00018E2C File Offset: 0x0001702C
+	private void Update()
+	{
+		this.DoTheUpdate(false);
+		if (this.freefallMode && this.onGround)
+		{
+			this.freefallMode = false;
+		}
+	}
+
+	// Token: 0x04000258 RID: 600
+	public const int physicsUpdateTimeShare = 6;
+
+	// Token: 0x04000259 RID: 601
+	private const float edgeInterpolateMaxTime = 0.2f;
+
+	// Token: 0x0400025A RID: 602
+	public AnimControlCustomCode customCodeManager;
+
+	// Token: 0x0400025B RID: 603
+	public AnimcontrolledAI animControlledAI;
+
+	// Token: 0x0400025C RID: 604
+	public BaseWaypoint initialWaypoint;
+
+	// Token: 0x0400025D RID: 605
+	public bool groundPhysics;
+
+	// Token: 0x0400025E RID: 606
+	public bool tiltOnSlopes;
+
+	// Token: 0x0400025F RID: 607
+	public Vector2 textureOffset;
+
+	// Token: 0x04000260 RID: 608
+	public bool debugJoystickControl;
+
+	// Token: 0x04000261 RID: 609
+	public bool debugPlayPosition;
+
+	// Token: 0x04000262 RID: 610
+	public string debugAnimA;
+
+	// Token: 0x04000263 RID: 611
+	public string debugAnimB;
+
+	// Token: 0x04000264 RID: 612
+	public string debugAnimX;
+
+	// Token: 0x04000265 RID: 613
+	public string debugAnimY;
+
+	// Token: 0x04000266 RID: 614
+	[NonSerialized]
+	public bool onGround;
+
+	// Token: 0x04000267 RID: 615
+	private AnimcontrolledCharacter.AnimControl controls = new AnimcontrolledCharacter.AnimControl();
+
+	// Token: 0x04000268 RID: 616
+	private float stickDeadZone = 0.2f;
+
+	// Token: 0x04000269 RID: 617
+	private float angleLastFrame;
+
+	// Token: 0x0400026A RID: 618
+	private float magnitudeLastFrame;
+
+	// Token: 0x0400026B RID: 619
+	[HideInInspector]
+	public float fallspeed;
+
+	// Token: 0x0400026C RID: 620
+	[HideInInspector]
+	public float lastFallspeed;
+
+	// Token: 0x0400026D RID: 621
+	public GameObject headBone;
+
+	// Token: 0x0400026E RID: 622
+	public Transform headTransform;
+
+	// Token: 0x0400026F RID: 623
+	public bool headScale;
+
+	// Token: 0x04000270 RID: 624
+	public GameObject stopModeVisualization;
+
+	// Token: 0x04000271 RID: 625
+	public bool disableMovement;
+
+	// Token: 0x04000272 RID: 626
+	public bool fastSetPos;
+
+	// Token: 0x04000273 RID: 627
+	private Vector3 staticAnimBasePos = Vector3Fast.zero;
+
+	// Token: 0x04000274 RID: 628
+	private Vector3 staticAnimBaseRot = Vector3Fast.zero;
+
+	// Token: 0x04000275 RID: 629
+	private Collider lastGroundCollider;
+
+	// Token: 0x04000276 RID: 630
+	private Vector3 lastGroundPos;
+
+	// Token: 0x04000277 RID: 631
+	private Vector3 groundVelocity = Vector3Fast.zero;
+
+	// Token: 0x04000278 RID: 632
+	private SkinnedMeshRenderer meshRenderer;
+
+	// Token: 0x04000279 RID: 633
+	private Transform _transform;
+
+	// Token: 0x0400027A RID: 634
+	private Rigidbody _rigidbody;
+
+	// Token: 0x0400027B RID: 635
+	private Vector3 cachedPosLastFrame = Vector3Fast.zero;
+
+	// Token: 0x0400027C RID: 636
+	private Vector3 staticAnimWantedBasePos = Vector3Fast.zero;
+
+	// Token: 0x0400027D RID: 637
+	private float staticAnimCustomParameter;
+
+	// Token: 0x0400027E RID: 638
+	private Vector3 staticAnimWantedBaseRot = Vector3Fast.zero;
+
+	// Token: 0x0400027F RID: 639
+	private FastList<AnimcontrolledCharacter.CustomTransitionFunction> customTransitionFunctions = new FastList<AnimcontrolledCharacter.CustomTransitionFunction>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04000280 RID: 640
+	private FastList<AnimcontrolledCharacter.CustomPositioningFunction> customPositioningFunctions = new FastList<AnimcontrolledCharacter.CustomPositioningFunction>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04000281 RID: 641
+	private FastList<AnimcontrolledCharacter.CustomStaticPositionFunction> customStaticPositionFunctions = new FastList<AnimcontrolledCharacter.CustomStaticPositionFunction>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04000282 RID: 642
+	private bool bIsForceStoppingCharacter;
+
+	// Token: 0x04000283 RID: 643
+	private ABDefinition animDefToSetAfterStop;
+
+	// Token: 0x04000284 RID: 644
+	private float customParameterAfterStop;
+
+	// Token: 0x04000285 RID: 645
+	private float transitTimeAfterStop;
+
+	// Token: 0x04000286 RID: 646
+	private float slopeLastFrame;
+
+	// Token: 0x04000287 RID: 647
+	public float configurationToUse;
+
+	// Token: 0x04000288 RID: 648
+	private bool freefallMode;
+
+	// Token: 0x04000289 RID: 649
+	private Vector3 freefallMoveSpeed;
+
+	// Token: 0x0400028A RID: 650
+	private Vector3 lastMoveStep;
+
+	// Token: 0x0400028B RID: 651
+	private GameController mControllerLazy;
+
+	// Token: 0x0400028C RID: 652
+	public static int masterPhysicsUpdateCount;
+
+	// Token: 0x0400028D RID: 653
+	public List<Collider> cachedColliders;
+
+	// Token: 0x0400028E RID: 654
+	private int physicsUpdateCount;
+
+	// Token: 0x0400028F RID: 655
+	public bool roundRobinPhysics;
+
+	// Token: 0x04000290 RID: 656
+	private bool bFirstFrame = true;
+
+	// Token: 0x04000291 RID: 657
+	private static long resetStopWatchTime;
+
+	// Token: 0x04000292 RID: 658
+	private static long stopWatchTime;
+
+	// Token: 0x04000293 RID: 659
+	private bool isAlbino;
+
+	// Token: 0x04000294 RID: 660
+	private AlbinoAI albinoAI;
+
+	// Token: 0x04000295 RID: 661
+	private Vector3 wantedHeadLocalTransform = Vector3Fast.zero;
+
+	// Token: 0x04000296 RID: 662
+	private bool timeSliceStart;
+
+	// Token: 0x04000297 RID: 663
+	private Transform animCharTransform;
+
+	// Token: 0x04000298 RID: 664
+	private Transform animAITransform;
+
+	// Token: 0x04000299 RID: 665
+	private Transform fastBonesTransform;
+
+	// Token: 0x0400029A RID: 666
+	private GameObject staticAligner;
+
+	// Token: 0x0400029B RID: 667
+	private float fallSpeed;
+
+	// Token: 0x0400029C RID: 668
+	private int colMask;
+
+	// Token: 0x0400029D RID: 669
+	private FastList<Collider> colliders = new FastList<Collider>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x0400029E RID: 670
+	private bool forceNextColliderUpdate;
+
+	// Token: 0x0400029F RID: 671
+	private bool testRigidBody;
+
+	// Token: 0x040002A0 RID: 672
+	private Ray rayToCast = new Ray(Vector3Fast.zero, Vector3Fast.down);
+
+	// Token: 0x040002A1 RID: 673
+	private RaycastHit hit = default(RaycastHit);
+
+	// Token: 0x040002A2 RID: 674
+	private float edgeInterpolateTimer;
+
+	// Token: 0x040002A3 RID: 675
+	private Vector3 posAtStartOfFrame = Vector3Fast.zero;
+
+	// Token: 0x040002A4 RID: 676
+	private bool setNewRotation;
+
+	// Token: 0x040002A5 RID: 677
+	private Quaternion rotToSet;
+
+	// Token: 0x040002A6 RID: 678
+	private float configurationSinus;
+
+	// Token: 0x040002A7 RID: 679
+	private float confSinusUpdateSpeed = 1f;
+
+	// Token: 0x040002A8 RID: 680
+	private float confSinusFactor = 0.3f;
+
+	// Token: 0x02000039 RID: 57
+	public class AnimControl
+	{
+		// Token: 0x040002A9 RID: 681
+		public Vector2 stick;
+	}
+
+	// Token: 0x02000665 RID: 1637
+	// (Invoke) Token: 0x0600282A RID: 10282
+	public delegate AnimcontrolStateInfo.TransitionData CustomTransitionFunction(AnimcontrolledCharacter character);
+
+	// Token: 0x02000666 RID: 1638
+	// (Invoke) Token: 0x0600282E RID: 10286
+	public delegate void CustomPositioningFunction(AnimcontrolledCharacter character, float deltaTime);
+
+	// Token: 0x02000667 RID: 1639
+	// (Invoke) Token: 0x06002832 RID: 10290
+	public delegate Vector3 CustomStaticPositionFunction(AnimcontrolledCharacter character, Vector3 initialPos, Vector3 wantedPos);
+}

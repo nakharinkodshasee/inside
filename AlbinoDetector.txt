@@ -1,0 +1,32 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000009 RID: 9
+public class AlbinoDetector : MonoBehaviour
+{
+	// Token: 0x06000063 RID: 99 RVA: 0x00009DA0 File Offset: 0x00007FA0
+	private void OnTriggerEnter(Collider coll)
+	{
+		AlbinoAI component = coll.GetComponent<AlbinoAI>();
+		if (component != this.ownerAI && component != null && !this.albinosInside.Contains(component))
+		{
+			this.albinosInside.Add(component);
+		}
+	}
+
+	// Token: 0x06000064 RID: 100 RVA: 0x00009DF0 File Offset: 0x00007FF0
+	private void OnTriggerExit(Collider coll)
+	{
+		AlbinoAI component = coll.GetComponent<AlbinoAI>();
+		if (component != null)
+		{
+			this.albinosInside.Remove(component);
+		}
+	}
+
+	// Token: 0x040000A1 RID: 161
+	public AlbinoAI ownerAI;
+
+	// Token: 0x040000A2 RID: 162
+	public FastList<AlbinoAI> albinosInside = new FastList<AlbinoAI>(0, FastListExpandMode.Exponential, 100);
+}

@@ -1,0 +1,38 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200003A RID: 58
+public class AnimcontrolledProperties : MonoBehaviour
+{
+	// Token: 0x17000007 RID: 7
+	// (get) Token: 0x060001D8 RID: 472 RVA: 0x00018ED8 File Offset: 0x000170D8
+	// (set) Token: 0x060001D9 RID: 473 RVA: 0x00018EE0 File Offset: 0x000170E0
+	public GameObject aiNode { get; set; }
+
+	// Token: 0x040002AA RID: 682
+	public float scale = -1f;
+
+	// Token: 0x040002AB RID: 683
+	public int meshToUse = -1;
+
+	// Token: 0x040002AC RID: 684
+	public int materialToUse = -1;
+
+	// Token: 0x040002AD RID: 685
+	public Vector2 textureOffset = new Vector2(-1f, -1f);
+
+	// Token: 0x040002AE RID: 686
+	public float configuration = -2f;
+
+	// Token: 0x040002AF RID: 687
+	public float headGearPossibility = 0.25f;
+
+	// Token: 0x040002B0 RID: 688
+	public float hairPossibility = 0.25f;
+
+	// Token: 0x040002B1 RID: 689
+	public int specificHeadGear = -1;
+
+	// Token: 0x040002B2 RID: 690
+	public int specificHair = -1;
+}

@@ -1,0 +1,102 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000016 RID: 22
+public class AlbinoMultiInteraction : MonoBehaviour
+{
+	// Token: 0x06000105 RID: 261 RVA: 0x00011CFC File Offset: 0x0000FEFC
+	protected virtual void Start()
+	{
+		this.reservedInteracters = new List<GameObject>();
+	}
+
+	// Token: 0x06000106 RID: 262 RVA: 0x00011D0C File Offset: 0x0000FF0C
+	protected virtual void Update()
+	{
+	}
+
+	// Token: 0x06000107 RID: 263 RVA: 0x00011D10 File Offset: 0x0000FF10
+	public virtual Vector3 GetOffsetPos(float offset, float scalefactor)
+	{
+		return Vector3.zero;
+	}
+
+	// Token: 0x06000108 RID: 264 RVA: 0x00011D18 File Offset: 0x0000FF18
+	private bool IsAnyFreeAlbinoCloser(GameObject albino)
+	{
+		FastList<AlbinoAI> activeAlbinos = AlbinoGroupManager.mInstance.GetActiveAlbinos();
+		float x = albino.transform.position.x;
+		float x2 = base.transform.position.x;
+		float num = x - x2;
+		foreach (AlbinoAI albinoAI in activeAlbinos)
+		{
+			if (albinoAI != albino && albinoAI.GetCharacter().onGround)
+			{
+				float num2 = albinoAI.transform.position.x - x2;
+				if (Mathf.Abs(num2) < Mathf.Abs(num) && num * num2 > 0f && !this.reservedInteracters.Contains(albinoAI.gameObject))
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x06000109 RID: 265 RVA: 0x00011E28 File Offset: 0x00010028
+	public bool RoomLeftForMultiInteraction()
+	{
+		return this.reservedInteracters.Count < this.maxHelpersInteracting;
+	}
+
+	// Token: 0x0600010A RID: 266 RVA: 0x00011E40 File Offset: 0x00010040
+	public virtual bool TestAndReserveInteraction(GameObject albino)
+	{
+		if (this.reservedInteracters.Exists((GameObject o) => o == albino))
+		{
+			return true;
+		}
+		if (this.reservedInteracters.Count >= this.maxHelpersInteracting)
+		{
+			return false;
+		}
+		if (!this.IsAnyFreeAlbinoCloser(albino))
+		{
+			this.reservedInteracters.Add(albino);
+			return true;
+		}
+		return false;
+	}
+
+	// Token: 0x0600010B RID: 267 RVA: 0x00011EBC File Offset: 0x000100BC
+	public virtual void UnReserveAllInteractions()
+	{
+		this.internalHelpersInteracting = 0;
+		this.reservedInteracters.Clear();
+	}
+
+	// Token: 0x0600010C RID: 268 RVA: 0x00011ED0 File Offset: 0x000100D0
+	public virtual void UnReserveInteraction(GameObject albino)
+	{
+		this.reservedInteracters.Remove(albino);
+		this.reservedInteracters.Clear();
+	}
+
+	// Token: 0x0600010D RID: 269 RVA: 0x00011EEC File Offset: 0x000100EC
+	public virtual void ControlMe(AlbinoAI albino, float zOffset)
+	{
+		this.internalHelpersInteracting++;
+	}
+
+	// Token: 0x04000168 RID: 360
+	public int helpersNeededToInteract;
+
+	// Token: 0x04000169 RID: 361
+	public int maxHelpersInteracting = 6;
+
+	// Token: 0x0400016A RID: 362
+	private List<GameObject> reservedInteracters;
+
+	// Token: 0x0400016B RID: 363
+	protected int internalHelpersInteracting;
+}

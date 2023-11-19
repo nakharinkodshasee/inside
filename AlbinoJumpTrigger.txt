@@ -1,0 +1,147 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000093 RID: 147
+public class AlbinoJumpTrigger : AlbinoTrigger
+{
+	// Token: 0x060004EF RID: 1263 RVA: 0x000362F4 File Offset: 0x000344F4
+	public override void Start()
+	{
+		base.Start();
+	}
+
+	// Token: 0x060004F0 RID: 1264 RVA: 0x000362FC File Offset: 0x000344FC
+	private AnimcontrolWaypoint GetClosestWaypoint(List<AnimcontrolWaypoint> waypointList, AlbinoAI albinoAI)
+	{
+		if (this.selectWaypointRoundRobin)
+		{
+			if (this.waypointIndex >= waypointList.Count)
+			{
+				this.waypointIndex = 0;
+			}
+			return waypointList[this.waypointIndex++];
+		}
+		AnimcontrolWaypoint animcontrolWaypoint = null;
+		if (waypointList.Count > 0)
+		{
+			if (waypointList.Count == 1)
+			{
+				animcontrolWaypoint = waypointList[0];
+			}
+			else
+			{
+				float z = albinoAI.transform.position.z;
+				animcontrolWaypoint = waypointList[0];
+				float num = Mathf.Abs(animcontrolWaypoint.transform.position.z - z);
+				for (int i = 1; i < waypointList.Count; i++)
+				{
+					AnimcontrolWaypoint animcontrolWaypoint2 = waypointList[i];
+					float num2 = Mathf.Abs(animcontrolWaypoint2.transform.position.z - z);
+					bool flag = num2 < num || (num2 == num && Random.Range(0f, 1f) > 0.5f);
+					if (flag)
+					{
+						num = num2;
+						animcontrolWaypoint = animcontrolWaypoint2;
+					}
+				}
+			}
+		}
+		return animcontrolWaypoint;
+	}
+
+	// Token: 0x060004F1 RID: 1265 RVA: 0x00036420 File Offset: 0x00034620
+	public AnimcontrolWaypoint SelectLeftWaypoint(AlbinoAI albinoAI)
+	{
+		double timeDbl = Time.timeDbl;
+		if (Mathf.Abs((float)(timeDbl - this.lastLeftJumpTime)) > this.leftInterval)
+		{
+			AnimcontrolWaypoint closestWaypoint = this.GetClosestWaypoint(this.JumpLeftWaypoints, albinoAI);
+			AnimationBlendHelper blendHelper = albinoAI.GetCharacter().GetBlendHelper();
+			if (!blendHelper.IsAnyStaticAnimPlaying())
+			{
+				this.lastLeftJumpTime = timeDbl;
+				this.leftInterval = Random.Range(0.05f, 0.3f);
+				return closestWaypoint;
+			}
+		}
+		return null;
+	}
+
+	// Token: 0x060004F2 RID: 1266 RVA: 0x00036490 File Offset: 0x00034690
+	public AnimcontrolWaypoint SelectRightWaypoint(AlbinoAI albinoAI)
+	{
+		double timeDbl = Time.timeDbl;
+		if (Mathf.Abs((float)(timeDbl - this.lastRightJumpTime)) > this.rightInterval)
+		{
+			AnimcontrolWaypoint closestWaypoint = this.GetClosestWaypoint(this.JumpRightWaypoints, albinoAI);
+			AnimationBlendHelper blendHelper = albinoAI.GetCharacter().GetBlendHelper();
+			if (!blendHelper.IsAnyStaticAnimPlaying())
+			{
+				this.lastRightJumpTime = timeDbl;
+				this.rightInterval = Random.Range(0.05f, 0.3f);
+				return closestWaypoint;
+			}
+		}
+		return null;
+	}
+
+	// Token: 0x060004F3 RID: 1267 RVA: 0x00036500 File Offset: 0x00034700
+	private void OnDrawGizmos()
+	{
+		if (EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay) && base.GetComponent<Collider>() != null)
+		{
+			Vector3 size = base.GetComponent<Collider>().bounds.size;
+			if (base.gameObject.layer != LayerMask.NameToLayer("NPC+"))
+			{
+				Gizmos.color = new Color(1f, 0f, 0f, 0.6f);
+				Gizmos.DrawCube(base.transform.position, size);
+				return;
+			}
+			Gizmos.color = new Color(0.4f, 0.7f, 0.4f, 0.5f);
+			Gizmos.DrawWireCube(base.transform.position, size);
+			size.x *= 0.5f;
+			if (this.JumpLeftWaypoints.Count > 0)
+			{
+				Gizmos.color = new Color(0.5f, 1f, 0.7f, 0.3f);
+				Vector3 position = base.transform.position;
+				position.x += size.x * 0.5f;
+				Gizmos.DrawCube(position, size);
+			}
+			if (this.JumpRightWaypoints.Count > 0)
+			{
+				Gizmos.color = new Color(0.7f, 1f, 0.5f, 0.3f);
+				Vector3 position2 = base.transform.position;
+				position2.x -= size.x * 0.5f;
+				Gizmos.DrawCube(position2, size);
+			}
+		}
+	}
+
+	// Token: 0x0400085A RID: 2138
+	public List<AnimcontrolWaypoint> JumpLeftWaypoints = new List<AnimcontrolWaypoint>();
+
+	// Token: 0x0400085B RID: 2139
+	public List<AnimcontrolWaypoint> JumpRightWaypoints = new List<AnimcontrolWaypoint>();
+
+	// Token: 0x0400085C RID: 2140
+	public bool allowFallDown;
+
+	// Token: 0x0400085D RID: 2141
+	public bool selectWaypointRoundRobin;
+
+	// Token: 0x0400085E RID: 2142
+	private int waypointIndex;
+
+	// Token: 0x0400085F RID: 2143
+	private double lastLeftJumpTime;
+
+	// Token: 0x04000860 RID: 2144
+	private float leftInterval = 0.15f;
+
+	// Token: 0x04000861 RID: 2145
+	private double lastRightJumpTime;
+
+	// Token: 0x04000862 RID: 2146
+	private float rightInterval = 0.15f;
+}

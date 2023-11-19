@@ -1,0 +1,147 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000125 RID: 293
+public class AudioSequenceStopSelector : MonoBehaviour, IAudioEventCallbackHandler, IPreAwake
+{
+	// Token: 0x060008DA RID: 2266 RVA: 0x0005CC6C File Offset: 0x0005AE6C
+	[EarlyProcessBuild(0)]
+	private void OnPreprocess()
+	{
+		if (this.preprocessed)
+		{
+			return;
+		}
+		this.eventStart = new AudioEventWithCallback(this.prefix + this.startEvent, AudioCallbackType.CueMarker | AudioCallbackType.Duration);
+		int num = this.stopEvents.Length;
+		this.eventsStop = new AudioEventSimple[num];
+		for (int i = 0; i < num; i++)
+		{
+			this.eventsStop[i] = new AudioEventSimple(this.prefix + this.stopEvents[i]);
+		}
+		if (!this.audioGameObject)
+		{
+			this.audioGameObject = base.gameObject;
+		}
+		this.akGameobj = AudioUtils.EnsureAkGameObj(this.audioGameObject, this);
+		this.preprocessed = true;
+	}
+
+	// Token: 0x060008DB RID: 2267 RVA: 0x0005CD24 File Offset: 0x0005AF24
+	public bool PreAwake(int callcount)
+	{
+		this.start = SignalIn.Create("start", base.gameObject, new Action(this.PlayStartEvent));
+		this.stop = SignalIn.Create("stop", base.gameObject, delegate
+		{
+			if (this.waitForNewSoundOrMarker)
+			{
+				this.isStopScheduled = true;
+			}
+			else
+			{
+				this.PlayStopEvent();
+			}
+		});
+		this.eventStart.SetHandler(this);
+		return true;
+	}
+
+	// Token: 0x060008DC RID: 2268 RVA: 0x0005CD84 File Offset: 0x0005AF84
+	private void Awake()
+	{
+		if (!this.preprocessed)
+		{
+			this.OnPreprocess();
+		}
+	}
+
+	// Token: 0x060008DD RID: 2269 RVA: 0x0005CD98 File Offset: 0x0005AF98
+	private void Update()
+	{
+		if (this.stopNow)
+		{
+			this.PlayStopEvent();
+			this.stopNow = false;
+		}
+	}
+
+	// Token: 0x060008DE RID: 2270 RVA: 0x0005CDB4 File Offset: 0x0005AFB4
+	public void PlayStartEvent()
+	{
+		this.eventStart.Post(this.akGameobj);
+		this.eventStartedCount = -1;
+	}
+
+	// Token: 0x060008DF RID: 2271 RVA: 0x0005CDD0 File Offset: 0x0005AFD0
+	public void PlayStopEvent()
+	{
+		int num = Mathf.Clamp(this.eventStartedCount, 0, this.eventsStop.Length - 1);
+		this.eventStart.CancelCallbacks();
+		this.eventsStop[num].PostFast(this.akGameobj);
+	}
+
+	// Token: 0x060008E0 RID: 2272 RVA: 0x0005CE14 File Offset: 0x0005B014
+	public void HandleEventCallback(AudioCallbackType type, CallbackInfo info)
+	{
+		if (type == AudioCallbackType.Duration)
+		{
+			this.eventStartedCount++;
+			if (this.waitForNewSoundOrMarker && this.isStopScheduled)
+			{
+				this.isStopScheduled = false;
+				this.stopNow = true;
+			}
+		}
+		else if (type == AudioCallbackType.CueMarker && this.waitForNewSoundOrMarker && this.isStopScheduled)
+		{
+			this.isStopScheduled = false;
+			this.stopNow = true;
+		}
+	}
+
+	// Token: 0x04000EEA RID: 3818
+	public string prefix;
+
+	// Token: 0x04000EEB RID: 3819
+	public string startEvent;
+
+	// Token: 0x04000EEC RID: 3820
+	public string[] stopEvents;
+
+	// Token: 0x04000EED RID: 3821
+	public bool waitForNewSoundOrMarker;
+
+	// Token: 0x04000EEE RID: 3822
+	public GameObject audioGameObject;
+
+	// Token: 0x04000EEF RID: 3823
+	public SignalIn start;
+
+	// Token: 0x04000EF0 RID: 3824
+	public SignalIn stop;
+
+	// Token: 0x04000EF1 RID: 3825
+	[SerializeField]
+	private AudioEventWithCallback eventStart;
+
+	// Token: 0x04000EF2 RID: 3826
+	[SerializeField]
+	private AudioEventSimple[] eventsStop;
+
+	// Token: 0x04000EF3 RID: 3827
+	[SerializeField]
+	private AkGameObj akGameobj;
+
+	// Token: 0x04000EF4 RID: 3828
+	private int eventStartedCount;
+
+	// Token: 0x04000EF5 RID: 3829
+	private bool isStopScheduled;
+
+	// Token: 0x04000EF6 RID: 3830
+	private bool stopNow;
+
+	// Token: 0x04000EF7 RID: 3831
+	[SerializeField]
+	private bool preprocessed;
+}

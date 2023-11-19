@@ -1,0 +1,129 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200009C RID: 156
+public class AlbinoTrigger : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600050E RID: 1294 RVA: 0x00036DC0 File Offset: 0x00034FC0
+	public bool GetIsEnabled()
+	{
+		return this.isEnabled;
+	}
+
+	// Token: 0x0600050F RID: 1295 RVA: 0x00036DC8 File Offset: 0x00034FC8
+	public virtual bool PreAwake(int callcount)
+	{
+		this.enableTrigger = SignalIn.Create("enableTrigger", base.gameObject, new Action(this.OnEnableTrigger));
+		this.disableTrigger = SignalIn.Create("disableTrigger", base.gameObject, new Action(this.OnDisableTrigger));
+		return true;
+	}
+
+	// Token: 0x06000510 RID: 1296 RVA: 0x00036E1C File Offset: 0x0003501C
+	public virtual void Start()
+	{
+		if (this.startDisabled)
+		{
+			this.OnDisableTrigger();
+		}
+	}
+
+	// Token: 0x06000511 RID: 1297 RVA: 0x00036E30 File Offset: 0x00035030
+	private void OnDisable()
+	{
+		this.albinosInside.Clear();
+	}
+
+	// Token: 0x06000512 RID: 1298 RVA: 0x00036E40 File Offset: 0x00035040
+	protected virtual void OnTriggerEnter(Collider coll)
+	{
+		AlbinoAI component = coll.GetComponent<AlbinoAI>();
+		if (component != null && !this.albinosInside.Contains(component))
+		{
+			if (this.isEnabled)
+			{
+				component.TriggerEntered(this);
+			}
+			this.albinosInside.Add(component);
+		}
+	}
+
+	// Token: 0x06000513 RID: 1299 RVA: 0x00036E90 File Offset: 0x00035090
+	protected virtual void OnTriggerExit(Collider coll)
+	{
+		AlbinoAI component = coll.GetComponent<AlbinoAI>();
+		if (component != null)
+		{
+			this.albinosInside.Remove(component);
+			if (this.isEnabled)
+			{
+				component.TriggerExited(this);
+			}
+		}
+	}
+
+	// Token: 0x06000514 RID: 1300 RVA: 0x00036ED0 File Offset: 0x000350D0
+	public void SafetyRemoveAlbinoAI(AlbinoAI albinoAI)
+	{
+		this.albinosInside.Remove(albinoAI);
+		if (this.isEnabled)
+		{
+			albinoAI.TriggerExited(this);
+		}
+	}
+
+	// Token: 0x06000515 RID: 1301 RVA: 0x00036EF4 File Offset: 0x000350F4
+	public bool LogicEnabled()
+	{
+		return this.isEnabled;
+	}
+
+	// Token: 0x06000516 RID: 1302 RVA: 0x00036EFC File Offset: 0x000350FC
+	public void OnEnableTrigger()
+	{
+		if (!this.isEnabled)
+		{
+			int i = 0;
+			int count = this.albinosInside.Count;
+			while (i < count)
+			{
+				AlbinoAI albinoAI = this.albinosInside[i];
+				albinoAI.TriggerEntered(this);
+				i++;
+			}
+		}
+		this.isEnabled = true;
+	}
+
+	// Token: 0x06000517 RID: 1303 RVA: 0x00036F50 File Offset: 0x00035150
+	public void OnDisableTrigger()
+	{
+		if (this.isEnabled)
+		{
+			int i = 0;
+			int count = this.albinosInside.Count;
+			while (i < count)
+			{
+				AlbinoAI albinoAI = this.albinosInside[i];
+				albinoAI.TriggerExited(this);
+				i++;
+			}
+		}
+		this.isEnabled = false;
+	}
+
+	// Token: 0x04000873 RID: 2163
+	public bool startDisabled;
+
+	// Token: 0x04000874 RID: 2164
+	protected SignalIn enableTrigger;
+
+	// Token: 0x04000875 RID: 2165
+	protected SignalIn disableTrigger;
+
+	// Token: 0x04000876 RID: 2166
+	protected bool isEnabled = true;
+
+	// Token: 0x04000877 RID: 2167
+	protected List<AlbinoAI> albinosInside = new List<AlbinoAI>();
+}

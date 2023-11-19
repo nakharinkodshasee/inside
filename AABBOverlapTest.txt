@@ -1,0 +1,56 @@
+using System;
+
+// Token: 0x02000001 RID: 1
+internal class <Module>
+{
+}
+
+using System;
+using UnityEngine;
+
+// Token: 0x02000563 RID: 1379
+[ExecuteInEditMode]
+public class AABBOverlapTest : MonoBehaviour, ISupportOverlapTest
+{
+	// Token: 0x060023CF RID: 9167 RVA: 0x001298DC File Offset: 0x00127ADC
+	public bool Overlap(ref Bounds other)
+	{
+		return BoundsExtension.Overlap(ref this.boundsCuller.aabb, ref other);
+	}
+
+	// Token: 0x060023D0 RID: 9168 RVA: 0x001298F0 File Offset: 0x00127AF0
+	public bool Overlap(Vector3 sphereCenter, float sphereRadius)
+	{
+		return BoundsExtension.Overlap(ref this.boundsCuller.aabb, ref sphereCenter, sphereRadius);
+	}
+
+	// Token: 0x060023D1 RID: 9169 RVA: 0x00129908 File Offset: 0x00127B08
+	private void UpdateTest()
+	{
+		Lights.DoIf((Light light) => true, delegate(Light light)
+		{
+			light.color = Color.green;
+		});
+		Lights.DoIf((Light light) => DirtyStaticShadowManager.UsesStaticShadowAndOverlap(this, light), delegate(Light light)
+		{
+			light.staticShadowsDirty = true;
+			light.color = Color.red;
+		});
+	}
+
+	// Token: 0x060023D2 RID: 9170 RVA: 0x00129984 File Offset: 0x00127B84
+	private void OnDrawGizmos()
+	{
+		this.boundsCuller.aabb.Draw(Color.blue);
+	}
+
+	// Token: 0x060023D3 RID: 9171 RVA: 0x0012999C File Offset: 0x00127B9C
+	private void Update()
+	{
+		this.UpdateTest();
+		this.boundsCuller.RefreshRuntimeState();
+	}
+
+	// Token: 0x0400423E RID: 16958
+	public BoundsCullerRuntime boundsCuller;
+}

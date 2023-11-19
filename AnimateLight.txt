@@ -1,0 +1,201 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000313 RID: 787
+public class AnimateLight : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001676 RID: 5750 RVA: 0x000C5588 File Offset: 0x000C3788
+	public bool PreAwake(int callcount)
+	{
+		this.animateLight = SignalIn.Create("animateLight", base.gameObject, new Action(this.OnAnimate));
+		this.stopAnimation = SignalIn.Create("stopAnimation", base.gameObject, new Action(this.OnStopAnimation));
+		return true;
+	}
+
+	// Token: 0x06001677 RID: 5751 RVA: 0x000C55DC File Offset: 0x000C37DC
+	private void Start()
+	{
+		if (this.setInitialCurveValue && this.lightToAnimate != null)
+		{
+			int i = 0;
+			int num = this.lightToAnimate.Length;
+			while (i < num)
+			{
+				Light light = this.lightToAnimate[i];
+				if (light)
+				{
+					if (this.animateIntensity)
+					{
+						light.intensity = this.lightIntensity.Evaluate(0f);
+					}
+					if (this.animateColor)
+					{
+						light.color = this.lightColor.Evaluate(0f);
+					}
+				}
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x06001678 RID: 5752 RVA: 0x000C5670 File Offset: 0x000C3870
+	private void OnEnable()
+	{
+		if (this.playOnAwake)
+		{
+			this.SetAnimateState();
+		}
+	}
+
+	// Token: 0x06001679 RID: 5753 RVA: 0x000C5684 File Offset: 0x000C3884
+	private void Update()
+	{
+		if (this.state == AnimateLight.State.Animate)
+		{
+			this.AnimateState();
+		}
+		else if (this.state == AnimateLight.State.Wait)
+		{
+			this.WaitState();
+		}
+	}
+
+	// Token: 0x0600167A RID: 5754 RVA: 0x000C56B0 File Offset: 0x000C38B0
+	private void SetWaitState()
+	{
+		this.state = AnimateLight.State.Wait;
+	}
+
+	// Token: 0x0600167B RID: 5755 RVA: 0x000C56BC File Offset: 0x000C38BC
+	private void WaitState()
+	{
+	}
+
+	// Token: 0x0600167C RID: 5756 RVA: 0x000C56C0 File Offset: 0x000C38C0
+	private void SetAnimateState()
+	{
+		if (this.lightToAnimate != null)
+		{
+			this.time = 0f;
+			this.animateDuration = Random.Range(this.animateDurationMin, this.animateDurationMax);
+			this.state = AnimateLight.State.Animate;
+		}
+		else
+		{
+			this.SetWaitState();
+		}
+	}
+
+	// Token: 0x0600167D RID: 5757 RVA: 0x000C570C File Offset: 0x000C390C
+	private void AnimateState()
+	{
+		if (this.time < this.animateDuration)
+		{
+			this.time += Time.deltaTime;
+			float num = this.time / this.animateDuration;
+			float intensity = this.lightIntensity.Evaluate(num);
+			float num2 = this.spotAngle.Evaluate(num);
+			Color color = this.lightColor.Evaluate(num);
+			int i = 0;
+			int num3 = this.lightToAnimate.Length;
+			while (i < num3)
+			{
+				if (this.animateIntensity)
+				{
+					this.lightToAnimate[i].intensity = intensity;
+				}
+				if (this.animateColor)
+				{
+					this.lightToAnimate[i].color = color;
+				}
+				if (this.animateSpotAngle)
+				{
+					this.lightToAnimate[i].spotAngle = num2;
+				}
+				i++;
+			}
+		}
+		else if (this.loopAnimation)
+		{
+			this.SetAnimateState();
+		}
+		else
+		{
+			this.SetWaitState();
+		}
+	}
+
+	// Token: 0x0600167E RID: 5758 RVA: 0x000C5804 File Offset: 0x000C3A04
+	public void OnAnimate()
+	{
+		this.SetAnimateState();
+	}
+
+	// Token: 0x0600167F RID: 5759 RVA: 0x000C580C File Offset: 0x000C3A0C
+	public void OnStopAnimation()
+	{
+		this.SetWaitState();
+	}
+
+	// Token: 0x040027B1 RID: 10161
+	public Light[] lightToAnimate = new Light[0];
+
+	// Token: 0x040027B2 RID: 10162
+	public AnimationCurve lightIntensity;
+
+	// Token: 0x040027B3 RID: 10163
+	public AnimationCurve spotAngle;
+
+	// Token: 0x040027B4 RID: 10164
+	public Gradient lightColor;
+
+	// Token: 0x040027B5 RID: 10165
+	public bool animateIntensity = true;
+
+	// Token: 0x040027B6 RID: 10166
+	public bool animateColor = true;
+
+	// Token: 0x040027B7 RID: 10167
+	public bool animateSpotAngle;
+
+	// Token: 0x040027B8 RID: 10168
+	public float animateDurationMin = 1f;
+
+	// Token: 0x040027B9 RID: 10169
+	public float animateDurationMax = 2f;
+
+	// Token: 0x040027BA RID: 10170
+	public bool playOnAwake;
+
+	// Token: 0x040027BB RID: 10171
+	public bool loopAnimation;
+
+	// Token: 0x040027BC RID: 10172
+	public bool setInitialCurveValue;
+
+	// Token: 0x040027BD RID: 10173
+	public SignalIn animateLight;
+
+	// Token: 0x040027BE RID: 10174
+	public SignalIn stopAnimation;
+
+	// Token: 0x040027BF RID: 10175
+	private AnimateLight.State state;
+
+	// Token: 0x040027C0 RID: 10176
+	private float time;
+
+	// Token: 0x040027C1 RID: 10177
+	private float animateDuration;
+
+	// Token: 0x02000314 RID: 788
+	private enum State
+	{
+		// Token: 0x040027C3 RID: 10179
+		None,
+		// Token: 0x040027C4 RID: 10180
+		Wait,
+		// Token: 0x040027C5 RID: 10181
+		Animate
+	}
+}

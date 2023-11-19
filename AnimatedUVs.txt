@@ -1,0 +1,28 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003CF RID: 975
+public class AnimatedUVs : MonoBehaviour
+{
+	// Token: 0x06001A2D RID: 6701 RVA: 0x000E45AC File Offset: 0x000E27AC
+	private void LateUpdate()
+	{
+		this.uvOffset += this.uvAnimationRate * Time.deltaTime;
+		if (base.GetComponent<Renderer>().enabled)
+		{
+			base.GetComponent<Renderer>().materials[this.materialIndex].SetTextureOffset(this.textureName, this.uvOffset);
+		}
+	}
+
+	// Token: 0x04002F0A RID: 12042
+	public int materialIndex;
+
+	// Token: 0x04002F0B RID: 12043
+	public Vector2 uvAnimationRate = new Vector2(1f, 0f);
+
+	// Token: 0x04002F0C RID: 12044
+	public string textureName = "_MainTex";
+
+	// Token: 0x04002F0D RID: 12045
+	private Vector2 uvOffset = Vector2.zero;
+}

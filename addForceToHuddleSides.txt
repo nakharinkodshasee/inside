@@ -1,0 +1,27 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005DA RID: 1498
+public class addForceToHuddleSides : MonoBehaviour
+{
+	// Token: 0x060025E7 RID: 9703 RVA: 0x00135308 File Offset: 0x00133508
+	public void addForce()
+	{
+		HuddleCloth.ClothBone[] leftmostHuddleBones = ScriptGlobals.huddle.cloth.leftmostHuddleBones;
+		Rigidbody body = leftmostHuddleBones[leftmostHuddleBones.Length - 1].body;
+		body.AddRelativeForce(Vector3.up * this.multiplyer);
+	}
+
+	// Token: 0x060025E8 RID: 9704 RVA: 0x00135348 File Offset: 0x00133548
+	private void Start()
+	{
+	}
+
+	// Token: 0x060025E9 RID: 9705 RVA: 0x0013534C File Offset: 0x0013354C
+	private void Update()
+	{
+	}
+
+	// Token: 0x04004523 RID: 17699
+	public float multiplyer;
+}

@@ -1,0 +1,800 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000022 RID: 34
+public class AlbinoVoiceManager : MonoBehaviour, IFastEventListener
+{
+	// Token: 0x06000141 RID: 321 RVA: 0x00013780 File Offset: 0x00011980
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(this.albinoAvarage.gameObject, null);
+		string str = "mines_albino";
+		this.audioVoiceStartMines = new AudioEventSimpleLocal(str + "_voiceStart", this.akGameObj);
+		this.audioVoiceStopMines = new AudioEventSimpleLocal(str + "_voiceStop", this.akGameObj);
+		this.audioJumpAlbinosMines = new AudioEventSimpleLocal(str + "_boyJumpAid", this.akGameObj);
+		this.audioClimbAlbinosMines = new AudioEventSimpleLocal(str + "_boyClimbAid", this.akGameObj);
+		this.audioTagJumpMines = new AudioEventSimpleLocal(str + "_tapThrow", this.akGameObj);
+		this.audioSmallJumpMines = new AudioEventSimpleLocal(str + "_smallThrow", this.akGameObj);
+		this.audioFullJumpMines = new AudioEventSimpleLocal(str + "_fullThrow", this.akGameObj);
+		this.audioCatchBoyMines = new AudioEventSimpleLocal(str + "_catchBoy", this.akGameObj);
+		this.audioHugStartMines = new AudioEventSimpleLocal(str + "_hugStart", this.akGameObj);
+		this.audioHugStopMines = new AudioEventSimpleLocal(str + "_hugStop", this.akGameObj);
+		this.audioFallMines = new AudioEventSimpleLocal(str + "_fall", this.akGameObj);
+		string str2 = "prehuddle_albino";
+		this.audioVoiceStartHuddle = new AudioEventSimpleLocal(str2 + "_voiceStart", this.akGameObj);
+		this.audioVoiceStopHuddle = new AudioEventSimpleLocal(str2 + "_voiceStop", this.akGameObj);
+		this.audioJumpAlbinosHuddle = new AudioEventSimpleLocal(str2 + "_boyJumpAid", this.akGameObj);
+		this.audioClimbAlbinosHuddle = new AudioEventSimpleLocal(str2 + "_boyClimbAid", this.akGameObj);
+		this.audioTagJumpHuddle = new AudioEventSimpleLocal(str2 + "_tapThrow", this.akGameObj);
+		this.audioSmallJumpHuddle = new AudioEventSimpleLocal(str2 + "_smallThrow", this.akGameObj);
+		this.audioFullJumpHuddle = new AudioEventSimpleLocal(str2 + "_fullThrow", this.akGameObj);
+		this.audioCatchBoyHuddle = new AudioEventSimpleLocal(str2 + "_catchBoy", this.akGameObj);
+		this.audioHugStartHuddle = new AudioEventSimpleLocal(str2 + "_hugStart", this.akGameObj);
+		this.audioHugStopHuddle = new AudioEventSimpleLocal(str2 + "_hugStop", this.akGameObj);
+		this.audioFallHuddle = new AudioEventSimpleLocal(str2 + "_fall", this.akGameObj);
+		this.audioLiftHuddleStart = new AudioEventSimpleLocal(str2 + "_liftHuddleStart", this.akGameObj);
+		this.audioLiftHuddleStop = new AudioEventSimpleLocal(str2 + "_liftHuddleStop", this.akGameObj);
+	}
+
+	// Token: 0x06000142 RID: 322 RVA: 0x00013A64 File Offset: 0x00011C64
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.manager = AlbinoGroupManager.mInstance;
+		this.jumpAlbinoAidedQuickTap = this.manager.jumpAlbinoAidedQuickTap;
+		this.jumpAlbinoAidedSmallUp = this.manager.jumpAlbinoAidedSmallUp;
+		this.jumpAlbinoAided = this.manager.jumpAlbinoAided;
+		this.jumpAlbinoAidedForward = this.manager.jumpAlbinoAidedForward;
+		this.jumpAlbinoAidedBackward = this.manager.jumpAlbinoAidedBackward;
+		this.climbUpAlbinos = this.manager.climbUpAlbinos;
+		this.jumpUpAlbinos = this.manager.jumpUpAlbinos;
+		this.carriedByAlbinos = this.manager.carriedByAlbinos;
+		this.runningOffAlbinosFW = this.manager.runningOffAlbinosFW;
+		this.runningOffAlbinosBW = this.manager.runningOffAlbinosBW;
+		this.audioVoiceStart = this.audioVoiceStartMines;
+		this.audioVoiceStop = this.audioVoiceStopMines;
+		this.audioJumpAlbinos = this.audioJumpAlbinosMines;
+		this.audioClimbAlbinos = this.audioClimbAlbinosMines;
+		this.audioTagJump = this.audioTagJumpMines;
+		this.audioSmallJump = this.audioSmallJumpMines;
+		this.audioFullJump = this.audioFullJumpMines;
+		this.audioCatchBoy = this.audioCatchBoyMines;
+		this.audioHugStart = this.audioHugStartMines;
+		this.audioHugStop = this.audioHugStopMines;
+		this.audioFall = this.audioFallMines;
+		this.visualBoy = ScriptGlobals.boy.visualBoy;
+		this.audioObject = this.albinoAvarage.gameObject;
+		GameManager.scenesLoaded.Register(this, ref this.scenesLoadedHandle);
+	}
+
+	// Token: 0x06000143 RID: 323 RVA: 0x00013BE4 File Offset: 0x00011DE4
+	private void OnDestroy()
+	{
+		if (this.audioVoiceStop != null && this.audioVoiceStop.akGameObj != null)
+		{
+			this.audioVoiceStop.PostFast();
+		}
+		GameManager.scenesLoaded.Unregister(ref this.scenesLoadedHandle);
+	}
+
+	// Token: 0x06000144 RID: 324 RVA: 0x00013C24 File Offset: 0x00011E24
+	public void OnFastEvent(FastEvent sender)
+	{
+		if (sender == GameManager.scenesLoaded)
+		{
+			this.ResetValues();
+		}
+	}
+
+	// Token: 0x06000145 RID: 325 RVA: 0x00013C38 File Offset: 0x00011E38
+	private void ResetValues()
+	{
+		this.albinoHugging = false;
+		this.albinoHuggingLastFrame = false;
+		this.soundIsPlaying = false;
+		this.jumpingUp = false;
+		this.climbingUp = false;
+		this.fullThrow = false;
+		this.smallThrow = false;
+		this.quickTap = false;
+		this.caughtByAlbinos = false;
+		this.liftingHuddle = false;
+		this.boyMaxFallSpeed = 0f;
+		this.idleCountLastFrame = 0;
+		this.albinosAreHugging = false;
+		this.followingAlbinoIsOnMovingGround = false;
+		this.movingAlbinosLastFrame = 0;
+	}
+
+	// Token: 0x06000146 RID: 326 RVA: 0x00013CB4 File Offset: 0x00011EB4
+	private void UpdateThrowVoices()
+	{
+		if (ScriptGlobals.boy.status.groundCollider == null)
+		{
+			if (!this.quickTap && this.clipNode == this.jumpAlbinoAidedQuickTap && this.clipNode.frame > 1f && this.clipNode.frame < 5f)
+			{
+				this.quickTap = true;
+				this.audioTagJump.PostFast();
+			}
+			else if (this.quickTap && this.clipNode == this.jumpAlbinoAidedQuickTap && this.clipNode.frame > 15f)
+			{
+				this.quickTap = false;
+			}
+			else if (!this.smallThrow && this.clipNode == this.jumpAlbinoAidedSmallUp)
+			{
+				this.smallThrow = true;
+				this.audioSmallJump.PostFast();
+			}
+			else if (!this.fullThrow && (this.clipNode == this.jumpAlbinoAided || this.clipNode == this.jumpAlbinoAidedForward || this.clipNode == this.jumpAlbinoAidedBackward) && this.clipNode.frame > 12f && this.clipNode.frame < 14f)
+			{
+				this.audioFullJump.PostFast();
+				this.fullThrow = true;
+			}
+		}
+		else
+		{
+			this.fullThrow = false;
+			this.smallThrow = false;
+			this.quickTap = false;
+		}
+		if (this.manager.IsBoyBeingLifted())
+		{
+			if (!this.climbingUp && this.clipNode == this.climbUpAlbinos && this.clipNode.frame > 14f && this.clipNode.frame < 16f)
+			{
+				this.climbingUp = true;
+				this.audioClimbAlbinos.PostFast();
+			}
+			else if (!(this.clipNode == this.jumpAlbinoAidedQuickTap))
+			{
+				if (!this.jumpingUp && this.clipNode == this.jumpUpAlbinos && this.clipNode.frame > 8f && this.clipNode.frame < 10f)
+				{
+					this.jumpingUp = true;
+					this.audioJumpAlbinos.PostFast();
+				}
+			}
+		}
+		else
+		{
+			this.jumpingUp = false;
+			this.climbingUp = false;
+		}
+		if (this.smallThrow && this.clipNode != this.jumpAlbinoAidedSmallUp)
+		{
+			this.smallThrow = false;
+		}
+		if (this.fullThrow && this.clipNode != this.jumpAlbinoAided && this.clipNode != this.jumpAlbinoAidedForward && this.clipNode != this.jumpAlbinoAidedBackward)
+		{
+			this.fullThrow = false;
+		}
+	}
+
+	// Token: 0x06000147 RID: 327 RVA: 0x00013FD8 File Offset: 0x000121D8
+	private void UpdateCatchVoices()
+	{
+		VisualBoyNode state = this.visualBoy.state;
+		VisualBoyJump visualBoyJump = state as VisualBoyJump;
+		if (visualBoyJump != null)
+		{
+			float magnitude = ScriptGlobals.boy.velocity3.magnitude;
+			if (magnitude > this.boyMaxFallSpeed)
+			{
+				this.boyMaxFallSpeed = magnitude;
+			}
+			if (!this.caughtByAlbinos && visualBoyJump.HasBeenCaughtByAlbinos())
+			{
+				this.fullThrow = false;
+				this.smallThrow = false;
+				this.quickTap = false;
+				this.caughtByAlbinos = true;
+				float value = Mathf.InverseLerp(0f, 15f, this.boyMaxFallSpeed) * 100f;
+				SoundEngine.RTPCs.boyAlbinoCatchSpeed.SetFast(value, this.akGameObj, 0f);
+				this.audioCatchBoy.PostFast();
+			}
+		}
+		else
+		{
+			this.boyMaxFallSpeed = 0f;
+			this.caughtByAlbinos = false;
+		}
+	}
+
+	// Token: 0x06000148 RID: 328 RVA: 0x000140B4 File Offset: 0x000122B4
+	private void UpdateIdleVoices()
+	{
+		if (ScriptGlobals.mainCharacter == null)
+		{
+			return;
+		}
+		List<GenericDudeAudio> genericDudeAudios = this.manager.GetGenericDudeAudios();
+		int num = 0;
+		float num2 = float.MaxValue;
+		Vector3 pos = ScriptGlobals.mainCharacter.pos3;
+		int i = 0;
+		int count = genericDudeAudios.Count;
+		while (i < count)
+		{
+			GenericDudeAudio genericDudeAudio = genericDudeAudios[i];
+			if (genericDudeAudio.idle)
+			{
+				float sqrMagnitude = (pos - genericDudeAudio.transform.position).sqrMagnitude;
+				if (sqrMagnitude < num2)
+				{
+					num2 = sqrMagnitude;
+				}
+				num++;
+			}
+			i++;
+		}
+		if (num2 < 25f)
+		{
+			if (ScriptGlobals.boyActive)
+			{
+				if (!this.albinosAreHugging && num >= 1 && this.idleCountLastFrame == 0)
+				{
+					this.audioHugStart.PostFast();
+					this.albinosAreHugging = true;
+				}
+				else if (this.albinosAreHugging && num < 2 && this.idleCountLastFrame >= 2)
+				{
+					this.audioHugStop.PostFast();
+					this.albinosAreHugging = false;
+				}
+			}
+			else if (!this.albinosAreHugging && num >= 4 && this.idleCountLastFrame < 4)
+			{
+				this.audioHugStart.PostFast();
+				this.albinosAreHugging = true;
+			}
+			else if (this.albinosAreHugging && num < 4 && this.idleCountLastFrame >= 4)
+			{
+				this.audioHugStop.PostFast();
+				this.albinosAreHugging = false;
+			}
+			this.idleCountLastFrame = num;
+		}
+		else if (this.albinosAreHugging && num2 > 25f)
+		{
+			this.audioHugStop.PostFast();
+			this.albinosAreHugging = false;
+			this.idleCountLastFrame = 0;
+		}
+	}
+
+	// Token: 0x06000149 RID: 329 RVA: 0x00014278 File Offset: 0x00012478
+	private void UpdateLiftHuddleVoices()
+	{
+		if (this.manager.GetJumpState() == AlbinoGroupManager.AlbinoJumpState.climbingAlbinos)
+		{
+			float liftCounter = this.manager.GetLiftCounter();
+			float value = Mathf.InverseLerp(0f, 3f, liftCounter) * 100f;
+			if (this.liftingHuddle)
+			{
+				SoundEngine.RTPCs.position.SetFast(value, this.akGameObj, 0f);
+			}
+			if (!this.liftingHuddle && liftCounter <= 1f)
+			{
+				this.liftingHuddle = true;
+				this.audioLiftHuddleStart.PostFast();
+			}
+		}
+		else if (this.liftingHuddle && this.manager.GetJumpState() == AlbinoGroupManager.AlbinoJumpState.Inactive)
+		{
+			this.liftingHuddle = false;
+			this.audioLiftHuddleStop.PostFast();
+		}
+	}
+
+	// Token: 0x0600014A RID: 330 RVA: 0x00014338 File Offset: 0x00012538
+	private void UpdateSmoothPosition(Vector3 target)
+	{
+		Vector3 position = this.albinoAvarage.position;
+		float magnitude = (position - target).magnitude;
+		float num = Mathf.InverseLerp(0f, 7f, magnitude);
+		float num2 = Mathf.Lerp(0.1f, 2f, num);
+		if (ScriptGlobals.huddleActive)
+		{
+			num2 = 0.5f;
+		}
+		float num3 = num2;
+		if (this.followingAlbinoIsOnMovingGround)
+		{
+			num3 *= 0.01f;
+		}
+		Vector3 zero = Vector3Fast.zero;
+		if (Mathf.Abs(position.x - target.x) > 0.2f)
+		{
+			zero.x = Mathf.SmoothDamp(position.x, target.x, ref this.groupFollowVel.x, num2);
+		}
+		else
+		{
+			zero.x = position.x;
+		}
+		if (Mathf.Abs(position.y - target.y) > 0.2f)
+		{
+			zero.y = Mathf.SmoothDamp(position.y, target.y, ref this.groupFollowVel.y, num3);
+		}
+		else
+		{
+			zero.y = position.y;
+		}
+		if (Mathf.Abs(position.z - target.z) > 0.2f)
+		{
+			zero.z = Mathf.SmoothDamp(position.z, target.z, ref this.groupFollowVel.z, num2);
+		}
+		else
+		{
+			zero.z = position.z;
+		}
+		this.albinoAvarage.position = zero;
+	}
+
+	// Token: 0x0600014B RID: 331 RVA: 0x000144C8 File Offset: 0x000126C8
+	private void UpdateAlbinoGroupVoice()
+	{
+		if (ScriptGlobals.mainCharacter == null)
+		{
+			return;
+		}
+		Vector3 vector = Vector3Fast.zero;
+		Vector3 vector2 = Vector3Fast.zero;
+		Vector3 pos = ScriptGlobals.mainCharacter.pos3;
+		int num = 0;
+		int num2 = 0;
+		int num3 = 0;
+		int i = 0;
+		int size = this.AIs.size;
+		while (i < size)
+		{
+			AlbinoAI albinoAI = this.AIs.raw[i];
+			Vector3 cachedWantedPos = albinoAI.cachedWantedPos;
+			float sqrMagnitude = (cachedWantedPos - pos).sqrMagnitude;
+			if (sqrMagnitude < 25f || FastMath.Abs(albinoAI.groundVel.y) > 0.5f || albinoAI.GetLastMoveSpeed() >= 0.001f)
+			{
+				num3++;
+				if (albinoAI.aiMode != AlbinoAI.AIMode.SpawnedButWaiting)
+				{
+					if (sqrMagnitude < 25f)
+					{
+						vector += cachedWantedPos;
+						num++;
+						if (albinoAI.groundVel.sqrMagnitude >= 0.01f)
+						{
+							this.followingAlbinoIsOnMovingGround = true;
+						}
+					}
+					else
+					{
+						vector2 += cachedWantedPos;
+						num2++;
+					}
+				}
+			}
+			i++;
+		}
+		if (num > 0)
+		{
+			vector /= (float)num;
+		}
+		if (num2 > 0)
+		{
+			vector2 /= (float)num2;
+		}
+		if (num > 0)
+		{
+			this.UpdateSmoothPosition(vector);
+		}
+		else if (num2 > 0)
+		{
+			this.UpdateSmoothPosition(vector2);
+		}
+		if (this.movingAlbinosLastFrame == 0 && num3 >= 1)
+		{
+			if (num > 0)
+			{
+				this.albinoAvarage.transform.position = vector;
+			}
+			else if (num2 > 0)
+			{
+				this.albinoAvarage.transform.position = vector2;
+			}
+			else
+			{
+				AlbinoAI albinoAI2 = this.AIs.raw[0];
+				if (albinoAI2)
+				{
+					this.albinoAvarage.transform.position = albinoAI2.transform.position;
+				}
+			}
+		}
+		this.followingAlbinoIsOnMovingGround = false;
+		this.movingAlbinosLastFrame = num3;
+	}
+
+	// Token: 0x0600014C RID: 332 RVA: 0x000146C4 File Offset: 0x000128C4
+	private void UpdateStartStopEvents()
+	{
+		if (ScriptGlobals.mainCharacter == null)
+		{
+			return;
+		}
+		float sqrMagnitude = (this.albinoAvarage.position - ScriptGlobals.mainCharacter.pos3).sqrMagnitude;
+		if (!this.isStarted && sqrMagnitude <= 225f)
+		{
+			this.ToggleAudioEvents();
+			this.audioVoiceStart.PostFast();
+			this.isStarted = true;
+		}
+		else if (this.isStarted && sqrMagnitude >= 256f)
+		{
+			this.audioVoiceStop.PostFast();
+			this.isStarted = false;
+		}
+	}
+
+	// Token: 0x0600014D RID: 333 RVA: 0x00014764 File Offset: 0x00012964
+	private void Update()
+	{
+		if (Time.deltaTime <= 0f)
+		{
+			return;
+		}
+		if (ScriptGlobals.boy == null)
+		{
+			return;
+		}
+		if (this.manager == null)
+		{
+			return;
+		}
+		this.AIs = this.manager.GetActiveAlbinos();
+		this.UpdateAlbinoGroupVoice();
+		this.UpdateStartStopEvents();
+		this.UpdateIdleVoices();
+		if (AlbinoGroupManager.mInstance.GetAndClearPlayAlbinoFallSound())
+		{
+			this.audioFall.PostFast();
+		}
+		this.visualBoy = ScriptGlobals.boy.visualBoy;
+		if (ScriptGlobals.boy.isCharacterActive && this.visualBoy)
+		{
+			if (this.AIs.size > 0)
+			{
+				this.vstate = (this.visualBoy.state as VisualBoyCustomAnim);
+				if (this.vstate != null)
+				{
+					this.clipNode = this.vstate.anim.GetComponent<AnimClipNode>();
+				}
+				this.UpdateThrowVoices();
+				this.UpdateCatchVoices();
+			}
+		}
+		else if (ScriptGlobals.huddle.isCharacterActive)
+		{
+			this.UpdateLiftHuddleVoices();
+		}
+	}
+
+	// Token: 0x0600014E RID: 334 RVA: 0x00014888 File Offset: 0x00012A88
+	private void ToggleAudioEvents()
+	{
+		GenericDudeAudio.GenericDudeType genericDudeType = GenericDudeAudio.GenericDudeType.mines_albino;
+		FastList<AlbinoAI> activeAlbinos = this.manager.GetActiveAlbinos();
+		if (activeAlbinos.size > 0)
+		{
+			GenericDudeAudio componentInChildren = activeAlbinos.raw[0].transform.parent.GetComponentInChildren<GenericDudeAudio>();
+			genericDudeType = componentInChildren.dudeType;
+		}
+		if (genericDudeType == GenericDudeAudio.GenericDudeType.mines_albino)
+		{
+			this.audioVoiceStart = this.audioVoiceStartMines;
+			this.audioVoiceStop = this.audioVoiceStopMines;
+			this.audioJumpAlbinos = this.audioJumpAlbinosMines;
+			this.audioClimbAlbinos = this.audioClimbAlbinosMines;
+			this.audioTagJump = this.audioTagJumpMines;
+			this.audioSmallJump = this.audioSmallJumpMines;
+			this.audioFullJump = this.audioFullJumpMines;
+			this.audioCatchBoy = this.audioCatchBoyMines;
+			this.audioHugStart = this.audioHugStartMines;
+			this.audioHugStop = this.audioHugStopMines;
+			this.audioFall = this.audioFallMines;
+		}
+		else
+		{
+			this.audioVoiceStart = this.audioVoiceStartHuddle;
+			this.audioVoiceStop = this.audioVoiceStopHuddle;
+			this.audioJumpAlbinos = this.audioJumpAlbinosHuddle;
+			this.audioClimbAlbinos = this.audioClimbAlbinosHuddle;
+			this.audioTagJump = this.audioTagJumpHuddle;
+			this.audioSmallJump = this.audioSmallJumpHuddle;
+			this.audioFullJump = this.audioFullJumpHuddle;
+			this.audioCatchBoy = this.audioCatchBoyHuddle;
+			this.audioHugStart = this.audioHugStartHuddle;
+			this.audioHugStop = this.audioHugStopHuddle;
+			this.audioFall = this.audioFallHuddle;
+		}
+	}
+
+	// Token: 0x040001C1 RID: 449
+	private const float ALBINO_DISTSQ_THRESHOLD = 25f;
+
+	// Token: 0x040001C2 RID: 450
+	private const float CHARACTER_DISTSQ_THRESHOLD = 25f;
+
+	// Token: 0x040001C3 RID: 451
+	public Transform albinoAvarage;
+
+	// Token: 0x040001C4 RID: 452
+	private AnimClipNode jumpAlbinoAidedQuickTap;
+
+	// Token: 0x040001C5 RID: 453
+	private AnimClipNode jumpAlbinoAidedSmallUp;
+
+	// Token: 0x040001C6 RID: 454
+	private AnimClipNode jumpAlbinoAided;
+
+	// Token: 0x040001C7 RID: 455
+	private AnimClipNode jumpAlbinoAidedForward;
+
+	// Token: 0x040001C8 RID: 456
+	private AnimClipNode jumpAlbinoAidedBackward;
+
+	// Token: 0x040001C9 RID: 457
+	private AnimClipNode climbUpAlbinos;
+
+	// Token: 0x040001CA RID: 458
+	private AnimClipNode jumpUpAlbinos;
+
+	// Token: 0x040001CB RID: 459
+	private AnimClipNode carriedByAlbinos;
+
+	// Token: 0x040001CC RID: 460
+	private AnimClipNode runningOffAlbinosFW;
+
+	// Token: 0x040001CD RID: 461
+	private AnimClipNode runningOffAlbinosBW;
+
+	// Token: 0x040001CE RID: 462
+	private AlbinoGroupManager manager;
+
+	// Token: 0x040001CF RID: 463
+	private bool albinoHugging;
+
+	// Token: 0x040001D0 RID: 464
+	private bool albinoHuggingLastFrame;
+
+	// Token: 0x040001D1 RID: 465
+	private bool soundIsPlaying;
+
+	// Token: 0x040001D2 RID: 466
+	private int idleCountLastFrame;
+
+	// Token: 0x040001D3 RID: 467
+	private bool jumpingUp;
+
+	// Token: 0x040001D4 RID: 468
+	private bool climbingUp;
+
+	// Token: 0x040001D5 RID: 469
+	private bool fullThrow;
+
+	// Token: 0x040001D6 RID: 470
+	private bool smallThrow;
+
+	// Token: 0x040001D7 RID: 471
+	private bool quickTap;
+
+	// Token: 0x040001D8 RID: 472
+	private bool caughtByAlbinos;
+
+	// Token: 0x040001D9 RID: 473
+	private bool liftingHuddle;
+
+	// Token: 0x040001DA RID: 474
+	private bool albinosAreHugging;
+
+	// Token: 0x040001DB RID: 475
+	private float boyMaxFallSpeed;
+
+	// Token: 0x040001DC RID: 476
+	private GameObject audioObject;
+
+	// Token: 0x040001DD RID: 477
+	private VisualBoy visualBoy;
+
+	// Token: 0x040001DE RID: 478
+	private AnimClipNode clipNode;
+
+	// Token: 0x040001DF RID: 479
+	private VisualBoyCustomAnim vstate;
+
+	// Token: 0x040001E0 RID: 480
+	private FastList<AlbinoAI> AIs;
+
+	// Token: 0x040001E1 RID: 481
+	private Vector3 groupFollowVel = new Vector3(0.5f, 0.5f, 0.5f);
+
+	// Token: 0x040001E2 RID: 482
+	private bool groupIdleLastFrame;
+
+	// Token: 0x040001E3 RID: 483
+	private bool followingAlbinoIsOnMovingGround;
+
+	// Token: 0x040001E4 RID: 484
+	private int movingAlbinosLastFrame;
+
+	// Token: 0x040001E5 RID: 485
+	private bool isStarted;
+
+	// Token: 0x040001E6 RID: 486
+	private int scenesLoadedHandle = -1;
+
+	// Token: 0x040001E7 RID: 487
+	private AudioEventSimpleLocal audioVoiceStart;
+
+	// Token: 0x040001E8 RID: 488
+	private AudioEventSimpleLocal audioVoiceStop;
+
+	// Token: 0x040001E9 RID: 489
+	private AudioEventSimpleLocal audioJumpAlbinos;
+
+	// Token: 0x040001EA RID: 490
+	private AudioEventSimpleLocal audioClimbAlbinos;
+
+	// Token: 0x040001EB RID: 491
+	private AudioEventSimpleLocal audioTagJump;
+
+	// Token: 0x040001EC RID: 492
+	private AudioEventSimpleLocal audioSmallJump;
+
+	// Token: 0x040001ED RID: 493
+	private AudioEventSimpleLocal audioFullJump;
+
+	// Token: 0x040001EE RID: 494
+	private AudioEventSimpleLocal audioCatchBoy;
+
+	// Token: 0x040001EF RID: 495
+	private AudioEventSimpleLocal audioHugStart;
+
+	// Token: 0x040001F0 RID: 496
+	private AudioEventSimpleLocal audioHugStop;
+
+	// Token: 0x040001F1 RID: 497
+	private AudioEventSimpleLocal audioFall;
+
+	// Token: 0x040001F2 RID: 498
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioLiftHuddleStart;
+
+	// Token: 0x040001F3 RID: 499
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioLiftHuddleStop;
+
+	// Token: 0x040001F4 RID: 500
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioVoiceStartMines;
+
+	// Token: 0x040001F5 RID: 501
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioVoiceStopMines;
+
+	// Token: 0x040001F6 RID: 502
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioJumpAlbinosMines;
+
+	// Token: 0x040001F7 RID: 503
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioClimbAlbinosMines;
+
+	// Token: 0x040001F8 RID: 504
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioTagJumpMines;
+
+	// Token: 0x040001F9 RID: 505
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioSmallJumpMines;
+
+	// Token: 0x040001FA RID: 506
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioFullJumpMines;
+
+	// Token: 0x040001FB RID: 507
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioCatchBoyMines;
+
+	// Token: 0x040001FC RID: 508
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioHugStartMines;
+
+	// Token: 0x040001FD RID: 509
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioHugStopMines;
+
+	// Token: 0x040001FE RID: 510
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioFallMines;
+
+	// Token: 0x040001FF RID: 511
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioVoiceStartHuddle;
+
+	// Token: 0x04000200 RID: 512
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioVoiceStopHuddle;
+
+	// Token: 0x04000201 RID: 513
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioJumpAlbinosHuddle;
+
+	// Token: 0x04000202 RID: 514
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioClimbAlbinosHuddle;
+
+	// Token: 0x04000203 RID: 515
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioTagJumpHuddle;
+
+	// Token: 0x04000204 RID: 516
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioSmallJumpHuddle;
+
+	// Token: 0x04000205 RID: 517
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioFullJumpHuddle;
+
+	// Token: 0x04000206 RID: 518
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioCatchBoyHuddle;
+
+	// Token: 0x04000207 RID: 519
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioHugStartHuddle;
+
+	// Token: 0x04000208 RID: 520
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioHugStopHuddle;
+
+	// Token: 0x04000209 RID: 521
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioFallHuddle;
+
+	// Token: 0x0400020A RID: 522
+	[SerializeField]
+	[HideInInspector]
+	private AkGameObj akGameObj;
+
+	// Token: 0x0400020B RID: 523
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

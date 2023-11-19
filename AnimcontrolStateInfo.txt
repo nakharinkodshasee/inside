@@ -1,0 +1,234 @@
+using System;
+using System.Collections.Generic;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x0200002E RID: 46
+public class AnimcontrolStateInfo : MonoBehaviour
+{
+	// Token: 0x06000176 RID: 374 RVA: 0x00015224 File Offset: 0x00013424
+	public bool RequirementsMet(AnimationBlendHelper blendHelper, bool allowOutput = true)
+	{
+		int i = 0;
+		int count = this.requirements.Count;
+		while (i < count)
+		{
+			AnimcontrolConditionDefinition animcontrolConditionDefinition = this.requirements[i];
+			if (!animcontrolConditionDefinition.ConditionMet(blendHelper))
+			{
+				if (allowOutput)
+				{
+				}
+				return false;
+			}
+			i++;
+		}
+		return true;
+	}
+
+	// Token: 0x06000177 RID: 375 RVA: 0x00015274 File Offset: 0x00013474
+	public AnimcontrolStateInfo.TransitionData GetTransition(AnimationBlendHelper blendHelper, AnimcontrolTransitionManager manager)
+	{
+		if (this.RequirementsMet(blendHelper, true))
+		{
+			int i = 0;
+			int count = this.transitions.Count;
+			while (i < count)
+			{
+				AnimcontrolTransitionDefinition animcontrolTransitionDefinition = this.transitions[i];
+				if (animcontrolTransitionDefinition != null)
+				{
+					if (animcontrolTransitionDefinition.UpdateCachedDefinition(blendHelper, manager))
+					{
+						AnimcontrolStateInfo.TransitionData transitionData = animcontrolTransitionDefinition.TransitionMet(blendHelper, manager);
+						if (transitionData != null && blendHelper.CanTransitTo(transitionData.definition))
+						{
+							return transitionData;
+						}
+					}
+				}
+				i++;
+			}
+		}
+		else
+		{
+			int j = 0;
+			int count2 = this.fallbackTransitions.Count;
+			while (j < count2)
+			{
+				AnimcontrolTransitionDefinition animcontrolTransitionDefinition2 = this.fallbackTransitions[j];
+				if (animcontrolTransitionDefinition2.UpdateCachedDefinition(blendHelper, manager))
+				{
+					AnimcontrolStateInfo.TransitionData transitionData2 = animcontrolTransitionDefinition2.TransitionMet(blendHelper, manager);
+					if (transitionData2 != null && blendHelper.CanTransitTo(transitionData2.definition))
+					{
+						return transitionData2;
+					}
+				}
+				j++;
+			}
+			if (this.autoFallback)
+			{
+				ABDefinition defaultAnimationDefinition = manager.GetDefaultAnimationDefinition();
+				if (defaultAnimationDefinition != null)
+				{
+					AnimcontrolStateInfo.TransitionData transitionData3 = new AnimcontrolStateInfo.TransitionData();
+					transitionData3.definition = defaultAnimationDefinition;
+					transitionData3.startPos = -1f;
+					if (manager.defaultAnimationState != null)
+					{
+						transitionData3.transitTime = manager.defaultAnimationState.transitIntoTime;
+					}
+					return transitionData3;
+				}
+			}
+		}
+		return null;
+	}
+
+	// Token: 0x06000178 RID: 376 RVA: 0x000153C8 File Offset: 0x000135C8
+	public ABDefinition CreateCustomAnimDefinitions(AnimcontrolledCharacterBase acCharacter, GameObject character, AnimationBlendHelper blendHelper, AnimationMovementInfo animDB, AnimationMovementInfo animDBGeneric, List<string> manuallyCreatedAnims)
+	{
+		AnimcontrolledAnimBlend[] componentsInChildren = base.GetComponentsInChildren<AnimcontrolledAnimBlend>(true);
+		if (componentsInChildren.Length > 0)
+		{
+			FastList<int> fastList = new FastList<int>(0, FastListExpandMode.Exponential, 100);
+			AnimationMovementInfo animDB2 = animDB;
+			AnimationMovementInfo animDBGeneric2 = animDBGeneric;
+			if (!this.useAnimationMovement)
+			{
+				animDB2 = null;
+				animDBGeneric2 = null;
+			}
+			ABDefinition.ABLevel ablevel = componentsInChildren[0].CreateBlendLevel(blendHelper, character, animDB2, animDBGeneric2, 0f, base.name + "TopLevel", fastList, manuallyCreatedAnims);
+			if (ablevel != null)
+			{
+				ABDefinition abdefinition = new ABDefinition(ablevel, -1, true, base.name);
+				abdefinition.SetBlendParameterIndexes(fastList);
+				abdefinition.autoFallback = this.autoFallback;
+				abdefinition.allowReenty = this.allowReentry;
+				abdefinition.speedScaleRange = this.speedFactorRange;
+				abdefinition.randomStartPos = this.randomStartPos;
+				abdefinition.staticTopLayer = this.staticNoPosBlend;
+				abdefinition.isStatic = this.staticAnim;
+				abdefinition.useStaticScale = this.staticUseScale;
+				blendHelper.AddBlendDefinition(abdefinition);
+				manuallyCreatedAnims.Add(base.name);
+				return abdefinition;
+			}
+		}
+		else if (acCharacter != null)
+		{
+			ABDefinition abdefinition2 = acCharacter.CreateSingleAnimTransitionState(base.name, this.allowReentry, this.speedFactor, this.staticAnim, this.autoFallback, false, !this.useAnimationMovement);
+			if (abdefinition2 == null)
+			{
+				return null;
+			}
+			abdefinition2.staticTopLayer = this.staticNoPosBlend;
+			abdefinition2.useStaticScale = this.staticUseScale;
+			abdefinition2.speedScaleRange = this.speedFactorRange;
+			abdefinition2.randomStartPos = this.randomStartPos;
+			return abdefinition2;
+		}
+		return null;
+	}
+
+	// Token: 0x06000179 RID: 377 RVA: 0x00015540 File Offset: 0x00013740
+	private void Start()
+	{
+	}
+
+	// Token: 0x04000225 RID: 549
+	public float transitIntoTime = 0.4f;
+
+	// Token: 0x04000226 RID: 550
+	public float speedFactor = 1f;
+
+	// Token: 0x04000227 RID: 551
+	public float speedFactorRange;
+
+	// Token: 0x04000228 RID: 552
+	public float alignmentRotateSpeed;
+
+	// Token: 0x04000229 RID: 553
+	public bool useAnimationMovement = true;
+
+	// Token: 0x0400022A RID: 554
+	public bool allowReentry;
+
+	// Token: 0x0400022B RID: 555
+	public bool runCycle;
+
+	// Token: 0x0400022C RID: 556
+	public bool staticAnim;
+
+	// Token: 0x0400022D RID: 557
+	public bool staticUseScale;
+
+	// Token: 0x0400022E RID: 558
+	public bool staticNoPosBlend;
+
+	// Token: 0x0400022F RID: 559
+	public bool staticAlignToEnd;
+
+	// Token: 0x04000230 RID: 560
+	public bool autoFallback = true;
+
+	// Token: 0x04000231 RID: 561
+	public bool randomStartPos;
+
+	// Token: 0x04000232 RID: 562
+	public List<AnimcontrolConditionDefinition> requirements = new List<AnimcontrolConditionDefinition>();
+
+	// Token: 0x04000233 RID: 563
+	public List<AnimcontrolTransitionDefinition> transitions = new List<AnimcontrolTransitionDefinition>();
+
+	// Token: 0x04000234 RID: 564
+	public List<AnimcontrolTransitionDefinition> fallbackTransitions = new List<AnimcontrolTransitionDefinition>();
+
+	// Token: 0x0200002F RID: 47
+	public enum Comparison
+	{
+		// Token: 0x04000236 RID: 566
+		LessThan,
+		// Token: 0x04000237 RID: 567
+		LessThanOrEqual,
+		// Token: 0x04000238 RID: 568
+		Equal,
+		// Token: 0x04000239 RID: 569
+		GreaterThanOrEqual,
+		// Token: 0x0400023A RID: 570
+		GreaterThan
+	}
+
+	// Token: 0x02000030 RID: 48
+	[Serializable]
+	public class Condition
+	{
+		// Token: 0x0400023B RID: 571
+		[HideInInspector]
+		public string name;
+
+		// Token: 0x0400023C RID: 572
+		public AnimcontrolledCharacterBase.AnimControlBlendProperties blendProperty;
+
+		// Token: 0x0400023D RID: 573
+		public AnimcontrolStateInfo.Comparison comparison;
+
+		// Token: 0x0400023E RID: 574
+		public float value;
+	}
+
+	// Token: 0x02000031 RID: 49
+	public class TransitionData
+	{
+		// Token: 0x0400023F RID: 575
+		public ABDefinition definition;
+
+		// Token: 0x04000240 RID: 576
+		public float transitTime = 0.2f;
+
+		// Token: 0x04000241 RID: 577
+		public float startPos;
+	}
+}

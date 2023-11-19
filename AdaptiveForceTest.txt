@@ -1,0 +1,22 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000649 RID: 1609
+public class AdaptiveForceTest : MonoBehaviour
+{
+	// Token: 0x060027AE RID: 10158 RVA: 0x0013EAEC File Offset: 0x0013CCEC
+	private void Start()
+	{
+	}
+
+	// Token: 0x060027AF RID: 10159 RVA: 0x0013EAF0 File Offset: 0x0013CCF0
+	private void FixedUpdate()
+	{
+		float fixedDeltaTime = Time.fixedDeltaTime;
+		if (PhysicsUtils.stepCount == 100L)
+		{
+			Vector3 vector = Vector3.up * 5f;
+			base.GetComponent<Rigidbody>().AddForce(vector * base.GetComponent<Rigidbody>().mass, 1);
+		}
+	}
+}

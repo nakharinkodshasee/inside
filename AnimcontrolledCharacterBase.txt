@@ -1,0 +1,417 @@
+using System;
+using System.Collections.Generic;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x0200003F RID: 63
+public class AnimcontrolledCharacterBase : MonoBehaviour, IRoundRobinInitializationable, IFastEventExListener<GameManager.Load>, IModelSpawner
+{
+	// Token: 0x060001EC RID: 492 RVA: 0x000193D8 File Offset: 0x000175D8
+	[LateProcessBuild(0)]
+	public virtual void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		if (this.animCharPrefab != null && (this.animChar == null || this.animChar.transform.parent == null))
+		{
+			GameObject gameObject = Object.Instantiate<GameObject>(this.animCharPrefab);
+			if (this.animChar != null)
+			{
+				Animation component = this.animChar.GetComponent<Animation>();
+				Animation component2 = gameObject.GetComponent<Animation>();
+				if (component != null && component2 != null)
+				{
+					int clipCount = component.GetClipCount();
+					int clipCount2 = component2.GetClipCount();
+					if (clipCount != clipCount2)
+					{
+					}
+				}
+			}
+			this.animChar = gameObject;
+			Animation component3 = this.animChar.GetComponent<Animation>();
+			component3.playAutomatically = false;
+			component3.clip = null;
+			this.animChar.transform.parent = base.transform;
+			this.animChar.transform.localPosition = Vector3.zero;
+			this.animChar.transform.localRotation = Quaternion.identity;
+			component3.cullingType = 1;
+		}
+		else
+		{
+			if (this.animChar != null)
+			{
+				this.animChar.transform.parent = base.transform;
+				this.animChar.transform.localPosition = Vector3.zero;
+				this.animChar.transform.localRotation = Quaternion.identity;
+			}
+			else
+			{
+				this.animChar = base.gameObject;
+			}
+			Animation component4 = this.animChar.GetComponent<Animation>();
+			if (component4)
+			{
+				component4.playAutomatically = false;
+			}
+		}
+		AnimationPreAwake component5 = this.animChar.GetComponent<AnimationPreAwake>();
+		if (component5 == null)
+		{
+			this.animChar.AddComponent<AnimationPreAwake>();
+		}
+		this.preProcessed = true;
+	}
+
+	// Token: 0x060001ED RID: 493 RVA: 0x000195B0 File Offset: 0x000177B0
+	public bool IsInitialized()
+	{
+		return this.initialized;
+	}
+
+	// Token: 0x060001EE RID: 494 RVA: 0x000195B8 File Offset: 0x000177B8
+	public ABDefinition CreateSingleAnimTransitionState(string animName, bool allowReentry = false, float speedFactor = 1f, bool isStaticAnim = false, bool autoFallback = false, bool customTransition = false, bool noMovementData = false)
+	{
+		AnimationState animationState = this.animChar.GetComponent<Animation>()[animName];
+		if (animationState == null)
+		{
+			return null;
+		}
+		this.manuallyCreatedAnims.Add(animName);
+		ABDefinition.ABLevel ablevel = new ABDefinition.ABLevel(0f, animName);
+		if (noMovementData)
+		{
+			ablevel.CreateAndAddNode(this.blendHelper, animationState, 0f, speedFactor, null);
+		}
+		else if (this.animDB != null && this.animDB.GetMovementData(animName) != null)
+		{
+			ablevel.CreateAndAddNode(this.blendHelper, animationState, 0f, speedFactor, this.animDB);
+		}
+		else
+		{
+			ablevel.CreateAndAddNode(this.blendHelper, animationState, 0f, speedFactor, this.animDBGeneric);
+		}
+		ABDefinition abdefinition = new ABDefinition(ablevel, -1, false, animName);
+		abdefinition.allowReenty = allowReentry;
+		abdefinition.isStatic = isStaticAnim;
+		abdefinition.animLength = animationState.length;
+		abdefinition.autoFallback = autoFallback;
+		this.blendHelper.AddBlendDefinition(abdefinition);
+		return abdefinition;
+	}
+
+	// Token: 0x060001EF RID: 495 RVA: 0x000196B0 File Offset: 0x000178B0
+	public ABDefinition OnTheFlyCreateDef(string animName)
+	{
+		AnimationState animationState = this.animChar.GetComponent<Animation>()[animName];
+		if (animationState != null)
+		{
+			bool flag = animationState.wrapMode == 2 || animationState.wrapMode == 4;
+			return this.CreateSingleAnimTransitionState(animationState.name, flag, 1f, false, !flag, false, false);
+		}
+		return null;
+	}
+
+	// Token: 0x060001F0 RID: 496 RVA: 0x00019710 File Offset: 0x00017910
+	protected bool TransitIfPossible(ABDefinition def, float transitTime = 0.4f, float startpos = 0f)
+	{
+		if (this.blendHelper.CanTransitTo(def))
+		{
+			if (def.isStatic)
+			{
+				this.SetStaticAnimation(def, null, false, 0f, transitTime, 0f);
+			}
+			else
+			{
+				this.blendHelper.TransitToBlendDefinition(def, transitTime, startpos);
+			}
+			return true;
+		}
+		return false;
+	}
+
+	// Token: 0x060001F1 RID: 497 RVA: 0x00019764 File Offset: 0x00017964
+	public void DoTransition(AnimcontrolStateInfo.TransitionData newDef, ABDefinition activeDef, float normAnimPos)
+	{
+		if (newDef != null && newDef.definition != activeDef)
+		{
+			this.TransitIfPossible(newDef.definition, newDef.transitTime, newDef.startPos);
+		}
+		else if (activeDef.autoFallback && normAnimPos >= 1f)
+		{
+			ABDefinition abdefinition = null;
+			if (this.transitionManager != null)
+			{
+				abdefinition = this.transitionManager.GetDefaultAnimationDefinition();
+			}
+			if (abdefinition != null)
+			{
+				AnimcontrolStateInfo defaultAnimationState = this.transitionManager.defaultAnimationState;
+				if (defaultAnimationState)
+				{
+					this.TransitIfPossible(this.transitionManager.GetDefaultAnimationDefinition(), defaultAnimationState.transitIntoTime, 0f);
+				}
+				else
+				{
+					this.TransitIfPossible(this.transitionManager.GetDefaultAnimationDefinition(), 0.4f, 0f);
+				}
+			}
+			else
+			{
+				ABDefinition definition = this.blendHelper.GetDefinition(this.defaultAnimation, false);
+				if (definition != null)
+				{
+					this.blendHelper.TransitToBlendDefinition(definition, 0.4f, 0f);
+				}
+			}
+		}
+	}
+
+	// Token: 0x060001F2 RID: 498 RVA: 0x0001986C File Offset: 0x00017A6C
+	public virtual void Reset(bool keepTriggers = false)
+	{
+		string defName = string.Empty;
+		ABDefinition topDefinition = this.blendHelper.GetTopDefinition();
+		if (topDefinition != null)
+		{
+			defName = this.blendHelper.GetTopDefinition().debugName;
+		}
+		this.blendHelper.Reset();
+		ABDefinition definition = this.blendHelper.GetDefinition(this.defaultAnimation, false);
+		if (definition == null)
+		{
+			definition = this.blendHelper.GetDefinition(defName, false);
+		}
+		if (definition != null)
+		{
+			this.blendHelper.SetBlendDefinition(definition);
+		}
+		this.animChar.GetComponent<Animation>().cullingType = 1;
+	}
+
+	// Token: 0x060001F3 RID: 499 RVA: 0x000198F8 File Offset: 0x00017AF8
+	public void OnFastEventEx(FastEventEx<GameManager.Load> sender, ref GameManager.Load arg)
+	{
+		if (sender == GameManager.prepareLoad)
+		{
+			try
+			{
+				this.Reset(false);
+			}
+			catch (NullReferenceException ex)
+			{
+				if (!(this == null))
+				{
+					if (!(base.gameObject == null))
+					{
+						string name = base.gameObject.name;
+					}
+				}
+			}
+		}
+	}
+
+	// Token: 0x060001F4 RID: 500 RVA: 0x00019980 File Offset: 0x00017B80
+	protected void OnDestroy()
+	{
+		if (this.autoResetAtLoads)
+		{
+			GameManager.prepareLoad.Unregister(ref this.prepareLoadHandle);
+		}
+		this.OnDestroyInternal();
+	}
+
+	// Token: 0x060001F5 RID: 501 RVA: 0x000199A4 File Offset: 0x00017BA4
+	protected virtual void OnDestroyInternal()
+	{
+	}
+
+	// Token: 0x060001F6 RID: 502 RVA: 0x000199A8 File Offset: 0x00017BA8
+	public virtual void Init()
+	{
+		this.OnPreProcess();
+		if (this.initialized)
+		{
+			return;
+		}
+		if (this.autoResetAtLoads)
+		{
+			GameManager.prepareLoad.Register(this, ref this.prepareLoadHandle);
+		}
+		Animation component = this.animChar.GetComponent<Animation>();
+		this.modelSpawnedEvent.Dispatch(ref this.animChar);
+		for (int i = 1; i < 10; i++)
+		{
+			component.SyncLayer(i * 2);
+		}
+		if (this.defaultAnimation.CompareTo("none") == 0)
+		{
+			this.defaultAnimation = string.Empty;
+		}
+		else if (this.defaultAnimation.Length == 0)
+		{
+			this.defaultAnimation = component.clip.name;
+		}
+		this.characterModel = this.animChar;
+		this.manuallyCreatedAnims.Clear();
+		string path = "movementinfo/" + this.dbName;
+		this.animDB = GlobalCachedAnimationMovementInfo.mInstance.GetMoveInfo(path);
+		this.animDBGeneric = GlobalCachedAnimationMovementInfo.mInstance.GetMoveInfo("movementinfo/GenericCharacter");
+		int maxParameterIndex = Enum.GetNames(typeof(AnimcontrolledCharacterBase.AnimControlBlendProperties)).Length;
+		if (this.blendHelper == null)
+		{
+			this.blendHelper = AnimationBlendHelper.CreateAnimationBlendHelper(base.gameObject, maxParameterIndex);
+		}
+		else
+		{
+			this.blendHelper.InitializeBlendParameters(maxParameterIndex);
+		}
+		if (this.transitionDatabase != null)
+		{
+			this.transitionDatabase.CreateCustomAnimDefinitions(this, this.animChar, this.blendHelper, this.animDB, this.animDBGeneric, this.manuallyCreatedAnims, this.transitionManager);
+		}
+		else if (this.transitionManager != null)
+		{
+			this.transitionManager.CreateCustomAnimDefinitions(this, this.animChar, this.blendHelper, this.animDB, this.animDBGeneric, this.manuallyCreatedAnims);
+		}
+		if (this.autoCreateBlendStates)
+		{
+			foreach (object obj in component)
+			{
+				AnimationState animationState = (AnimationState)obj;
+				if (animationState.wrapMode == 1)
+				{
+					animationState.wrapMode = 8;
+				}
+				if (!this.manuallyCreatedAnims.Contains(animationState.name))
+				{
+					bool flag = animationState.wrapMode == 2 || animationState.wrapMode == 4;
+					this.CreateSingleAnimTransitionState(animationState.name, flag, 1f, false, !flag, false, false);
+				}
+			}
+		}
+		ABDefinition abdefinition = this.blendHelper.GetDefinition(this.defaultAnimation, false);
+		if (abdefinition == null)
+		{
+			abdefinition = this.OnTheFlyCreateDef(this.defaultAnimation);
+		}
+		if (abdefinition != null)
+		{
+			this.blendHelper.TransitToBlendDefinition(abdefinition, 0.01f, 0f);
+			abdefinition.transitTime = 0.8f;
+			this.blendHelper.SetBlendDefinition(abdefinition);
+			if (this.transitionManager)
+			{
+				this.transitionManager.SetDefaultAnimationDefinition(abdefinition);
+			}
+		}
+		this.blendHelper.AllAnimsInitialized();
+	}
+
+	// Token: 0x060001F7 RID: 503 RVA: 0x00019CD4 File Offset: 0x00017ED4
+	protected virtual void SetStaticAnimation(ABDefinition def, GameObject initialAlignementPivot = null, bool linearPlacement = false, float customParameter = 0f, float transitTime = 0.4f, float animStartPos = 0f)
+	{
+	}
+
+	// Token: 0x060001F8 RID: 504 RVA: 0x00019CD8 File Offset: 0x00017ED8
+	public GameObject GetModelSpawned()
+	{
+		return this.animChar;
+	}
+
+	// Token: 0x060001F9 RID: 505 RVA: 0x00019CE0 File Offset: 0x00017EE0
+	public void RegisterModelSpawned(IFastEventExListener<GameObject> receiver, ref int handle)
+	{
+		this.modelSpawnedEvent.Register(receiver, ref handle);
+	}
+
+	// Token: 0x060001FA RID: 506 RVA: 0x00019CF0 File Offset: 0x00017EF0
+	public void UnregisterModelSpawned(ref int handle)
+	{
+		this.modelSpawnedEvent.Unregister(ref handle);
+	}
+
+	// Token: 0x040002BF RID: 703
+	public FastEventEx<GameObject> modelSpawnedEvent = new FastEventEx<GameObject>(8);
+
+	// Token: 0x040002C0 RID: 704
+	public AnimcontrolTransitionManager transitionManager;
+
+	// Token: 0x040002C1 RID: 705
+	public AnimControlTransitionDatabase transitionDatabase;
+
+	// Token: 0x040002C2 RID: 706
+	public GameObject animChar;
+
+	// Token: 0x040002C3 RID: 707
+	public GameObject animCharPrefab;
+
+	// Token: 0x040002C4 RID: 708
+	public string defaultAnimation;
+
+	// Token: 0x040002C5 RID: 709
+	public string dbName = "Scientist_A";
+
+	// Token: 0x040002C6 RID: 710
+	public bool autoCreateBlendStates = true;
+
+	// Token: 0x040002C7 RID: 711
+	public bool autoResetAtLoads;
+
+	// Token: 0x040002C8 RID: 712
+	protected AnimationMovementInfo animDB;
+
+	// Token: 0x040002C9 RID: 713
+	protected AnimationMovementInfo animDBGeneric;
+
+	// Token: 0x040002CA RID: 714
+	public AnimationBlendHelper blendHelper;
+
+	// Token: 0x040002CB RID: 715
+	protected GameObject characterModel;
+
+	// Token: 0x040002CC RID: 716
+	protected List<string> manuallyCreatedAnims = new List<string>();
+
+	// Token: 0x040002CD RID: 717
+	private int prepareLoadHandle = -1;
+
+	// Token: 0x040002CE RID: 718
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x040002CF RID: 719
+	protected bool initialized;
+
+	// Token: 0x02000040 RID: 64
+	public enum AnimControlBlendProperties
+	{
+		// Token: 0x040002D1 RID: 721
+		Dummy,
+		// Token: 0x040002D2 RID: 722
+		Speed,
+		// Token: 0x040002D3 RID: 723
+		Random,
+		// Token: 0x040002D4 RID: 724
+		Angle,
+		// Token: 0x040002D5 RID: 725
+		AnimPos,
+		// Token: 0x040002D6 RID: 726
+		PlayTime,
+		// Token: 0x040002D7 RID: 727
+		BlendIn,
+		// Token: 0x040002D8 RID: 728
+		Slope,
+		// Token: 0x040002D9 RID: 729
+		RawSpeed,
+		// Token: 0x040002DA RID: 730
+		Configuration,
+		// Token: 0x040002DB RID: 731
+		Custom1,
+		// Token: 0x040002DC RID: 732
+		Custom2
+	}
+}

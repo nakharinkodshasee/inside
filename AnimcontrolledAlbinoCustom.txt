@@ -1,0 +1,205 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000044 RID: 68
+public class AnimcontrolledAlbinoCustom : AnimControlCustomCode
+{
+	// Token: 0x06000217 RID: 535 RVA: 0x0001A980 File Offset: 0x00018B80
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000218 RID: 536 RVA: 0x0001A984 File Offset: 0x00018B84
+	public override AnimcontrolledCharacter.CustomTransitionFunction GetCustomTransitFunction(string definitionName)
+	{
+		if (this.dbTransitions.ContainsKey(definitionName))
+		{
+			return this.dbTransitions[definitionName];
+		}
+		return null;
+	}
+
+	// Token: 0x06000219 RID: 537 RVA: 0x0001A9A8 File Offset: 0x00018BA8
+	public override AnimcontrolledCharacter.CustomPositioningFunction GetCustomPositioningFunction(string definitionName)
+	{
+		if (this.dbPositioning.ContainsKey(definitionName))
+		{
+			return this.dbPositioning[definitionName];
+		}
+		return null;
+	}
+
+	// Token: 0x0600021A RID: 538 RVA: 0x0001A9CC File Offset: 0x00018BCC
+	public override AnimcontrolledCharacter.CustomStaticPositionFunction GetCustomStaticPositionFunction(string definitionName)
+	{
+		if (this.dbStaticPositioning.ContainsKey(definitionName))
+		{
+			return this.dbStaticPositioning[definitionName];
+		}
+		return null;
+	}
+
+	// Token: 0x0600021B RID: 539 RVA: 0x0001A9F0 File Offset: 0x00018BF0
+	public override void NewWaypointSet(BaseWaypoint wayPoint)
+	{
+	}
+
+	// Token: 0x0600021C RID: 540 RVA: 0x0001A9F4 File Offset: 0x00018BF4
+	public override void WaypointReached(BaseWaypoint wayPoint)
+	{
+	}
+
+	// Token: 0x0600021D RID: 541 RVA: 0x0001A9F8 File Offset: 0x00018BF8
+	public override void SetUniqueAnimationFromWaypoint(BaseWaypoint waypointToUse)
+	{
+	}
+
+	// Token: 0x0600021E RID: 542 RVA: 0x0001A9FC File Offset: 0x00018BFC
+	public override void PostUpdateFollowWaypoint(AnimcontrolledCharacter.AnimControl controls, BaseWaypoint wayPoint)
+	{
+	}
+
+	// Token: 0x0600021F RID: 543 RVA: 0x0001AA00 File Offset: 0x00018C00
+	private static AnimcontrolStateInfo.TransitionData IdleAngryA_CT(AnimcontrolledCharacter character)
+	{
+		AnimationBlendHelper blendHelper = character.GetBlendHelper();
+		return character.TestAndConvertDefinition(blendHelper.GetDefinition("RunState", true));
+	}
+
+	// Token: 0x06000220 RID: 544 RVA: 0x0001AA28 File Offset: 0x00018C28
+	private static void IdleTurnRunA_Positioning(AnimcontrolledCharacter character, float deltaTime)
+	{
+		AnimControlCustomCode.RotateWhileTurning(character, deltaTime, 0.06f, 0.39f, 180f);
+	}
+
+	// Token: 0x06000221 RID: 545 RVA: 0x0001AA40 File Offset: 0x00018C40
+	private static void IdleTurnRunB_Positioning(AnimcontrolledCharacter character, float deltaTime)
+	{
+		AnimControlCustomCode.RotateWhileTurning(character, deltaTime, 0.06f, 0.33f, 180f);
+	}
+
+	// Token: 0x06000222 RID: 546 RVA: 0x0001AA58 File Offset: 0x00018C58
+	private static void IdleTurnRunC_Positioning(AnimcontrolledCharacter character, float deltaTime)
+	{
+		AnimControlCustomCode.RotateWhileTurning(character, deltaTime, 0.06f, 0.5f, -180f);
+	}
+
+	// Token: 0x06000223 RID: 547 RVA: 0x0001AA70 File Offset: 0x00018C70
+	private static void RunTurnRunA_Positioning(AnimcontrolledCharacter character, float deltaTime)
+	{
+		AnimControlCustomCode.RotateWhileTurning(character, deltaTime, 0.06f, 0.5f, 180f);
+	}
+
+	// Token: 0x06000224 RID: 548 RVA: 0x0001AA88 File Offset: 0x00018C88
+	private static void RunTurnRunB_Long_Positioning(AnimcontrolledCharacter character, float deltaTime)
+	{
+		AnimControlCustomCode.RotateWhileTurning(character, deltaTime, 0.2f, 0.56f, 180f);
+	}
+
+	// Token: 0x06000225 RID: 549 RVA: 0x0001AAA0 File Offset: 0x00018CA0
+	private static void RunTurnRunB_L_Positioning(AnimcontrolledCharacter character, float deltaTime)
+	{
+		AnimControlCustomCode.RotateWhileTurning(character, deltaTime, 0.16f, 0.5f, -180f);
+	}
+
+	// Token: 0x06000226 RID: 550 RVA: 0x0001AAB8 File Offset: 0x00018CB8
+	private static Vector3 JumpForwardA_StaticPositioning(AnimcontrolledCharacter character, Vector3 initialPos, Vector3 wantedPos)
+	{
+		float num = character.GetBlendHelper().GetLatestAnimData().normalizedAnimPos;
+		Vector3 result = initialPos * (1f - num) + wantedPos * num;
+		if (num < 0.2f)
+		{
+			result.y = initialPos.y;
+		}
+		else
+		{
+			num = (num - 0.2f) * 1.25f;
+			result.y = initialPos.y * (1f - num) + wantedPos.y * num;
+		}
+		return result;
+	}
+
+	// Token: 0x06000227 RID: 551 RVA: 0x0001AB40 File Offset: 0x00018D40
+	private static Vector3 ClimbUp_StaticPositioning(AnimcontrolledCharacter character, Vector3 initialPos, Vector3 wantedPos)
+	{
+		character.UpdateStaticPosFromStoredPivot();
+		float normalizedAnimPos = character.GetBlendHelper().GetLatestAnimData().normalizedAnimPos;
+		float num = Mathf.Min(normalizedAnimPos / 0.1f, 1f);
+		num = MathUtils.SmoothFraction(num);
+		return initialPos * (1f - num) + wantedPos * num;
+	}
+
+	// Token: 0x04000300 RID: 768
+	private Dictionary<string, AnimcontrolledCharacter.CustomTransitionFunction> dbTransitions = new Dictionary<string, AnimcontrolledCharacter.CustomTransitionFunction>();
+
+	// Token: 0x04000301 RID: 769
+	private Dictionary<string, AnimcontrolledCharacter.CustomPositioningFunction> dbPositioning = new Dictionary<string, AnimcontrolledCharacter.CustomPositioningFunction>
+	{
+		{
+			"IdleTurnRunA",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledAlbinoCustom.IdleTurnRunA_Positioning)
+		},
+		{
+			"IdleTurnRunB",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledAlbinoCustom.IdleTurnRunB_Positioning)
+		},
+		{
+			"IdleTurnRunC",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledAlbinoCustom.IdleTurnRunC_Positioning)
+		},
+		{
+			"RunTurnRunA",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledAlbinoCustom.RunTurnRunA_Positioning)
+		},
+		{
+			"RunTurnRunB_Long",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledAlbinoCustom.RunTurnRunB_Long_Positioning)
+		},
+		{
+			"RunTurnRunB_L",
+			new AnimcontrolledCharacter.CustomPositioningFunction(AnimcontrolledAlbinoCustom.RunTurnRunB_L_Positioning)
+		}
+	};
+
+	// Token: 0x04000302 RID: 770
+	private Dictionary<string, AnimcontrolledCharacter.CustomStaticPositionFunction> dbStaticPositioning = new Dictionary<string, AnimcontrolledCharacter.CustomStaticPositionFunction>
+	{
+		{
+			"JumpForwardA",
+			new AnimcontrolledCharacter.CustomStaticPositionFunction(AnimcontrolledAlbinoCustom.JumpForwardA_StaticPositioning)
+		},
+		{
+			"JumpForwardB",
+			new AnimcontrolledCharacter.CustomStaticPositionFunction(AnimcontrolledAlbinoCustom.JumpForwardA_StaticPositioning)
+		},
+		{
+			"JumpForwardC",
+			new AnimcontrolledCharacter.CustomStaticPositionFunction(AnimcontrolledAlbinoCustom.JumpForwardA_StaticPositioning)
+		},
+		{
+			"ClimbUp",
+			new AnimcontrolledCharacter.CustomStaticPositionFunction(AnimcontrolledAlbinoCustom.ClimbUp_StaticPositioning)
+		},
+		{
+			"ClimbUpLedge50cm",
+			new AnimcontrolledCharacter.CustomStaticPositionFunction(AnimcontrolledAlbinoCustom.ClimbUp_StaticPositioning)
+		},
+		{
+			"ClimbUpLedge20cm",
+			new AnimcontrolledCharacter.CustomStaticPositionFunction(AnimcontrolledAlbinoCustom.ClimbUp_StaticPositioning)
+		},
+		{
+			"ClimbUpLedge_20cm_A",
+			new AnimcontrolledCharacter.CustomStaticPositionFunction(AnimcontrolledAlbinoCustom.ClimbUp_StaticPositioning)
+		},
+		{
+			"ClimbUpLedge_20cm_B",
+			new AnimcontrolledCharacter.CustomStaticPositionFunction(AnimcontrolledAlbinoCustom.ClimbUp_StaticPositioning)
+		},
+		{
+			"ClimbUpLedge_20cm_C",
+			new AnimcontrolledCharacter.CustomStaticPositionFunction(AnimcontrolledAlbinoCustom.ClimbUp_StaticPositioning)
+		}
+	};
+}

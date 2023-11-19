@@ -1,0 +1,86 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200000A RID: 10
+public class AlbinoFollowBone : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000066 RID: 102 RVA: 0x00009E34 File Offset: 0x00008034
+	public bool PreAwake(int callcount)
+	{
+		this.dropObject = SignalIn.Create("dropObject", base.gameObject, new Action(this.OnDropObject));
+		this.attachObject = SignalIn.Create("attachObject", base.gameObject, new Action(this.OnAttachObject));
+		return true;
+	}
+
+	// Token: 0x06000067 RID: 103 RVA: 0x00009E88 File Offset: 0x00008088
+	private void Awake()
+	{
+		this.objectTransform = this.objectRigidbody.transform;
+	}
+
+	// Token: 0x06000068 RID: 104 RVA: 0x00009E9C File Offset: 0x0000809C
+	private void LateUpdate()
+	{
+		if (this.isAttached)
+		{
+			this.objectTransform.position = this.parent.position;
+			this.objectTransform.rotation = this.parent.rotation;
+		}
+	}
+
+	// Token: 0x06000069 RID: 105 RVA: 0x00009EE0 File Offset: 0x000080E0
+	private void OnAttachObject()
+	{
+		if (this.isDropped)
+		{
+			return;
+		}
+		AlbinoAI allocatedAlbinoAI = this.albinoSpawner.GetAllocatedAlbinoAI();
+		if (allocatedAlbinoAI != null && allocatedAlbinoAI.currentSpawner == this.albinoSpawner)
+		{
+			GameObject animChar = allocatedAlbinoAI.GetCharacter().animChar;
+			this.parent = animChar.transform.Find(this.albinoParentNode);
+			if (this.parent == null)
+			{
+				return;
+			}
+			this.isAttached = true;
+			this.objectRigidbody.isKinematic = true;
+		}
+	}
+
+	// Token: 0x0600006A RID: 106 RVA: 0x00009F70 File Offset: 0x00008170
+	private void OnDropObject()
+	{
+		this.isAttached = false;
+		this.isDropped = true;
+		this.objectRigidbody.isKinematic = false;
+	}
+
+	// Token: 0x040000A3 RID: 163
+	public AlbinoSpawner albinoSpawner;
+
+	// Token: 0x040000A4 RID: 164
+	public Rigidbody objectRigidbody;
+
+	// Token: 0x040000A5 RID: 165
+	public string albinoParentNode = "bones/Logic/Root/SpineA/SpineB/SpineC/LeftClavicle/LeftArm/LeftElbow/LeftWrist/holdL";
+
+	// Token: 0x040000A6 RID: 166
+	private SignalIn dropObject;
+
+	// Token: 0x040000A7 RID: 167
+	private SignalIn attachObject;
+
+	// Token: 0x040000A8 RID: 168
+	private bool isAttached;
+
+	// Token: 0x040000A9 RID: 169
+	private bool isDropped;
+
+	// Token: 0x040000AA RID: 170
+	private Transform parent;
+
+	// Token: 0x040000AB RID: 171
+	private Transform objectTransform;
+}
