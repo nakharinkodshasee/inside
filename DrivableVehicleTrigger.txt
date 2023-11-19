@@ -1,0 +1,46 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200019B RID: 411
+public class DrivableVehicleTrigger : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000C0F RID: 3087 RVA: 0x00075DA0 File Offset: 0x00073FA0
+	public bool PreAwake(int callcount)
+	{
+		this.enterSignal = SignalOut.Create("enterSignal", base.gameObject);
+		this.exitSignal = SignalOut.Create("exitSignal", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000C10 RID: 3088 RVA: 0x00075DDC File Offset: 0x00073FDC
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.attachedRigidbody != null && coll.GetComponent<DrivableVehicleProbe>())
+		{
+			this.enterSignal.Signal();
+			this.vehicleEnter.OnEvent(this);
+		}
+	}
+
+	// Token: 0x06000C11 RID: 3089 RVA: 0x00075E24 File Offset: 0x00074024
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.attachedRigidbody != null && coll.GetComponent<DrivableVehicleProbe>())
+		{
+			this.exitSignal.Signal();
+			this.vehicleExit.OnEvent(this);
+		}
+	}
+
+	// Token: 0x04001515 RID: 5397
+	private SignalOut enterSignal;
+
+	// Token: 0x04001516 RID: 5398
+	private SignalOut exitSignal;
+
+	// Token: 0x04001517 RID: 5399
+	private SimpleEvent<DrivableVehicleTrigger> vehicleEnter = new SimpleEvent<DrivableVehicleTrigger>("vehicleEnter");
+
+	// Token: 0x04001518 RID: 5400
+	private SimpleEvent<DrivableVehicleTrigger> vehicleExit = new SimpleEvent<DrivableVehicleTrigger>("vehicleExit");
+}

@@ -1,0 +1,166 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000252 RID: 594
+public class Destructible : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600126F RID: 4719 RVA: 0x000ACB94 File Offset: 0x000AAD94
+	public bool PreAwake(int callcount)
+	{
+		this.forceBreak = SignalIn.Create("forceBreak", base.gameObject, new Action(this.Break));
+		return true;
+	}
+
+	// Token: 0x06001270 RID: 4720 RVA: 0x000ACBBC File Offset: 0x000AADBC
+	private void Start()
+	{
+		foreach (object obj in this.chips.transform)
+		{
+			Transform transform = (Transform)obj;
+			this.chipsList.Add(transform.gameObject);
+		}
+		foreach (object obj2 in this.pieces.transform)
+		{
+			Transform transform2 = (Transform)obj2;
+			this.piecesList.Add(transform2.gameObject);
+		}
+		if (base.GetComponent<Rigidbody>() == null)
+		{
+		}
+		this.original.SetActive(true);
+		this.pieces.SetActive(true);
+		this.chips.SetActive(true);
+		if (this.FX.gameObject != null)
+		{
+			this.FX.SetActive(false);
+		}
+	}
+
+	// Token: 0x06001271 RID: 4721 RVA: 0x000ACD04 File Offset: 0x000AAF04
+	private void OnCollisionEnter(Collision col)
+	{
+		if (this.broken)
+		{
+			return;
+		}
+		float num = base.GetComponent<Rigidbody>().velocity.magnitude;
+		foreach (ContactPoint contactPoint in col.contacts)
+		{
+			HuddleClothBody component = contactPoint.otherCollider.GetComponent<HuddleClothBody>();
+			if (component != null)
+			{
+				num *= 16f;
+				break;
+			}
+		}
+		if (this.breakForce != 0f && num > this.breakForce)
+		{
+			this.Break();
+		}
+		else if (this.chipForce != 0f && num > this.chipForce)
+		{
+			ContactPoint contactPoint2 = col.contacts[0];
+			foreach (object obj in this.chips.transform)
+			{
+				Transform transform = (Transform)obj;
+				float num2 = Vector3.Distance(transform.transform.position, contactPoint2.point);
+				if (num2 < this.impactRadius)
+				{
+					this.Detach(transform.gameObject, base.GetComponent<Rigidbody>().velocity);
+					this.brokenChips++;
+				}
+			}
+			if ((float)this.brokenChips >= this.chipsToBreak)
+			{
+				this.Break();
+			}
+		}
+	}
+
+	// Token: 0x06001272 RID: 4722 RVA: 0x000ACEA8 File Offset: 0x000AB0A8
+	private void Break()
+	{
+		this.broken = true;
+		Vector3 velocity = base.GetComponent<Rigidbody>().velocity;
+		foreach (GameObject g in this.chipsList)
+		{
+			this.Detach(g, velocity);
+		}
+		foreach (GameObject g2 in this.piecesList)
+		{
+			this.Detach(g2, velocity);
+		}
+		if (this.FX.gameObject != null)
+		{
+			this.FX.SetActive(true);
+			this.FX.gameObject.transform.parent = null;
+		}
+		base.gameObject.SetActive(false);
+		if (ScriptGlobals.huddle.isCharacterActive)
+		{
+			ScriptGlobals.huddle.grabState.RefreshGrab();
+		}
+	}
+
+	// Token: 0x06001273 RID: 4723 RVA: 0x000ACFDC File Offset: 0x000AB1DC
+	private void Detach(GameObject g, Vector3 vel)
+	{
+		if (g.transform != null && g.GetComponent<Rigidbody>() == null)
+		{
+			g.transform.parent = null;
+			foreach (Collider collider in g.gameObject.GetComponentsInChildren<Collider>())
+			{
+				collider.isTrigger = false;
+				collider.gameObject.AddComponent<HuddleNoGrab>();
+			}
+			Rigidbody rigidbody = g.AddComponent<Rigidbody>();
+			rigidbody.mass = 0.15f;
+			rigidbody.drag = 0.3f;
+			rigidbody.angularDrag = 0.1f;
+			rigidbody.velocity = vel / 2f;
+		}
+	}
+
+	// Token: 0x040021D9 RID: 8665
+	public GameObject chips;
+
+	// Token: 0x040021DA RID: 8666
+	public GameObject pieces;
+
+	// Token: 0x040021DB RID: 8667
+	public GameObject original;
+
+	// Token: 0x040021DC RID: 8668
+	public GameObject huddleGrab;
+
+	// Token: 0x040021DD RID: 8669
+	public GameObject FX;
+
+	// Token: 0x040021DE RID: 8670
+	public float chipForce;
+
+	// Token: 0x040021DF RID: 8671
+	public float impactRadius;
+
+	// Token: 0x040021E0 RID: 8672
+	public float chipsToBreak;
+
+	// Token: 0x040021E1 RID: 8673
+	public float breakForce;
+
+	// Token: 0x040021E2 RID: 8674
+	private int brokenChips;
+
+	// Token: 0x040021E3 RID: 8675
+	private bool broken;
+
+	// Token: 0x040021E4 RID: 8676
+	private List<GameObject> chipsList = new List<GameObject>();
+
+	// Token: 0x040021E5 RID: 8677
+	private List<GameObject> piecesList = new List<GameObject>();
+
+	// Token: 0x040021E6 RID: 8678
+	private SignalIn forceBreak;
+}

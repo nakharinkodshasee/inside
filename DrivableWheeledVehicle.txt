@@ -1,0 +1,136 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003A8 RID: 936
+public class DrivableWheeledVehicle : MonoBehaviour
+{
+	// Token: 0x1700006E RID: 110
+	// (get) Token: 0x0600190E RID: 6414 RVA: 0x000D7E74 File Offset: 0x000D6074
+	// (set) Token: 0x0600190F RID: 6415 RVA: 0x000D7E7C File Offset: 0x000D607C
+	public float CurrentMotorTorque { get; private set; }
+
+	// Token: 0x04002CE6 RID: 11494
+	public Boy driver;
+
+	// Token: 0x04002CE7 RID: 11495
+	public Rigidbody carBody;
+
+	// Token: 0x04002CE8 RID: 11496
+	public Transform centerOfMass;
+
+	// Token: 0x04002CE9 RID: 11497
+	public float facing = 1f;
+
+	// Token: 0x04002CEA RID: 11498
+	public float speedUphill = 5f;
+
+	// Token: 0x04002CEB RID: 11499
+	public float speedFlat = 5.5f;
+
+	// Token: 0x04002CEC RID: 11500
+	public float speedDownhill = 8f;
+
+	// Token: 0x04002CED RID: 11501
+	public float maxMotorTorque = 3000f;
+
+	// Token: 0x04002CEE RID: 11502
+	public AnimationCurve torqueCurve = AnimationCurve.EaseInOut(0f, 1f, 1f, 0f);
+
+	// Token: 0x04002CEF RID: 11503
+	public float brakeTorque = 5000f;
+
+	// Token: 0x04002CF0 RID: 11504
+	public AnimationCurve brakeCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+
+	// Token: 0x04002CF1 RID: 11505
+	public float freeRollBrakeTorque = 5000f;
+
+	// Token: 0x04002CF2 RID: 11506
+	public AnimationCurve freeRollBrakeCurve;
+
+	// Token: 0x04002CF3 RID: 11507
+	public Transform exitPos;
+
+	// Token: 0x04002CF4 RID: 11508
+	public Wheel[] wheels;
+
+	// Token: 0x04002CF5 RID: 11509
+	public string SoundId = "clubcar_";
+
+	// Token: 0x04002CF6 RID: 11510
+	public float soundSpeedInterpolate = 3f;
+
+	// Token: 0x04002CF7 RID: 11511
+	public float soundLoadInterpolate = 5f;
+
+	// Token: 0x04002CF8 RID: 11512
+	public DrivableWheeledVehicle.Animations animations;
+
+	// Token: 0x04002CF9 RID: 11513
+	public bool alwaysUseHandbrake;
+
+	// Token: 0x04002CFA RID: 11514
+	public float brakeBeforeExitSpeed = 1f;
+
+	// Token: 0x04002CFB RID: 11515
+	public float maxHandbrakeAngle = 10f;
+
+	// Token: 0x04002CFC RID: 11516
+	public float casualSpeed = 1f;
+
+	// Token: 0x04002CFD RID: 11517
+	public float jumpOutOfCarSpeed = 4f;
+
+	// Token: 0x04002CFE RID: 11518
+	public float franticSpeed = 9f;
+
+	// Token: 0x04002CFF RID: 11519
+	public float franticAngularVelocity = 1f;
+
+	// Token: 0x04002D00 RID: 11520
+	public float modifiedBoyPushStrength = 70f;
+
+	// Token: 0x020003A9 RID: 937
+	[Serializable]
+	public class Animations
+	{
+		// Token: 0x04002D02 RID: 11522
+		public AnimClipNode enterAnimation;
+
+		// Token: 0x04002D03 RID: 11523
+		public AnimClipNode exitIdleAnimation;
+
+		// Token: 0x04002D04 RID: 11524
+		public AnimClipNode exitCasualAnimation;
+
+		// Token: 0x04002D05 RID: 11525
+		public AnimClipNode exitLandingFwdCasualAnimation;
+
+		// Token: 0x04002D06 RID: 11526
+		public AnimClipNode exitLandingBwdCasualAnimation;
+
+		// Token: 0x04002D07 RID: 11527
+		public AnimClipNode exitFranticAnimation;
+
+		// Token: 0x04002D08 RID: 11528
+		public AnimClipNode exitLandingFwdFranticAnimation;
+
+		// Token: 0x04002D09 RID: 11529
+		public AnimClipNode exitLandingBwdFranticAnimation;
+
+		// Token: 0x04002D0A RID: 11530
+		public AnimClipNode idleAnimation;
+
+		// Token: 0x04002D0B RID: 11531
+		public AnimClipNode forwardCasualAnimation;
+
+		// Token: 0x04002D0C RID: 11532
+		public AnimClipNode backwardCasualAnimation;
+
+		// Token: 0x04002D0D RID: 11533
+		public AnimClipNode forwardFranticAnimation;
+
+		// Token: 0x04002D0E RID: 11534
+		public AnimClipNode backwardFranticAnimation;
+	}
+}

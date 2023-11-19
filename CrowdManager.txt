@@ -1,0 +1,304 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000074 RID: 116
+public class CrowdManager : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060003D1 RID: 977 RVA: 0x00029E60 File Offset: 0x00028060
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.dudeList = this.dudes.GetComponentsInChildren<CrowdDude>(true);
+		int i = 0;
+		int num = this.dudeList.Length;
+		while (i < num)
+		{
+			this.dudeList[i].ManagerPreProcess(this);
+			i++;
+		}
+	}
+
+	// Token: 0x060003D2 RID: 978 RVA: 0x00029EBC File Offset: 0x000280BC
+	public bool PreAwake(int callcount)
+	{
+		this.flee = SignalIn.Create("flee", base.gameObject, new Action(this.OnBegin));
+		this.loadCompleted = SignalIn.Create("loadCompleted", base.gameObject, new Action(this.OnLoadCompleted));
+		return true;
+	}
+
+	// Token: 0x060003D3 RID: 979 RVA: 0x00029F10 File Offset: 0x00028110
+	public void Awake()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x060003D4 RID: 980 RVA: 0x00029F18 File Offset: 0x00028118
+	public void Start()
+	{
+		this.internalStompDist = this.stompDist * this.stompDist;
+		this.internalHeadacheDist = this.headacheDist * this.headacheDist;
+		this.headacheCheckTimer = this.headacheBegin;
+	}
+
+	// Token: 0x060003D5 RID: 981 RVA: 0x00029F58 File Offset: 0x00028158
+	public void SetSafeState()
+	{
+		this.safeTimer = this.safeTime;
+		this.state = CrowdManager.State.Safe;
+	}
+
+	// Token: 0x060003D6 RID: 982 RVA: 0x00029F70 File Offset: 0x00028170
+	private void SafeState()
+	{
+		if (this.safeTimer > 0f)
+		{
+			this.safeTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.SetFleeState();
+		}
+	}
+
+	// Token: 0x060003D7 RID: 983 RVA: 0x00029FA0 File Offset: 0x000281A0
+	public void SetFleeState()
+	{
+		this.state = CrowdManager.State.Flee;
+	}
+
+	// Token: 0x060003D8 RID: 984 RVA: 0x00029FAC File Offset: 0x000281AC
+	private void FleeState()
+	{
+		if (this.headacheCheckTimer > 0f)
+		{
+			this.headacheCheckTimer -= Time.deltaTime;
+		}
+		this.HeadacheCheck();
+		this.BoyDeadCheck();
+	}
+
+	// Token: 0x060003D9 RID: 985 RVA: 0x00029FE8 File Offset: 0x000281E8
+	private void BoyDeadCheck()
+	{
+		if (this.boyDeadReaction && ScriptGlobals.boy.isCharacterActive && ScriptGlobals.boy.isDead)
+		{
+			int i = 0;
+			int num = this.dudeList.Length;
+			while (i < num)
+			{
+				CrowdDude crowdDude = this.dudeList[i];
+				crowdDude.SetBoyDeadState();
+				i++;
+			}
+			this.state = CrowdManager.State.None;
+		}
+	}
+
+	// Token: 0x060003DA RID: 986 RVA: 0x0002A050 File Offset: 0x00028250
+	private void HeadacheCheck()
+	{
+		int i = 0;
+		int num = this.dudeList.Length;
+		while (i < num)
+		{
+			CrowdDude crowdDude = this.dudeList[i];
+			if (crowdDude.state == CrowdDude.State.Flee)
+			{
+				Vector3 vector = ScriptGlobals.mainCharacter.pos3 - crowdDude.dudeHolder.transform.position;
+				vector.y = 0f;
+				float sqrMagnitude = vector.sqrMagnitude;
+				if (sqrMagnitude < this.internalStompDist)
+				{
+					if (ScriptGlobals.boy.isCharacterActive)
+					{
+						crowdDude.SetPushState();
+					}
+					else
+					{
+						crowdDude.SetStompState();
+					}
+				}
+				else if (this.headacheCheckTimer <= 0f && this.headacheVictimCount < this.headacheCount && sqrMagnitude < this.internalHeadacheDist && Mathf.Abs(crowdDude.dudeHolder.transform.position.z) > this.headacheZ)
+				{
+					crowdDude.SetHeadacheState(this.headacheAnimIndex % this.startAnimCount + 1);
+					this.headacheVictimCount++;
+					this.headacheCheckTimer = this.headacheInterval;
+					this.headacheAnimIndex++;
+				}
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x060003DB RID: 987 RVA: 0x0002A18C File Offset: 0x0002838C
+	public void WaterCheck(Collider waterCollider)
+	{
+		Bounds bounds = waterCollider.bounds;
+		int i = 0;
+		int num = this.dudeList.Length;
+		while (i < num)
+		{
+			CrowdDude crowdDude = this.dudeList[i];
+			if (bounds.Contains(crowdDude.dudeHolder.transform.position))
+			{
+				crowdDude.SetWaterImpactState();
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x060003DC RID: 988 RVA: 0x0002A1E8 File Offset: 0x000283E8
+	private void Update()
+	{
+		if (this.state == CrowdManager.State.Flee)
+		{
+			this.FleeState();
+		}
+		else if (this.state == CrowdManager.State.Safe)
+		{
+			this.SafeState();
+		}
+	}
+
+	// Token: 0x060003DD RID: 989 RVA: 0x0002A214 File Offset: 0x00028414
+	private void OnLoadCompleted()
+	{
+		int i = 0;
+		int num = this.dudeList.Length;
+		while (i < num)
+		{
+			this.dudeList[i].LoadCompleted();
+			i++;
+		}
+	}
+
+	// Token: 0x060003DE RID: 990 RVA: 0x0002A24C File Offset: 0x0002844C
+	private void OnBegin()
+	{
+		int i = 0;
+		int num = this.dudeList.Length;
+		while (i < num)
+		{
+			if (this.randomStartPoint)
+			{
+				this.dudeList[i].SetFleetStateNoTransition();
+			}
+			else
+			{
+				this.dudeList[i].SetShockState();
+			}
+			i++;
+		}
+		if (this.stompDist != 0f || this.headacheCount > 0)
+		{
+			this.SetSafeState();
+		}
+	}
+
+	// Token: 0x04000624 RID: 1572
+	public GameObject dudes;
+
+	// Token: 0x04000625 RID: 1573
+	public int startAnimCount = 3;
+
+	// Token: 0x04000626 RID: 1574
+	public int runAnimCount = 5;
+
+	// Token: 0x04000627 RID: 1575
+	public int hideAnimCount = 6;
+
+	// Token: 0x04000628 RID: 1576
+	public bool loop;
+
+	// Token: 0x04000629 RID: 1577
+	public bool randomStartPoint;
+
+	// Token: 0x0400062A RID: 1578
+	public bool endEvent;
+
+	// Token: 0x0400062B RID: 1579
+	public bool boyDeadReaction;
+
+	// Token: 0x0400062C RID: 1580
+	public float headacheBegin = 2f;
+
+	// Token: 0x0400062D RID: 1581
+	public float headacheDist = 150f;
+
+	// Token: 0x0400062E RID: 1582
+	private float internalHeadacheDist;
+
+	// Token: 0x0400062F RID: 1583
+	public float headacheZ = 4f;
+
+	// Token: 0x04000630 RID: 1584
+	public int headacheCount = 9;
+
+	// Token: 0x04000631 RID: 1585
+	public float headacheInterval = 0.5f;
+
+	// Token: 0x04000632 RID: 1586
+	public float stompDist = 8f;
+
+	// Token: 0x04000633 RID: 1587
+	public float rotateSpeed = 7f;
+
+	// Token: 0x04000634 RID: 1588
+	public float finishDist = 0.5f;
+
+	// Token: 0x04000635 RID: 1589
+	public float safeTime = 3f;
+
+	// Token: 0x04000636 RID: 1590
+	public float maxShockTime = 0.25f;
+
+	// Token: 0x04000637 RID: 1591
+	private float internalStompDist;
+
+	// Token: 0x04000638 RID: 1592
+	public SignalIn flee;
+
+	// Token: 0x04000639 RID: 1593
+	public SignalIn loadCompleted;
+
+	// Token: 0x0400063A RID: 1594
+	private float headacheCheckTimer;
+
+	// Token: 0x0400063B RID: 1595
+	private int headacheVictimCount;
+
+	// Token: 0x0400063C RID: 1596
+	private int headacheAnimIndex;
+
+	// Token: 0x0400063D RID: 1597
+	private CrowdManager.State state;
+
+	// Token: 0x0400063E RID: 1598
+	private float safeTimer;
+
+	// Token: 0x0400063F RID: 1599
+	[HideInInspector]
+	[SerializeField]
+	private CrowdDude[] dudeList;
+
+	// Token: 0x04000640 RID: 1600
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x02000075 RID: 117
+	private enum State
+	{
+		// Token: 0x04000642 RID: 1602
+		None,
+		// Token: 0x04000643 RID: 1603
+		Safe,
+		// Token: 0x04000644 RID: 1604
+		Flee
+	}
+}

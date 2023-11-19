@@ -1,0 +1,69 @@
+using System;
+using System.Collections.Generic;
+using Playdead.DebugLog.AK;
+using UnitTest;
+using UnityEngine;
+
+// Token: 0x02000629 RID: 1577
+[Test]
+internal class ColorTest
+{
+	// Token: 0x06002724 RID: 10020 RVA: 0x0013BDE8 File Offset: 0x00139FE8
+	public ColorTest()
+	{
+		this.colors = new List<Color>();
+	}
+
+	// Token: 0x06002725 RID: 10021 RVA: 0x0013BDFC File Offset: 0x00139FFC
+	[CustomGUITest("Generate colors")]
+	private bool GenerateColors()
+	{
+		GUILayout.BeginVertical(new GUILayoutOption[0]);
+		this.colors = new List<Color>();
+		for (int i = 0; i < 10; i++)
+		{
+			int num = (i + 1) * 997;
+			int num2 = num;
+			float num3 = (float)(num % 255) / 255f;
+			num = (num + 1) * 997;
+			int num4 = num;
+			float num5 = (float)(num % 255) / 255f;
+			num = (num + 1) * 997;
+			int num6 = num;
+			float num7 = (float)(num % 255) / 255f;
+			string str = string.Format("float: {0}, {1}, {2}, int: {3}, {4}, {5}", new object[]
+			{
+				num3,
+				num5,
+				num7,
+				num2,
+				num4,
+				num6
+			});
+			Color hashColor = D.GetHashColor(i);
+			this.colors.Add(hashColor);
+			using (PDGUI.BackgroundColor(hashColor))
+			{
+				GUILayout.Label(hashColor.ToString() + " (" + str + ")", GUI.skin.button, new GUILayoutOption[0]);
+			}
+		}
+		GUILayout.EndVertical();
+		return true;
+	}
+
+	// Token: 0x06002726 RID: 10022 RVA: 0x0013BF50 File Offset: 0x0013A150
+	public Color GetHashColor(int hash)
+	{
+		hash = (hash + 1) * 997;
+		float num = (float)(hash % 255) / 255f;
+		hash = (hash + 1) * 997;
+		float num2 = (float)(hash % 255) / 255f;
+		hash = (hash + 1) * 997;
+		float num3 = (float)(hash % 255) / 255f;
+		return new Color(num, num2, num3);
+	}
+
+	// Token: 0x040046A3 RID: 18083
+	[Test]
+	private List<Color> colors;
+}

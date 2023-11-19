@@ -1,0 +1,126 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020003FA RID: 1018
+public class DebugDrawPath : MonoBehaviour
+{
+	// Token: 0x06001AEC RID: 6892 RVA: 0x000EC694 File Offset: 0x000EA894
+	private void OnDrawGizmos()
+	{
+		if (this.path.Count <= 1 || (!this.showPosition && !this.showRotation))
+		{
+			return;
+		}
+		float time = this.path[0].time;
+		float num = this.path[this.path.Count - 1].time - time;
+		int i = 1;
+		int count = this.path.Count;
+		while (i < count)
+		{
+			DebugDrawPath.LogPoint logPoint = this.path[i - 1];
+			DebugDrawPath.LogPoint logPoint2 = this.path[i];
+			float num2 = (logPoint2.time - time) / num;
+			Gizmos.color = Color.Lerp(this.startColor, this.endColor, num2);
+			if (this.showPosition)
+			{
+				Gizmos.DrawLine(logPoint.pos, logPoint2.pos);
+			}
+			if (this.showRotation)
+			{
+				Gizmos.DrawLine(logPoint2.pos, logPoint2.rot);
+			}
+			if (this.trailing > 0 && count > this.trailing && (i - 1) % (this.maxLength / this.trailing) == 0)
+			{
+				Gizmos.color = Gizmos.color.Alpha(0.5f);
+				Gizmos.DrawSphere(logPoint2.pos, 0.05f);
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06001AED RID: 6893 RVA: 0x000EC7EC File Offset: 0x000EA9EC
+	private void FixedUpdate()
+	{
+		this.logTimer -= Time.deltaTime;
+		if (this.logTimer <= 0f)
+		{
+			this.AddLogPoint();
+			this.logTimer = this.logInterval;
+			while (this.maxLength != 0 && this.path.Count > this.maxLength)
+			{
+				this.path.RemoveAt(0);
+			}
+		}
+	}
+
+	// Token: 0x06001AEE RID: 6894 RVA: 0x000EC860 File Offset: 0x000EAA60
+	private void AddLogPoint()
+	{
+		Vector3 position = base.transform.position;
+		Vector3 rot = base.transform.position + base.transform.forward * 1.5f;
+		if (this.xyOnly)
+		{
+			position.z = 0f;
+		}
+		this.path.Add(new DebugDrawPath.LogPoint(Time.time, position, rot));
+	}
+
+	// Token: 0x06001AEF RID: 6895 RVA: 0x000EC8D0 File Offset: 0x000EAAD0
+	[ContextMenu("Clear")]
+	private void Clear()
+	{
+		this.path.Clear();
+	}
+
+	// Token: 0x040030D4 RID: 12500
+	public bool showPosition = true;
+
+	// Token: 0x040030D5 RID: 12501
+	public bool showRotation;
+
+	// Token: 0x040030D6 RID: 12502
+	public Color startColor = Color.green;
+
+	// Token: 0x040030D7 RID: 12503
+	public Color endColor = Color.red;
+
+	// Token: 0x040030D8 RID: 12504
+	public float logInterval = 0.2f;
+
+	// Token: 0x040030D9 RID: 12505
+	public int maxLength = 300;
+
+	// Token: 0x040030DA RID: 12506
+	public int trailing;
+
+	// Token: 0x040030DB RID: 12507
+	public bool xyOnly;
+
+	// Token: 0x040030DC RID: 12508
+	private List<DebugDrawPath.LogPoint> path = new List<DebugDrawPath.LogPoint>();
+
+	// Token: 0x040030DD RID: 12509
+	private float logTimer;
+
+	// Token: 0x020003FB RID: 1019
+	private class LogPoint
+	{
+		// Token: 0x06001AF0 RID: 6896 RVA: 0x000EC8E0 File Offset: 0x000EAAE0
+		public LogPoint(float time, Vector3 pos, Vector3 rot)
+		{
+			this.time = time;
+			this.pos = pos;
+			this.rot = rot;
+		}
+
+		// Token: 0x040030DE RID: 12510
+		public float time;
+
+		// Token: 0x040030DF RID: 12511
+		public Vector3 pos;
+
+		// Token: 0x040030E0 RID: 12512
+		public Vector3 rot;
+	}
+}

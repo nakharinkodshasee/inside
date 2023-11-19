@@ -1,0 +1,395 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000133 RID: 307
+[ExecuteInEditMode]
+public class DynamicMoveTowards : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000944 RID: 2372 RVA: 0x0005EE04 File Offset: 0x0005D004
+	public bool PreAwake(int callcount)
+	{
+		this.moveToA = SignalIn.Create("moveToA", base.gameObject, new Action(this.OnMoveToA));
+		this.moveToB = SignalIn.Create("moveToB", base.gameObject, new Action(this.OnMoveToB));
+		this.stopNow = SignalIn.Create("stopNow", base.gameObject, new Action(this.OnStopNow));
+		this.changeDirection = SignalIn.Create("changeDirection", base.gameObject, new Action(this.OnChangeDirection));
+		this.clearPingPong = SignalIn.Create("clearPingPong", base.gameObject, new Action(this.OnClearPingPong));
+		this.pointAReached = SignalOut.Create("pointAReached", base.gameObject);
+		this.pointBReached = SignalOut.Create("pointBReached", base.gameObject);
+		this.stoppedInBetween = SignalOut.Create("stoppedInBetween", base.gameObject);
+		this.anyPointReached = SignalOut.Create("anyPointReached", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000945 RID: 2373 RVA: 0x0005EF14 File Offset: 0x0005D114
+	private void Awake()
+	{
+		if (base.GetComponent<Collider>() != null && base.GetComponent<Rigidbody>() == null)
+		{
+			base.gameObject.AddComponent<Rigidbody>();
+			base.GetComponent<Rigidbody>().isKinematic = true;
+		}
+	}
+
+	// Token: 0x06000946 RID: 2374 RVA: 0x0005EF5C File Offset: 0x0005D15C
+	public void Start()
+	{
+		this.actualSpeed = 0f;
+		this.actualMaxSpeed = 0f;
+		this.easeOutOvershoot = 0.5f - 0.5f * this.easeOutEndFraction * this.easeOutEndFraction;
+		this.actualMaxSpeed = (this.actualSpeed = this.easeInStartFraction * this.maxSpeed);
+		this.originalWorldPos = base.transform.position;
+		if (base.GetComponent<Rigidbody>())
+		{
+			base.GetComponent<Rigidbody>().centerOfMass = Vector3.zero;
+		}
+		if (this.autoStart)
+		{
+			this.SetNextTarget(this.targetA, this.OffsetA, true);
+		}
+	}
+
+	// Token: 0x06000947 RID: 2375 RVA: 0x0005F00C File Offset: 0x0005D20C
+	private void SetNextTarget(GameObject nextTarget, Vector3 nextOffset, bool toA)
+	{
+		this.movingToA = toA;
+		this.actualSpeed = 0f;
+		this.actualMaxSpeed = 0f;
+		this.currentTarget = nextTarget;
+		this.currentOffset = nextOffset;
+		this.bStopNow = false;
+		this.bRunning = true;
+	}
+
+	// Token: 0x06000948 RID: 2376 RVA: 0x0005F048 File Offset: 0x0005D248
+	private void OnChangeDirection()
+	{
+		if (this.bRunning)
+		{
+			if (this.movingToA)
+			{
+				this.OnMoveToB();
+			}
+			else
+			{
+				this.OnMoveToA();
+			}
+		}
+	}
+
+	// Token: 0x06000949 RID: 2377 RVA: 0x0005F074 File Offset: 0x0005D274
+	private void OnMoveToA()
+	{
+		if (this.bRunning)
+		{
+			this.actionWhenStopped = DynamicMoveTowards.ActionWhenStopped.GoToA;
+			if (!this.movingToA)
+			{
+				this.bStopNow = true;
+			}
+			else
+			{
+				this.actionWhenStopped = DynamicMoveTowards.ActionWhenStopped.GoToSleep;
+				this.bStopNow = false;
+			}
+		}
+		else
+		{
+			this.actionWhenStopped = DynamicMoveTowards.ActionWhenStopped.GoToSleep;
+			this.SetNextTarget(this.targetA, this.OffsetA, true);
+		}
+	}
+
+	// Token: 0x0600094A RID: 2378 RVA: 0x0005F0D8 File Offset: 0x0005D2D8
+	private void OnMoveToB()
+	{
+		if (this.bRunning)
+		{
+			this.actionWhenStopped = DynamicMoveTowards.ActionWhenStopped.GoToB;
+			if (this.movingToA)
+			{
+				this.bStopNow = true;
+			}
+			else
+			{
+				this.actionWhenStopped = DynamicMoveTowards.ActionWhenStopped.GoToSleep;
+				this.bStopNow = false;
+			}
+		}
+		else
+		{
+			this.actionWhenStopped = DynamicMoveTowards.ActionWhenStopped.GoToSleep;
+			this.SetNextTarget(this.targetB, this.OffsetB, false);
+		}
+	}
+
+	// Token: 0x0600094B RID: 2379 RVA: 0x0005F13C File Offset: 0x0005D33C
+	private void OnStopNow()
+	{
+		this.bStopNow = true;
+	}
+
+	// Token: 0x0600094C RID: 2380 RVA: 0x0005F148 File Offset: 0x0005D348
+	private void OnClearPingPong()
+	{
+		this.pingPong = false;
+	}
+
+	// Token: 0x0600094D RID: 2381 RVA: 0x0005F154 File Offset: 0x0005D354
+	private void FixedUpdate()
+	{
+		if (base.GetComponent<Rigidbody>())
+		{
+			this.DoMoveTowards();
+		}
+	}
+
+	// Token: 0x0600094E RID: 2382 RVA: 0x0005F16C File Offset: 0x0005D36C
+	private void Update()
+	{
+		if (Application.isPlaying && !base.GetComponent<Rigidbody>())
+		{
+			this.DoMoveTowards();
+		}
+	}
+
+	// Token: 0x0600094F RID: 2383 RVA: 0x0005F19C File Offset: 0x0005D39C
+	private Vector3 GetTargetPos(GameObject goTarget, Vector3 offset)
+	{
+		Vector3 vector;
+		if (goTarget != null)
+		{
+			vector = goTarget.transform.position;
+			if (this.space == null)
+			{
+				vector += offset;
+			}
+			else
+			{
+				vector += goTarget.transform.TransformDirection(offset);
+			}
+		}
+		else if (this.space == null)
+		{
+			vector = this.originalWorldPos + offset;
+		}
+		else
+		{
+			vector = this.originalWorldPos + base.transform.TransformDirection(offset);
+		}
+		if (this.ignoreHorizontal)
+		{
+			vector.x = base.transform.position.x;
+		}
+		if (this.ignoreVertical)
+		{
+			vector.y = base.transform.position.y;
+		}
+		return vector;
+	}
+
+	// Token: 0x06000950 RID: 2384 RVA: 0x0005F274 File Offset: 0x0005D474
+	private void DoMoveTowards()
+	{
+		if (!this.bRunning)
+		{
+			return;
+		}
+		Vector3 targetPos = this.GetTargetPos(this.currentTarget, this.currentOffset);
+		float magnitude = (base.transform.position - targetPos).magnitude;
+		bool flag = false;
+		if (this.bStopNow || magnitude - this.easeOutOvershoot * this.actualMaxSpeed * this.easeOutTime <= this.finishDistance)
+		{
+			if ((double)this.easeOutTime == 0.0)
+			{
+				flag = true;
+			}
+			else
+			{
+				this.actualSpeed = Mathf.Sign(this.actualSpeed) * Mathf.Max(0f, Mathf.Abs(this.actualSpeed) - Time.deltaTime * this.actualMaxSpeed / this.easeOutTime);
+				if (Mathf.Abs(this.actualSpeed) <= Mathf.Abs(this.actualMaxSpeed) * this.easeOutEndFraction)
+				{
+					flag = true;
+				}
+			}
+			if (flag)
+			{
+				this.actualSpeed = 0f;
+				this.actualMaxSpeed = 0f;
+				this.bRunning = false;
+				bool flag2 = true;
+				DynamicMoveTowards.ActionWhenStopped actionWhenStopped = this.actionWhenStopped;
+				if (actionWhenStopped != DynamicMoveTowards.ActionWhenStopped.GoToA)
+				{
+					if (actionWhenStopped == DynamicMoveTowards.ActionWhenStopped.GoToB)
+					{
+						this.OnMoveToB();
+						flag2 = false;
+					}
+				}
+				else
+				{
+					this.OnMoveToA();
+					flag2 = false;
+				}
+				if (this.bStopNow)
+				{
+					this.stoppedInBetween.Signal();
+				}
+				else if (this.movingToA)
+				{
+					if (this.pingPong && flag2)
+					{
+						this.OnMoveToB();
+					}
+					this.pointAReached.Signal();
+				}
+				else
+				{
+					if (this.pingPong && flag2)
+					{
+						this.OnMoveToA();
+					}
+					this.pointBReached.Signal();
+				}
+				this.anyPointReached.Signal();
+			}
+		}
+		else if (this.easeInTime == 0f)
+		{
+			this.actualMaxSpeed = (this.actualSpeed = this.maxSpeed);
+		}
+		else
+		{
+			this.actualMaxSpeed = (this.actualSpeed = Mathf.Min(this.maxSpeed, this.actualSpeed + Time.deltaTime * this.maxSpeed / this.easeInTime));
+		}
+		Vector3 vector = Vector3.MoveTowards(base.transform.position, targetPos, this.actualSpeed * Time.deltaTime);
+		if (base.GetComponent<Rigidbody>())
+		{
+			base.GetComponent<Rigidbody>().MovePosition(vector);
+		}
+		else
+		{
+			base.transform.position = vector;
+		}
+		if (flag)
+		{
+			return;
+		}
+	}
+
+	// Token: 0x04000F91 RID: 3985
+	public GameObject targetA;
+
+	// Token: 0x04000F92 RID: 3986
+	public Vector3 OffsetA;
+
+	// Token: 0x04000F93 RID: 3987
+	public GameObject targetB;
+
+	// Token: 0x04000F94 RID: 3988
+	public Vector3 OffsetB;
+
+	// Token: 0x04000F95 RID: 3989
+	public Space space;
+
+	// Token: 0x04000F96 RID: 3990
+	public bool ignoreHorizontal;
+
+	// Token: 0x04000F97 RID: 3991
+	public bool ignoreVertical;
+
+	// Token: 0x04000F98 RID: 3992
+	public float maxSpeed;
+
+	// Token: 0x04000F99 RID: 3993
+	public float finishDistance;
+
+	// Token: 0x04000F9A RID: 3994
+	public float easeInTime;
+
+	// Token: 0x04000F9B RID: 3995
+	public float easeInStartFraction;
+
+	// Token: 0x04000F9C RID: 3996
+	public float easeOutTime;
+
+	// Token: 0x04000F9D RID: 3997
+	public float easeOutEndFraction;
+
+	// Token: 0x04000F9E RID: 3998
+	public bool autoStart;
+
+	// Token: 0x04000F9F RID: 3999
+	public bool pingPong;
+
+	// Token: 0x04000FA0 RID: 4000
+	private bool movingToA;
+
+	// Token: 0x04000FA1 RID: 4001
+	private GameObject currentTarget;
+
+	// Token: 0x04000FA2 RID: 4002
+	private Vector3 currentOffset;
+
+	// Token: 0x04000FA3 RID: 4003
+	private Vector3 originalWorldPos;
+
+	// Token: 0x04000FA4 RID: 4004
+	private bool bRunning;
+
+	// Token: 0x04000FA5 RID: 4005
+	private float actualSpeed;
+
+	// Token: 0x04000FA6 RID: 4006
+	private float actualMaxSpeed;
+
+	// Token: 0x04000FA7 RID: 4007
+	private float easeOutOvershoot;
+
+	// Token: 0x04000FA8 RID: 4008
+	private Vector3 currentVelocity;
+
+	// Token: 0x04000FA9 RID: 4009
+	private SignalIn moveToA;
+
+	// Token: 0x04000FAA RID: 4010
+	private SignalIn moveToB;
+
+	// Token: 0x04000FAB RID: 4011
+	private SignalIn stopNow;
+
+	// Token: 0x04000FAC RID: 4012
+	private SignalIn changeDirection;
+
+	// Token: 0x04000FAD RID: 4013
+	private SignalIn clearPingPong;
+
+	// Token: 0x04000FAE RID: 4014
+	private SignalOut pointAReached;
+
+	// Token: 0x04000FAF RID: 4015
+	private SignalOut pointBReached;
+
+	// Token: 0x04000FB0 RID: 4016
+	private SignalOut stoppedInBetween;
+
+	// Token: 0x04000FB1 RID: 4017
+	private SignalOut anyPointReached;
+
+	// Token: 0x04000FB2 RID: 4018
+	private bool bStopNow;
+
+	// Token: 0x04000FB3 RID: 4019
+	private DynamicMoveTowards.ActionWhenStopped actionWhenStopped;
+
+	// Token: 0x02000134 RID: 308
+	private enum ActionWhenStopped
+	{
+		// Token: 0x04000FB5 RID: 4021
+		GoToSleep,
+		// Token: 0x04000FB6 RID: 4022
+		GoToA,
+		// Token: 0x04000FB7 RID: 4023
+		GoToB
+	}
+}

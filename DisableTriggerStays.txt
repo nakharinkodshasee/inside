@@ -1,0 +1,18 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000580 RID: 1408
+public class DisableTriggerStays : MonoBehaviour
+{
+	// Token: 0x06002445 RID: 9285 RVA: 0x0012BA08 File Offset: 0x00129C08
+	private void FixedUpdate()
+	{
+		if (Physics.disableTriggerStays != this.disableTriggerStays)
+		{
+			Physics.disableTriggerStays = this.disableTriggerStays;
+		}
+	}
+
+	// Token: 0x04004298 RID: 17048
+	public bool disableTriggerStays = true;
+}

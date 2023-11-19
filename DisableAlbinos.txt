@@ -1,0 +1,31 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004C0 RID: 1216
+public class DisableAlbinos : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001FCB RID: 8139 RVA: 0x0010E810 File Offset: 0x0010CA10
+	public bool PreAwake(int callcount)
+	{
+		this.disableAlbinos = SignalIn.Create("disableAlbinos", base.gameObject, delegate
+		{
+			this.OnDisableAlbinos();
+		});
+		return true;
+	}
+
+	// Token: 0x06001FCC RID: 8140 RVA: 0x0010E838 File Offset: 0x0010CA38
+	private void OnDisableAlbinos()
+	{
+		AlbinoGroupManager.mInstance.UnspawnAllAlbinos(this.fromId, this.toId);
+	}
+
+	// Token: 0x04003ADC RID: 15068
+	private SignalIn disableAlbinos;
+
+	// Token: 0x04003ADD RID: 15069
+	public int fromId;
+
+	// Token: 0x04003ADE RID: 15070
+	public int toId = 17;
+}

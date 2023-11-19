@@ -1,0 +1,66 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005BE RID: 1470
+public class DirectionalDragInWater : DefaultBoyInput, IPreAwake
+{
+	// Token: 0x170000AA RID: 170
+	// (get) Token: 0x0600256C RID: 9580 RVA: 0x00132968 File Offset: 0x00130B68
+	public override vector2f stick
+	{
+		get
+		{
+			return new vector2f(base.stick.x, this.yValue);
+		}
+	}
+
+	// Token: 0x0600256D RID: 9581 RVA: 0x00132990 File Offset: 0x00130B90
+	public bool PreAwake(int callcount)
+	{
+		this.startDrag = SignalIn.Create("startDrag", base.gameObject, delegate
+		{
+			this.scriptActive = true;
+		});
+		this.stopDrag = SignalIn.Create("stopDrag", base.gameObject, delegate
+		{
+			this.scriptActive = false;
+		});
+		return true;
+	}
+
+	// Token: 0x0600256E RID: 9582 RVA: 0x001329E4 File Offset: 0x00130BE4
+	private void FixedUpdate()
+	{
+		if (BoyUtils.GetCurrentGrabBody(ScriptGlobals.boy) == this.objectInWater && this.scriptActive)
+		{
+			if (GameInput.stick.y >= 0f)
+			{
+				this.yValue = GameInput.stick.y * 0f;
+			}
+			else
+			{
+				this.yValue = GameInput.stick.y * 0.3f;
+			}
+			ScriptGlobals.boy.input = this;
+		}
+		else if (ScriptGlobals.boy.input == this)
+		{
+			ScriptGlobals.boy.input = null;
+		}
+	}
+
+	// Token: 0x04004477 RID: 17527
+	public Rigidbody objectInWater;
+
+	// Token: 0x04004478 RID: 17528
+	private float yValue;
+
+	// Token: 0x04004479 RID: 17529
+	private bool scriptActive;
+
+	// Token: 0x0400447A RID: 17530
+	private SignalIn startDrag;
+
+	// Token: 0x0400447B RID: 17531
+	private SignalIn stopDrag;
+}

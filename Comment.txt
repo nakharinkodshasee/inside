@@ -1,0 +1,21 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003F8 RID: 1016
+public class Comment : MonoBehaviour
+{
+	// Token: 0x040030CF RID: 12495
+	public Comment.Type type;
+
+	// Token: 0x040030D0 RID: 12496
+	public string message;
+
+	// Token: 0x020003F9 RID: 1017
+	public enum Type
+	{
+		// Token: 0x040030D2 RID: 12498
+		Note,
+		// Token: 0x040030D3 RID: 12499
+		FIXME
+	}
+}

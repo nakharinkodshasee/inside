@@ -1,0 +1,1068 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000115 RID: 277
+[ExecuteInEditMode]
+public class ClimbController : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000860 RID: 2144 RVA: 0x00058764 File Offset: 0x00056964
+	public void SetClimbAllowed(bool allowed)
+	{
+		this.climbAllowed = allowed;
+	}
+
+	// Token: 0x06000861 RID: 2145 RVA: 0x00058770 File Offset: 0x00056970
+	public bool PreAwake(int callcount)
+	{
+		this.boyStartClimb = SignalOut.Create("boyStartClimb", base.gameObject);
+		this.boyStopClimb = SignalOut.Create("boyStopClimb", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000862 RID: 2146 RVA: 0x000587AC File Offset: 0x000569AC
+	private void Start()
+	{
+		if (Application.isPlaying)
+		{
+			this.climbDB = LevelGlobals.climbAnimDatabase;
+		}
+	}
+
+	// Token: 0x06000863 RID: 2147 RVA: 0x000587C4 File Offset: 0x000569C4
+	public void BoyInsideTopTrigger(Boy boyArg)
+	{
+		if (!boyArg.isDead && this.boyState == ClimbController.BoyState.NotClimbing && base.gameObject.activeInHierarchy)
+		{
+			Vector3 forward = base.transform.forward;
+			float num = -this.stickDeadZone;
+			if (!this.highPriorityDown)
+			{
+				num = -0.75f;
+			}
+			if (forward.x * boyArg.input.stick.x > 0f)
+			{
+				num = -0.85f;
+			}
+			if (boyArg.input.stick.y < num && boyArg.status.groundPlateau != null && this.mockupTopGraphics != null)
+			{
+				this.boy = boyArg;
+				AnimClipNode component = this.climbDB.topSegments[this.topAnimIndex].climbDownAnim.GetComponent<AnimClipNode>();
+				component.transform.position = this.mockupTopGraphics.transform.position;
+				component.transform.rotation = this.mockupTopGraphics.transform.rotation;
+				BoyUtils.StartCustomAnim(this.boy, component, null, 0f, Boy.AffectMode.Default, this.climbMat);
+				this.boyState = ClimbController.BoyState.ClimbingOnFromTop;
+				this.boy.specialBoyMode = Boy.SpecialBoyMode.ClimbingCliff;
+				this.SetVoiceActive();
+			}
+		}
+	}
+
+	// Token: 0x06000864 RID: 2148 RVA: 0x00058914 File Offset: 0x00056B14
+	public void BoyInsideTrigger(Boy boyArg)
+	{
+		if (!this.climbAllowed)
+		{
+			return;
+		}
+		if (!boyArg.isDead && this.boyState == ClimbController.BoyState.NotClimbing && base.gameObject.activeInHierarchy)
+		{
+			if (boyArg.pos.y < this.mockupGraphics[0].transform.position.y + 0.3f)
+			{
+				return;
+			}
+			float x = base.transform.TransformDirection(Vector3.forward).x;
+			float z = base.transform.InverseTransformDirection(boyArg.velocity3).z;
+			bool flag = BoySlideState.IsSliding(boyArg, boyArg.status);
+			float num = boyArg.input.stick.x * Mathf.Sign(x);
+			if (this.disallowDownClimb && boyArg.input.looseDir.y < -0.5f)
+			{
+				return;
+			}
+			if ((Mathf.Abs(x) < 0.3f || num > 0f || ((double)num > -0.3 && boyArg.input.stick.y > 0.5f) || z > 0f || (flag && num > 0f)) && (boyArg.status.groundPlateau == null || boyArg.input.stick.y > 0.5f || flag))
+			{
+				if (!boyArg.visualBoy.IsPoseFacing(base.transform.forward.x, 70f))
+				{
+					return;
+				}
+				this.boy = boyArg;
+				this.goingUp = true;
+				int segmentID = 0;
+				bool flag2 = false;
+				float startLocation;
+				if (this.boy.status.groundPlateau == null)
+				{
+					flag2 = true;
+					float y = this.boy.velocity.y;
+					if ((double)y > 0.5)
+					{
+						startLocation = this.GetStartLocation(this.boy.pos3 - Vector3.up * 0.55f, ref segmentID);
+					}
+					else if ((double)y > -1.0)
+					{
+						startLocation = this.GetStartLocation(this.boy.pos3 - Vector3.up * 0.65f, ref segmentID);
+					}
+					else
+					{
+						startLocation = this.GetStartLocation(this.boy.pos3 - Vector3.up * 0.9f, ref segmentID);
+					}
+					if (y < -4f)
+					{
+						float power = Mathf.Min(0.2f + (-y - 4f) * 0.1f, 0.8f);
+						RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightThenLeft, power, -1f, 0, 0f);
+					}
+					else if (y < -2f)
+					{
+						RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftSpike, 0.3f, -1f, 0, 0f);
+					}
+				}
+				else
+				{
+					if (flag)
+					{
+						RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightThenLeft, 0.4f, -1f, 0, 0f);
+						flag2 = true;
+					}
+					startLocation = this.GetStartLocation(this.boy.pos3 - Vector3.up * 0.65f, ref segmentID);
+				}
+				if (flag2)
+				{
+					ClimbAnimEvent.GrabPosition closestGrabPosition = this.GetClosestGrabPosition(segmentID, startLocation, this.goingUp, false);
+					if (closestGrabPosition != null && !closestGrabPosition.disallowAdditive)
+					{
+						this.boy.visualBoy.additiveAnim = LevelGlobals.climbAnimDatabase.additiveJumpOnAnim;
+					}
+				}
+				this.onCliffTimer = 0f;
+				this.boyState = ClimbController.BoyState.Climbing;
+				this.boy.specialBoyMode = Boy.SpecialBoyMode.ClimbingCliff;
+				AlbinoGroupManager.mInstance.SafetyReleaseAllAlbinos();
+				this.SetVoiceActive();
+				this.jumpAllowed = false;
+				this.startSegment(segmentID, startLocation);
+			}
+		}
+	}
+
+	// Token: 0x06000865 RID: 2149 RVA: 0x00058D14 File Offset: 0x00056F14
+	private float GetStartLocation(Vector3 worldPos, ref int segmentID)
+	{
+		segmentID = 0;
+		GameObject gameObject = this.mockupGraphics[0];
+		int num = 0;
+		while (gameObject != null && worldPos.y >= gameObject.transform.position.y)
+		{
+			segmentID = num;
+			num++;
+			if (num < this.mockupGraphics.Count)
+			{
+				gameObject = this.mockupGraphics[num];
+			}
+			else
+			{
+				gameObject = null;
+			}
+		}
+		Vector3 vector = this.mockupGraphics[segmentID].transform.InverseTransformPoint(worldPos);
+		int index = this.climbAnimIndexes[segmentID];
+		ClimbAnimDatabase.ClimbSegment climbSegment = LevelGlobals.climbAnimDatabase.climbSegments[index];
+		ClimbAnimEvent climbUpAnim = climbSegment.climbUpAnim;
+		float num2 = vector.y / climbUpAnim.topPosition.y;
+		if (segmentID == 0)
+		{
+			num2 = Mathf.Max(num2, this.lowerSegmentMinEnterFraction);
+		}
+		float numFrames = climbUpAnim.GetComponent<AnimClipNode>().numFrames;
+		float num3 = num2 * numFrames;
+		return Mathf.Clamp(num3, 0f, numFrames);
+	}
+
+	// Token: 0x06000866 RID: 2150 RVA: 0x00058E28 File Offset: 0x00057028
+	private int GetClosestGrabPosID(ClimbAnimEvent animToTest, float frame, bool mustBeLater)
+	{
+		int result = -1;
+		float num = -100000f;
+		for (int i = 0; i < animToTest.frames.Length; i++)
+		{
+			if (animToTest.grabPositions[i].isRestPos)
+			{
+				float num2 = animToTest.frames[i];
+				if ((animToTest.frames[i] > frame || !mustBeLater) && Mathf.Abs(animToTest.frames[i] - frame) < Mathf.Abs(num - frame))
+				{
+					num = animToTest.frames[i];
+					result = i;
+				}
+			}
+		}
+		return result;
+	}
+
+	// Token: 0x06000867 RID: 2151 RVA: 0x00058EB0 File Offset: 0x000570B0
+	private ClimbAnimEvent GetAnimToTest(int segmentID, bool useUp)
+	{
+		int index = this.climbAnimIndexes[segmentID];
+		ClimbAnimDatabase.ClimbSegment climbSegment = this.climbDB.climbSegments[index];
+		if (this.wasLeaningOut)
+		{
+			return (!useUp) ? climbSegment.climbDownLeanAnim : climbSegment.climbUpLeanAnim;
+		}
+		return (!useUp) ? climbSegment.climbDownAnim : climbSegment.climbUpAnim;
+	}
+
+	// Token: 0x06000868 RID: 2152 RVA: 0x00058F18 File Offset: 0x00057118
+	private ClimbAnimEvent.GrabPosition GetClosestGrabPosition(int segmentID, float frame, bool useUp, bool mustBeLater = false)
+	{
+		ClimbAnimEvent.GrabPosition result = null;
+		ClimbAnimEvent animToTest = this.GetAnimToTest(segmentID, useUp);
+		int closestGrabPosID = this.GetClosestGrabPosID(animToTest, frame, mustBeLater);
+		if (closestGrabPosID >= 0 && closestGrabPosID < animToTest.grabPositions.Length)
+		{
+			result = animToTest.grabPositions[closestGrabPosID];
+		}
+		return result;
+	}
+
+	// Token: 0x06000869 RID: 2153 RVA: 0x00058F5C File Offset: 0x0005715C
+	private float GetCurrentClosestRestPos(bool mustBeLater)
+	{
+		return this.GetClosestRestPos(this.currentSegment, this.currentAnim.frame, this.goingUp, mustBeLater);
+	}
+
+	// Token: 0x0600086A RID: 2154 RVA: 0x00058F7C File Offset: 0x0005717C
+	private float GetClosestRestPos(int segmentID, float frame, bool useUp, bool mustBeLater)
+	{
+		ClimbAnimEvent animToTest = this.GetAnimToTest(segmentID, useUp);
+		int closestGrabPosID = this.GetClosestGrabPosID(animToTest, frame, mustBeLater);
+		float num = -100000f;
+		if (closestGrabPosID >= 0 && closestGrabPosID < animToTest.frames.Length)
+		{
+			num = animToTest.frames[closestGrabPosID];
+		}
+		if (mustBeLater && num < frame)
+		{
+			num = animToTest.GetComponent<AnimClipNode>().numFrames;
+		}
+		return num;
+	}
+
+	// Token: 0x0600086B RID: 2155 RVA: 0x00058FDC File Offset: 0x000571DC
+	private void startSegment(int segmentID, float startFrame = 0f)
+	{
+		this.currentSegment = segmentID;
+		this.currentAnimEvent = this.GetAnimToTest(this.currentSegment, this.goingUp);
+		if (this.currentAnim != null)
+		{
+			this.currentAnim.transform.parent = this.currentAnimOriginalParent;
+		}
+		this.currentAnim = this.currentAnimEvent.GetComponent<AnimClipNode>();
+		this.currentAnim.transform.position = this.GetCurrentStartPos(segmentID);
+		this.currentAnim.transform.rotation = base.transform.rotation;
+		this.currentAnimOriginalParent = this.currentAnim.transform.parent;
+		this.currentAnim.transform.parent = base.transform;
+		if (!this.boy.isDead)
+		{
+			BoyUtils.StartCustomAnim(this.boy, this.currentAnim, new AnimClipNode.GotFocusArg(AnimClipNode.LoopingMode.FrozenEnding, startFrame), 0f, Boy.AffectMode.Default, this.climbMat);
+		}
+	}
+
+	// Token: 0x0600086C RID: 2156 RVA: 0x000590D4 File Offset: 0x000572D4
+	private Vector3 GetCurrentStartPos(int segment)
+	{
+		return this.mockupGraphics[segment].transform.position;
+	}
+
+	// Token: 0x0600086D RID: 2157 RVA: 0x000590EC File Offset: 0x000572EC
+	private float GetBestAnimationFrame(int segmentIndex, float frameGuess)
+	{
+		int index = this.climbAnimIndexes[segmentIndex];
+		ClimbAnimDatabase.ClimbSegment climbSegment = LevelGlobals.climbAnimDatabase.climbSegments[index];
+		ClimbAnimEvent climbAnimEvent;
+		if (this.goingUp)
+		{
+			climbAnimEvent = climbSegment.climbUpAnim;
+		}
+		else
+		{
+			climbAnimEvent = climbSegment.climbDownAnim;
+		}
+		AnimClipNode component = climbAnimEvent.GetComponent<AnimClipNode>();
+		Actor actor = component.actor;
+		SpecificBones specificBones = actor.specificBones;
+		frameGuess = Mathf.Clamp(frameGuess, 0f, component.numFrames - 1f);
+		float num = this.mockupGraphics[segmentIndex].transform.InverseTransformPoint(this.boy.pos3).y - 0.65f;
+		int num2 = (int)frameGuess;
+		CompressedAnimBone compressedAnimBone = component.clip.poses[num2 / component.frameFactor][specificBones.logic];
+		float num3 = compressedAnimBone.pos.y - num;
+		if (Mathf.Abs(num3) < 0.05f)
+		{
+			return frameGuess;
+		}
+		int num4 = 1;
+		int num5 = (int)component.numFrames;
+		if ((num3 < 0f && !this.goingUp) || (num3 > 0f && this.goingUp))
+		{
+			num4 = -1;
+			num5 = -1;
+		}
+		int num6 = num2;
+		num2 += num4;
+		num3 = Mathf.Abs(num3);
+		while (num2 != num5)
+		{
+			compressedAnimBone = component.clip.poses[num2 / component.frameFactor][specificBones.logic];
+			float num7 = compressedAnimBone.pos.y - num;
+			if (Mathf.Abs(num7) >= num3)
+			{
+				break;
+			}
+			num6 = num2;
+			num2 += num4;
+			num3 = Mathf.Abs(num7);
+		}
+		return (float)num6;
+	}
+
+	// Token: 0x0600086E RID: 2158 RVA: 0x000592B4 File Offset: 0x000574B4
+	private float getDistToColision(float maxdist)
+	{
+		CollisionUtils.Type type = CollisionUtils.Type.Solid;
+		Vector3 pos = this.boy.pos3;
+		Vector3 vector = base.transform.TransformDirection(Vector3.up);
+		ColInfo3Buffer colInfo3Buffer = CollisionUtils.RayIsect(pos, pos + vector * maxdist, type, true);
+		int i = 0;
+		while (i < colInfo3Buffer.size)
+		{
+			ColInfo3 colInfo = colInfo3Buffer.raw[i];
+			Transform parent = colInfo.collider.transform.parent;
+			if (this.ignoreColliders.Contains(colInfo.collider) || (parent != null && this.mockupGraphics.Contains(parent.gameObject)))
+			{
+				i++;
+			}
+			else
+			{
+				if (Mathf.Abs(colInfo.normal.y) > 0.5f)
+				{
+					maxdist = colInfo.distance;
+					break;
+				}
+				i++;
+			}
+		}
+		ColInfo3Buffer.Release(ref colInfo3Buffer);
+		return maxdist;
+	}
+
+	// Token: 0x0600086F RID: 2159 RVA: 0x000593A8 File Offset: 0x000575A8
+	private bool JumpAwayTest(vector2f stick)
+	{
+		if (stick.x * base.transform.TransformDirection(Vector3.forward).x < 0f && Mathf.Abs(stick.x) > this.stickDeadZone)
+		{
+			this.jumpAllowed = false;
+			this.boyState = ClimbController.BoyState.JumpingOff;
+			this.boy.specialBoyMode = Boy.SpecialBoyMode.None;
+			this.SetVoiceNone();
+			this.boy.visualBoy.additiveAnim = null;
+			if (!this.boy.isDead)
+			{
+				this.boy.facing = Mathf.Sign(stick.x);
+				this.boy.SpawnExternalState(new BoyJumpState(this.boy, BoyJumpState.State.JumpForward, base.GetComponent<Collider>()), Boy.AffectMode.Default);
+			}
+			return true;
+		}
+		return false;
+	}
+
+	// Token: 0x06000870 RID: 2160 RVA: 0x00059470 File Offset: 0x00057670
+	public void SafetyStopClimbing()
+	{
+		if (this.boyState != ClimbController.BoyState.NotClimbing)
+		{
+			if (this.currentAnim != null)
+			{
+				this.currentAnim.transform.parent = this.currentAnimOriginalParent;
+			}
+			this.boyState = ClimbController.BoyState.NotClimbing;
+			this.boy.specialBoyMode = Boy.SpecialBoyMode.None;
+			this.SetVoiceNone();
+		}
+	}
+
+	// Token: 0x06000871 RID: 2161 RVA: 0x000594C8 File Offset: 0x000576C8
+	public bool IsBoyclimbing()
+	{
+		return this.boyState != ClimbController.BoyState.NotClimbing;
+	}
+
+	// Token: 0x06000872 RID: 2162 RVA: 0x000594D8 File Offset: 0x000576D8
+	private void UpdateTargetPlanePosition()
+	{
+	}
+
+	// Token: 0x06000873 RID: 2163 RVA: 0x000594DC File Offset: 0x000576DC
+	private void UpdateClimbing()
+	{
+		vector2f stick = this.boy.input.stick;
+		this.onCliffTimer += Time.deltaTime;
+		if (this.onCliffTimer < 0.3f)
+		{
+			if (stick.y < -this.stickDeadZone)
+			{
+				float distToColision = this.getDistToColision(-1.6f);
+				if (distToColision > -1.6f)
+				{
+					stick.y = 0f;
+				}
+			}
+			this.hasSetVoiceEngaged = false;
+		}
+		if (!this.hasSetVoiceEngaged && this.onCliffTimer > 0.5f)
+		{
+			this.SetVoicePassive();
+		}
+		bool rawJump = this.boy.input.rawJump;
+		bool flag = rawJump;
+		if (GameInput.controllerType == GameController.Type.Digital)
+		{
+			flag = (this.boy.input.rawAction && this.boy.input.looseDir.y < -0.5f && this.boy.input.looseDir.x == 0f);
+		}
+		if ((rawJump || flag) && this.jumpAllowed)
+		{
+			if (rawJump && this.JumpAwayTest(stick))
+			{
+				return;
+			}
+			if (stick.y < 0.5f && flag)
+			{
+				float x = base.transform.TransformDirection(Vector3.forward).x;
+				if (this.boy.input.stick.x * x <= 0f || Mathf.Abs(this.boy.input.stick.x) < this.stickDeadZone)
+				{
+					CollisionUtils.Type type = CollisionUtils.Type.Solid;
+					Vector3 pos = this.boy.pos3;
+					Vector3 vector = base.transform.TransformDirection(Vector3.down);
+					ColInfo3Buffer colInfo3Buffer = CollisionUtils.RayIsect(pos, pos + vector * 1.2f, type, true);
+					bool flag2 = colInfo3Buffer.size == 0;
+					ColInfo3Buffer.Release(ref colInfo3Buffer);
+					if (flag2)
+					{
+						this.jumpAllowed = false;
+						this.boy.visualBoy.additiveAnim = null;
+						this.boyState = ClimbController.BoyState.CustomAnimOff;
+						this.disallowDownClimb = true;
+						this.boy.specialBoyMode = Boy.SpecialBoyMode.None;
+						this.SetVoiceActive();
+						if (!this.boy.isDead)
+						{
+							BoyUtils.StartCustomAnim(this.boy, this.climbDB.jumpOffAnim, null, 0f, Boy.AffectMode.Default, this.climbMat);
+						}
+						return;
+					}
+				}
+			}
+		}
+		if (this.goingUp && stick.y >= 0.5f && this.getDistToColision(0.75f) < 0.75f)
+		{
+			stick.y = 0f;
+		}
+		bool flag3 = stick.x * base.transform.TransformDirection(Vector3.forward).x < 0f && Mathf.Abs(stick.x) > 0.5f;
+		if (Mathf.Abs(stick.y) < 0.5f)
+		{
+			if (this.stressClimbing)
+			{
+				this.SetVoicePassive();
+			}
+			this.stressClimbing = false;
+			float currentClosestRestPos = this.GetCurrentClosestRestPos(false);
+			float num = 30f * this.climbSpeedScale;
+			if (flag3 != this.wasLeaningOut)
+			{
+				this.wasLeaningOut = flag3;
+				this.startSegment(this.currentSegment, this.currentAnim.frame);
+			}
+			if (Mathf.Abs(this.currentAnim.frame - currentClosestRestPos) < 6f)
+			{
+				float num2 = (currentClosestRestPos - this.currentAnim.frame) / 6f;
+				num2 = 1f - (1f - num2) * (1f - num2);
+				num = num2 * 30f * this.climbSpeedScale;
+				this.currentAnim.fps += Time.deltaTime * 15f * (num - this.currentAnim.fps);
+				float num3 = this.currentAnim.frame + this.currentAnim.fps * Time.deltaTime;
+				if ((num3 < currentClosestRestPos && this.currentAnim.frame >= currentClosestRestPos) || (num3 > currentClosestRestPos && this.currentAnim.frame <= currentClosestRestPos))
+				{
+					this.currentAnim.fps = (currentClosestRestPos - this.currentAnim.frame) / Time.deltaTime;
+				}
+				if (flag3)
+				{
+					if (this.boy.visualBoy.additiveAnim != null)
+					{
+						this.boy.visualBoy.additiveAnim = null;
+					}
+				}
+				else if (this.boy.visualBoy.additiveAnim == null)
+				{
+					this.boy.visualBoy.additiveAnim = LevelGlobals.climbAnimDatabase.additiveHangIdleAnim;
+				}
+			}
+			else
+			{
+				this.currentAnim.fps += Time.deltaTime * 20f * (num - this.currentAnim.fps);
+			}
+		}
+		else
+		{
+			if (!this.stressClimbing)
+			{
+				this.SetVoiceActive();
+			}
+			this.stressClimbing = true;
+			if (this.wasLeaningOut)
+			{
+				this.wasLeaningOut = false;
+				this.startSegment(this.currentSegment, this.currentAnim.frame);
+			}
+			if (this.boy.visualBoy.additiveAnim != null)
+			{
+				this.boy.visualBoy.additiveAnim = null;
+			}
+			if (this.goingUp == stick.y <= -0.5f)
+			{
+				this.currentAnim.fps = 0f;
+				this.goingUp = !this.goingUp;
+				float num4 = this.currentAnim.frame / this.currentAnim.numFrames;
+				float bestAnimationFrame = this.GetBestAnimationFrame(this.currentSegment, (1f - num4) * this.currentAnim.numFrames);
+				this.startSegment(this.currentSegment, bestAnimationFrame);
+			}
+			this.currentAnim.fps = 30f * this.climbSpeedScale;
+		}
+		if (!this.goingUp)
+		{
+			float distToColision2 = this.getDistToColision(-1.6f);
+			if (distToColision2 > -1.6f)
+			{
+				if (distToColision2 > 1.2f)
+				{
+					this.boy.visualBoy.additiveAnim = null;
+					this.disallowDownClimb = true;
+					this.boyState = ClimbController.BoyState.CustomAnimOff;
+					this.boy.specialBoyMode = Boy.SpecialBoyMode.None;
+					this.SetVoiceActive();
+					if (!this.boy.isDead)
+					{
+						BoyUtils.StartCustomAnim(this.boy, this.climbDB.jumpOffAnim, null, 0f, Boy.AffectMode.Default, this.climbMat);
+					}
+				}
+				else if (distToColision2 < 0.75f)
+				{
+					this.boyState = ClimbController.BoyState.JumpingOff;
+					this.boy.specialBoyMode = Boy.SpecialBoyMode.None;
+					this.SetVoiceNone();
+					BoyUtils.ClearState(this.boy, -1f);
+					return;
+				}
+			}
+		}
+		if (this.currentAnim.frame >= this.currentAnim.numFrames)
+		{
+			if (this.goingUp && this.currentSegment + 1 == this.climbAnimIndexes.Count)
+			{
+				if (this.boy.input.stick.y > this.stickDeadZone && this.autoExitUp)
+				{
+					AnimClipNode component = this.climbDB.topSegments[this.topAnimIndex].climbUpAnim.GetComponent<AnimClipNode>();
+					component.transform.position = this.mockupTopGraphics.transform.position;
+					component.transform.rotation = this.mockupTopGraphics.transform.rotation;
+					if (!this.boy.isDead)
+					{
+						BoyUtils.StartCustomAnim(this.boy, component, null, 0f, Boy.AffectMode.Default, this.climbMat);
+					}
+					this.boyState = ClimbController.BoyState.ClimbingOff;
+					this.boy.specialBoyMode = Boy.SpecialBoyMode.None;
+					this.SetVoiceActive();
+				}
+				else
+				{
+					this.currentAnim.fps = 0f;
+				}
+			}
+			else if (!this.goingUp && this.currentSegment == 0)
+			{
+				this.currentAnim.frame = this.currentAnim.numFrames;
+				this.currentAnim.fps = 0f;
+			}
+			else if (this.goingUp)
+			{
+				this.startSegment(this.currentSegment + 1, 0f);
+			}
+			else
+			{
+				this.startSegment(this.currentSegment - 1, 0f);
+			}
+		}
+	}
+
+	// Token: 0x06000874 RID: 2164 RVA: 0x00059D6C File Offset: 0x00057F6C
+	private void FixedUpdate()
+	{
+		if (this.disallowDownClimb)
+		{
+			if (this.boy.input.looseDir.y > -0.5f)
+			{
+				this.disallowDownClimb = false;
+			}
+			else if (this.boy.state is BoyRunState)
+			{
+				this.disallowDownClimb = false;
+			}
+		}
+		switch (this.boyState)
+		{
+		case ClimbController.BoyState.Climbing:
+			this.UpdateTargetPlanePosition();
+			this.UpdateClimbing();
+			break;
+		case ClimbController.BoyState.JumpingOff:
+			if (this.boy.status.groundCollider != null || !(this.boy.state is BoyJumpState))
+			{
+				if (this.currentAnim != null)
+				{
+					this.currentAnim.transform.parent = this.currentAnimOriginalParent;
+				}
+				this.boyState = ClimbController.BoyState.NotClimbing;
+				this.hasSetVoiceEngaged = false;
+			}
+			break;
+		case ClimbController.BoyState.CustomAnimOff:
+			this.UpdateTargetPlanePosition();
+			if (!(this.boy.state is BoyCustomAnimState))
+			{
+				if (this.currentAnim != null)
+				{
+					this.currentAnim.transform.parent = this.currentAnimOriginalParent;
+				}
+				this.boyState = ClimbController.BoyState.NotClimbing;
+				this.SetVoiceNone();
+				this.hasSetVoiceEngaged = false;
+			}
+			break;
+		case ClimbController.BoyState.ClimbingOff:
+		{
+			this.UpdateTargetPlanePosition();
+			if (this.boy.input.rawJump && this.jumpAllowed && this.JumpAwayTest(this.boy.input.stick))
+			{
+				return;
+			}
+			AnimClipNode component = this.climbDB.topSegments[this.topAnimIndex].climbUpAnim.GetComponent<AnimClipNode>();
+			float frame = component.frame;
+			if (this.boy.input.stick.y < -this.stickDeadZone && frame < 40f)
+			{
+				float num = 1f - frame / 40f;
+				this.SetVoiceActive();
+				this.boyState = ClimbController.BoyState.ClimbingOnFromTop;
+				AnimClipNode component2 = this.climbDB.topSegments[this.topAnimIndex].climbDownAnim.GetComponent<AnimClipNode>();
+				component2.transform.position = this.mockupTopGraphics.transform.position;
+				component2.transform.rotation = this.mockupTopGraphics.transform.rotation;
+				if (!this.boy.isDead)
+				{
+					BoyUtils.StartCustomAnim(this.boy, component2, new AnimClipNode.GotFocusArg(AnimClipNode.LoopingMode.FrozenEnding, 20f + num * (component2.numFrames - 20f)), 0f, Boy.AffectMode.Default, this.climbMat);
+				}
+			}
+			else
+			{
+				if (frame > 46f)
+				{
+					BoyUtils.ClearState(this.boy, -1f);
+				}
+				if (!(this.boy.state is BoyCustomAnimState))
+				{
+					if (this.currentAnim != null)
+					{
+						this.currentAnim.transform.parent = this.currentAnimOriginalParent;
+					}
+					this.SetVoiceNone();
+					this.boyState = ClimbController.BoyState.NotClimbing;
+					this.hasSetVoiceEngaged = false;
+				}
+			}
+			break;
+		}
+		case ClimbController.BoyState.ClimbingOnFromTop:
+		{
+			this.disallowDownClimb = false;
+			this.UpdateTargetPlanePosition();
+			if (this.boy.input.rawJump && this.jumpAllowed && this.JumpAwayTest(this.boy.input.stick))
+			{
+				return;
+			}
+			AnimClipNode component3 = this.climbDB.topSegments[this.topAnimIndex].climbDownAnim.GetComponent<AnimClipNode>();
+			if (this.boy.input.stick.y > this.stickDeadZone && component3.frame > 15f)
+			{
+				float num2 = 1f - (component3.frame - 15f) / (component3.numFrames - 15f);
+				this.boyState = ClimbController.BoyState.ClimbingOff;
+				this.boy.specialBoyMode = Boy.SpecialBoyMode.None;
+				this.SetVoiceActive();
+				AnimClipNode component4 = this.climbDB.topSegments[this.topAnimIndex].climbUpAnim.GetComponent<AnimClipNode>();
+				component4.transform.position = this.mockupTopGraphics.transform.position;
+				component4.transform.rotation = this.mockupTopGraphics.transform.rotation;
+				if (!this.boy.isDead)
+				{
+					if (this.currentAnim != null)
+					{
+						this.currentAnim.transform.parent = this.currentAnimOriginalParent;
+					}
+					BoyUtils.StartCustomAnim(this.boy, component4, new AnimClipNode.GotFocusArg(AnimClipNode.LoopingMode.FrozenEnding, num2 * 40f), 0f, Boy.AffectMode.Default, this.climbMat);
+				}
+			}
+			else if (component3.frame >= component3.numFrames)
+			{
+				this.goingUp = false;
+				this.boyState = ClimbController.BoyState.Climbing;
+				this.boy.specialBoyMode = Boy.SpecialBoyMode.ClimbingCliff;
+				this.SetVoiceActive();
+				this.startSegment(this.climbAnimIndexes.Count - 1, 0f);
+			}
+			break;
+		}
+		}
+		if (this.boyState != ClimbController.BoyState.NotClimbing)
+		{
+			this.jumpAllowed = (this.jumpAllowed || !this.boy.input.rawJump);
+		}
+		if (GameInput.controllerType == GameController.Type.Digital)
+		{
+			this.jumpAllowed = true;
+		}
+		if (this.boy != null && this.boy.isDead && this.currentAnim != null)
+		{
+			this.currentAnim.transform.parent = this.currentAnimOriginalParent;
+		}
+	}
+
+	// Token: 0x06000875 RID: 2165 RVA: 0x0005A30C File Offset: 0x0005850C
+	private void Update()
+	{
+		if (!Application.isPlaying)
+		{
+			this.debugVisualUpdate();
+		}
+		if (this.boy != this.boyOnLastFrame)
+		{
+			if (this.boy)
+			{
+				this.wasLeaningOut = false;
+				this.boyStartClimb.Signal();
+			}
+			else
+			{
+				this.boyStopClimb.Signal();
+			}
+		}
+		this.boyOnLastFrame = this.boy;
+	}
+
+	// Token: 0x06000876 RID: 2166 RVA: 0x0005A380 File Offset: 0x00058580
+	public void OnDestroy()
+	{
+		if (this.currentAnim != null)
+		{
+			this.currentAnim.transform.parent = this.currentAnimOriginalParent;
+		}
+	}
+
+	// Token: 0x06000877 RID: 2167 RVA: 0x0005A3AC File Offset: 0x000585AC
+	private GameObject debugAddMockupGraphics(Vector3 topPos, GameObject objectToInstatiate, GameObject mockupFolder, GameObject triggerFolder, GameObject entry)
+	{
+		if (entry == null)
+		{
+			entry = Object.Instantiate<GameObject>(objectToInstatiate);
+			entry.name = objectToInstatiate.name;
+			entry.transform.parent = mockupFolder.transform;
+			entry.transform.position = topPos;
+			entry.transform.localRotation = default(Quaternion);
+			if (entry.transform.childCount > 0)
+			{
+				for (int i = 0; i < entry.transform.childCount; i++)
+				{
+					GameObject gameObject = entry.transform.GetChild(i).gameObject;
+					ClimbControllerTrigger component = gameObject.GetComponent<ClimbControllerTrigger>();
+					if (component != null)
+					{
+						this.enterTriggers.Add(gameObject);
+						gameObject.SetActive(true);
+						gameObject.transform.parent = triggerFolder.transform;
+						component.climbController = this;
+					}
+				}
+			}
+		}
+		return entry;
+	}
+
+	// Token: 0x06000878 RID: 2168 RVA: 0x0005A494 File Offset: 0x00058694
+	private void debugVisualize(GameObject go)
+	{
+		if (go != null)
+		{
+			MeshRenderer component = go.GetComponent<MeshRenderer>();
+			if (component)
+			{
+				component.enabled = !this.hideMockupGraphics;
+			}
+		}
+	}
+
+	// Token: 0x06000879 RID: 2169 RVA: 0x0005A4D0 File Offset: 0x000586D0
+	private void debugVisualUpdate()
+	{
+		if (!Application.isEditor)
+		{
+			this.debugShow = false;
+		}
+		if (this.debugShow)
+		{
+			Vector3 vector = base.transform.position;
+			int num = 0;
+			Transform transform = base.transform.Find("mockupGraphics");
+			GameObject gameObject = null;
+			if (transform == null)
+			{
+				gameObject = new GameObject("mockupGraphics");
+				gameObject.transform.parent = base.transform;
+				gameObject.transform.localPosition = Vector3.zero;
+				gameObject.transform.localRotation = default(Quaternion);
+			}
+			else
+			{
+				gameObject = transform.gameObject;
+			}
+			Transform transform2 = base.transform.Find("enterTriggers");
+			GameObject gameObject2 = null;
+			if (transform2 == null)
+			{
+				gameObject2 = new GameObject("enterTriggers");
+				gameObject2.transform.parent = base.transform;
+				gameObject2.transform.localPosition = Vector3.zero;
+				gameObject2.transform.localRotation = default(Quaternion);
+			}
+			else
+			{
+				gameObject2 = transform2.gameObject;
+			}
+			bool flag = this.lastClimbAnimIndexes.Count != this.climbAnimIndexes.Count || this.topAnimIndex != this.lastTopAnimIndex;
+			if (!flag)
+			{
+				for (int i = 0; i < this.climbAnimIndexes.Count; i++)
+				{
+					if (this.lastClimbAnimIndexes[i] != this.climbAnimIndexes[i])
+					{
+						flag = true;
+						break;
+					}
+				}
+			}
+			this.lastClimbAnimIndexes.Clear();
+			this.lastClimbAnimIndexes.AddRange(this.climbAnimIndexes);
+			if (flag)
+			{
+				foreach (GameObject obj in this.mockupGraphics)
+				{
+					PDUtilities.Destroy(obj);
+				}
+				this.mockupGraphics.Clear();
+				foreach (GameObject obj2 in this.enterTriggers)
+				{
+					PDUtilities.Destroy(obj2);
+				}
+				this.enterTriggers.Clear();
+				if (this.mockupTopGraphics != null)
+				{
+					PDUtilities.Destroy(this.mockupTopGraphics);
+				}
+				this.mockupTopGraphics = null;
+			}
+			while (this.mockupGraphics.Count < this.climbAnimIndexes.Count)
+			{
+				this.mockupGraphics.Add(null);
+			}
+			while (this.enterTriggers.Count < this.climbAnimIndexes.Count)
+			{
+				this.enterTriggers.Add(null);
+			}
+			foreach (int num2 in this.climbAnimIndexes)
+			{
+				Vector3 vector2 = vector;
+				int num3 = Mathf.Clamp(num2, 0, this.climbAnimIndexes.Count - 1);
+				ClimbAnimDatabase.ClimbSegment climbSegment = this.climbDB.climbSegments[num2];
+				this.mockupGraphics[num] = this.debugAddMockupGraphics(vector, climbSegment.mockupGraphics, gameObject, gameObject2, this.mockupGraphics[num]);
+				ClimbAnimEvent climbUpAnim = climbSegment.climbUpAnim;
+				vector = vector2 + base.transform.TransformDirection(climbUpAnim.topPosition);
+				climbUpAnim.DebugDrawPos(0f, string.Empty + num, vector2, base.transform.rotation);
+				num++;
+			}
+			if (this.topAnimIndex >= 0 && this.mockupTopGraphics == null)
+			{
+				this.mockupTopGraphics = this.debugAddMockupGraphics(vector, this.climbDB.topSegments[this.topAnimIndex].mockupGraphics, gameObject, gameObject2, this.mockupTopGraphics);
+			}
+			foreach (GameObject go in this.mockupGraphics)
+			{
+				this.debugVisualize(go);
+			}
+			this.debugVisualize(this.mockupTopGraphics);
+		}
+	}
+
+	// Token: 0x0600087A RID: 2170 RVA: 0x0005A97C File Offset: 0x00058B7C
+	private void SetVoiceNone()
+	{
+		if (this.onCliffTimer > 0.5f)
+		{
+			Device.SetVoiceNone();
+			this.hasSetVoiceEngaged = true;
+		}
+	}
+
+	// Token: 0x0600087B RID: 2171 RVA: 0x0005A99C File Offset: 0x00058B9C
+	private void SetVoicePassive()
+	{
+		if (this.onCliffTimer > 0.5f)
+		{
+			Device.SetVoicePassive();
+			this.hasSetVoiceEngaged = true;
+		}
+	}
+
+	// Token: 0x0600087C RID: 2172 RVA: 0x0005A9BC File Offset: 0x00058BBC
+	private void SetVoiceActive()
+	{
+		if (this.onCliffTimer > 0.5f)
+		{
+			Device.SetVoiceActive();
+			this.hasSetVoiceEngaged = true;
+		}
+	}
+
+	// Token: 0x04000E44 RID: 3652
+	private const float voiceDelay = 0.5f;
+
+	// Token: 0x04000E45 RID: 3653
+	public bool debugShow;
+
+	// Token: 0x04000E46 RID: 3654
+	public List<int> climbAnimIndexes;
+
+	// Token: 0x04000E47 RID: 3655
+	public int topAnimIndex;
+
+	// Token: 0x04000E48 RID: 3656
+	public float climbSpeedScale = 1f;
+
+	// Token: 0x04000E49 RID: 3657
+	public bool autoExitUp = true;
+
+	// Token: 0x04000E4A RID: 3658
+	public bool hideMockupGraphics;
+
+	// Token: 0x04000E4B RID: 3659
+	public EffectMaterial.Material climbMat;
+
+	// Token: 0x04000E4C RID: 3660
+	public float lowerSegmentMinEnterFraction = -1f;
+
+	// Token: 0x04000E4D RID: 3661
+	public bool highPriorityDown = true;
+
+	// Token: 0x04000E4E RID: 3662
+	[HideInInspector]
+	public List<GameObject> mockupGraphics = new List<GameObject>();
+
+	// Token: 0x04000E4F RID: 3663
+	[HideInInspector]
+	public List<GameObject> enterTriggers = new List<GameObject>();
+
+	// Token: 0x04000E50 RID: 3664
+	[HideInInspector]
+	public List<int> lastClimbAnimIndexes = new List<int>();
+
+	// Token: 0x04000E51 RID: 3665
+	[HideInInspector]
+	public GameObject mockupTopGraphics;
+
+	// Token: 0x04000E52 RID: 3666
+	[HideInInspector]
+	public int lastTopAnimIndex;
+
+	// Token: 0x04000E53 RID: 3667
+	public List<Collider> ignoreColliders = new List<Collider>();
+
+	// Token: 0x04000E54 RID: 3668
+	public ClimbAnimDatabase climbDB;
+
+	// Token: 0x04000E55 RID: 3669
+	private ClimbController.BoyState boyState;
+
+	// Token: 0x04000E56 RID: 3670
+	private AnimClipNode currentAnim;
+
+	// Token: 0x04000E57 RID: 3671
+	private ClimbAnimEvent currentAnimEvent;
+
+	// Token: 0x04000E58 RID: 3672
+	private Transform currentAnimOriginalParent;
+
+	// Token: 0x04000E59 RID: 3673
+	private int currentSegment;
+
+	// Token: 0x04000E5A RID: 3674
+	private float stickDeadZone = 0.4f;
+
+	// Token: 0x04000E5B RID: 3675
+	private bool jumpAllowed;
+
+	// Token: 0x04000E5C RID: 3676
+	private Boy boy;
+
+	// Token: 0x04000E5D RID: 3677
+	private Boy boyOnLastFrame;
+
+	// Token: 0x04000E5E RID: 3678
+	private bool disallowDownClimb;
+
+	// Token: 0x04000E5F RID: 3679
+	private SignalOut boyStartClimb;
+
+	// Token: 0x04000E60 RID: 3680
+	private SignalOut boyStopClimb;
+
+	// Token: 0x04000E61 RID: 3681
+	private bool climbAllowed = true;
+
+	// Token: 0x04000E62 RID: 3682
+	private float onCliffTimer;
+
+	// Token: 0x04000E63 RID: 3683
+	private bool goingUp = true;
+
+	// Token: 0x04000E64 RID: 3684
+	private bool wasLeaningOut;
+
+	// Token: 0x04000E65 RID: 3685
+	private bool stressClimbing = true;
+
+	// Token: 0x04000E66 RID: 3686
+	private bool hasSetVoiceEngaged;
+
+	// Token: 0x02000116 RID: 278
+	private enum BoyState
+	{
+		// Token: 0x04000E68 RID: 3688
+		NotClimbing,
+		// Token: 0x04000E69 RID: 3689
+		Climbing,
+		// Token: 0x04000E6A RID: 3690
+		JumpingOff,
+		// Token: 0x04000E6B RID: 3691
+		JumpingUp,
+		// Token: 0x04000E6C RID: 3692
+		CustomAnimOff,
+		// Token: 0x04000E6D RID: 3693
+		ClimbingOff,
+		// Token: 0x04000E6E RID: 3694
+		ClimbingOnFromTop
+	}
+}

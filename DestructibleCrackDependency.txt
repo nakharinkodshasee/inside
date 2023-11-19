@@ -1,0 +1,10 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200052A RID: 1322
+public class DestructibleCrackDependency : MonoBehaviour
+{
+	// Token: 0x04004054 RID: 16468
+	public List<Collider> removeCollFrom;
+}

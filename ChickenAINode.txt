@@ -1,0 +1,38 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000060 RID: 96
+public class ChickenAINode : MonoBehaviour
+{
+	// Token: 0x06000324 RID: 804 RVA: 0x00024C98 File Offset: 0x00022E98
+	private void RefreshMinMax()
+	{
+		Collider component = base.GetComponent<Collider>();
+		Bounds bounds = component.bounds;
+		this.minZ = bounds.min.z;
+		this.maxZ = bounds.max.z;
+	}
+
+	// Token: 0x06000325 RID: 805 RVA: 0x00024CE0 File Offset: 0x00022EE0
+	private void Start()
+	{
+		this.RefreshMinMax();
+	}
+
+	// Token: 0x04000515 RID: 1301
+	public bool forceGoBack;
+
+	// Token: 0x04000516 RID: 1302
+	public bool forceGoForward;
+
+	// Token: 0x04000517 RID: 1303
+	public bool forceStay;
+
+	// Token: 0x04000518 RID: 1304
+	[NonSerialized]
+	public float minZ;
+
+	// Token: 0x04000519 RID: 1305
+	[NonSerialized]
+	public float maxZ;
+}

@@ -1,0 +1,53 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000112 RID: 274
+public class ClimbAnimDatabase : MonoBehaviour
+{
+	// Token: 0x0600085B RID: 2139 RVA: 0x0005869C File Offset: 0x0005689C
+	private void Start()
+	{
+	}
+
+	// Token: 0x04000E37 RID: 3639
+	public List<ClimbAnimDatabase.ClimbSegment> climbSegments = new List<ClimbAnimDatabase.ClimbSegment>();
+
+	// Token: 0x04000E38 RID: 3640
+	public List<ClimbAnimDatabase.ClimbSegment> topSegments = new List<ClimbAnimDatabase.ClimbSegment>();
+
+	// Token: 0x04000E39 RID: 3641
+	public AnimClipNode additiveHangIdleAnim;
+
+	// Token: 0x04000E3A RID: 3642
+	public AnimClipNode additiveJumpOnAnim;
+
+	// Token: 0x04000E3B RID: 3643
+	public AnimClipNode climbUpAnim;
+
+	// Token: 0x04000E3C RID: 3644
+	public AnimClipNode jumpOffAnim;
+
+	// Token: 0x04000E3D RID: 3645
+	public AnimClipNode jumpUpAnim;
+
+	// Token: 0x02000113 RID: 275
+	[Serializable]
+	public class ClimbSegment
+	{
+		// Token: 0x04000E3E RID: 3646
+		public ClimbAnimEvent climbUpAnim;
+
+		// Token: 0x04000E3F RID: 3647
+		public ClimbAnimEvent climbUpLeanAnim;
+
+		// Token: 0x04000E40 RID: 3648
+		public ClimbAnimEvent climbDownAnim;
+
+		// Token: 0x04000E41 RID: 3649
+		public ClimbAnimEvent climbDownLeanAnim;
+
+		// Token: 0x04000E42 RID: 3650
+		public GameObject mockupGraphics;
+	}
+}

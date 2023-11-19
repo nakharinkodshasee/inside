@@ -1,0 +1,286 @@
+using System;
+using System.Linq;
+using UnityEngine;
+
+// Token: 0x02000062 RID: 98
+public class ChickenManager : MonoBehaviour
+{
+	// Token: 0x06000329 RID: 809 RVA: 0x00024E18 File Offset: 0x00023018
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.chickenList = base.GetComponentsInChildren<Chicken>(true);
+		this.SetChickSpeed();
+	}
+
+	// Token: 0x0600032A RID: 810 RVA: 0x00024E4C File Offset: 0x0002304C
+	private void OnEnable()
+	{
+		this.OnPreProcess();
+		if (GameManager.IsLoading())
+		{
+			int i = 0;
+			int num = this.chickenList.Length;
+			while (i < num)
+			{
+				this.chickenList[i].gameObject.SetActive(true);
+				i++;
+			}
+		}
+		else
+		{
+			this.enableIndex = -4;
+			this.enablingChickens = true;
+		}
+	}
+
+	// Token: 0x0600032B RID: 811 RVA: 0x00024EAC File Offset: 0x000230AC
+	private void OnDisable()
+	{
+		int i = 0;
+		int num = this.chickenList.Length;
+		while (i < num)
+		{
+			this.chickenList[i].gameObject.SetActive(false);
+			i++;
+		}
+		this.enablingChickens = false;
+	}
+
+	// Token: 0x0600032C RID: 812 RVA: 0x00024EF0 File Offset: 0x000230F0
+	private void Start()
+	{
+		ChickenManager.instance = this;
+		this.boy = ScriptGlobals.boy;
+		Transform childComponent = this.boy.visualBoy.transform.GetChildComponent("Themes");
+		this.chickenTheme = childComponent.GetChildComponent("WithChicken");
+		if (this.chickenTheme == null)
+		{
+		}
+	}
+
+	// Token: 0x0600032D RID: 813 RVA: 0x00024F4C File Offset: 0x0002314C
+	private void OnDestroy()
+	{
+		ChickenManager.instance = null;
+	}
+
+	// Token: 0x0600032E RID: 814 RVA: 0x00024F54 File Offset: 0x00023154
+	public void SetChickSpeed()
+	{
+		if (this.chickenSpeedVariations.Length <= 0)
+		{
+			return;
+		}
+		Chicken[] array = (from x in this.chickenList
+		orderby x.transform.position.x
+		select x).ToArray<Chicken>();
+		int i = 0;
+		int num = array.Length;
+		while (i < num)
+		{
+			Chicken chicken = array[i];
+			int num2 = i % this.chickenSpeedVariations.Length;
+			float num3 = this.chickenSpeedVariations[num2];
+			chicken.moveSpeed += chicken.moveSpeedVariation * num3;
+			chicken.gameObject.SetActive(false);
+			i++;
+		}
+	}
+
+	// Token: 0x0600032F RID: 815 RVA: 0x00024FF4 File Offset: 0x000231F4
+	public void SetChickenTarget(GameObject target)
+	{
+		if (target == null)
+		{
+			if (ScriptGlobals.boy == null)
+			{
+				return;
+			}
+			target = ScriptGlobals.boy.gameObject;
+		}
+		int i = 0;
+		int num = this.chickenList.Length;
+		while (i < num)
+		{
+			Chicken chicken = this.chickenList[i];
+			chicken.SetNewTarget(target);
+			i++;
+		}
+	}
+
+	// Token: 0x06000330 RID: 816 RVA: 0x00025058 File Offset: 0x00023258
+	private void FixedUpdate()
+	{
+		if (this.enablingChickens)
+		{
+			if (this.enableIndex >= 0)
+			{
+				this.chickenList[this.enableIndex].gameObject.SetActive(true);
+			}
+			this.enableIndex++;
+			if (this.enableIndex >= this.chickenList.Length)
+			{
+				this.enablingChickens = false;
+			}
+			return;
+		}
+		if (this.chickenTheme == null)
+		{
+			return;
+		}
+		if (this.themeTimer > 0f)
+		{
+			this.themeTimer -= Time.deltaTime;
+		}
+		bool flag = false;
+		float x = ScriptGlobals.boy.input.stick.x;
+		Boy boy = ScriptGlobals.boy;
+		if (Mathf.Abs(x) > this.minStickX)
+		{
+			if (Mathf.Abs(this.previousStickX) <= this.minStickX && this.currentTheme == this.chickenTheme)
+			{
+				int num = 0;
+				int i = 0;
+				int num2 = this.chickenList.Length;
+				while (i < num2)
+				{
+					Chicken chicken = this.chickenList[i];
+					if (!(chicken.Target != boy.gameObject) && chicken.distY <= 1.5f)
+					{
+						float num3 = (float)Math.Sign(x);
+						Vector3 position = chicken.transform.position;
+						if ((num3 != -1f || position.x <= boy.pos3.x) && (num3 != 1f || position.x >= boy.pos3.x) && chicken.distToBoy < 4f)
+						{
+							num++;
+						}
+					}
+					i++;
+				}
+				if (num > 3)
+				{
+					this.themeTimer = this.themeDelay;
+				}
+				else
+				{
+					flag = true;
+				}
+			}
+		}
+		else if (this.i <= 0)
+		{
+			flag = true;
+			int j = 0;
+			int num4 = this.chickenList.Length;
+			while (j < num4)
+			{
+				Chicken chicken2 = this.chickenList[j];
+				if (!(chicken2.Target != boy.gameObject) && chicken2.distY <= 1.5f)
+				{
+					flag = false;
+					Vector3 position2 = chicken2.transform.position;
+					bool flag2 = (boy.facing == -1f && position2.x > boy.pos3.x) || (boy.facing == 1f && position2.x < boy.pos3.x);
+					if (chicken2.distToBoy < ((!flag2) ? 4f : 1f))
+					{
+						if (this.currentTheme != this.chickenTheme)
+						{
+							PointOfInterestManager.AddPOIBlocker(this.poiBlocker);
+							this.themeEaseInTimer = this.themeEaseInDelay;
+							this.currentTheme = this.chickenTheme;
+						}
+						this.themeTimer = this.themeDelay;
+						break;
+					}
+				}
+				j++;
+			}
+			this.i = 10;
+		}
+		else
+		{
+			this.i--;
+		}
+		if (this.themeTimer <= 0f || flag)
+		{
+			this.currentTheme = null;
+		}
+		if (this.currentTheme)
+		{
+			if (this.themeEaseInTimer > 0f)
+			{
+				this.themeEaseInTimer -= Time.deltaTime;
+			}
+			else if (ScriptGlobals.boy.visualBoy.theme != this.chickenTheme)
+			{
+				boy.visualBoy.SetTheme(this.chickenTheme, VisualBoy.ThemePriority.High);
+			}
+		}
+		else if (ScriptGlobals.boy.visualBoy.theme == this.chickenTheme)
+		{
+			PointOfInterestManager.RemovePOIBlocker(this.poiBlocker);
+			boy.visualBoy.SetTheme(null, VisualBoy.ThemePriority.High);
+		}
+		this.previousStickX = x;
+	}
+
+	// Token: 0x0400051D RID: 1309
+	[Range(-1f, 1f)]
+	public float[] chickenSpeedVariations;
+
+	// Token: 0x0400051E RID: 1310
+	public PointOfInterestBlocker poiBlocker;
+
+	// Token: 0x0400051F RID: 1311
+	private int i;
+
+	// Token: 0x04000520 RID: 1312
+	private Boy boy;
+
+	// Token: 0x04000521 RID: 1313
+	private Transform chickenTheme;
+
+	// Token: 0x04000522 RID: 1314
+	private Transform currentTheme;
+
+	// Token: 0x04000523 RID: 1315
+	private float themeTimer;
+
+	// Token: 0x04000524 RID: 1316
+	private float themeDelay = 1.5f;
+
+	// Token: 0x04000525 RID: 1317
+	private float themeEaseInTimer;
+
+	// Token: 0x04000526 RID: 1318
+	private float themeEaseInDelay = 0.35f;
+
+	// Token: 0x04000527 RID: 1319
+	private float previousStickX;
+
+	// Token: 0x04000528 RID: 1320
+	private float minStickX = 0.3f;
+
+	// Token: 0x04000529 RID: 1321
+	public static ChickenManager instance;
+
+	// Token: 0x0400052A RID: 1322
+	[HideInInspector]
+	[SerializeField]
+	private Chicken[] chickenList;
+
+	// Token: 0x0400052B RID: 1323
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x0400052C RID: 1324
+	private int enableIndex;
+
+	// Token: 0x0400052D RID: 1325
+	private bool enablingChickens;
+}

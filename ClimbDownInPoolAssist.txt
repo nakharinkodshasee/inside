@@ -1,0 +1,97 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004FE RID: 1278
+public class ClimbDownInPoolAssist : DefaultBoyInput
+{
+	// Token: 0x06002176 RID: 8566 RVA: 0x00118CBC File Offset: 0x00116EBC
+	private void Start()
+	{
+		if (this.startActive)
+		{
+			this.isActive = true;
+		}
+		this.enableAssist = SignalIn.Create("enableAssist", base.gameObject, new Action(this.OnEnableAssist));
+	}
+
+	// Token: 0x06002177 RID: 8567 RVA: 0x00118D00 File Offset: 0x00116F00
+	private void OnEnableAssist()
+	{
+		this.isActive = true;
+	}
+
+	// Token: 0x17000091 RID: 145
+	// (get) Token: 0x06002178 RID: 8568 RVA: 0x00118D0C File Offset: 0x00116F0C
+	public override vector2f stick
+	{
+		get
+		{
+			if (!this.isActive)
+			{
+				return new vector2f(base.stick.x, base.stick.y);
+			}
+			if (this.leftDir)
+			{
+				float num = base.stick.x;
+				if (this.useXMinimumStick && num < -0.5f)
+				{
+					num = -0.5f;
+				}
+				if (base.stick.x < this.requiredStickX && base.stick.y < 0f)
+				{
+					return new vector2f(Mathf.Min(base.stick.x, base.stick.y), 0f);
+				}
+				return new vector2f(num, base.stick.y);
+			}
+			else
+			{
+				float num2 = base.stick.x;
+				if (this.useXMinimumStick && num2 > 0.5f)
+				{
+					num2 = 0.5f;
+				}
+				if (base.stick.x > -this.requiredStickX && base.stick.y < 0f)
+				{
+					return new vector2f(Mathf.Max(base.stick.x, -base.stick.y), 0f);
+				}
+				return new vector2f(num2, base.stick.y);
+			}
+		}
+	}
+
+	// Token: 0x06002179 RID: 8569 RVA: 0x00118E98 File Offset: 0x00117098
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			ScriptGlobals.boy.input = this;
+		}
+	}
+
+	// Token: 0x0600217A RID: 8570 RVA: 0x00118EB8 File Offset: 0x001170B8
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			ScriptGlobals.boy.input = null;
+		}
+	}
+
+	// Token: 0x04003E35 RID: 15925
+	public bool leftDir = true;
+
+	// Token: 0x04003E36 RID: 15926
+	public float requiredStickX = 0.1f;
+
+	// Token: 0x04003E37 RID: 15927
+	public bool useXMinimumStick;
+
+	// Token: 0x04003E38 RID: 15928
+	public bool startActive = true;
+
+	// Token: 0x04003E39 RID: 15929
+	private bool isActive;
+
+	// Token: 0x04003E3A RID: 15930
+	private SignalIn enableAssist;
+}

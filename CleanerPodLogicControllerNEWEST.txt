@@ -1,0 +1,619 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020004FB RID: 1275
+public class CleanerPodLogicControllerNEWEST : MonoBehaviour
+{
+	// Token: 0x06002163 RID: 8547 RVA: 0x00117954 File Offset: 0x00115B54
+	private void Start()
+	{
+		this.shineIntensity = this.sphereShine.GetOrAddFloatProperty("_Intensity");
+		Vector3 vector = this.elbowPoint.position - this.shoulderPoint.position;
+		vector.z = 0f;
+		this.upperArmLength = vector.magnitude;
+		Vector3 vector2 = this.wristPoint.position - this.elbowPoint.position;
+		vector2.z = 0f;
+		this.lowerArmLength = vector2.magnitude;
+		this.GetMinMaxDistances();
+		this.lastElbowPos = this.elbowPoint.position;
+		this.lastElbowPos.z = 0f;
+		if (this.bounceLight != null)
+		{
+			MaterialInstance.FloatProperty orAddFloatProperty = this.bounceLight.GetOrAddFloatProperty("_Intensity");
+			this.bounceLightIntensity = orAddFloatProperty;
+			this.bounceLightInitialIntensity = this.bounceLight.GetFloatValue(this.bounceLightIntensity);
+			this.bounceLight.SetFloatProperty(this.bounceLightIntensity, 0f);
+		}
+		if (this.spotLight != null)
+		{
+			this.spotLightInitialIntensity = this.spotLight.intensity;
+		}
+		this.stickAnimCircle = this.cleanerLever["Circle"];
+		this.stickAnimIdle = this.cleanerLever["Idle"];
+		this.stickAnimCircle.speed = 0f;
+		this.stickAnimCircle.enabled = true;
+		this.stickAnimCircle.weight = 0f;
+		this.stickAnimIdle.enabled = true;
+		this.stickAnimIdle.weight = 1f;
+	}
+
+	// Token: 0x06002164 RID: 8548 RVA: 0x00117AF4 File Offset: 0x00115CF4
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyInside = true;
+		}
+	}
+
+	// Token: 0x06002165 RID: 8549 RVA: 0x00117B10 File Offset: 0x00115D10
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.boyInside = false;
+		}
+	}
+
+	// Token: 0x06002166 RID: 8550 RVA: 0x00117B2C File Offset: 0x00115D2C
+	private void UpdateAudioEvents()
+	{
+		if (this.motorRunning != this.motorRunningLastFrame)
+		{
+			if (this.motorRunning)
+			{
+				this.engineSound.enabled = true;
+			}
+			else
+			{
+				this.engineSound.enabled = false;
+			}
+		}
+	}
+
+	// Token: 0x06002167 RID: 8551 RVA: 0x00117B68 File Offset: 0x00115D68
+	private void UpdateGrabbingAnim(vector2f v2stick)
+	{
+		Vector3 vector = MathUtils.v3(v2stick, 0f);
+		bool flag = false;
+		if (vector.x == 0f && vector.y == 0f)
+		{
+			this.stickWasZero = true;
+			flag = true;
+		}
+		float num = Vector3.Angle(vector, Vector3.up);
+		float x = base.transform.right.x;
+		if (x * this.lastRight < 0f && !this.stickWasZero && !flag)
+		{
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.animBlendNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			ScriptGlobals.boy.visualBoy.StartBlend(0.4f);
+		}
+		this.lastRight = x;
+		if (!flag)
+		{
+			this.stickWasZero = false;
+		}
+		if (vector.x * base.transform.right.x > 0f)
+		{
+			num = 360f - num;
+		}
+		float num2 = num / 360f;
+		this.animCircle.frame = num2 * this.animCircle.numFrames;
+		float magnitude = v2stick.magnitude;
+		this.animBlendNode.currentBlendValue = magnitude;
+		this.stickAnimCircle.normalizedTime = num2;
+		this.stickAnimCircle.weight = magnitude;
+		this.stickAnimIdle.weight = 1f - magnitude;
+	}
+
+	// Token: 0x06002168 RID: 8552 RVA: 0x00117CCC File Offset: 0x00115ECC
+	private void UpdateLights(float deltaTime)
+	{
+		this.spotRandomTimer -= Time.deltaTime;
+		if (this.spotRandomTimer <= 0f)
+		{
+			this.spotRandomTimer = 0.05f;
+			this.spotWantedRandomVal = 1f + Random.Range(-0.1f, 0.1f);
+		}
+		this.spotRandomVal += (this.spotWantedRandomVal - this.spotRandomVal) * Mathf.Min(Time.deltaTime * 20f, 1f);
+		this.spotLight.intensity = this.spotLightInitialIntensity * this.spotRandomVal;
+		MaterialInstance.FloatProperty property = this.bounceLightIntensity;
+		if (this.bounceLight != null)
+		{
+			float x = this.spotLight.transform.forward.x;
+			float num = Mathf.Abs(x);
+			if (x < 0f)
+			{
+				float num2 = this.actualCabin.transform.position.y - this.bounceLightLeftSphere.transform.position.y;
+				float num3 = this.bounceLightLeftSphere.lossyScale.x * 0.5f;
+				float num4 = Mathf.Asin(num2 / num3);
+				Vector3 position = this.bounceLightLeftSphere.transform.position + Quaternion.Euler(0f, 0f, 57.29578f * num4) * Vector3.right * num3 + Vector3.right * 0.6f;
+				position.z = this.actualCabin.transform.position.z;
+				this.bounceLight.transform.position = position;
+				Debug.DrawLine(this.actualCabin.transform.position, this.bounceLight.transform.position);
+			}
+			else
+			{
+				Vector3 position2 = this.actualCabin.transform.position;
+				position2.x = this.cabinRightmostPoint.position.x + 1f;
+				this.bounceLight.transform.position = position2;
+			}
+			float num5 = Mathf.Abs(this.bounceLight.transform.position.x - this.actualCabin.transform.position.x);
+			float num6 = 0.6f + 0.4f * Mathf.Min(1f, num5 * 0.2f);
+			this.bounceLight.SetFloatProperty(property, Mathf.Abs(num) * this.bounceLightInitialIntensity * this.spotRandomVal * num6);
+		}
+	}
+
+	// Token: 0x06002169 RID: 8553 RVA: 0x00117F7C File Offset: 0x0011617C
+	private void GetMinMaxDistances()
+	{
+		float num = this.upperArmLength + Mathf.Cos(0.017453292f * (180f - this.lowerMaxAngle)) * this.lowerArmLength;
+		float num2 = Mathf.Sin(0.017453292f * (180f - this.lowerMaxAngle)) * this.lowerArmLength;
+		this.maxReach = Mathf.Sqrt(num * num + num2 * num2);
+		float num3 = this.upperArmLength - Mathf.Cos(0.017453292f * this.lowerMinAngle) * this.lowerArmLength;
+		float num4 = Mathf.Sin(0.017453292f * this.lowerMinAngle) * this.lowerArmLength;
+		this.minReach = Mathf.Sqrt(num3 * num3 + num4 * num4);
+	}
+
+	// Token: 0x0600216A RID: 8554 RVA: 0x0011802C File Offset: 0x0011622C
+	public void SetCurrentCabinTiltAngle(float newCabinTiltAngle)
+	{
+		this.wantedCabinTiltAngle = newCabinTiltAngle;
+	}
+
+	// Token: 0x0600216B RID: 8555 RVA: 0x00118038 File Offset: 0x00116238
+	private Vector3 MapToCircleEdge(Vector3 elbowPos, Vector3 myPos)
+	{
+		Vector3 vector = myPos - elbowPos;
+		vector.z = 0f;
+		Vector3 result = elbowPos + vector.normalized * this.lowerArmLength;
+		result.z = myPos.z;
+		return result;
+	}
+
+	// Token: 0x0600216C RID: 8556 RVA: 0x00118084 File Offset: 0x00116284
+	private Vector3 GetActualElbowPos(Vector3 pos)
+	{
+		Vector3 result = this.lastElbowPos;
+		List<vector2f> list = MathUtils.CircleCircleIntersection(MathUtils.v2(this.shoulderPoint.position), this.upperArmLength, MathUtils.v2(pos), this.lowerArmLength);
+		Vector3 position = this.elbowPoint.position;
+		position.z = 0f;
+		float maxValue = float.MaxValue;
+		int i = 0;
+		int count = list.Count;
+		while (i < count)
+		{
+			Vector3 vector = MathUtils.v3(list[i], 0f);
+			float sqrMagnitude = (position - vector).sqrMagnitude;
+			if (sqrMagnitude < maxValue)
+			{
+				result = vector;
+			}
+			i++;
+		}
+		return result;
+	}
+
+	// Token: 0x0600216D RID: 8557 RVA: 0x00118130 File Offset: 0x00116330
+	private bool ApplyArmLimits(ref Vector3 pos)
+	{
+		bool result = false;
+		Vector3 vector = pos - this.shoulderPoint.position;
+		vector.z = 0f;
+		float magnitude = vector.magnitude;
+		if (magnitude > this.maxReach)
+		{
+			pos = this.shoulderPoint.position + this.maxReach / magnitude * vector;
+			result = true;
+		}
+		if (magnitude < this.minReach)
+		{
+			pos = this.shoulderPoint.position + this.minReach / magnitude * vector;
+			result = true;
+		}
+		int i = 0;
+		int count = this.avoidSpheres.Count;
+		while (i < count)
+		{
+			Transform transform = this.avoidSpheres[i];
+			Vector3 vector2 = pos - transform.position;
+			vector2.z = 0f;
+			float magnitude2 = vector2.magnitude;
+			if (magnitude2 < transform.lossyScale.x * 0.5f + 1.15f)
+			{
+				float z = pos.z;
+				pos = transform.position + vector2 * ((transform.lossyScale.x * 0.5f + 1.15f) / magnitude2);
+				pos.z = z;
+			}
+			i++;
+		}
+		Vector3 actualElbowPos = this.GetActualElbowPos(pos);
+		Vector3 vector3 = actualElbowPos - this.shoulderPoint.position;
+		vector3.z = 0f;
+		float num = Vector3.Angle(Vector3.right, vector3);
+		if (num < this.upperMinAngle)
+		{
+			Vector3 vector4 = this.shoulderPoint.position;
+			Vector3 vector5 = Quaternion.Euler(0f, 0f, -this.upperMinAngle) * Vector3.right * this.upperArmLength;
+			vector4 += vector5;
+			result = true;
+			pos = this.MapToCircleEdge(vector4, pos);
+		}
+		if (num > this.upperMaxAngle)
+		{
+			Vector3 vector6 = this.shoulderPoint.position;
+			Vector3 vector7 = Quaternion.Euler(0f, 0f, -this.upperMaxAngle) * Vector3.right * this.upperArmLength;
+			vector6 += vector7;
+			result = true;
+			pos = this.MapToCircleEdge(vector6, pos);
+		}
+		if (this.cabinRightmostPoint != null)
+		{
+			pos.x = Mathf.Min(pos.x, this.cabinRightmostPoint.position.x);
+		}
+		if (this.cabinTopmostPoint != null)
+		{
+			pos.y = Mathf.Min(pos.y, this.cabinTopmostPoint.position.y);
+		}
+		return result;
+	}
+
+	// Token: 0x0600216E RID: 8558 RVA: 0x0011840C File Offset: 0x0011660C
+	public void DoFirstVeryHardHit()
+	{
+		this.firstHitTime = 0f;
+	}
+
+	// Token: 0x0600216F RID: 8559 RVA: 0x0011841C File Offset: 0x0011661C
+	private void UpdateSphereShine()
+	{
+		float y = this.actualCabin.transform.rotation.eulerAngles.y;
+		if (y >= 250f && y <= 355f)
+		{
+			float num = Mathf.InverseLerp(355f, 275f, y);
+			float value = Mathf.Lerp(1.57f, 0f, num);
+			this.sphereShine.SetFloatProperty(this.shineIntensity, value);
+		}
+	}
+
+	// Token: 0x06002170 RID: 8560 RVA: 0x00118498 File Offset: 0x00116698
+	private void FixedUpdate()
+	{
+		if (!ScriptGlobals.boy.Initialized())
+		{
+			return;
+		}
+		if (this.controllerIsActive)
+		{
+			this.timerControllerActive += Time.deltaTime;
+		}
+		else
+		{
+			this.timerControllerActive = 0f;
+		}
+		Vector3 vector = this.cabinRoot.transform.position;
+		this.grabStunTimer = Mathf.Max(this.grabStunTimer - Time.deltaTime, 0f);
+		this.releaseStunTimer = Mathf.Max(this.releaseStunTimer - Time.deltaTime, 0f);
+		float facing = -base.transform.right.x;
+		if (!this.controllerIsActive && this.boyInside && ScriptGlobals.boy.input.rawAction && this.grabStunTimer <= 0f && ScriptGlobals.boy.visualBoy.IsPoseFacing(facing, 40f))
+		{
+			this.controllerIsActive = true;
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.animBlendNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			ScriptGlobals.boy.visualBoy.StartBlend(0.3f);
+			Device.SetVoicePassive();
+			this.releaseStunTimer = 0.1f;
+			this.controllerFraction = 0.5f;
+		}
+		else if (this.controllerIsActive && !ScriptGlobals.boy.input.rawAction && this.releaseStunTimer <= 0f && ((vector.x < this.cabinTurnPoint.position.x && this.goalFacing == 0f && this.wantedCabinRotation < 0.1f) || (vector.x >= this.cabinTurnPoint.position.x && this.goalFacing == 1f && this.wantedCabinRotation > 0.9f)))
+		{
+			this.grabStunTimer = 0.2f;
+			BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+			Device.SetVoiceNone();
+			this.controllerIsActive = false;
+			this.motorRunning = false;
+			this.lastInputX = 0f;
+			this.lastInputY = 0f;
+			this.controllerFraction = 0.5f;
+		}
+		float z = vector.z;
+		if ((this.controllerIsActive && this.timerControllerActive > 0.25f) || this.firstHitTime < 1f)
+		{
+			if (this.firstHitTime < 1f)
+			{
+				this.firstHitTime = Mathf.Min(this.firstHitTime + Time.deltaTime * 3f, 1f);
+				vector += Vector3.down * Time.deltaTime * (1f - this.firstHitTime) * 3f;
+			}
+			else
+			{
+				vector2f a = ScriptGlobals.boy.input.stick;
+				float magnitude = (this.cabinSpring.transform.parent.position - this.cabinSpring.transform.position).magnitude;
+				float num = Mathf.Max(1f - magnitude * 3.3f, 0f);
+				num = num * num * 0.5f;
+				float num2 = a.x * num + this.lastInputX * (1f - num);
+				float num3 = a.y * num + this.lastInputY * (1f - num);
+				this.lastInputX = num2;
+				this.lastInputY = num3;
+				if (a.sqrMagnitude < 0.25f)
+				{
+					this.motorRunning = false;
+					a = vector2f.zero;
+					Device.SetVoicePassive();
+				}
+				else
+				{
+					this.motorRunning = true;
+					Device.SetVoiceActive();
+					if (num3 > 0f)
+					{
+						num3 *= 0.6f;
+					}
+					vector += new Vector3(num2, num3, 0f) * Time.deltaTime * 2.1f;
+				}
+				float b = Mathf.Min(8f * Time.deltaTime, 1f);
+				this.currentAnimPos += (a - this.currentAnimPos) * b;
+				this.UpdateGrabbingAnim(this.currentAnimPos);
+			}
+			this.ApplyArmLimits(ref vector);
+		}
+		else
+		{
+			float num4 = Mathf.Min(8f * Time.deltaTime, 1f);
+			this.currentAnimPos *= 1f - num4;
+			this.UpdateGrabbingAnim(this.currentAnimPos);
+		}
+		vector.z = z;
+		this.currentCabinTiltAngle += (this.wantedCabinTiltAngle - this.currentCabinTiltAngle) * Time.deltaTime * 8f;
+		this.cabinRoot.transform.position = vector;
+		float deltaTime = Time.deltaTime;
+		this.cabinSpring.DoTheUpdate(deltaTime);
+		Quaternion quaternion = this.cabinSpring.transform.rotation;
+		this.actualCabin.MovePosition(this.cabinSpring.transform.position);
+		if (this.swivelArmRoot != null)
+		{
+			this.swivelArmRoot.rotation = quaternion;
+		}
+		if (this.goalFacing == 0f && this.wantedCabinRotation > 0f)
+		{
+			this.wantedCabinRotation = Mathf.Max(this.wantedCabinRotation - Time.deltaTime, 0f);
+		}
+		else if (this.goalFacing == 1f && this.wantedCabinRotation < 1f)
+		{
+			this.wantedCabinRotation = Mathf.Min(this.wantedCabinRotation + Time.deltaTime, 1f);
+		}
+		else if (vector.x < this.cabinTurnPoint.position.x)
+		{
+			this.goalFacing = 0f;
+		}
+		else
+		{
+			this.goalFacing = 1f;
+		}
+		quaternion = Quaternion.Euler(0f, 360f - MathUtils.SmoothFraction(this.wantedCabinRotation) * 180f, 0f) * Quaternion.Euler(0f, 0f, this.currentCabinTiltAngle) * quaternion;
+		this.actualCabin.MoveRotation(quaternion);
+		this.UpdateSphereShine();
+		deltaTime = Time.deltaTime;
+		this.armRootSpring.DoTheUpdate(deltaTime);
+		this.armRoot.MovePosition(this.armRootSpring.transform.position);
+		this.armRoot.MoveRotation(this.armRootSpring.transform.rotation);
+		this.UpdateLights(Time.deltaTime);
+		this.UpdateAudioEvents();
+		this.motorRunningLastFrame = this.motorRunning;
+	}
+
+	// Token: 0x04003DE6 RID: 15846
+	public GameObject cabinRoot;
+
+	// Token: 0x04003DE7 RID: 15847
+	public FakeSpring cabinSpring;
+
+	// Token: 0x04003DE8 RID: 15848
+	public Rigidbody actualCabin;
+
+	// Token: 0x04003DE9 RID: 15849
+	public FakeSpring armRootSpring;
+
+	// Token: 0x04003DEA RID: 15850
+	public Rigidbody armRoot;
+
+	// Token: 0x04003DEB RID: 15851
+	public Transform swivelArmRoot;
+
+	// Token: 0x04003DEC RID: 15852
+	public Transform cabinTurnPoint;
+
+	// Token: 0x04003DED RID: 15853
+	public Transform cabinRightmostPoint;
+
+	// Token: 0x04003DEE RID: 15854
+	public Transform cabinTopmostPoint;
+
+	// Token: 0x04003DEF RID: 15855
+	public AnimClipNode animCircle;
+
+	// Token: 0x04003DF0 RID: 15856
+	private AnimClipNode currentAnim;
+
+	// Token: 0x04003DF1 RID: 15857
+	public Animation cleanerLever;
+
+	// Token: 0x04003DF2 RID: 15858
+	private AnimationState stickAnimIdle;
+
+	// Token: 0x04003DF3 RID: 15859
+	private AnimationState stickAnimCircle;
+
+	// Token: 0x04003DF4 RID: 15860
+	private AnimationState stickAnimUp;
+
+	// Token: 0x04003DF5 RID: 15861
+	private AnimationState stickAnimDown;
+
+	// Token: 0x04003DF6 RID: 15862
+	private AnimationState stickAnimForward;
+
+	// Token: 0x04003DF7 RID: 15863
+	private AnimationState stickAnimBack;
+
+	// Token: 0x04003DF8 RID: 15864
+	public AnimBlendNode animBlendNode;
+
+	// Token: 0x04003DF9 RID: 15865
+	public Transform shoulderPoint;
+
+	// Token: 0x04003DFA RID: 15866
+	public Transform elbowPoint;
+
+	// Token: 0x04003DFB RID: 15867
+	public Transform wristPoint;
+
+	// Token: 0x04003DFC RID: 15868
+	public float upperMinAngle = 20f;
+
+	// Token: 0x04003DFD RID: 15869
+	public float upperMaxAngle = 150f;
+
+	// Token: 0x04003DFE RID: 15870
+	public float lowerMinAngle = 25f;
+
+	// Token: 0x04003DFF RID: 15871
+	public float lowerMaxAngle = 150f;
+
+	// Token: 0x04003E00 RID: 15872
+	public List<Transform> avoidSpheres;
+
+	// Token: 0x04003E01 RID: 15873
+	public Transform bounceLightLeftSphere;
+
+	// Token: 0x04003E02 RID: 15874
+	public MaterialInstance bounceLight;
+
+	// Token: 0x04003E03 RID: 15875
+	public Light spotLight;
+
+	// Token: 0x04003E04 RID: 15876
+	public MaterialInstance sphereShine;
+
+	// Token: 0x04003E05 RID: 15877
+	private MaterialInstance.FloatProperty shineIntensity;
+
+	// Token: 0x04003E06 RID: 15878
+	private MaterialInstance.FloatProperty bounceLightIntensity;
+
+	// Token: 0x04003E07 RID: 15879
+	private MaterialInstance.ColorProperty bounceLightColorProp;
+
+	// Token: 0x04003E08 RID: 15880
+	private Color bounceLightColorBackup;
+
+	// Token: 0x04003E09 RID: 15881
+	private float bounceLightInitialIntensity;
+
+	// Token: 0x04003E0A RID: 15882
+	private float spotLightInitialIntensity;
+
+	// Token: 0x04003E0B RID: 15883
+	private float upperArmLength = 1f;
+
+	// Token: 0x04003E0C RID: 15884
+	private float lowerArmLength = 1f;
+
+	// Token: 0x04003E0D RID: 15885
+	private float maxReach = 1f;
+
+	// Token: 0x04003E0E RID: 15886
+	private float minReach;
+
+	// Token: 0x04003E0F RID: 15887
+	private bool boyInside;
+
+	// Token: 0x04003E10 RID: 15888
+	private List<Vector3> dirList = new List<Vector3>();
+
+	// Token: 0x04003E11 RID: 15889
+	private List<Vector3> normalList = new List<Vector3>();
+
+	// Token: 0x04003E12 RID: 15890
+	private List<float> distList = new List<float>();
+
+	// Token: 0x04003E13 RID: 15891
+	private float wantedCabinTiltAngle;
+
+	// Token: 0x04003E14 RID: 15892
+	private float currentCabinTiltAngle;
+
+	// Token: 0x04003E15 RID: 15893
+	public AudioMove engineSound;
+
+	// Token: 0x04003E16 RID: 15894
+	private bool motorRunning;
+
+	// Token: 0x04003E17 RID: 15895
+	private bool motorRunningLastFrame;
+
+	// Token: 0x04003E18 RID: 15896
+	private float moveSpeed;
+
+	// Token: 0x04003E19 RID: 15897
+	private float moveSpeedLastFrame;
+
+	// Token: 0x04003E1A RID: 15898
+	private bool moving;
+
+	// Token: 0x04003E1B RID: 15899
+	private bool movingLastFrame;
+
+	// Token: 0x04003E1C RID: 15900
+	private float grabStunTimer;
+
+	// Token: 0x04003E1D RID: 15901
+	private float releaseStunTimer;
+
+	// Token: 0x04003E1E RID: 15902
+	private float lastRight;
+
+	// Token: 0x04003E1F RID: 15903
+	private bool stickWasZero;
+
+	// Token: 0x04003E20 RID: 15904
+	private float spotRandomTimer;
+
+	// Token: 0x04003E21 RID: 15905
+	private float spotWantedRandomVal = 1f;
+
+	// Token: 0x04003E22 RID: 15906
+	private float spotRandomVal = 1f;
+
+	// Token: 0x04003E23 RID: 15907
+	private bool controllerIsActive;
+
+	// Token: 0x04003E24 RID: 15908
+	private bool controllerActiveLastFrame;
+
+	// Token: 0x04003E25 RID: 15909
+	private float controllerFraction = 0.5f;
+
+	// Token: 0x04003E26 RID: 15910
+	private float timerControllerActive;
+
+	// Token: 0x04003E27 RID: 15911
+	private float wantedCabinRotation;
+
+	// Token: 0x04003E28 RID: 15912
+	private float goalFacing;
+
+	// Token: 0x04003E29 RID: 15913
+	private Vector3 lastElbowPos = Vector3.zero;
+
+	// Token: 0x04003E2A RID: 15914
+	private float firstHitTime = 1f;
+
+	// Token: 0x04003E2B RID: 15915
+	private vector2f currentAnimPos = vector2f.zero;
+
+	// Token: 0x04003E2C RID: 15916
+	private float lastInputX;
+
+	// Token: 0x04003E2D RID: 15917
+	private float lastInputY;
+}

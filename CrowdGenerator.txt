@@ -1,0 +1,472 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+// Token: 0x02000071 RID: 113
+public class CrowdGenerator : MonoBehaviour
+{
+	// Token: 0x060003BE RID: 958 RVA: 0x000292EC File Offset: 0x000274EC
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.colliders)
+		{
+			PDUtilities.Destroy(this.colliders.gameObject);
+		}
+		if (this.floors)
+		{
+			PDUtilities.Destroy(this.floors);
+		}
+		this.SetDirty(this);
+	}
+
+	// Token: 0x060003BF RID: 959 RVA: 0x00029350 File Offset: 0x00027550
+	public void Start()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x060003C0 RID: 960 RVA: 0x00029358 File Offset: 0x00027558
+	public void GenerateAll()
+	{
+		this.dudeList = this.dudes.GetComponentsInChildren<CrowdDude>(true).ToList<CrowdDude>();
+		this.GenerateAll(this.dudeList);
+	}
+
+	// Token: 0x060003C1 RID: 961 RVA: 0x00029380 File Offset: 0x00027580
+	public void GenerateAll(List<CrowdDude> dudes)
+	{
+		this.GeneratePaths(dudes);
+		this.RandomizeVisuals(dudes);
+	}
+
+	// Token: 0x060003C2 RID: 962 RVA: 0x00029390 File Offset: 0x00027590
+	public void GeneratePaths()
+	{
+		this.dudeList = this.dudes.GetComponentsInChildren<CrowdDude>(true).ToList<CrowdDude>();
+		this.GeneratePaths(this.dudeList);
+	}
+
+	// Token: 0x060003C3 RID: 963 RVA: 0x000293B8 File Offset: 0x000275B8
+	public void GeneratePaths(List<CrowdDude> dudes)
+	{
+		this.Initialize();
+		this.GenerateColliders();
+		int i = 0;
+		int count = dudes.Count;
+		while (i < count)
+		{
+			CrowdDude dude = dudes[i];
+			this.SetupDude(dude);
+			i++;
+		}
+		this.RemoveColliders();
+	}
+
+	// Token: 0x060003C4 RID: 964 RVA: 0x00029400 File Offset: 0x00027600
+	public void RandomizeVisuals()
+	{
+		this.dudeList = this.dudes.GetComponentsInChildren<CrowdDude>(true).ToList<CrowdDude>();
+		this.RandomizeVisuals(this.dudeList);
+	}
+
+	// Token: 0x060003C5 RID: 965 RVA: 0x00029428 File Offset: 0x00027628
+	public void RandomizeVisuals(List<CrowdDude> dudes)
+	{
+		int i = 0;
+		int count = dudes.Count;
+		while (i < count)
+		{
+			CrowdDude dude = dudes[i];
+			this.RandomizeDude(dude);
+			i++;
+		}
+	}
+
+	// Token: 0x060003C6 RID: 966 RVA: 0x00029460 File Offset: 0x00027660
+	public void Initialize()
+	{
+		this.objectList = new List<GameObject>();
+		if (this.objects)
+		{
+			int i = 0;
+			int childCount = this.objects.transform.childCount;
+			while (i < childCount)
+			{
+				GameObject gameObject = this.objects.transform.GetChild(i).gameObject;
+				this.objectList.Add(gameObject);
+				i++;
+			}
+		}
+		if (this.floors)
+		{
+			this.floorList = new List<GameObject>();
+			int j = 0;
+			int childCount2 = this.floors.transform.childCount;
+			while (j < childCount2)
+			{
+				GameObject gameObject2 = this.floors.transform.GetChild(j).gameObject;
+				this.floorList.Add(gameObject2);
+				j++;
+			}
+		}
+		this.goalStartPos = this.goal.transform.position;
+		if (this.colliders)
+		{
+			foreach (Transform transform in this.colliders.GetComponentsInChildren<Transform>(true))
+			{
+				transform.gameObject.layer = LayerMask.NameToLayer("Item+");
+			}
+		}
+	}
+
+	// Token: 0x060003C7 RID: 967 RVA: 0x000295A0 File Offset: 0x000277A0
+	private void GenerateColliders()
+	{
+		int i = 0;
+		int count = this.objectList.Count;
+		while (i < count)
+		{
+			GameObject gameObject = this.objectList[i];
+			gameObject.layer = LayerMask.NameToLayer("Item+");
+			Collider component = gameObject.GetComponent<Collider>();
+			if (component)
+			{
+				PDUtilities.Destroy(component);
+			}
+			Quaternion rotation = gameObject.transform.rotation;
+			gameObject.transform.rotation = Quaternion.identity;
+			Vector3 vector = gameObject.GetComponent<Renderer>().bounds.extents;
+			vector.x /= gameObject.transform.localScale.x;
+			vector.z /= gameObject.transform.localScale.z;
+			vector.y = 5f / gameObject.transform.localScale.y;
+			if (vector.x * gameObject.transform.localScale.x > this.minColliderSize || vector.z * gameObject.transform.localScale.z > this.minColliderSize)
+			{
+				Vector3 center = gameObject.GetComponent<Renderer>().bounds.center - gameObject.transform.position;
+				center.y -= gameObject.transform.localPosition.y / gameObject.transform.localScale.y;
+				float num = vector.x * gameObject.transform.localScale.x / (vector.z * gameObject.transform.localScale.z);
+				if (this.colliderType == CrowdGenerator.ColliderType.Box || num > 1.25f || num < 0.8f)
+				{
+					BoxCollider boxCollider = gameObject.AddComponent<BoxCollider>();
+					boxCollider.size = vector * this.collisionSizeBox;
+					boxCollider.center = center;
+				}
+				else if (this.colliderType == CrowdGenerator.ColliderType.Capsule)
+				{
+					vector *= this.collisionSizeCapsule;
+					CapsuleCollider capsuleCollider = gameObject.AddComponent<CapsuleCollider>();
+					capsuleCollider.height = vector.y;
+					capsuleCollider.radius = (vector.x + vector.z) / 2f;
+					capsuleCollider.center = center;
+				}
+			}
+			gameObject.transform.rotation = rotation;
+			i++;
+		}
+	}
+
+	// Token: 0x060003C8 RID: 968 RVA: 0x00029830 File Offset: 0x00027A30
+	private void RemoveColliders()
+	{
+		int i = 0;
+		int count = this.objectList.Count;
+		while (i < count)
+		{
+			GameObject gameObject = this.objectList[i];
+			Collider component = gameObject.GetComponent<Collider>();
+			if (component)
+			{
+				PDUtilities.Destroy(component);
+			}
+			i++;
+		}
+		this.goal.transform.position = this.goalStartPos;
+	}
+
+	// Token: 0x060003C9 RID: 969 RVA: 0x00029898 File Offset: 0x00027A98
+	private void SetupDude(CrowdDude dude)
+	{
+		dude.SetPath(null);
+		Vector3 position = this.goalStartPos;
+		if (this.goalScatter != 0f)
+		{
+			position.x += Random.Range(-this.goalScatter, this.goalScatter);
+			position.z += Random.Range(-this.goalScatter, this.goalScatter);
+		}
+		this.goal.transform.position = position;
+		CrowdGenerator.DudePath dudePath = new CrowdGenerator.DudePath(dude.transform.position, this);
+		dude.SetPath(dudePath.path.ToArray<Vector3>());
+		if (!dudePath.valid)
+		{
+			dude.validPath = false;
+		}
+		else
+		{
+			dude.validPath = true;
+		}
+		this.SetDirty(dude);
+	}
+
+	// Token: 0x060003CA RID: 970 RVA: 0x0002995C File Offset: 0x00027B5C
+	private void RandomizeDude(CrowdDude dude)
+	{
+		Material m = this.dudeMaterials[Random.Range(0, this.dudeMaterials.Length)];
+		float rot = (!this.randomiseRotation) ? 0f : Random.Range(0f, 360f);
+		float scale = Random.Range(this.minSize, this.maxSize);
+		dude.Randomize(m, scale, rot);
+	}
+
+	// Token: 0x060003CB RID: 971 RVA: 0x000299C0 File Offset: 0x00027BC0
+	private void SetDirty(Object obj)
+	{
+	}
+
+	// Token: 0x040005FA RID: 1530
+	public GameObject objects;
+
+	// Token: 0x040005FB RID: 1531
+	public GameObject floors;
+
+	// Token: 0x040005FC RID: 1532
+	public GameObject dudes;
+
+	// Token: 0x040005FD RID: 1533
+	public Transform colliders;
+
+	// Token: 0x040005FE RID: 1534
+	public Transform goal;
+
+	// Token: 0x040005FF RID: 1535
+	private Vector3 goalStartPos;
+
+	// Token: 0x04000600 RID: 1536
+	public float goalScatter = 1.5f;
+
+	// Token: 0x04000601 RID: 1537
+	public bool randomiseRotation = true;
+
+	// Token: 0x04000602 RID: 1538
+	public CrowdGenerator.ColliderType colliderType;
+
+	// Token: 0x04000603 RID: 1539
+	public LayerMask objectMask;
+
+	// Token: 0x04000604 RID: 1540
+	public LayerMask groundMask;
+
+	// Token: 0x04000605 RID: 1541
+	private List<GameObject> objectList;
+
+	// Token: 0x04000606 RID: 1542
+	private List<GameObject> floorList;
+
+	// Token: 0x04000607 RID: 1543
+	private List<CrowdDude> dudeList;
+
+	// Token: 0x04000608 RID: 1544
+	public float stepSize = 0.25f;
+
+	// Token: 0x04000609 RID: 1545
+	public float rayCastHeight = 1f;
+
+	// Token: 0x0400060A RID: 1546
+	public float minColliderSize = 1f;
+
+	// Token: 0x0400060B RID: 1547
+	public float collisionSizeCapsule = 2f;
+
+	// Token: 0x0400060C RID: 1548
+	public float collisionSizeBox = 2f;
+
+	// Token: 0x0400060D RID: 1549
+	public float minSize = 0.95f;
+
+	// Token: 0x0400060E RID: 1550
+	public float maxSize = 1.1f;
+
+	// Token: 0x0400060F RID: 1551
+	public int offsetIntervals = 10;
+
+	// Token: 0x04000610 RID: 1552
+	public float offsetMin = -30f;
+
+	// Token: 0x04000611 RID: 1553
+	public float offsetMax = 15f;
+
+	// Token: 0x04000612 RID: 1554
+	public float offsetCutoff = 15f;
+
+	// Token: 0x04000613 RID: 1555
+	public Transform dangerPosition;
+
+	// Token: 0x04000614 RID: 1556
+	public int dangerFleeSteps;
+
+	// Token: 0x04000615 RID: 1557
+	public AnimationCurve fleeFalloff;
+
+	// Token: 0x04000616 RID: 1558
+	public Material[] dudeMaterials;
+
+	// Token: 0x04000617 RID: 1559
+	[SerializeField]
+	[HideInInspector]
+	public bool showPathPoints;
+
+	// Token: 0x04000618 RID: 1560
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x02000072 RID: 114
+	public enum ColliderType
+	{
+		// Token: 0x0400061A RID: 1562
+		Capsule,
+		// Token: 0x0400061B RID: 1563
+		Box
+	}
+
+	// Token: 0x02000073 RID: 115
+	private class DudePath
+	{
+		// Token: 0x060003CC RID: 972 RVA: 0x000299C4 File Offset: 0x00027BC4
+		public DudePath(Vector3 p, CrowdGenerator m)
+		{
+			this.manager = m;
+			this.path = new List<Vector3>();
+			this.pos = p;
+			this.AddPoint(this.pos);
+			this.valid = this.CalculatePath();
+		}
+
+		// Token: 0x060003CD RID: 973 RVA: 0x00029A00 File Offset: 0x00027C00
+		public bool CalculatePath()
+		{
+			if (this.stepCount > 300)
+			{
+				return false;
+			}
+			float num = Vector3.Distance(this.pos, this.manager.goal.position);
+			if (num < 2f)
+			{
+				this.AddPoint(this.manager.goal.position);
+				return true;
+			}
+			Vector3 vector = this.currentDir;
+			if (this.collisionDir != Vector3.zero)
+			{
+				vector = this.collisionDir;
+			}
+			else
+			{
+				this.currentDir = this.NewGetDirection(vector);
+				vector = this.currentDir;
+			}
+			Vector3 vector2 = this.pos;
+			vector2.y += this.manager.rayCastHeight;
+			Ray ray;
+			ray..ctor(vector2, vector);
+			RaycastHit raycastHit;
+			if (Physics.Raycast(ray, ref raycastHit, this.manager.stepSize, this.manager.objectMask))
+			{
+				Vector3 vector3 = raycastHit.normal * this.manager.stepSize;
+				Vector3 vector4;
+				vector4..ctor(-vector3.z, 0f, vector3.x);
+				float num2 = Vector3.Dot(vector, vector4);
+				if (num2 < 0f)
+				{
+					vector4 *= -1f;
+				}
+				this.collisionDir = vector4;
+				this.stepCount++;
+				return this.CalculatePath();
+			}
+			Vector3 vector5 = this.pos + vector;
+			this.AddPoint(vector5);
+			this.pos = vector5;
+			this.collisionDir = Vector3.zero;
+			this.stepCount++;
+			return this.CalculatePath();
+		}
+
+		// Token: 0x060003CE RID: 974 RVA: 0x00029BA0 File Offset: 0x00027DA0
+		public Vector3 NewGetDirection(Vector3 currentDir)
+		{
+			Vector3 vector = currentDir;
+			float num = Vector3.Distance(this.pos, this.manager.goal.position);
+			if (num < this.manager.offsetCutoff)
+			{
+				vector = this.manager.goal.position - this.pos;
+			}
+			else if (this.manager.dangerPosition && this.stepCount < this.manager.dangerFleeSteps)
+			{
+				float num2 = (float)this.stepCount / (float)this.manager.dangerFleeSteps;
+				num2 = Mathf.Clamp(num2, 0f, 1f);
+				Vector3 vector2 = this.pos - this.manager.dangerPosition.position;
+				vector2.Normalize();
+				Vector3 vector3 = this.manager.goal.position - this.pos;
+				vector3.Normalize();
+				vector = Vector3.Slerp(vector2, vector3, this.manager.fleeFalloff.Evaluate(num2));
+			}
+			else if (this.offsetTimer <= 0)
+			{
+				vector = this.manager.goal.position - this.pos;
+				Quaternion quaternion = Quaternion.Euler(0f, Random.Range(this.manager.offsetMin, this.manager.offsetMax), 0f);
+				vector = quaternion * vector;
+				this.offsetTimer = this.manager.offsetIntervals;
+			}
+			else
+			{
+				this.offsetTimer--;
+			}
+			vector.y = 0f;
+			return vector.normalized * this.manager.stepSize;
+		}
+
+		// Token: 0x060003CF RID: 975 RVA: 0x00029D58 File Offset: 0x00027F58
+		public void AddPoint(Vector3 pos)
+		{
+			Vector3 vector = pos;
+			vector.y += 3f;
+			Ray ray;
+			ray..ctor(vector, Vector3.down);
+			RaycastHit raycastHit;
+			if (Physics.Raycast(ray, ref raycastHit, 5f, this.manager.groundMask))
+			{
+				pos.y = raycastHit.point.y;
+			}
+			this.path.Add(pos);
+		}
+
+		// Token: 0x0400061C RID: 1564
+		public Vector3 pos;
+
+		// Token: 0x0400061D RID: 1565
+		public Vector3 currentDir;
+
+		// Token: 0x0400061E RID: 1566
+		public Vector3 collisionDir;
+
+		// Token: 0x0400061F RID: 1567
+		public List<Vector3> path;
+
+		// Token: 0x04000620 RID: 1568
+		public int stepCount;
+
+		// Token: 0x04000621 RID: 1569
+		public int offsetTimer;
+
+		// Token: 0x04000622 RID: 1570
+		public bool valid;
+
+		// Token: 0x04000623 RID: 1571
+		public CrowdGenerator manager;
+	}
+}

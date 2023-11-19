@@ -1,0 +1,18 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000114 RID: 276
+public class ClimbAnimDatabaseLoader : MonoBehaviour
+{
+	// Token: 0x0600085E RID: 2142 RVA: 0x000586B0 File Offset: 0x000568B0
+	private void Start()
+	{
+		if (LevelGlobals.climbAnimDatabase == null)
+		{
+			LevelGlobals.climbAnimDatabase = Object.Instantiate<ClimbAnimDatabase>(this.climbDB);
+		}
+	}
+
+	// Token: 0x04000E43 RID: 3651
+	public ClimbAnimDatabase climbDB;
+}

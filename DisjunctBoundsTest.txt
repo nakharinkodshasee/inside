@@ -1,0 +1,25 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000564 RID: 1380
+[ExecuteInEditMode]
+public class DisjunctBoundsTest : MonoBehaviour
+{
+	// Token: 0x060023D9 RID: 9177 RVA: 0x001299EC File Offset: 0x00127BEC
+	private void OnDrawGizmos()
+	{
+		this.bounds.Draw((!this.bounds.Disjunct(ref this.other.bounds)) ? Color.red : Color.green);
+	}
+
+	// Token: 0x060023DA RID: 9178 RVA: 0x00129A24 File Offset: 0x00127C24
+	private void Update()
+	{
+		this.bounds.center = base.transform.position;
+	}
+
+	// Token: 0x04004242 RID: 16962
+	public Bounds bounds;
+
+	// Token: 0x04004243 RID: 16963
+	public DisjunctBoundsTest other;
+}

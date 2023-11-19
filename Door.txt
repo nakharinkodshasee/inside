@@ -1,0 +1,275 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001D1 RID: 465
+public class Door : Device, IPreAwake
+{
+	// Token: 0x06000DC2 RID: 3522 RVA: 0x00083D58 File Offset: 0x00081F58
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioOpen = new AudioEventSimpleLocal(this.audioPrefix + "_door_open", akGameObj);
+	}
+
+	// Token: 0x06000DC3 RID: 3523 RVA: 0x00083DA4 File Offset: 0x00081FA4
+	public bool PreAwake(int callcount)
+	{
+		this.lockDoor = SignalIn.Create("lockDoor", base.gameObject, new Action(this.LockDoorSignal));
+		this.unlockDoor = SignalIn.Create("unlockDoor", base.gameObject, new Action(this.UnlockDoorSignal));
+		this.openDoorLeft = SignalIn.Create("openDoorLeft", base.gameObject, new Action(this.OpenDoorLeftSignal));
+		this.openDoorRight = SignalIn.Create("openDoorRight", base.gameObject, new Action(this.OpenDoorRightSignal));
+		this.loadOpen = SignalIn.Create("loadOpen", base.gameObject, new Action(this.OnLoadOpen));
+		this.doorOpened = SignalOut.Create("doorOpened", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000DC4 RID: 3524 RVA: 0x00083E74 File Offset: 0x00082074
+	protected override void Start()
+	{
+		this.OnPreProcess();
+		base.Start();
+		if (this.openDirection != Door.OpenDirection.None)
+		{
+			this.state = Door.State.Closed;
+		}
+	}
+
+	// Token: 0x06000DC5 RID: 3525 RVA: 0x00083E98 File Offset: 0x00082098
+	private void ClosedState()
+	{
+		int i = 0;
+		int count = this.boysInside.Count;
+		while (i < count)
+		{
+			Boy boy = this.boysInside[i];
+			Collider groundCollider = boy.status.groundCollider;
+			if (groundCollider && !this.locked)
+			{
+				float x = boy.input.stick.x;
+				float num = Mathf.Sign(base.transform.position.x - boy.transform.position.x);
+				if (num == 1f && x > 0.3f && this.openDirection != Door.OpenDirection.LeftOnly)
+				{
+					this.OpenDoor(boy, num);
+				}
+				else if (num == -1f && x < -0.3f && this.openDirection != Door.OpenDirection.RightOnly)
+				{
+					this.OpenDoor(boy, num);
+				}
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06000DC6 RID: 3526 RVA: 0x00083F98 File Offset: 0x00082198
+	private void OpenDoor(Boy boy, float dir)
+	{
+		this.boyGrabbing = boy;
+		float num = Mathf.Abs(boy.velocity3.x);
+		AnimClipNode animClipNode;
+		if (num > this.walkVelocity)
+		{
+			this.OpenDoorVisuals("Open", dir);
+			animClipNode = this.boyOpenRun;
+		}
+		else
+		{
+			this.OpenDoorVisuals("OpenWalk", dir);
+			animClipNode = this.boyOpenWalk;
+		}
+		if (dir == 1f)
+		{
+			animClipNode.mirror = true;
+			animClipNode.transform.localPosition *= -1f;
+			animClipNode.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+		}
+		BoyUtils.StartCustomAnim(boy, animClipNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		Device.SetVoiceActive();
+		this.audioOpen.PostFast();
+		this.state = Door.State.Opening;
+	}
+
+	// Token: 0x06000DC7 RID: 3527 RVA: 0x0008406C File Offset: 0x0008226C
+	private void OpenDoorVisuals(string anim, float dir)
+	{
+		anim = ((dir != 1f) ? anim : (anim + "Mirror"));
+		this.collision.SetActive(false);
+		this.open = true;
+		this.doorAnim.Play(anim);
+	}
+
+	// Token: 0x06000DC8 RID: 3528 RVA: 0x000840B8 File Offset: 0x000822B8
+	private void OpeningState()
+	{
+		if (!(this.boyGrabbing.state is BoyCustomAnimState))
+		{
+			this.EndOpening();
+		}
+	}
+
+	// Token: 0x06000DC9 RID: 3529 RVA: 0x000840E4 File Offset: 0x000822E4
+	private void EndOpening()
+	{
+		float num = Mathf.Abs(this.boyGrabbing.input.stick.x);
+		float num2 = Mathf.Abs(this.boyGrabbing.velocity3.x);
+		if (num < 0.3f && num2 > this.walkVelocity)
+		{
+			BoyUtils.StartCustomAnim(this.boyGrabbing, this.boyRunStop, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		this.doorOpened.Signal();
+		Device.SetVoiceNone();
+		this.state = Door.State.None;
+		this.boyGrabbing = null;
+	}
+
+	// Token: 0x06000DCA RID: 3530 RVA: 0x00084178 File Offset: 0x00082378
+	private void FixedUpdate()
+	{
+		if (this.state == Door.State.Closed)
+		{
+			this.ClosedState();
+		}
+		else if (this.state == Door.State.Opening)
+		{
+			this.OpeningState();
+		}
+	}
+
+	// Token: 0x06000DCB RID: 3531 RVA: 0x000841A4 File Offset: 0x000823A4
+	private void UnlockDoorSignal()
+	{
+		this.locked = false;
+	}
+
+	// Token: 0x06000DCC RID: 3532 RVA: 0x000841B0 File Offset: 0x000823B0
+	private void LockDoorSignal()
+	{
+		this.locked = true;
+	}
+
+	// Token: 0x06000DCD RID: 3533 RVA: 0x000841BC File Offset: 0x000823BC
+	private void OpenDoorLeftSignal()
+	{
+		if (!this.locked)
+		{
+			this.OpenDoorVisuals("Open", -1f);
+			this.state = Door.State.None;
+		}
+	}
+
+	// Token: 0x06000DCE RID: 3534 RVA: 0x000841EC File Offset: 0x000823EC
+	private void OpenDoorRightSignal()
+	{
+		if (!this.locked)
+		{
+			this.OpenDoorVisuals("Open", 1f);
+			this.state = Door.State.None;
+		}
+	}
+
+	// Token: 0x06000DCF RID: 3535 RVA: 0x0008421C File Offset: 0x0008241C
+	private void OnLoadOpen()
+	{
+		this.collision.SetActive(false);
+		this.open = true;
+		string text = "Open";
+		if (this.openDirection == Door.OpenDirection.RightOnly)
+		{
+			text += "Mirror";
+		}
+		AnimationState animationState = this.doorAnim[text];
+		this.doorAnim.Play(text);
+		animationState.normalizedTime = 1f;
+		this.state = Door.State.None;
+	}
+
+	// Token: 0x04001886 RID: 6278
+	public Door.OpenDirection openDirection;
+
+	// Token: 0x04001887 RID: 6279
+	public bool locked;
+
+	// Token: 0x04001888 RID: 6280
+	public GameObject collision;
+
+	// Token: 0x04001889 RID: 6281
+	public Animation doorAnim;
+
+	// Token: 0x0400188A RID: 6282
+	public AnimClipNode boyOpenRun;
+
+	// Token: 0x0400188B RID: 6283
+	public AnimClipNode boyOpenWalk;
+
+	// Token: 0x0400188C RID: 6284
+	public AnimClipNode boyRunStop;
+
+	// Token: 0x0400188D RID: 6285
+	public string audioPrefix;
+
+	// Token: 0x0400188E RID: 6286
+	private SignalIn openDoorLeft;
+
+	// Token: 0x0400188F RID: 6287
+	private SignalIn openDoorRight;
+
+	// Token: 0x04001890 RID: 6288
+	private SignalIn lockDoor;
+
+	// Token: 0x04001891 RID: 6289
+	private SignalIn unlockDoor;
+
+	// Token: 0x04001892 RID: 6290
+	private SignalIn loadOpen;
+
+	// Token: 0x04001893 RID: 6291
+	private SignalOut doorOpened;
+
+	// Token: 0x04001894 RID: 6292
+	private Door.State state;
+
+	// Token: 0x04001895 RID: 6293
+	private bool open;
+
+	// Token: 0x04001896 RID: 6294
+	private float walkVelocity = 2.2f;
+
+	// Token: 0x04001897 RID: 6295
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioOpen;
+
+	// Token: 0x04001898 RID: 6296
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x020001D2 RID: 466
+	public enum OpenDirection
+	{
+		// Token: 0x0400189A RID: 6298
+		Both,
+		// Token: 0x0400189B RID: 6299
+		LeftOnly,
+		// Token: 0x0400189C RID: 6300
+		RightOnly,
+		// Token: 0x0400189D RID: 6301
+		None
+	}
+
+	// Token: 0x020001D3 RID: 467
+	private enum State
+	{
+		// Token: 0x0400189F RID: 6303
+		None,
+		// Token: 0x040018A0 RID: 6304
+		Opening,
+		// Token: 0x040018A1 RID: 6305
+		Closed
+	}
+}

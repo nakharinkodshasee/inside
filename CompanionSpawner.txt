@@ -1,0 +1,187 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200037F RID: 895
+public class CompanionSpawner : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600184B RID: 6219 RVA: 0x000D4418 File Offset: 0x000D2618
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.companionType == CompanionType.sewerSubmarine)
+		{
+			this.audioSubmarineStartInWater = new AudioEventSimple("mechanisms_submarine_startInWater");
+		}
+	}
+
+	// Token: 0x0600184C RID: 6220 RVA: 0x000D444C File Offset: 0x000D264C
+	public bool PreAwake(int callcount)
+	{
+		this.spawned = SignalOut.Create("spawned", base.gameObject);
+		this.spawn = SignalIn.Create("spawn", base.gameObject, new Action(this.SpawnCompanion));
+		return true;
+	}
+
+	// Token: 0x0600184D RID: 6221 RVA: 0x000D4494 File Offset: 0x000D2694
+	private void Start()
+	{
+		this.OnPreProcess();
+		if (this.newSpawnLocation)
+		{
+			this.newSpawnLoc = this.newSpawnLocation;
+		}
+		else
+		{
+			this.newSpawnLoc = base.gameObject;
+		}
+	}
+
+	// Token: 0x0600184E RID: 6222 RVA: 0x000D44CC File Offset: 0x000D26CC
+	private void OnDrawGizmos()
+	{
+		Gizmos.DrawIcon(base.transform.position, "companion_cube.png");
+	}
+
+	// Token: 0x0600184F RID: 6223 RVA: 0x000D44E4 File Offset: 0x000D26E4
+	private void SpawnCompanion()
+	{
+		this.companion = SingletonBehaviour<CompanionManager>.instance.GetCompanion(this.companionType);
+		if (this.useNewLocation && ((this.moveIfAlreadyActive && this.companion.isActive) || !this.companion.isActive))
+		{
+			if (this.companion.isActive)
+			{
+				Rigidbody component = this.companion.GetComponent<Rigidbody>();
+				if (component && !component.isKinematic)
+				{
+					component.velocity = Vector3.zero;
+					component.angularVelocity = Vector3.zero;
+				}
+			}
+			this.companion.transform.position = this.newSpawnLoc.transform.position;
+			this.companion.transform.rotation = this.newSpawnLoc.transform.rotation;
+		}
+		this.companion.ActivateCompanion();
+		this.SetupCompanion(this.companionType);
+		if (this.placeOnGround)
+		{
+			this.PlaceOnGround(this.companion);
+		}
+	}
+
+	// Token: 0x06001850 RID: 6224 RVA: 0x000D45F4 File Offset: 0x000D27F4
+	private void SetupCompanion(CompanionType companionType)
+	{
+		if (companionType == CompanionType.sewerSubmarine)
+		{
+			if (this.subSafetyOverrideSpawnRotation)
+			{
+				this.companion.transform.eulerAngles = new Vector3(0f, 90f, 0f);
+			}
+			Submarine component = this.companion.gameObject.GetComponent<Submarine>();
+			if (component != null)
+			{
+				component.Reset();
+				component.useLongEnterAnim = this.useLongSubEnterAnim;
+				Rigidbody component2 = component.GetComponent<Rigidbody>();
+				if (component2 != null)
+				{
+					component2.isKinematic = false;
+					component2.constraints = 8;
+				}
+				AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(component.gameObject, this);
+			}
+			if (this.putBoyInsideSub)
+			{
+				SubmarineBoyInteraction component3 = this.companion.gameObject.GetComponent<SubmarineBoyInteraction>();
+				if (component3 != null)
+				{
+					component3.Reset();
+					component3.TeleportBoyInside(ScriptGlobals.boy);
+					component3.GetComponent<Rigidbody>().isKinematic = false;
+				}
+			}
+		}
+		else if (companionType == CompanionType.labJetCrate)
+		{
+			JetCrate component4 = this.companion.gameObject.GetComponent<JetCrate>();
+			if (component4 != null)
+			{
+				component4.PrepareHandleUpVector();
+				Rigidbody rigidBody = component4.GetRigidBody();
+				rigidBody.isKinematic = false;
+				Vector3 position = rigidBody.position;
+				position.z = 0f;
+				rigidBody.position = position;
+			}
+		}
+		this.spawnedEvent.OnEvent(this);
+		this.spawned.Signal();
+	}
+
+	// Token: 0x06001851 RID: 6225 RVA: 0x000D4754 File Offset: 0x000D2954
+	private void PlaceOnGround(Companion companion)
+	{
+		Vector3 down = Vector3.down;
+		Rigidbody componentInChildren = companion.GetComponentInChildren<Rigidbody>();
+		RaycastHit raycastHit;
+		if (componentInChildren && componentInChildren.SweepTest(down, ref raycastHit, 10f))
+		{
+			float distance = raycastHit.distance;
+			companion.transform.position += down * distance;
+		}
+	}
+
+	// Token: 0x04002BE8 RID: 11240
+	public CompanionType companionType;
+
+	// Token: 0x04002BE9 RID: 11241
+	public GameObject newSpawnLocation;
+
+	// Token: 0x04002BEA RID: 11242
+	public bool useNewLocation = true;
+
+	// Token: 0x04002BEB RID: 11243
+	public bool moveIfAlreadyActive = true;
+
+	// Token: 0x04002BEC RID: 11244
+	public bool placeOnGround = true;
+
+	// Token: 0x04002BED RID: 11245
+	public bool putBoyInsideSub;
+
+	// Token: 0x04002BEE RID: 11246
+	public bool useLongSubEnterAnim;
+
+	// Token: 0x04002BEF RID: 11247
+	public bool subSafetyOverrideSpawnRotation = true;
+
+	// Token: 0x04002BF0 RID: 11248
+	private Companion companion;
+
+	// Token: 0x04002BF1 RID: 11249
+	private GameObject newSpawnLoc;
+
+	// Token: 0x04002BF2 RID: 11250
+	private SignalIn spawn;
+
+	// Token: 0x04002BF3 RID: 11251
+	private SimpleEvent<CompanionSpawner> spawnedEvent = new SimpleEvent<CompanionSpawner>("spawnedEvent");
+
+	// Token: 0x04002BF4 RID: 11252
+	private SignalOut spawned;
+
+	// Token: 0x04002BF5 RID: 11253
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioSubmarineStartInWater;
+
+	// Token: 0x04002BF6 RID: 11254
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

@@ -1,0 +1,415 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000135 RID: 309
+[ExecuteInEditMode]
+public class DynamicRotateTowards : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000952 RID: 2386 RVA: 0x0005F508 File Offset: 0x0005D708
+	private void OnRotateToA()
+	{
+		if (this.bRotating)
+		{
+			this.actionWhenStopped = DynamicRotateTowards.ActionWhenStopped.GoToTarget;
+			if (!this.bGoingToA)
+			{
+				this.fadingOut = true;
+			}
+			else
+			{
+				this.actionWhenStopped = DynamicRotateTowards.ActionWhenStopped.GoToSleep;
+				this.fadingOut = false;
+			}
+		}
+		else
+		{
+			this.actionWhenStopped = DynamicRotateTowards.ActionWhenStopped.GoToSleep;
+			this.bGoingToA = true;
+			this.StartRotating();
+		}
+	}
+
+	// Token: 0x06000953 RID: 2387 RVA: 0x0005F568 File Offset: 0x0005D768
+	private void OnRotateToB()
+	{
+		if (this.bRotating)
+		{
+			this.actionWhenStopped = DynamicRotateTowards.ActionWhenStopped.GoToStart;
+			if (this.bGoingToA)
+			{
+				this.fadingOut = true;
+			}
+			else
+			{
+				this.actionWhenStopped = DynamicRotateTowards.ActionWhenStopped.GoToSleep;
+				this.fadingOut = false;
+			}
+		}
+		else
+		{
+			this.actionWhenStopped = DynamicRotateTowards.ActionWhenStopped.GoToSleep;
+			this.bGoingToA = false;
+			this.StartRotating();
+		}
+	}
+
+	// Token: 0x06000954 RID: 2388 RVA: 0x0005F5C8 File Offset: 0x0005D7C8
+	private void OnStopNow()
+	{
+		this.fadingOut = true;
+	}
+
+	// Token: 0x06000955 RID: 2389 RVA: 0x0005F5D4 File Offset: 0x0005D7D4
+	private void OnChangeDirection()
+	{
+		if (this.bRotating)
+		{
+			if (this.bGoingToA)
+			{
+				this.OnRotateToB();
+			}
+			else
+			{
+				this.OnRotateToA();
+			}
+		}
+	}
+
+	// Token: 0x06000956 RID: 2390 RVA: 0x0005F600 File Offset: 0x0005D800
+	private void OnClearPingPong()
+	{
+		this.pingPong = false;
+	}
+
+	// Token: 0x06000957 RID: 2391 RVA: 0x0005F60C File Offset: 0x0005D80C
+	private void StartRotating()
+	{
+		this.bRotating = true;
+		this.totalCountUp = 0f;
+		this.fadingOut = false;
+		float num = this.rotateTime;
+		this.stoppedDueToArrival = false;
+		this.currentStep = this.easeInStartFraction;
+		Quaternion rotation = base.transform.rotation;
+		this.lastLocalRotation = base.transform.localRotation;
+		if (this.angularSpeed > 0f)
+		{
+			Quaternion targetRotation = this.GetTargetRotation();
+			float num2 = Quaternion.Angle(rotation, targetRotation);
+			num = Mathf.Abs(num2 / this.angularSpeed);
+		}
+		float num3 = (0.5f - 0.5f * this.easeInStartFraction * this.easeInStartFraction) * this.easeInTime;
+		float num4 = (0.5f - 0.5f * this.easeOutEndFraction * this.easeOutEndFraction) * this.easeOutTime;
+		this.actualLinearTime = num + 0.5f * (num3 + num4);
+	}
+
+	// Token: 0x06000958 RID: 2392 RVA: 0x0005F6F0 File Offset: 0x0005D8F0
+	public bool PreAwake(int callcount)
+	{
+		this.rotateToA = SignalIn.Create("rotateToA", base.gameObject, new Action(this.OnRotateToA));
+		this.rotateToB = SignalIn.Create("rotateToB", base.gameObject, new Action(this.OnRotateToB));
+		this.stopNow = SignalIn.Create("stopNow", base.gameObject, new Action(this.OnStopNow));
+		this.changeDirection = SignalIn.Create("changeDirection", base.gameObject, new Action(this.OnChangeDirection));
+		this.clearPingPong = SignalIn.Create("clearPingPong", base.gameObject, new Action(this.OnClearPingPong));
+		this.targetReached = SignalOut.Create("targetReached", base.gameObject);
+		this.startReached = SignalOut.Create("startReached", base.gameObject);
+		this.stoppedInBetween = SignalOut.Create("stoppedInBetween", base.gameObject);
+		this.anyPointReached = SignalOut.Create("anyPointReached", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000959 RID: 2393 RVA: 0x0005F800 File Offset: 0x0005DA00
+	private void Start()
+	{
+		this.bRotating = false;
+		if (this.autoStart)
+		{
+			this.OnRotateToA();
+		}
+	}
+
+	// Token: 0x0600095A RID: 2394 RVA: 0x0005F81C File Offset: 0x0005DA1C
+	private Quaternion GetTargetRotation()
+	{
+		Quaternion result = default(Quaternion);
+		this.lastLocalRotation = base.transform.localRotation;
+		Quaternion quaternion = default(Quaternion);
+		if (base.transform.parent != null)
+		{
+			quaternion = base.transform.parent.transform.rotation;
+		}
+		GameObject gameObject = this.targetA;
+		Vector3 vector = this.EulerA;
+		if (!this.bGoingToA)
+		{
+			gameObject = this.targetB;
+			vector = this.EulerB;
+		}
+		if (gameObject != null)
+		{
+			result = gameObject.transform.rotation * Quaternion.Euler(vector);
+		}
+		else if (this.space == null || base.transform.parent == null)
+		{
+			result = Quaternion.Euler(vector);
+		}
+		else
+		{
+			result = quaternion * Quaternion.Euler(vector);
+		}
+		return result;
+	}
+
+	// Token: 0x0600095B RID: 2395 RVA: 0x0005F900 File Offset: 0x0005DB00
+	private void DoRotateTowards()
+	{
+		if (!this.bRotating)
+		{
+			return;
+		}
+		float num = this.currentStep;
+		if (this.totalCountUp + (0.5f - 0.5f * this.easeOutEndFraction * this.easeOutEndFraction) * this.easeOutTime * num * this.currentStep > this.actualLinearTime || this.fadingOut)
+		{
+			if (!this.fadingOut)
+			{
+				this.stoppedDueToArrival = true;
+			}
+			this.currentStep -= Time.deltaTime / this.easeOutTime;
+			this.fadingOut = true;
+			if (this.currentStep <= this.easeOutEndFraction)
+			{
+				this.currentStep = 0f;
+				this.bRotating = false;
+			}
+			this.totalCountUp += this.currentStep * Time.deltaTime;
+		}
+		else
+		{
+			if (this.currentStep < 1f)
+			{
+				if (this.easeInTime > 0f)
+				{
+					this.currentStep += Time.deltaTime / this.easeInTime;
+					if (this.currentStep > 1f)
+					{
+						this.currentStep = 1f;
+					}
+				}
+				else
+				{
+					this.currentStep = 1f;
+				}
+			}
+			this.totalCountUp += this.currentStep * Time.deltaTime;
+		}
+		if (this.totalCountUp > this.actualLinearTime)
+		{
+			this.currentStep = 0f;
+			this.bRotating = false;
+		}
+		Quaternion targetRotation = this.GetTargetRotation();
+		Quaternion quaternion = targetRotation;
+		if (base.transform.parent != null)
+		{
+			quaternion = Quaternion.Inverse(base.transform.parent.transform.rotation) * targetRotation;
+		}
+		float num2 = this.currentStep / this.actualLinearTime * Time.deltaTime;
+		float num3 = 1f;
+		float num4 = 1f - this.totalCountUp / this.actualLinearTime;
+		if (num4 > 0f)
+		{
+			num3 = Mathf.Min(1f, num2 / num4);
+		}
+		this.lastLocalRotation = Quaternion.Slerp(this.lastLocalRotation, quaternion, num3);
+		if (base.GetComponent<Rigidbody>() != null)
+		{
+			if (base.transform.parent != null)
+			{
+				base.GetComponent<Rigidbody>().MoveRotation(base.transform.parent.transform.rotation * this.lastLocalRotation);
+			}
+			else
+			{
+				base.GetComponent<Rigidbody>().MoveRotation(this.lastLocalRotation);
+			}
+		}
+		else
+		{
+			base.transform.localRotation = this.lastLocalRotation;
+		}
+		if (!this.bRotating)
+		{
+			this.fadingOut = false;
+			DynamicRotateTowards.ActionWhenStopped actionWhenStopped = this.actionWhenStopped;
+			if (actionWhenStopped != DynamicRotateTowards.ActionWhenStopped.GoToTarget)
+			{
+				if (actionWhenStopped == DynamicRotateTowards.ActionWhenStopped.GoToStart)
+				{
+					this.OnRotateToB();
+				}
+			}
+			else
+			{
+				this.OnRotateToA();
+			}
+			if (this.stoppedDueToArrival)
+			{
+				if (this.bGoingToA)
+				{
+					if (this.pingPong)
+					{
+						this.OnRotateToB();
+					}
+					this.targetReached.Signal();
+				}
+				else
+				{
+					if (this.pingPong)
+					{
+						this.OnRotateToA();
+					}
+					this.startReached.Signal();
+				}
+			}
+			else
+			{
+				this.stoppedInBetween.Signal();
+			}
+			this.anyPointReached.Signal();
+		}
+	}
+
+	// Token: 0x0600095C RID: 2396 RVA: 0x0005FC4C File Offset: 0x0005DE4C
+	private void Awake()
+	{
+		if (base.GetComponent<Collider>() != null && base.GetComponent<Rigidbody>() == null)
+		{
+			base.gameObject.AddComponent<Rigidbody>();
+			base.GetComponent<Rigidbody>().isKinematic = true;
+		}
+	}
+
+	// Token: 0x0600095D RID: 2397 RVA: 0x0005FC94 File Offset: 0x0005DE94
+	private void FixedUpdate()
+	{
+		if (base.GetComponent<Rigidbody>())
+		{
+			this.DoRotateTowards();
+		}
+	}
+
+	// Token: 0x0600095E RID: 2398 RVA: 0x0005FCAC File Offset: 0x0005DEAC
+	private void Update()
+	{
+		if (Application.isPlaying && !base.GetComponent<Rigidbody>())
+		{
+			this.DoRotateTowards();
+		}
+	}
+
+	// Token: 0x04000FB8 RID: 4024
+	public GameObject targetA;
+
+	// Token: 0x04000FB9 RID: 4025
+	public Vector3 EulerA;
+
+	// Token: 0x04000FBA RID: 4026
+	public GameObject targetB;
+
+	// Token: 0x04000FBB RID: 4027
+	public Vector3 EulerB;
+
+	// Token: 0x04000FBC RID: 4028
+	public Space space;
+
+	// Token: 0x04000FBD RID: 4029
+	public float rotateTime;
+
+	// Token: 0x04000FBE RID: 4030
+	public float angularSpeed;
+
+	// Token: 0x04000FBF RID: 4031
+	public float easeInTime;
+
+	// Token: 0x04000FC0 RID: 4032
+	public float easeInStartFraction;
+
+	// Token: 0x04000FC1 RID: 4033
+	public float easeOutTime;
+
+	// Token: 0x04000FC2 RID: 4034
+	public float easeOutEndFraction;
+
+	// Token: 0x04000FC3 RID: 4035
+	public bool autoStart;
+
+	// Token: 0x04000FC4 RID: 4036
+	public bool pingPong;
+
+	// Token: 0x04000FC5 RID: 4037
+	private float actualLinearTime;
+
+	// Token: 0x04000FC6 RID: 4038
+	private bool bRotating;
+
+	// Token: 0x04000FC7 RID: 4039
+	private bool bGoingToA = true;
+
+	// Token: 0x04000FC8 RID: 4040
+	private Quaternion lastLocalRotation;
+
+	// Token: 0x04000FC9 RID: 4041
+	private SignalIn rotateToA;
+
+	// Token: 0x04000FCA RID: 4042
+	private SignalIn rotateToB;
+
+	// Token: 0x04000FCB RID: 4043
+	private SignalIn stopNow;
+
+	// Token: 0x04000FCC RID: 4044
+	private SignalIn changeDirection;
+
+	// Token: 0x04000FCD RID: 4045
+	private SignalIn clearPingPong;
+
+	// Token: 0x04000FCE RID: 4046
+	private SignalOut targetReached;
+
+	// Token: 0x04000FCF RID: 4047
+	private SignalOut startReached;
+
+	// Token: 0x04000FD0 RID: 4048
+	private SignalOut stoppedInBetween;
+
+	// Token: 0x04000FD1 RID: 4049
+	private SignalOut anyPointReached;
+
+	// Token: 0x04000FD2 RID: 4050
+	private float currentStep;
+
+	// Token: 0x04000FD3 RID: 4051
+	private float totalCountUp;
+
+	// Token: 0x04000FD4 RID: 4052
+	private bool fadingOut;
+
+	// Token: 0x04000FD5 RID: 4053
+	private bool restartWhenStopped;
+
+	// Token: 0x04000FD6 RID: 4054
+	private bool stoppedDueToArrival;
+
+	// Token: 0x04000FD7 RID: 4055
+	private DynamicRotateTowards.ActionWhenStopped actionWhenStopped;
+
+	// Token: 0x02000136 RID: 310
+	private enum ActionWhenStopped
+	{
+		// Token: 0x04000FD9 RID: 4057
+		GoToSleep,
+		// Token: 0x04000FDA RID: 4058
+		GoToTarget,
+		// Token: 0x04000FDB RID: 4059
+		GoToStart
+	}
+}

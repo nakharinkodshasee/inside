@@ -1,0 +1,18 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000634 RID: 1588
+public class CollisionEventTester : MonoBehaviour
+{
+	// Token: 0x0600276E RID: 10094 RVA: 0x0013D458 File Offset: 0x0013B658
+	private void OnTriggerEnter(Collider collider)
+	{
+		Debug.Log(collider.name + " entered the trigger " + base.name);
+	}
+
+	// Token: 0x0600276F RID: 10095 RVA: 0x0013D478 File Offset: 0x0013B678
+	private void OnTriggerExit(Collider collider)
+	{
+		Debug.Log(collider.name + " exited the trigger " + base.name);
+	}
+}

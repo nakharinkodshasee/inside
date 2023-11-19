@@ -1,0 +1,16 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003A5 RID: 933
+public class ClubCarBump : MonoBehaviour
+{
+	// Token: 0x060018FF RID: 6399 RVA: 0x000D7BA8 File Offset: 0x000D5DA8
+	private void Start()
+	{
+	}
+
+	// Token: 0x06001900 RID: 6400 RVA: 0x000D7BAC File Offset: 0x000D5DAC
+	private void Update()
+	{
+	}
+}

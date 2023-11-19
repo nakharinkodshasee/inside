@@ -1,0 +1,155 @@
+using System;
+using System.Collections.Generic;
+using AudioCommands;
+using UnityEngine;
+
+// Token: 0x02000198 RID: 408
+public class Device : MonoBehaviour, IFastEventExListener<Collider>
+{
+	// Token: 0x06000BF4 RID: 3060 RVA: 0x00075534 File Offset: 0x00073734
+	protected virtual void Start()
+	{
+		this.triggerGrab.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.triggerGrab.exitTrigger.Register(this, ref this.triggerExitHandle);
+	}
+
+	// Token: 0x06000BF5 RID: 3061 RVA: 0x00075570 File Offset: 0x00073770
+	public virtual void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.triggerGrab.enterTrigger)
+		{
+			BoyProbe component = collider.GetComponent<BoyProbe>();
+			if (component)
+			{
+				Boy boy = component.boy;
+				if (!this.boysInside.Contains(boy))
+				{
+					this.boysInside.Add(boy);
+				}
+			}
+		}
+		else if (sender == this.triggerGrab.exitTrigger)
+		{
+			BoyProbe component2 = collider.GetComponent<BoyProbe>();
+			if (component2)
+			{
+				this.boysInside.Remove(component2.boy);
+			}
+		}
+	}
+
+	// Token: 0x06000BF6 RID: 3062 RVA: 0x00075600 File Offset: 0x00073800
+	public void AddBoy(Boy boy)
+	{
+		if (!this.boysInside.Contains(boy))
+		{
+			this.boysInside.Add(boy);
+		}
+	}
+
+	// Token: 0x06000BF7 RID: 3063 RVA: 0x00075620 File Offset: 0x00073820
+	public void RemoveBoy(Boy boy)
+	{
+		this.boysInside.Remove(boy);
+	}
+
+	// Token: 0x06000BF8 RID: 3064 RVA: 0x00075630 File Offset: 0x00073830
+	public static bool IsVoiceActive()
+	{
+		return SingletonBehaviour<BoyAudio>.instance.voiceState.current.actionStateOverride == BoyVoiceState.ActionState.engagedActive;
+	}
+
+	// Token: 0x06000BF9 RID: 3065 RVA: 0x0007564C File Offset: 0x0007384C
+	public static bool IsVoicePassive()
+	{
+		return SingletonBehaviour<BoyAudio>.instance.voiceState.current.actionStateOverride == BoyVoiceState.ActionState.engagedPassive;
+	}
+
+	// Token: 0x06000BFA RID: 3066 RVA: 0x00075668 File Offset: 0x00073868
+	public static bool IsVoiceNone()
+	{
+		return SingletonBehaviour<BoyAudio>.instance.voiceState.current.actionStateOverride == BoyVoiceState.ActionState.none;
+	}
+
+	// Token: 0x06000BFB RID: 3067 RVA: 0x00075684 File Offset: 0x00073884
+	public static bool IsVoiceFrantic()
+	{
+		VoiceConfigProbe.Emotion emotion = SingletonBehaviour<BoyAudio>.instance.voice.configProbe.emotion;
+		return emotion == VoiceConfigProbe.Emotion.frantic || emotion == VoiceConfigProbe.Emotion.deathPanic || emotion == VoiceConfigProbe.Emotion.tranquillized || emotion == VoiceConfigProbe.Emotion.alert;
+	}
+
+	// Token: 0x06000BFC RID: 3068 RVA: 0x000756C8 File Offset: 0x000738C8
+	public static void SetVoiceActive()
+	{
+		ThemeUtils.SetVoiceConfig(AudioKeyObject.boy, Device.voiceActive);
+	}
+
+	// Token: 0x06000BFD RID: 3069 RVA: 0x000756DC File Offset: 0x000738DC
+	public static void SetVoicePassive()
+	{
+		ThemeUtils.SetVoiceConfig(AudioKeyObject.boy, Device.voicePassive);
+		BoyVoiceState.State current = SingletonBehaviour<BoyAudio>.instance.voiceState.current;
+		BoyVoiceState.BreathType breathType = current.breathType;
+	}
+
+	// Token: 0x06000BFE RID: 3070 RVA: 0x00075710 File Offset: 0x00073910
+	public static void SetVoiceNone()
+	{
+		if (Device.IsVoiceActive() || Device.IsVoicePassive())
+		{
+			ThemeUtils.SetVoiceConfig(AudioKeyObject.boy, Device.voiceNone);
+		}
+	}
+
+	// Token: 0x06000BFF RID: 3071 RVA: 0x00075738 File Offset: 0x00073938
+	public static bool GrabCheck(Boy boy, bool requireGround = true)
+	{
+		VisualBoyLand visualBoyLand = boy.visualBoy.state as VisualBoyLand;
+		bool flag = visualBoyLand && visualBoyLand.isStunned;
+		return !boy.isDead && boy.input.grab && (!requireGround || (boy.status.groundCollider && !(boy.state is BoyJumpState))) && !flag && !BoyGrabState.FindGrabCollider(boy);
+	}
+
+	// Token: 0x06000C00 RID: 3072 RVA: 0x000757CC File Offset: 0x000739CC
+	public static bool CheckFacing(Boy boy, Vector3 dir, float requiredAngle = 95f)
+	{
+		return Vector3.Angle(boy.transform.up, dir) < requiredAngle;
+	}
+
+	// Token: 0x06000C01 RID: 3073 RVA: 0x000757E4 File Offset: 0x000739E4
+	public static bool CheckStickFacing(Boy boy, Vector3 dir, float stickMinLength = 0.3f, float requiredAngle = 95f)
+	{
+		vector2f stick = boy.input.stick;
+		if (stick.magnitude < stickMinLength)
+		{
+			return true;
+		}
+		Vector3 vector;
+		vector..ctor(stick.x, stick.y, 0f);
+		float num = Vector3.Angle(vector.normalized, dir);
+		return num < requiredAngle;
+	}
+
+	// Token: 0x04001504 RID: 5380
+	public CollisionEvents triggerGrab;
+
+	// Token: 0x04001505 RID: 5381
+	protected List<Boy> boysInside = new List<Boy>();
+
+	// Token: 0x04001506 RID: 5382
+	protected Boy boyGrabbing;
+
+	// Token: 0x04001507 RID: 5383
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04001508 RID: 5384
+	private int triggerExitHandle = -1;
+
+	// Token: 0x04001509 RID: 5385
+	private static BoyVoiceConfig voiceActive = BoyVoiceConfig.CreateConfigActionOverride(BoyVoiceState.ActionState.engagedActive);
+
+	// Token: 0x0400150A RID: 5386
+	private static BoyVoiceConfig voicePassive = BoyVoiceConfig.CreateConfigActionOverride(BoyVoiceState.ActionState.engagedPassive);
+
+	// Token: 0x0400150B RID: 5387
+	private static BoyVoiceConfig voiceNone = BoyVoiceConfig.CreateConfigActionOverride(BoyVoiceState.ActionState.none);
+}

@@ -1,0 +1,1315 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+// Token: 0x0200006C RID: 108
+public class CrowdDude : UmbrellaBehaviour<CrowdDude>
+{
+	// Token: 0x06000384 RID: 900 RVA: 0x0002703C File Offset: 0x0002523C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.pathHolder = base.transform.FindChild("Path");
+		List<GameObject> sortedPath = this.GetSortedPath();
+		if (sortedPath[sortedPath.Count - 1].transform.position.x < sortedPath[0].transform.position.x)
+		{
+			sortedPath.Reverse();
+		}
+		this.endDirection = sortedPath[sortedPath.Count - 1].transform.forward * 10f;
+		this.currentHidePoint = null;
+		this.path = new Vector3[sortedPath.Count];
+		this.hidePoints = new List<CrowdDude.HidePoint>();
+		int i = 0;
+		int count = sortedPath.Count;
+		while (i < count)
+		{
+			Transform transform = sortedPath[i].transform;
+			this.path[i] = transform.position - base.transform.position;
+			CrowdPathPoint component = transform.GetComponent<CrowdPathPoint>();
+			if (component && !string.IsNullOrEmpty(component.hideAnim))
+			{
+				CrowdDude.HidePoint item = new CrowdDude.HidePoint(this.hidePoints.Count, i, transform.position, component.hideAnim, transform.forward);
+				this.hidePoints.Add(item);
+			}
+			i++;
+		}
+		float magnitude = (base.transform.position + this.path[0] - this.dudeHolder.position).magnitude;
+		float magnitude2 = (base.transform.position + this.path[this.path.Length - 1] - this.dudeHolder.position).magnitude;
+		if (magnitude2 > magnitude)
+		{
+			this.moveDir = 1;
+			this.currentIndex = 0;
+			if (this.hidePoints.Count > 0)
+			{
+				this.currentHidePoint = this.hidePoints[0];
+			}
+		}
+		else
+		{
+			this.moveDir = -1;
+			this.currentIndex = this.path.Length - 1;
+			if (this.hidePoints.Count > 0)
+			{
+				this.currentHidePoint = this.hidePoints[this.hidePoints.Count - 1];
+			}
+		}
+		this.currentPoint = this.GetPathPoint(this.currentIndex);
+		if (!Application.isPlaying)
+		{
+			PDUtilities.Destroy(this.pathHolder.gameObject);
+		}
+		if (this.lookAtHuddle && !this.headTransform)
+		{
+			List<Transform> list = base.transform.GetComponentsInChildren<Transform>(true).ToList<Transform>();
+			this.headTransform = list.Find((Transform x) => x.gameObject.name == "Head");
+		}
+	}
+
+	// Token: 0x06000385 RID: 901 RVA: 0x00027340 File Offset: 0x00025540
+	public void ManagerPreProcess(CrowdManager crowdManager)
+	{
+		this.OnPreProcess();
+		this.manager = crowdManager;
+		this.animator = this.dudeHolder.GetComponent<Animator>();
+		if (this.manager.randomStartPoint)
+		{
+			this.currentIndex = Random.Range(0, this.path.Length);
+			this.currentPoint = this.GetPathPoint(this.currentIndex);
+			this.dudeHolder.position = this.currentPoint;
+		}
+		this.currentLookAt = this.dudeHolder.forward;
+		int num = this.manager.startAnimCount + 1;
+		this.startRandom = Random.Range(1, num);
+		this.runAnimTimer = Random.value;
+		this.hideAnimTimer = Random.value;
+		this.speed = Random.Range(0.9f, 1f);
+	}
+
+	// Token: 0x06000386 RID: 902 RVA: 0x0002740C File Offset: 0x0002560C
+	private void Start()
+	{
+		this.OnPreProcess();
+		if (this.manager)
+		{
+			this.animator.SetInteger("StartRandom", this.startRandom);
+			this.runAnimCount = this.manager.runAnimCount;
+			this.hideAnimCount = this.manager.hideAnimCount;
+			this.loop = this.manager.loop;
+			this.endEvent = this.manager.endEvent;
+			this.rotateSpeed = this.manager.rotateSpeed * this.speed;
+			this.finishDist = this.manager.finishDist * this.speed;
+			this.maxShockTime = this.manager.maxShockTime;
+			this.animator.speed *= this.speed;
+		}
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000387 RID: 903 RVA: 0x000274E8 File Offset: 0x000256E8
+	protected override void OnEnable()
+	{
+		if (this.animator)
+		{
+			if (this.isComplete)
+			{
+				this.SetHideState();
+				this.animator.SetInteger("StartRandom", this.startRandom);
+			}
+			else
+			{
+				this.animator.SetInteger("StartRandom", this.startRandom);
+				if (this.state == CrowdDude.State.Hide)
+				{
+					int num = Random.Range(1, this.hideAnimCount);
+					this.animator.SetInteger("HideRandom", num);
+					this.animator.Play("Hiding");
+				}
+				else if (this.state == CrowdDude.State.Flee || this.state == CrowdDude.State.LeavingHide || this.state == CrowdDude.State.Start)
+				{
+					this.animator.Play("Run Hub");
+				}
+				else if (this.loadState == CrowdDude.State.Stomp)
+				{
+					if (this.startRandom <= 1)
+					{
+						this.animator.Play("RunStompedA", -1, 1f);
+					}
+					else if (this.startRandom == 2)
+					{
+						this.animator.Play("RunStompedB", -1, 1f);
+					}
+					else if (this.startRandom == 3)
+					{
+						this.animator.Play("RunStompedD", -1, 1f);
+					}
+					else if (this.startRandom >= 4)
+					{
+						this.animator.Play("RunStompedC", -1, 1f);
+					}
+				}
+				else if (this.loadState == CrowdDude.State.Headache)
+				{
+					if (this.startRandom <= 1)
+					{
+						this.animator.Play("HeadacheDieA", -1, 1f);
+					}
+					else if (this.startRandom == 2)
+					{
+						this.animator.Play("HeadacheDieA_AltA", -1, 1f);
+					}
+					else if (this.startRandom == 3)
+					{
+						this.animator.Play("HeadacheDieC", -1, 1f);
+					}
+					else if (this.startRandom >= 4)
+					{
+						this.animator.Play("HeadacheDieD", -1, 1f);
+					}
+				}
+				else if (this.loadState == CrowdDude.State.WaterImpact)
+				{
+					if (this.waterImpactAnimation != -1)
+					{
+						this.startRandom = this.waterImpactAnimation;
+					}
+					if (this.startRandom <= 1)
+					{
+						this.animator.Play("RunFlushedA", -1, 1f);
+					}
+					else if (this.startRandom == 2)
+					{
+						this.animator.Play("RunFlushedB", -1, 1f);
+					}
+					else if (this.startRandom >= 3)
+					{
+						this.animator.Play("RunFlushedD", -1, 1f);
+					}
+				}
+			}
+		}
+		base.OnEnable();
+	}
+
+	// Token: 0x06000388 RID: 904 RVA: 0x000277AC File Offset: 0x000259AC
+	private void SetIdleState()
+	{
+		this.state = CrowdDude.State.Idle;
+	}
+
+	// Token: 0x06000389 RID: 905 RVA: 0x000277B8 File Offset: 0x000259B8
+	private void IdleState()
+	{
+	}
+
+	// Token: 0x0600038A RID: 906 RVA: 0x000277BC File Offset: 0x000259BC
+	public void SetShockState()
+	{
+		this.shockTimer = Random.Range(0f, this.maxShockTime);
+		this.state = CrowdDude.State.Shock;
+	}
+
+	// Token: 0x0600038B RID: 907 RVA: 0x000277DC File Offset: 0x000259DC
+	private void ShockState()
+	{
+		if (this.shockTimer > 0f)
+		{
+			this.shockTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.SetStartState();
+		}
+	}
+
+	// Token: 0x0600038C RID: 908 RVA: 0x0002780C File Offset: 0x00025A0C
+	private void SetStartState()
+	{
+		this.animator.SetBool("IsTriggered", true);
+		this.state = CrowdDude.State.Start;
+	}
+
+	// Token: 0x0600038D RID: 909 RVA: 0x00027828 File Offset: 0x00025A28
+	public bool IsProne()
+	{
+		return this.state != CrowdDude.State.None && (this.state == CrowdDude.State.Headache || this.state == CrowdDude.State.Shock || this.state == CrowdDude.State.Dying || this.state == CrowdDude.State.End || this.state == CrowdDude.State.Stomp || this.state == CrowdDude.State.WaterImpact);
+	}
+
+	// Token: 0x0600038E RID: 910 RVA: 0x0002788C File Offset: 0x00025A8C
+	private void StartState()
+	{
+		this.ReachedCheck((this.currentPoint - this.dudeHolder.position).sqrMagnitude);
+		if (this.animator.GetCurrentAnimatorStateInfo(0).IsName("Run Hub"))
+		{
+			this.currentLookAt = this.dudeHolder.forward;
+			this.SetFleeState();
+		}
+	}
+
+	// Token: 0x0600038F RID: 911 RVA: 0x000278F4 File Offset: 0x00025AF4
+	public void SetFleeState()
+	{
+		this.state = CrowdDude.State.Flee;
+	}
+
+	// Token: 0x06000390 RID: 912 RVA: 0x00027900 File Offset: 0x00025B00
+	public void SetFleetStateNoTransition()
+	{
+		this.RandomRunAnim();
+		this.animator.Play("Run Hub");
+		this.state = CrowdDude.State.Flee;
+	}
+
+	// Token: 0x06000391 RID: 913 RVA: 0x00027920 File Offset: 0x00025B20
+	public void FleeState()
+	{
+		Vector3 targetDir = this.currentPoint - this.dudeHolder.position;
+		this.RandomRunAnim();
+		this.ReachedCheck(targetDir.sqrMagnitude);
+		this.RotateCharacter(targetDir, this.rotateSpeed);
+		if (this.changeDirection && this.hidePoints.Count > 0)
+		{
+			this.ChangeDirectionCheck();
+		}
+	}
+
+	// Token: 0x06000392 RID: 914 RVA: 0x00027988 File Offset: 0x00025B88
+	public void SetRotateState(int nextIndex)
+	{
+		this.currentHidePoint = this.hidePoints[nextIndex];
+		this.animator.CrossFade("RunTurnRun", 0.3f);
+		this.state = CrowdDude.State.Rotate;
+	}
+
+	// Token: 0x06000393 RID: 915 RVA: 0x000279BC File Offset: 0x00025BBC
+	private void RotateState()
+	{
+		if (this.animator.GetCurrentAnimatorStateInfo(0).IsName("Run Hub"))
+		{
+			this.moveDir *= -1;
+			this.NextPoint();
+			this.rotateTimer = 0f;
+			this.currentLookAt = this.dudeHolder.forward;
+			this.SetFleeState();
+		}
+	}
+
+	// Token: 0x06000394 RID: 916 RVA: 0x00027A20 File Offset: 0x00025C20
+	public void SetHideState()
+	{
+		this.animator.SetBool("IsLeaving", false);
+		this.RandomHideAnim();
+		this.animator.CrossFade(this.currentHidePoint.anim, 0.2f);
+		this.hideBlendStart = this.dudeHolder.position;
+		this.hideBlendPath = this.currentHidePoint.pos - this.dudeHolder.position;
+		this.hideTimer = 0f;
+		this.nearestPointTimer = this.nearPointTimerDelay;
+		this.state = CrowdDude.State.Hide;
+	}
+
+	// Token: 0x06000395 RID: 917 RVA: 0x00027AB0 File Offset: 0x00025CB0
+	private void HideState()
+	{
+		this.RandomHideAnim();
+		this.RotateCharacter(this.currentHidePoint.facing, 3f);
+		if (this.hideTimer < this.totalHideTime)
+		{
+			this.hideTimer += Time.deltaTime;
+			if (this.hideTimer > this.totalHideTime)
+			{
+				this.hideTimer = this.totalHideTime;
+			}
+			Vector3 position = this.hideBlendStart + this.hideBlendPath * (this.hideTimer / this.totalHideTime);
+			this.dudeHolder.position = position;
+			return;
+		}
+		this.dudeHolder.position = this.hideBlendStart + this.hideBlendPath;
+		CrowdDude.HidePoint hidePoint = this.currentHidePoint;
+		if (this.hideType == CrowdDude.HideType.Scared)
+		{
+			hidePoint = this.FindHidePointScared();
+		}
+		else if (this.hideType == CrowdDude.HideType.NearestPoint)
+		{
+			if (this.nearestPointTimer > 0f)
+			{
+				this.nearestPointTimer -= Time.deltaTime;
+			}
+			else
+			{
+				this.nearestPointTimer = this.nearPointTimerDelay;
+				hidePoint = this.FindHidePointNearest();
+			}
+		}
+		if (hidePoint.pointIndex != this.currentHidePoint.pointIndex)
+		{
+			this.SetLeavingHideState(hidePoint);
+		}
+	}
+
+	// Token: 0x06000396 RID: 918 RVA: 0x00027BE8 File Offset: 0x00025DE8
+	public void SetLeavingHideState(CrowdDude.HidePoint nextHidePoint)
+	{
+		this.moveDir = ((nextHidePoint.index >= this.currentHidePoint.index) ? 1 : -1);
+		this.currentHidePoint = nextHidePoint;
+		this.NextPoint();
+		this.animator.SetBool("IsLeaving", true);
+		this.state = CrowdDude.State.LeavingHide;
+	}
+
+	// Token: 0x06000397 RID: 919 RVA: 0x00027C40 File Offset: 0x00025E40
+	private void LeavingHideState()
+	{
+		Vector3 targetDir = this.currentPoint - this.dudeHolder.position;
+		this.ReachedCheck(targetDir.sqrMagnitude);
+		this.RotateCharacter(targetDir, 1f);
+		if (this.animator.GetCurrentAnimatorStateInfo(0).IsName("Run Hub"))
+		{
+			this.animator.SetBool("IsLeaving", false);
+			this.SetFleeState();
+		}
+	}
+
+	// Token: 0x06000398 RID: 920 RVA: 0x00027CB4 File Offset: 0x00025EB4
+	public void SetHeadacheState(int headacheAnimIndex)
+	{
+		this.animator.SetInteger("StartRandom", headacheAnimIndex);
+		this.animator.SetBool("IsHeadache", true);
+		this.resetBool = true;
+		this.headacheTimer = 3f;
+		this.loadState = CrowdDude.State.Headache;
+		this.state = CrowdDude.State.Headache;
+	}
+
+	// Token: 0x06000399 RID: 921 RVA: 0x00027D04 File Offset: 0x00025F04
+	private void HeadacheState()
+	{
+		if (this.resetBool && this.animator.IsInTransition(0) && this.GetNextAnimatorHash() == Animator.StringToHash("Base Layer.HeadacheHub"))
+		{
+			this.animator.SetBool("IsHeadache", false);
+			this.resetBool = false;
+		}
+		Vector3 targetDir = this.currentPoint - this.dudeHolder.transform.position;
+		this.RotateCharacter(targetDir, this.rotateSpeed);
+		this.ReachedCheck(targetDir.sqrMagnitude);
+		if (this.headacheTimer > 0f)
+		{
+			this.headacheTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.SetDyingState();
+		}
+	}
+
+	// Token: 0x0600039A RID: 922 RVA: 0x00027DC0 File Offset: 0x00025FC0
+	public void SetPushState()
+	{
+		this.animator.SetBool("IsPushed", true);
+		this.resetBool = true;
+		this.state = CrowdDude.State.Push;
+	}
+
+	// Token: 0x0600039B RID: 923 RVA: 0x00027DF0 File Offset: 0x00025FF0
+	public void PushState()
+	{
+		if (this.resetBool && this.animator.IsInTransition(0) && this.GetNextAnimatorHash() == Animator.StringToHash("Base Layer.Pushed Hub"))
+		{
+			this.animator.SetBool("IsPushed", false);
+			this.resetBool = false;
+		}
+		Vector3 targetDir = this.currentPoint - this.dudeHolder.transform.position;
+		this.RotateCharacter(targetDir, this.rotateSpeed);
+		this.ReachedCheck(targetDir.sqrMagnitude);
+		if (this.animator.IsInTransition(0) && this.GetNextAnimatorHash() == Animator.StringToHash("Base Layer.Run Hub"))
+		{
+			this.state = CrowdDude.State.Flee;
+		}
+	}
+
+	// Token: 0x0600039C RID: 924 RVA: 0x00027EAC File Offset: 0x000260AC
+	public void SetStompState()
+	{
+		this.animator.SetBool("IsStomped", true);
+		this.resetBool = true;
+		this.stompTimer = 6f;
+		this.loadState = CrowdDude.State.Stomp;
+		this.state = CrowdDude.State.Stomp;
+	}
+
+	// Token: 0x0600039D RID: 925 RVA: 0x00027EE0 File Offset: 0x000260E0
+	private void StompState()
+	{
+		if (this.resetBool && this.animator.IsInTransition(0) && this.GetNextAnimatorHash() == Animator.StringToHash("Base Layer.Stomped Hub"))
+		{
+			this.animator.SetBool("IsStomped", false);
+			this.resetBool = false;
+		}
+		Vector3 targetDir = this.currentPoint - this.dudeHolder.transform.position;
+		this.RotateCharacter(targetDir, this.rotateSpeed);
+		this.ReachedCheck(targetDir.sqrMagnitude);
+		if (this.stompTimer > 0f)
+		{
+			this.stompTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.state = CrowdDude.State.None;
+		}
+	}
+
+	// Token: 0x0600039E RID: 926 RVA: 0x00027F9C File Offset: 0x0002619C
+	public void SetWaterImpactState()
+	{
+		if (this.waterImpactAnimation != -1)
+		{
+			this.animator.SetInteger("StartRandom", this.waterImpactAnimation);
+		}
+		this.animator.CrossFade("Flushed Hub", 0.2f);
+		this.loadState = CrowdDude.State.WaterImpact;
+		this.state = CrowdDude.State.WaterImpact;
+	}
+
+	// Token: 0x0600039F RID: 927 RVA: 0x00027FF0 File Offset: 0x000261F0
+	private void WaterImpactState()
+	{
+		Vector3 targetDir = this.currentPoint - this.dudeHolder.transform.position;
+		this.RotateCharacter(targetDir, this.rotateSpeed);
+		this.ReachedCheck(targetDir.sqrMagnitude);
+	}
+
+	// Token: 0x060003A0 RID: 928 RVA: 0x00028034 File Offset: 0x00026234
+	private void SetDyingState()
+	{
+		this.dyingTimer = (float)Random.Range(10, 30);
+		this.state = CrowdDude.State.Dying;
+	}
+
+	// Token: 0x060003A1 RID: 929 RVA: 0x00028050 File Offset: 0x00026250
+	private void DyingState()
+	{
+		if (this.dyingTimer > 0f)
+		{
+			this.dyingTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.animator.SetBool("IsDead", true);
+			this.state = CrowdDude.State.None;
+		}
+	}
+
+	// Token: 0x060003A2 RID: 930 RVA: 0x0002809C File Offset: 0x0002629C
+	private void SetEndState()
+	{
+		this.animator.SetBool("IsComplete", true);
+		this.resetBool = true;
+		this.endBlendStart = this.dudeHolder.position;
+		this.endBlendPath = this.currentPoint - this.dudeHolder.position;
+		this.endTimer = 0f;
+		this.state = CrowdDude.State.End;
+	}
+
+	// Token: 0x060003A3 RID: 931 RVA: 0x00028104 File Offset: 0x00026304
+	private void EndState()
+	{
+		if (this.resetBool && this.animator.IsInTransition(0) && this.GetNextAnimatorHash() == Animator.StringToHash("Base Layer.Complete Hub"))
+		{
+			this.animator.SetBool("IsComplete", false);
+			this.resetBool = false;
+		}
+		this.RotateCharacter(this.endDirection, 3f);
+		if (this.endTimer < this.totalEndTime)
+		{
+			this.endTimer += Time.deltaTime;
+			if (this.endTimer > this.totalEndTime)
+			{
+				this.endTimer = this.totalEndTime;
+			}
+			Vector3 position = this.endBlendStart + this.endBlendPath * (this.endTimer / this.totalEndTime);
+			this.dudeHolder.position = position;
+		}
+		else
+		{
+			this.dudeHolder.position = this.currentPoint;
+		}
+	}
+
+	// Token: 0x060003A4 RID: 932 RVA: 0x000281F4 File Offset: 0x000263F4
+	public void SetBoyDeadState()
+	{
+		float num = Mathf.Abs(this.dudeHolder.transform.position.z);
+		if (num > 8f)
+		{
+			base.gameObject.SetActive(false);
+			this.state = CrowdDude.State.None;
+		}
+		else
+		{
+			this.state = CrowdDude.State.BoyDead;
+		}
+	}
+
+	// Token: 0x060003A5 RID: 933 RVA: 0x0002824C File Offset: 0x0002644C
+	public void BoyDeadState()
+	{
+		Vector3 targetDir = ScriptGlobals.boy.pos3 - this.dudeHolder.transform.position;
+		targetDir.y -= 0.6f;
+		this.RotateCharacter(targetDir, this.rotateSpeed);
+		this.RandomRunAnim();
+		if (targetDir.sqrMagnitude < 12f)
+		{
+			this.endDirection = (ScriptGlobals.boy.pos3 - this.dudeHolder.transform.position) * 10f;
+			this.endDirection.y = 0f;
+			this.currentPoint = this.dudeHolder.transform.position;
+			this.SetEndState();
+		}
+	}
+
+	// Token: 0x060003A6 RID: 934 RVA: 0x0002830C File Offset: 0x0002650C
+	public bool UmbrellaUpdate()
+	{
+		if (this.state != CrowdDude.State.None)
+		{
+			switch (this.state)
+			{
+			case CrowdDude.State.Start:
+				this.StartState();
+				break;
+			case CrowdDude.State.Idle:
+				this.IdleState();
+				break;
+			case CrowdDude.State.Shock:
+				this.ShockState();
+				break;
+			case CrowdDude.State.Hide:
+				this.HideState();
+				break;
+			case CrowdDude.State.Headache:
+				this.HeadacheState();
+				break;
+			case CrowdDude.State.Dying:
+				this.DyingState();
+				break;
+			case CrowdDude.State.Stomp:
+				this.StompState();
+				break;
+			case CrowdDude.State.WaterImpact:
+				this.WaterImpactState();
+				break;
+			case CrowdDude.State.End:
+				this.EndState();
+				break;
+			case CrowdDude.State.Flee:
+				this.FleeState();
+				break;
+			case CrowdDude.State.Rotate:
+				this.RotateState();
+				break;
+			case CrowdDude.State.LeavingHide:
+				this.LeavingHideState();
+				break;
+			case CrowdDude.State.Push:
+				this.PushState();
+				break;
+			case CrowdDude.State.BoyDead:
+				this.BoyDeadState();
+				break;
+			}
+		}
+		return this.umbrellaHandle != -1;
+	}
+
+	// Token: 0x060003A7 RID: 935 RVA: 0x00028418 File Offset: 0x00026618
+	private void RotateCharacter(Vector3 targetDir, float speed)
+	{
+		if (this.rotateTimer > 0f)
+		{
+			this.rotateTimer -= Time.deltaTime;
+			this.currentLookAt = Vector3.Lerp(this.currentLookAt, targetDir, Mathf.Min(Time.deltaTime * speed, 1f));
+			this.dudeHolder.transform.LookAt(this.dudeHolder.transform.position + this.currentLookAt);
+		}
+		else
+		{
+			this.angle = Vector3.Angle(this.currentLookAt, targetDir);
+			if (this.angle > this.minAngle)
+			{
+				this.rotateTimer = 0.1f;
+			}
+		}
+	}
+
+	// Token: 0x060003A8 RID: 936 RVA: 0x000284C8 File Offset: 0x000266C8
+	public void UmbrellaLateUpdate()
+	{
+		Vector3 eulerAngles = this.dudeHolder.transform.rotation.eulerAngles;
+		eulerAngles.x = 0f;
+		this.dudeHolder.transform.rotation = Quaternion.Euler(eulerAngles);
+		if (this.lookAtHuddle && this.headTransform && ScriptGlobals.huddle.isCharacterActive)
+		{
+			Vector3 position = this.headTransform.position;
+			Vector3 vector;
+			if (this.state == CrowdDude.State.Idle || this.state == CrowdDude.State.Hide)
+			{
+				vector = ScriptGlobals.huddle.pos3;
+			}
+			else
+			{
+				vector = position + this.headTransform.forward;
+			}
+			Quaternion quaternion = Quaternion.LookRotation(vector - position);
+			this.currentRotation = Quaternion.Slerp(this.currentRotation, quaternion, Time.deltaTime * 5f);
+			this.headTransform.rotation = this.currentRotation;
+		}
+	}
+
+	// Token: 0x060003A9 RID: 937 RVA: 0x000285BC File Offset: 0x000267BC
+	private void ReachedCheck(float dist)
+	{
+		Vector3 vector = this.currentPoint - this.dudeHolder.position;
+		bool flag = Vector3.Dot(this.goalLine, -vector) > -1.5f;
+		if (this.hidePoints.Count > 0 && this.currentHidePoint != null && flag && this.currentIndex == this.currentHidePoint.pointIndex)
+		{
+			this.SetHideState();
+			return;
+		}
+		if ((this.moveDir == 1 && this.currentIndex == this.path.Length - 1) || (this.moveDir == -1 && this.currentIndex == 0))
+		{
+			if (flag)
+			{
+				if (this.loop)
+				{
+					this.dudeHolder.transform.position = this.GetPathPoint(0);
+					this.currentIndex = 1;
+					this.currentPoint = this.GetPathPoint(this.currentIndex);
+					this.dudeHolder.transform.LookAt(this.currentPoint);
+					this.currentLookAt = this.dudeHolder.transform.transform.forward;
+				}
+				else if (this.endEvent)
+				{
+					this.SetEndState();
+				}
+				else
+				{
+					base.gameObject.SetActive(false);
+					this.state = CrowdDude.State.None;
+				}
+			}
+		}
+		else if (flag)
+		{
+			this.NextPoint();
+		}
+	}
+
+	// Token: 0x060003AA RID: 938 RVA: 0x00028724 File Offset: 0x00026924
+	private void ChangeDirectionCheck()
+	{
+		float num = ScriptGlobals.mainCharacter.pos3.x - this.dudeHolder.position.x;
+		float num2 = Mathf.Abs(num);
+		if (num2 < 5f)
+		{
+			float num3 = Mathf.Sign(num) * (float)this.moveDir;
+			if (num3 == 1f)
+			{
+				int num4 = this.currentHidePoint.index - this.moveDir;
+				if (num4 >= 0 && num4 < this.hidePoints.Count)
+				{
+					this.SetRotateState(num4);
+				}
+			}
+		}
+	}
+
+	// Token: 0x060003AB RID: 939 RVA: 0x000287B8 File Offset: 0x000269B8
+	private void NextPoint()
+	{
+		this.currentIndex += this.moveDir;
+		this.currentPoint = this.GetPathPoint(this.currentIndex);
+	}
+
+	// Token: 0x060003AC RID: 940 RVA: 0x000287E0 File Offset: 0x000269E0
+	private CrowdDude.HidePoint FindHidePointScared()
+	{
+		if (this.hidePoints.Count == 1)
+		{
+			return this.hidePoints[0];
+		}
+		float x = ScriptGlobals.mainCharacter.pos3.x;
+		float x2 = this.dudeHolder.position.x;
+		CrowdDude.HidePoint result = this.currentHidePoint;
+		float num = x2 - x;
+		int num2 = (int)Mathf.Sign(num);
+		float num3 = Mathf.Abs(num);
+		int num4 = this.currentHidePoint.index;
+		if (num3 < 9f)
+		{
+			float x3 = ScriptGlobals.mainCharacter.velocity3.x;
+			if (num3 > 4f && (Mathf.Abs(x3) < 1f || Mathf.Sign(x3) == (float)num2))
+			{
+				num4 += num2;
+			}
+		}
+		else if (num3 > 24f)
+		{
+			num4 -= num2;
+		}
+		if (num4 >= 0 && num4 < this.hidePoints.Count)
+		{
+			result = this.hidePoints[num4];
+		}
+		return result;
+	}
+
+	// Token: 0x060003AD RID: 941 RVA: 0x000288F4 File Offset: 0x00026AF4
+	private CrowdDude.HidePoint FindHidePointNearest()
+	{
+		if (this.hidePoints.Count == 1)
+		{
+			return this.hidePoints[0];
+		}
+		float x = ScriptGlobals.mainCharacter.pos3.x;
+		CrowdDude.HidePoint hidePoint = this.hidePoints[0];
+		float num = Mathf.Abs(hidePoint.pos.x - x);
+		int i = 1;
+		int count = this.hidePoints.Count;
+		while (i < count)
+		{
+			CrowdDude.HidePoint hidePoint2 = this.hidePoints[i];
+			float num2 = Mathf.Abs(hidePoint2.pos.x - x);
+			if (num2 < num)
+			{
+				hidePoint = hidePoint2;
+				num = num2;
+			}
+			i++;
+		}
+		return hidePoint;
+	}
+
+	// Token: 0x060003AE RID: 942 RVA: 0x000289A8 File Offset: 0x00026BA8
+	public void Randomize(Material m, float scale, float rot)
+	{
+		this.dudeHolder.transform.localScale = Vector3.one * scale;
+		this.visuals.GetComponent<Renderer>().material = m;
+		if (rot != 0f)
+		{
+			this.dudeHolder.transform.Rotate(Vector3.up, rot);
+		}
+	}
+
+	// Token: 0x060003AF RID: 943 RVA: 0x00028A04 File Offset: 0x00026C04
+	private void RandomRunAnim()
+	{
+		if (this.runAnimTimer > 0f)
+		{
+			this.runAnimTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.runAnimTimer = 1f;
+			int num = 1;
+			if (this.currentIndex <= this.path.Length - 4)
+			{
+				if (Random.value > 0.85f)
+				{
+					num = this.runAnimCount;
+				}
+				else
+				{
+					num = Random.Range(1, this.runAnimCount);
+				}
+			}
+			this.animator.SetInteger("RunRandom", num);
+		}
+	}
+
+	// Token: 0x060003B0 RID: 944 RVA: 0x00028A94 File Offset: 0x00026C94
+	private void RandomHideAnim()
+	{
+		if (this.hideAnimTimer > 0f)
+		{
+			this.hideAnimTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.hideAnimTimer = 1f;
+			int num = Random.Range(1, this.hideAnimCount);
+			this.animator.SetInteger("HideRandom", num);
+		}
+	}
+
+	// Token: 0x060003B1 RID: 945 RVA: 0x00028AF4 File Offset: 0x00026CF4
+	public Vector3 GetPathPoint(int index)
+	{
+		Vector3 vector = base.transform.position + this.path[index];
+		this.goalLine = vector - this.dudeHolder.position;
+		if (this.debug && EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			Debug.DrawLine(this.dudeHolder.position, this.currentPoint, Color.cyan, 2f);
+			Debug.DrawLine(vector, vector + this.goalLine, Color.yellow, 2f);
+			Debug.DrawLine(this.dudeHolder.position, this.dudeHolder.position - this.goalLine, Color.green, 2f);
+		}
+		return vector;
+	}
+
+	// Token: 0x060003B2 RID: 946 RVA: 0x00028BC0 File Offset: 0x00026DC0
+	private int GetNextAnimatorHash()
+	{
+		return this.animator.GetNextAnimatorStateInfo(0).fullPathHash;
+	}
+
+	// Token: 0x060003B3 RID: 947 RVA: 0x00028BE4 File Offset: 0x00026DE4
+	public void SetPath(Vector3[] p)
+	{
+		this.pathHolder = base.transform.FindChild("Path");
+		if (this.pathHolder != null)
+		{
+			List<GameObject> list = new List<GameObject>();
+			foreach (object obj in this.pathHolder.transform)
+			{
+				Transform transform = (Transform)obj;
+				list.Add(transform.gameObject);
+			}
+			list.ForEach(new Action<GameObject>(PDUtilities.Destroy));
+		}
+		else
+		{
+			this.pathHolder = new GameObject().transform;
+			this.pathHolder.name = "Path";
+			this.pathHolder.parent = base.transform;
+			this.pathHolder.localPosition = Vector3.zero;
+		}
+		if (p == null)
+		{
+			return;
+		}
+		List<Vector3> list2 = p.ToList<Vector3>();
+		int i = 0;
+		int num = p.Length - 2;
+		while (i < num)
+		{
+			Vector3 vector = p[i];
+			Vector3 vector2 = p[i + 1];
+			Vector3 vector3 = p[i + 2];
+			Vector3 vector4 = vector2 - vector;
+			Vector3 vector5 = vector3 - vector;
+			float num2 = Vector3.Angle(vector4, vector5);
+			if (num2 < 2f)
+			{
+				list2.Remove(p[i + 1]);
+			}
+			i++;
+		}
+		int j = 0;
+		int count = list2.Count;
+		while (j < count)
+		{
+			Vector3 position = list2[j];
+			Transform transform2 = new GameObject().transform;
+			transform2.name = "Point_" + j * 10;
+			transform2.parent = this.pathHolder;
+			transform2.position = position;
+			transform2.gameObject.AddComponent<CrowdPathPoint>();
+			j++;
+		}
+		Transform child = this.pathHolder.GetChild(this.pathHolder.childCount - 2);
+		Transform child2 = this.pathHolder.GetChild(this.pathHolder.childCount - 1);
+		Vector3 vector6 = child2.position - child.position;
+		child2.LookAt(child2.position + vector6);
+	}
+
+	// Token: 0x060003B4 RID: 948 RVA: 0x00028E58 File Offset: 0x00027058
+	private List<GameObject> GetSortedPath()
+	{
+		GameObject[] array = new GameObject[this.pathHolder.childCount];
+		int i = 0;
+		int childCount = this.pathHolder.childCount;
+		while (i < childCount)
+		{
+			array[i] = this.pathHolder.GetChild(i).gameObject;
+			i++;
+		}
+		return array.OrderBy((GameObject x) => x.name, new NaturalComparer()).ToList<GameObject>();
+	}
+
+	// Token: 0x060003B5 RID: 949 RVA: 0x00028ED8 File Offset: 0x000270D8
+	public void LoadCompleted()
+	{
+		if (this.hidePoints == null || this.hidePoints.Count <= 0)
+		{
+			base.gameObject.SetActive(false);
+			this.state = CrowdDude.State.None;
+		}
+		else
+		{
+			CrowdDude.HidePoint hidePoint = this.FindHidePointNearest();
+			if (hidePoint != null)
+			{
+				this.dudeHolder.position = hidePoint.pos;
+				this.currentLookAt = hidePoint.facing;
+				this.dudeHolder.forward = this.currentLookAt;
+				this.currentHidePoint = hidePoint;
+				this.currentIndex = hidePoint.pointIndex;
+				this.currentPoint = this.GetPathPoint(this.currentIndex);
+				this.isComplete = true;
+			}
+		}
+	}
+
+	// Token: 0x060003B6 RID: 950 RVA: 0x00028F80 File Offset: 0x00027180
+	private void OnDrawGizmos()
+	{
+		if (Application.isPlaying && !this.selected)
+		{
+			return;
+		}
+		if (!EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			return;
+		}
+		Color red;
+		if (!this.validPath)
+		{
+			red..ctor(0.9f, 0f, 1f);
+		}
+		else if (this.selected)
+		{
+			red = Color.red;
+		}
+		else if (this.pathSelected)
+		{
+			red..ctor(1f, 0.5f, 0f, 0.8f);
+		}
+		else
+		{
+			red..ctor(0f, 0.5f, 0.5f, 0.8f);
+		}
+		Vector3[] array = null;
+		if (!Application.isPlaying)
+		{
+			if (this.pathHolder == null || this.pathHolder.childCount <= 1)
+			{
+				return;
+			}
+			List<GameObject> sortedPath = this.GetSortedPath();
+			array = new Vector3[this.pathHolder.childCount];
+			int i = 0;
+			int count = sortedPath.Count;
+			while (i < count)
+			{
+				array[i] = sortedPath[i].transform.position;
+				i++;
+			}
+		}
+		else if (this.path != null && this.path.Length > 1)
+		{
+			array = new Vector3[this.path.Length];
+			int j = 0;
+			int num = this.path.Length;
+			while (j < num)
+			{
+				array[j] = base.transform.position + this.path[j];
+				j++;
+			}
+		}
+		if (array != null && array.Length > 1)
+		{
+			int k = 0;
+			int num2 = array.Length - 1;
+			while (k < num2)
+			{
+				Vector3 vector = array[k];
+				Vector3 vector2 = array[k + 1];
+				Debug.DrawLine(vector, vector2, red);
+				k++;
+			}
+		}
+	}
+
+	// Token: 0x040005A7 RID: 1447
+	public Transform dudeHolder;
+
+	// Token: 0x040005A8 RID: 1448
+	public Renderer visuals;
+
+	// Token: 0x040005A9 RID: 1449
+	public CrowdDude.HideType hideType;
+
+	// Token: 0x040005AA RID: 1450
+	public bool changeDirection;
+
+	// Token: 0x040005AB RID: 1451
+	public bool lookAtHuddle;
+
+	// Token: 0x040005AC RID: 1452
+	public int waterImpactAnimation = -1;
+
+	// Token: 0x040005AD RID: 1453
+	public Transform headTransform;
+
+	// Token: 0x040005AE RID: 1454
+	public bool debug;
+
+	// Token: 0x040005AF RID: 1455
+	[HideInInspector]
+	public bool selected;
+
+	// Token: 0x040005B0 RID: 1456
+	[HideInInspector]
+	public bool pathSelected;
+
+	// Token: 0x040005B1 RID: 1457
+	[HideInInspector]
+	public bool validPath;
+
+	// Token: 0x040005B2 RID: 1458
+	private float rotateSpeed;
+
+	// Token: 0x040005B3 RID: 1459
+	private float finishDist;
+
+	// Token: 0x040005B4 RID: 1460
+	private float shockTimer;
+
+	// Token: 0x040005B5 RID: 1461
+	private float headacheTimer;
+
+	// Token: 0x040005B6 RID: 1462
+	private float dyingTimer;
+
+	// Token: 0x040005B7 RID: 1463
+	private float stompTimer;
+
+	// Token: 0x040005B8 RID: 1464
+	private bool resetBool;
+
+	// Token: 0x040005B9 RID: 1465
+	private bool isComplete;
+
+	// Token: 0x040005BA RID: 1466
+	public CrowdDude.State state;
+
+	// Token: 0x040005BB RID: 1467
+	public CrowdDude.State loadState;
+
+	// Token: 0x040005BC RID: 1468
+	private int runAnimCount;
+
+	// Token: 0x040005BD RID: 1469
+	private int hideAnimCount;
+
+	// Token: 0x040005BE RID: 1470
+	private bool loop;
+
+	// Token: 0x040005BF RID: 1471
+	private bool endEvent;
+
+	// Token: 0x040005C0 RID: 1472
+	private float maxShockTime;
+
+	// Token: 0x040005C1 RID: 1473
+	private float angle;
+
+	// Token: 0x040005C2 RID: 1474
+	private float minAngle = 5f;
+
+	// Token: 0x040005C3 RID: 1475
+	private float rotateTimer;
+
+	// Token: 0x040005C4 RID: 1476
+	private Vector3 hideBlendStart;
+
+	// Token: 0x040005C5 RID: 1477
+	private Vector3 hideBlendPath;
+
+	// Token: 0x040005C6 RID: 1478
+	private float hideTimer;
+
+	// Token: 0x040005C7 RID: 1479
+	private float totalHideTime = 0.55f;
+
+	// Token: 0x040005C8 RID: 1480
+	private Vector3 endBlendStart;
+
+	// Token: 0x040005C9 RID: 1481
+	private Vector3 endBlendPath;
+
+	// Token: 0x040005CA RID: 1482
+	private float endTimer;
+
+	// Token: 0x040005CB RID: 1483
+	private float totalEndTime = 0.4f;
+
+	// Token: 0x040005CC RID: 1484
+	private float nearestPointTimer;
+
+	// Token: 0x040005CD RID: 1485
+	private float nearPointTimerDelay = 1f;
+
+	// Token: 0x040005CE RID: 1486
+	private Quaternion currentRotation = Quaternion.identity;
+
+	// Token: 0x040005CF RID: 1487
+	[HideInInspector]
+	[SerializeField]
+	private int moveDir = 1;
+
+	// Token: 0x040005D0 RID: 1488
+	[SerializeField]
+	[HideInInspector]
+	private int startRandom;
+
+	// Token: 0x040005D1 RID: 1489
+	[HideInInspector]
+	[SerializeField]
+	private int currentIndex;
+
+	// Token: 0x040005D2 RID: 1490
+	[HideInInspector]
+	[SerializeField]
+	private float hideAnimTimer;
+
+	// Token: 0x040005D3 RID: 1491
+	[SerializeField]
+	[HideInInspector]
+	private float runAnimTimer;
+
+	// Token: 0x040005D4 RID: 1492
+	[HideInInspector]
+	[SerializeField]
+	private float speed;
+
+	// Token: 0x040005D5 RID: 1493
+	[HideInInspector]
+	[SerializeField]
+	private Vector3 currentLookAt;
+
+	// Token: 0x040005D6 RID: 1494
+	[HideInInspector]
+	[SerializeField]
+	private Vector3 currentPoint;
+
+	// Token: 0x040005D7 RID: 1495
+	[HideInInspector]
+	[SerializeField]
+	private Vector3 goalLine;
+
+	// Token: 0x040005D8 RID: 1496
+	[HideInInspector]
+	[SerializeField]
+	private Vector3 endDirection;
+
+	// Token: 0x040005D9 RID: 1497
+	[SerializeField]
+	[HideInInspector]
+	private CrowdManager manager;
+
+	// Token: 0x040005DA RID: 1498
+	[HideInInspector]
+	[SerializeField]
+	private Animator animator;
+
+	// Token: 0x040005DB RID: 1499
+	[SerializeField]
+	[HideInInspector]
+	private Transform pathHolder;
+
+	// Token: 0x040005DC RID: 1500
+	[HideInInspector]
+	[SerializeField]
+	private Vector3[] path;
+
+	// Token: 0x040005DD RID: 1501
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x040005DE RID: 1502
+	[SerializeField]
+	[HideInInspector]
+	private CrowdDude.HidePoint currentHidePoint;
+
+	// Token: 0x040005DF RID: 1503
+	[SerializeField]
+	[HideInInspector]
+	private List<CrowdDude.HidePoint> hidePoints;
+
+	// Token: 0x0200006D RID: 109
+	public enum HideType
+	{
+		// Token: 0x040005E3 RID: 1507
+		NearestPoint,
+		// Token: 0x040005E4 RID: 1508
+		Scared
+	}
+
+	// Token: 0x0200006E RID: 110
+	public enum State
+	{
+		// Token: 0x040005E6 RID: 1510
+		None,
+		// Token: 0x040005E7 RID: 1511
+		Start,
+		// Token: 0x040005E8 RID: 1512
+		Idle,
+		// Token: 0x040005E9 RID: 1513
+		Shock,
+		// Token: 0x040005EA RID: 1514
+		Hide,
+		// Token: 0x040005EB RID: 1515
+		Headache,
+		// Token: 0x040005EC RID: 1516
+		Dying,
+		// Token: 0x040005ED RID: 1517
+		Stomp,
+		// Token: 0x040005EE RID: 1518
+		WaterImpact,
+		// Token: 0x040005EF RID: 1519
+		End,
+		// Token: 0x040005F0 RID: 1520
+		Flee,
+		// Token: 0x040005F1 RID: 1521
+		Rotate,
+		// Token: 0x040005F2 RID: 1522
+		LeavingHide,
+		// Token: 0x040005F3 RID: 1523
+		Push,
+		// Token: 0x040005F4 RID: 1524
+		BoyDead
+	}
+
+	// Token: 0x0200006F RID: 111
+	[Serializable]
+	public class HidePoint
+	{
+		// Token: 0x060003B9 RID: 953 RVA: 0x000291A4 File Offset: 0x000273A4
+		public HidePoint(int index, int pointIndex, Vector3 pos, string anim, Vector3 facing)
+		{
+			this.index = index;
+			this.pointIndex = pointIndex;
+			this.pos = pos;
+			this.anim = anim;
+			this.facing = facing;
+		}
+
+		// Token: 0x040005F5 RID: 1525
+		public int index;
+
+		// Token: 0x040005F6 RID: 1526
+		public int pointIndex;
+
+		// Token: 0x040005F7 RID: 1527
+		public Vector3 pos;
+
+		// Token: 0x040005F8 RID: 1528
+		public string anim;
+
+		// Token: 0x040005F9 RID: 1529
+		public Vector3 facing;
+	}
+}

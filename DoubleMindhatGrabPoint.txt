@@ -1,0 +1,24 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000436 RID: 1078
+public class DoubleMindhatGrabPoint : MonoBehaviour
+{
+	// Token: 0x040033BD RID: 13245
+	public DoubleMindhatLiftDoorLogic.BoyState boyState;
+
+	// Token: 0x040033BE RID: 13246
+	public MindHatDudeSpawner boy;
+
+	// Token: 0x040033BF RID: 13247
+	public AnimClipNode idleToGrab;
+
+	// Token: 0x040033C0 RID: 13248
+	public AnimClipNode idle;
+
+	// Token: 0x040033C1 RID: 13249
+	public AnimClipNode lift;
+
+	// Token: 0x040033C2 RID: 13250
+	public AnimClipNode open;
+}

@@ -1,0 +1,34 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004FD RID: 1277
+public class ClearnerPodBoyClimbRoofEnabler : MonoBehaviour
+{
+	// Token: 0x06002174 RID: 8564 RVA: 0x00118BE0 File Offset: 0x00116DE0
+	private void Update()
+	{
+		if (!this.transitioned)
+		{
+			Vector3 vector = ScriptGlobals.boy.pos3 - base.transform.position;
+			if (FastMath.Abs(vector.x) < 4f)
+			{
+				if (vector.y < 2f && (ScriptGlobals.boy.state is BoyRunState || ScriptGlobals.boy.state is BoyGrabPlateauState))
+				{
+					this.noGrab.SetIsEnabled(false);
+					this.transitioned = true;
+					return;
+				}
+				if ((double)vector.y < 0.4)
+				{
+					this.noGrab.SetIsEnabled(true);
+				}
+			}
+		}
+	}
+
+	// Token: 0x04003E33 RID: 15923
+	public NoGrab noGrab;
+
+	// Token: 0x04003E34 RID: 15924
+	private bool transitioned;
+}

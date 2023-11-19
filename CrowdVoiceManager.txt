@@ -1,0 +1,164 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000079 RID: 121
+public class CrowdVoiceManager : MonoBehaviour
+{
+	// Token: 0x060003EB RID: 1003 RVA: 0x0002A550 File Offset: 0x00028750
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, null);
+		this.audioStartVoice = new AudioEventSimpleLocal(this.audioPrefix + "_voiceStart", this.akGameObj);
+		this.audioStopVoice = new AudioEventSimpleLocal(this.audioPrefix + "_voiceStop", this.akGameObj);
+	}
+
+	// Token: 0x060003EC RID: 1004 RVA: 0x0002A5C4 File Offset: 0x000287C4
+	private void Start()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x060003ED RID: 1005 RVA: 0x0002A5CC File Offset: 0x000287CC
+	private void OnEnable()
+	{
+		if (this.withinRange)
+		{
+			this.audioStartVoice.PostFast();
+		}
+	}
+
+	// Token: 0x060003EE RID: 1006 RVA: 0x0002A5E8 File Offset: 0x000287E8
+	private void OnDisable()
+	{
+		if (this.withinRange)
+		{
+			this.audioStopVoice.PostFast();
+		}
+	}
+
+	// Token: 0x060003EF RID: 1007 RVA: 0x0002A604 File Offset: 0x00028804
+	private void UpdateVoicePosition()
+	{
+		this.sqrShortestDist = float.MaxValue;
+		this.closestMember = null;
+		for (int i = 0; i < this.crowdMembers.Length; i++)
+		{
+			if (!(this.crowdMembers[i] == null) && this.crowdMembers[i].gameObject.activeInHierarchy)
+			{
+				float sqrMagnitude = (ScriptGlobals.mainCharacter.pos3 - this.crowdMembers[i].position).sqrMagnitude;
+				if (sqrMagnitude < this.sqrShortestDist)
+				{
+					this.sqrShortestDist = sqrMagnitude;
+					this.closestMember = this.crowdMembers[i];
+					this.closestMemberIndex = i;
+				}
+			}
+		}
+		if (this.closestMember != null)
+		{
+			CrowdDude component = this.closestMember.parent.parent.GetComponent<CrowdDude>();
+			if (component == null)
+			{
+				component = this.closestMember.parent.GetComponent<CrowdDude>();
+			}
+			if (component != null && component.IsProne())
+			{
+				this.crowdMembers[this.closestMemberIndex] = null;
+			}
+		}
+	}
+
+	// Token: 0x060003F0 RID: 1008 RVA: 0x0002A724 File Offset: 0x00028924
+	private void OnDrawGizmos()
+	{
+		if (this.debug && this.closestMember)
+		{
+			Gizmos.color = Color.red;
+			Gizmos.DrawSphere(this.closestMember.position, 1f);
+		}
+	}
+
+	// Token: 0x060003F1 RID: 1009 RVA: 0x0002A76C File Offset: 0x0002896C
+	private void Update()
+	{
+		this.frameCount++;
+		if (this.frameCount >= 10)
+		{
+			this.UpdateVoicePosition();
+			this.frameCount = 0;
+		}
+		if (this.closestMember != null)
+		{
+			float magnitude = (ScriptGlobals.mainCharacter.pos3 - this.closestMember.position).magnitude;
+			float num = Mathf.InverseLerp(0f, this.maxDistance, magnitude);
+			SoundEngine.RTPCs.crowdDistance.Set01ClampedFast(num, this.akGameObj);
+			if (this.rtpcLastFrame == 0f && num != 0f)
+			{
+				this.withinRange = true;
+				this.audioStartVoice.PostFast();
+			}
+			else if (this.rtpcLastFrame != 0f && num == 0f)
+			{
+				this.withinRange = false;
+				this.audioStopVoice.PostFast();
+			}
+			this.rtpcLastFrame = num;
+		}
+	}
+
+	// Token: 0x04000656 RID: 1622
+	public Transform[] crowdMembers = new Transform[0];
+
+	// Token: 0x04000657 RID: 1623
+	public float maxDistance = 40f;
+
+	// Token: 0x04000658 RID: 1624
+	public string audioPrefix = "env_area_puzzle_crowd";
+
+	// Token: 0x04000659 RID: 1625
+	public bool debug;
+
+	// Token: 0x0400065A RID: 1626
+	private Transform closestMember;
+
+	// Token: 0x0400065B RID: 1627
+	private int closestMemberIndex;
+
+	// Token: 0x0400065C RID: 1628
+	private float sqrShortestDist = float.MaxValue;
+
+	// Token: 0x0400065D RID: 1629
+	private int frameCount;
+
+	// Token: 0x0400065E RID: 1630
+	private float rtpcLastFrame;
+
+	// Token: 0x0400065F RID: 1631
+	private bool withinRange;
+
+	// Token: 0x04000660 RID: 1632
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObj;
+
+	// Token: 0x04000661 RID: 1633
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStartVoice;
+
+	// Token: 0x04000662 RID: 1634
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStopVoice;
+
+	// Token: 0x04000663 RID: 1635
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

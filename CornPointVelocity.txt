@@ -1,0 +1,136 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200060E RID: 1550
+public class CornPointVelocity : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060026BD RID: 9917 RVA: 0x001393BC File Offset: 0x001375BC
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (!this.watchObject)
+		{
+			this.watchObject = base.gameObject;
+		}
+		this.watchTransform = this.watchObject.transform;
+		this.oldPos = this.watchTransform.position;
+		this.oldRot = this.watchTransform.rotation;
+		this.matinstance = base.gameObject.GetComponent<MaterialInstance>();
+	}
+
+	// Token: 0x060026BE RID: 9918 RVA: 0x0013943C File Offset: 0x0013763C
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		this.prop_vel = this.matinstance.GetOrAddVectorProperty("_Velocity");
+		this.prop_angvel = this.matinstance.GetOrAddVectorProperty("_AngVelocity");
+		return true;
+	}
+
+	// Token: 0x060026BF RID: 9919 RVA: 0x00139474 File Offset: 0x00137674
+	public void UpdateMaterials(float timer)
+	{
+		Quaternion rotation = this.watchTransform.rotation;
+		Vector3 position = this.watchTransform.position;
+		float deltaTime = Time.deltaTime;
+		this.vel = (position - this.oldPos) / deltaTime;
+		this.wobble += this.vel;
+		this.wobble *= this.wobbleFalloff;
+		this.interpolatedVel = Vector3.Lerp(this.interpolatedVel, this.vel, deltaTime * this.lag);
+		Vector3 vector = this.wobbleStrength * this.wobble * Mathf.Sin(timer * this.wobbleFreq * 6.28f) + this.interpolatedVel;
+		Vector4 one = Vector4.one;
+		one.x = Mathf.Clamp(vector.x, -this.maxVelocity, this.maxVelocity);
+		one.y = Mathf.Clamp(vector.y, -this.maxVelocity, this.maxVelocity);
+		one.z = Mathf.Clamp(vector.z, -this.maxVelocity, this.maxVelocity);
+		this.matinstance.SetVectorProperty(this.prop_vel, one);
+		Quaternion q = rotation * Quaternion.Inverse(this.oldRot);
+		this.angVel = MathUtils.QuaternionToAngularVelocity(q) / deltaTime;
+		this.interpolatedAngVel = Vector3.Lerp(this.interpolatedAngVel, this.angVel, deltaTime * this.lag);
+		Vector3 vector2 = this.interpolatedAngVel * this.scaleAngularVelocity;
+		Vector4 one2 = Vector4.one;
+		one2.x = Mathf.Clamp(vector2.x, -this.maxAngVelocity, this.maxAngVelocity);
+		one2.y = Mathf.Clamp(vector2.y, -this.maxAngVelocity, this.maxAngVelocity);
+		one2.z = Mathf.Clamp(vector2.z, -this.maxAngVelocity, this.maxAngVelocity);
+		this.matinstance.SetVectorProperty(this.prop_angvel, one2);
+		this.oldPos = position;
+		this.oldRot = rotation;
+	}
+
+	// Token: 0x04004603 RID: 17923
+	public float lag = 10f;
+
+	// Token: 0x04004604 RID: 17924
+	public float wobbleFreq = 3f;
+
+	// Token: 0x04004605 RID: 17925
+	public float wobbleStrength = 0.05f;
+
+	// Token: 0x04004606 RID: 17926
+	public float wobbleFalloff = 0.9f;
+
+	// Token: 0x04004607 RID: 17927
+	public float maxVelocity = 9.78f;
+
+	// Token: 0x04004608 RID: 17928
+	public float maxAngVelocity = 10f;
+
+	// Token: 0x04004609 RID: 17929
+	public float scaleAngularVelocity = 1f;
+
+	// Token: 0x0400460A RID: 17930
+	public GameObject watchObject;
+
+	// Token: 0x0400460B RID: 17931
+	public bool debug;
+
+	// Token: 0x0400460C RID: 17932
+	private Vector3 vel;
+
+	// Token: 0x0400460D RID: 17933
+	private Vector3 angVel;
+
+	// Token: 0x0400460E RID: 17934
+	private Vector3 wobble;
+
+	// Token: 0x0400460F RID: 17935
+	private Vector3 interpolatedVel;
+
+	// Token: 0x04004610 RID: 17936
+	private Vector3 interpolatedAngVel;
+
+	// Token: 0x04004611 RID: 17937
+	private MaterialInstance.VectorProperty prop_vel;
+
+	// Token: 0x04004612 RID: 17938
+	private MaterialInstance.VectorProperty prop_angvel;
+
+	// Token: 0x04004613 RID: 17939
+	[HideInInspector]
+	[SerializeField]
+	private MaterialInstance matinstance;
+
+	// Token: 0x04004614 RID: 17940
+	[SerializeField]
+	[HideInInspector]
+	private Vector3 oldPos;
+
+	// Token: 0x04004615 RID: 17941
+	[SerializeField]
+	[HideInInspector]
+	private Quaternion oldRot;
+
+	// Token: 0x04004616 RID: 17942
+	[SerializeField]
+	[HideInInspector]
+	private Transform watchTransform;
+
+	// Token: 0x04004617 RID: 17943
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

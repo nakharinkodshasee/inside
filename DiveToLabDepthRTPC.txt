@@ -1,0 +1,47 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000485 RID: 1157
+public class DiveToLabDepthRTPC : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001E58 RID: 7768 RVA: 0x001044D8 File Offset: 0x001026D8
+	public bool PreAwake(int callcount)
+	{
+		this.activate = SignalIn.Create("activate", base.gameObject, new Action(this.DoActivate));
+		return true;
+	}
+
+	// Token: 0x06001E59 RID: 7769 RVA: 0x00104500 File Offset: 0x00102700
+	private void DoActivate()
+	{
+		this.isActivated = true;
+		this.distStatic = (ScriptGlobals.boy.pos3 - this.bottom.position).magnitude;
+	}
+
+	// Token: 0x06001E5A RID: 7770 RVA: 0x0010453C File Offset: 0x0010273C
+	private void Update()
+	{
+		if (this.isActivated)
+		{
+			float magnitude = (ScriptGlobals.boy.pos3 - this.bottom.position).magnitude;
+			float num = Mathf.InverseLerp(0f, this.distStatic, magnitude);
+			SoundEngine.RTPCs.puzzleTransition02.Set01ClampedFast(num, AudioKeyObject.AkGameObjs.global);
+			if (num <= 0.01f)
+			{
+				this.isActivated = false;
+			}
+		}
+	}
+
+	// Token: 0x040037FF RID: 14335
+	public Transform bottom;
+
+	// Token: 0x04003800 RID: 14336
+	private SignalIn activate;
+
+	// Token: 0x04003801 RID: 14337
+	private bool isActivated;
+
+	// Token: 0x04003802 RID: 14338
+	private float distStatic;
+}

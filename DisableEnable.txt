@@ -1,0 +1,13 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200057F RID: 1407
+public class DisableEnable : MonoBehaviour
+{
+	// Token: 0x06002443 RID: 9283 RVA: 0x0012B9D0 File Offset: 0x00129BD0
+	private void Start()
+	{
+		base.gameObject.SetActive(false);
+		base.gameObject.SetActive(true);
+	}
+}

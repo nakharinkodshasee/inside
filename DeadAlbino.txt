@@ -1,0 +1,1023 @@
+using System;
+using System.Collections.Generic;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x0200007A RID: 122
+public class DeadAlbino : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060003F3 RID: 1011 RVA: 0x0002A930 File Offset: 0x00028B30
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObjMovingPoint = AudioUtils.EnsureAkGameObj(this.movingPoint.gameObject, null);
+		this.audioSlideStart = new AudioEventSimpleLocal("phy_mines_cargoLift_deadAlbino_slide", this.akGameObjMovingPoint);
+		this.audioSlideStop = new AudioEventSimpleLocal("phy_mines_cargoLift_deadAlbino_slide_stop", this.akGameObjMovingPoint);
+		this.audioLand = new AudioEventSimpleLocal("phy_mines_cargoLift_deadAlbino_land", this.akGameObjMovingPoint);
+	}
+
+	// Token: 0x060003F4 RID: 1012 RVA: 0x0002A9AC File Offset: 0x00028BAC
+	public bool PreAwake(int callcount)
+	{
+		switch (callcount)
+		{
+		case 0:
+			this.corpseThrown = SignalOut.Create("corpseThrown", base.gameObject);
+			this.boyBlown = SignalIn.Create("boyBlown", base.gameObject, new Action(this.OnBoyBlown));
+			this.counterReached = SignalIn.Create("counterReached", base.gameObject, new Action(this.OnCounterReached));
+			return false;
+		case 1:
+		{
+			this.colMask = (1 << CollisionUtils.Layers.ungrouped | 1 << CollisionUtils.Layers.environment | 1 << CollisionUtils.Layers.item);
+			this.idleDef = this.deadAlbino.GetBlendHelper().GetDefinition("Idle", true);
+			AnimationBlendHelper blendHelper = this.deadAlbino.GetBlendHelper();
+			this.grabDef.Add(blendHelper.GetDefinition("GrabHands", true));
+			this.grabDef.Add(blendHelper.GetDefinition("GrabFeet", true));
+			this.grabIdleDef.Add(blendHelper.GetDefinition("GrabHandsIdle", true));
+			this.grabIdleDef.Add(blendHelper.GetDefinition("GrabFeetIdle", true));
+			return false;
+		}
+		case 2:
+		{
+			AnimationBlendHelper blendHelper = this.deadAlbino.GetBlendHelper();
+			this.grabWalkDef.Add(blendHelper.GetDefinition("GrabHandsWalk", true));
+			this.grabWalkDef.Add(blendHelper.GetDefinition("GrabFeetWalk", true));
+			this.grabReleaseDef.Add(blendHelper.GetDefinition("GrabHandsRelease", true));
+			this.grabReleaseDef.Add(blendHelper.GetDefinition("GrabFeetRelease", true));
+			return false;
+		}
+		case 3:
+		{
+			AnimationBlendHelper blendHelper = this.deadAlbino.GetBlendHelper();
+			this.grabTransDef.Add(blendHelper.GetDefinition("GrabHandsTransToFeet", true));
+			this.grabTransDef.Add(blendHelper.GetDefinition("GrabFeetTransToHands", true));
+			this.dumpDef.Add(blendHelper.GetDefinition("DumpItV2", true));
+			this.dumpDef[0].isStatic = true;
+			this.dumpDef[0].autoFallback = false;
+			this.oldPos = this.movingPoint.position;
+			return true;
+		}
+		default:
+			return true;
+		}
+	}
+
+	// Token: 0x060003F5 RID: 1013 RVA: 0x0002ABD4 File Offset: 0x00028DD4
+	private void Awake()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x060003F6 RID: 1014 RVA: 0x0002ABDC File Offset: 0x00028DDC
+	private void OnBoyBlown()
+	{
+		if (this.grabState != DeadAlbino.GrabState.Done && this.grabState != DeadAlbino.GrabState.Release && this.grabState != DeadAlbino.GrabState.NoGrabbing)
+		{
+			this.DoRelease(false);
+			this.noGrabTimer = 1f;
+		}
+	}
+
+	// Token: 0x060003F7 RID: 1015 RVA: 0x0002AC14 File Offset: 0x00028E14
+	private void OnCounterReached()
+	{
+		this.disallowGrab = 1f;
+		if (this.grabState != DeadAlbino.GrabState.Done && this.grabState != DeadAlbino.GrabState.Release && this.grabState != DeadAlbino.GrabState.NoGrabbing)
+		{
+			this.disallowGrab = 0f;
+			this.noGrabTimer = 1f;
+		}
+	}
+
+	// Token: 0x060003F8 RID: 1016 RVA: 0x0002AC68 File Offset: 0x00028E68
+	private void DoRelease(bool resetBoy = false)
+	{
+		this.noGrabTimer = 0.15f;
+		this.deadAlbino.ForceToAnimation(this.grabReleaseDef[this._animIndex], false, Vector3.zero, Vector3.zero, -1f, 0f, false);
+		this.audioSlideStop.PostFast();
+		this.isDragging = false;
+		this.grabState = DeadAlbino.GrabState.Release;
+		Device.SetVoiceNone();
+		this.pushFail = DeadAlbino.PushFailMode.None;
+		if (resetBoy)
+		{
+			BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+		}
+	}
+
+	// Token: 0x060003F9 RID: 1017 RVA: 0x0002ACF0 File Offset: 0x00028EF0
+	private bool CheckForRelease()
+	{
+		if (this.noReleaseTimer <= 0f && !ScriptGlobals.boy.input.rawAction)
+		{
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.grabReleaseAnim[this._animIndex], null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.DoRelease(false);
+			return true;
+		}
+		return false;
+	}
+
+	// Token: 0x060003FA RID: 1018 RVA: 0x0002AD50 File Offset: 0x00028F50
+	private void RestrictXPos()
+	{
+		Vector3 cachedPos = this.deadAlbino.GetCachedPos();
+		if (this.leftBlocker != null)
+		{
+			Vector3 position = this.leftBlocker.transform.position;
+			Vector3 position2 = cachedPos;
+			if (position2.x < position.x)
+			{
+				position2.x = position.x;
+				this.deadAlbino.transform.position = position2;
+			}
+		}
+		if (this.leftDropDownPoint != null)
+		{
+			Vector3 position3 = this.leftDropDownPoint.transform.position;
+			Vector3 position4 = cachedPos;
+			if (position4.x < position3.x)
+			{
+				position4.x = position3.x;
+				this.deadAlbino.transform.position = position4;
+			}
+		}
+		if (this.rightBlocker != null)
+		{
+			Vector3 position5 = this.rightBlocker.transform.position;
+			Vector3 position6 = cachedPos;
+			if (position6.x > position5.x)
+			{
+				position6.x = position5.x;
+				this.deadAlbino.transform.position = position6;
+			}
+		}
+	}
+
+	// Token: 0x060003FB RID: 1019 RVA: 0x0002AE70 File Offset: 0x00029070
+	private void SetGrabMoveAnim(bool always = false)
+	{
+		if (this.CheckForRelease())
+		{
+			return;
+		}
+		float num = ScriptGlobals.boy.input.looseDir.x * this._animSign;
+		if (this.leftBlocker != null)
+		{
+			Vector3 position = this.leftBlocker.transform.position;
+			Vector3 position2 = this.deadAlbino.transform.position;
+			if (position2.x <= position.x + 0.2f)
+			{
+				if (ScriptGlobals.boy.input.looseDir.x < 0f && num == -1f)
+				{
+					num = 0f;
+				}
+				if (position2.x < position.x)
+				{
+					position2.x = position.x;
+					this.deadAlbino.transform.position = position2;
+				}
+			}
+		}
+		if (this.rightBlocker != null)
+		{
+			Vector3 position3 = this.rightBlocker.transform.position;
+			Vector3 position4 = this.deadAlbino.transform.position;
+			if (position4.x >= position3.x - 0.2f)
+			{
+				if (ScriptGlobals.boy.input.looseDir.x > 0f && num == -1f)
+				{
+					num = 0f;
+				}
+				if (position4.x > position3.x)
+				{
+					position4.x = position3.x;
+					this.deadAlbino.transform.position = position4;
+				}
+			}
+		}
+		if (always || num != this.moveDir)
+		{
+			if (num < -0.5f)
+			{
+				if (always || this.deadAlbino.GetBlendHelper().CanTransitTo(this.grabWalkDef[this._animIndex]))
+				{
+					this.moveDir = num;
+					this.grabWalkDef[this._animIndex].speedScale = 1.08f;
+					this.deadAlbino.ForceToAnimation(this.grabWalkDef[this._animIndex], false, Vector3.zero, Vector3.zero, -1f, 0f, false);
+					BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.grabWalkAnim[this._animIndex], null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+					if (!Device.IsVoiceActive())
+					{
+						Device.SetVoiceActive();
+					}
+				}
+				this.grabState = DeadAlbino.GrabState.Grabbing;
+			}
+			else if (num <= 0.5f)
+			{
+				this.moveDir = num;
+				if (!this.playingIdleWhileFailing)
+				{
+					this.deadAlbino.ForceToAnimation(this.grabIdleDef[this._animIndex], false, Vector3.zero, Vector3.zero, 0.3f, 0f, false);
+					if (!Device.IsVoicePassive())
+					{
+						Device.SetVoicePassive();
+					}
+					BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.grabIdleAnim[this._animIndex], null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				}
+				this.playingIdleWhileFailing = false;
+				this.grabState = DeadAlbino.GrabState.Grabbing;
+			}
+			else
+			{
+				this.moveDir = num;
+				this.deadAlbino.ForceToAnimation(this.grabTransDef[this._animIndex], false, Vector3.zero, Vector3.zero, -1f, 0f, false);
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.grabTransAnim[this._animIndex], null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				this.grabState = DeadAlbino.GrabState.ChangeSide;
+				Device.SetVoiceNone();
+			}
+		}
+	}
+
+	// Token: 0x060003FC RID: 1020 RVA: 0x0002B1E4 File Offset: 0x000293E4
+	private void UpdateEnterGrab()
+	{
+		if (this.CheckForRelease())
+		{
+			return;
+		}
+		bool flag = false;
+		ABHelperData latestAnimData = this.deadAlbino.GetBlendHelper().GetLatestAnimData();
+		if (latestAnimData.totalPlayTime > 0.3f && ScriptGlobals.boy.input.looseDir.x != 0f)
+		{
+			flag = true;
+		}
+		if (flag || this.grabAnim[this._animIndex].frame > this.grabAnim[this._animIndex].numFrames - 3f)
+		{
+			this.audioSlideStart.PostFast();
+			this.isDragging = true;
+			this.SetGrabMoveAnim(true);
+		}
+	}
+
+	// Token: 0x060003FD RID: 1021 RVA: 0x0002B29C File Offset: 0x0002949C
+	private void UpdateAnimationPos(ABDefinition wantedDef, AnimClipNode boyAnim)
+	{
+		ABDefinition topDefinition = this.deadAlbino.GetBlendHelper().GetTopDefinition();
+		if (topDefinition == wantedDef)
+		{
+			float normalizedPlayPos = boyAnim.frame / boyAnim.numFrames;
+			topDefinition.SetNormalizedPlayPos(normalizedPlayPos);
+		}
+	}
+
+	// Token: 0x060003FE RID: 1022 RVA: 0x0002B2D8 File Offset: 0x000294D8
+	private void UpdateGrabbing()
+	{
+		if (this.CheckForRelease())
+		{
+			return;
+		}
+		this.SetGrabMoveAnim(false);
+		if (this.grabState == DeadAlbino.GrabState.Grabbing && this._animIndex < 2)
+		{
+			this.UpdateAnimationPos(this.grabWalkDef[this._animIndex], this.grabWalkAnim[this._animIndex]);
+		}
+	}
+
+	// Token: 0x060003FF RID: 1023 RVA: 0x0002B338 File Offset: 0x00029538
+	private void UpdateChangeSide()
+	{
+		if (!ScriptGlobals.boy.input.rawAction)
+		{
+			this.deadAlbino.ForceToAnimation("Idle", null, -1f, 0f, false);
+			BoyUtils.ClearState(ScriptGlobals.boy, 0.35f);
+			this.grabState = DeadAlbino.GrabState.NoGrabbing;
+			Device.SetVoiceNone();
+			return;
+		}
+		float normalizedAnimPos = this.deadAlbino.GetBlendHelper().GetLatestAnimData().normalizedAnimPos;
+		float x = ScriptGlobals.boy.input.looseDir.x;
+		if (((normalizedAnimPos < 0.3f && this._animSign > 0.5f) || (normalizedAnimPos < 0.2f && this._animSign < -0.5f)) && x * this._animSign <= 0f)
+		{
+			this.SetGrabMoveAnim(true);
+		}
+		else if (normalizedAnimPos > 0.95f || (normalizedAnimPos > 0.7f && x != 0f))
+		{
+			this._animIndex = (this._animIndex + 1) % 2;
+			this._animSign = -this._animSign;
+			Device.SetVoicePassive();
+			this.SetGrabMoveAnim(true);
+		}
+	}
+
+	// Token: 0x06000400 RID: 1024 RVA: 0x0002B460 File Offset: 0x00029660
+	private float GetGroundOffset(Vector3 pos, float range)
+	{
+		int num = -1;
+		float num2 = range;
+		RaycastHit[] array = Physics.RaycastAll(pos, Vector3.down, range, this.colMask);
+		Debug.DrawLine(pos, pos + Vector3.down * range);
+		int num3 = array.Length;
+		bool flag = base.GetComponent<Rigidbody>() != null;
+		if (num3 == 1)
+		{
+			if (!array[0].collider.isTrigger && (array[0].collider.attachedRigidbody != base.GetComponent<Rigidbody>() || !flag))
+			{
+				return array[0].distance;
+			}
+			return range + 1f;
+		}
+		else
+		{
+			for (int i = 0; i < num3; i++)
+			{
+				if (!array[i].collider.isTrigger && array[i].distance < num2 && (array[i].collider.attachedRigidbody != base.GetComponent<Rigidbody>() || !flag))
+				{
+					num = i;
+					num2 = array[i].distance;
+				}
+			}
+			if (num >= 0)
+			{
+				return array[num].distance;
+			}
+			return range + 1f;
+		}
+	}
+
+	// Token: 0x06000401 RID: 1025 RVA: 0x0002B59C File Offset: 0x0002979C
+	private void UpdateThrowDown()
+	{
+		ABHelperData latestAnimData = this.deadAlbino.GetBlendHelper().GetLatestAnimData();
+		if (latestAnimData.normalizedAnimPos < 0.075f)
+		{
+			this.RestrictXPos();
+			if (ScriptGlobals.boy.input.looseDir.x >= -0.5f)
+			{
+				if (this._animIndex == 2)
+				{
+					this._animIndex = 1;
+				}
+				this.SetGrabMoveAnim(true);
+				return;
+			}
+		}
+		else
+		{
+			if (!this.dumpReparented)
+			{
+				this.dumpAnim[0].transform.parent = base.transform;
+				this.dumpReparented = true;
+				this.normPos = this.deadAlbino.transform.position;
+			}
+			if (latestAnimData.normalizedAnimPos < 0.5f)
+			{
+				float num = MathUtils.SmoothFraction((latestAnimData.normalizedAnimPos - 0.15f) / 0.35f);
+				float num2 = (this.normPos.x - this.leftDropDownPoint.transform.position.x) * num;
+				Vector3 position = this.deadAlbino.transform.position;
+				Vector3 vector = this.normPos;
+				vector.x = this.leftDropDownPoint.transform.position.x;
+				Vector3 vector2 = this.normPos * (1f - num) + vector * num;
+				this.deadAlbino.SetStaticAnimWantedBasePos(this.normPos * (1f - num) + vector * num, false);
+				this.lastNormPos = latestAnimData.normalizedAnimPos;
+			}
+		}
+		if (!(ScriptGlobals.boy.state is BoyCustomAnimState))
+		{
+			this.boyCleared = true;
+			Device.SetVoiceNone();
+		}
+		if (ScriptGlobals.boy.input.looseDir.x > 0.5f)
+		{
+			this.zeroedLooseDir = true;
+		}
+		if (latestAnimData.normalizedAnimPos > 0.3f && !this.boyCleared && (ScriptGlobals.boy.input.looseDir.x > 0.5f || (ScriptGlobals.boy.input.looseDir.x < 0.5f && this.zeroedLooseDir)) && ScriptGlobals.boy.input.looseDir.x != 0f)
+		{
+			Device.SetVoiceNone();
+			BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+			this.boyCleared = true;
+			this.isFalling = true;
+		}
+		if ((latestAnimData.normalizedAnimPos > 0.9f && this._animIndex == 1) || latestAnimData.normalizedAnimPos > 0.97f)
+		{
+			ABDefinition definition = this.deadAlbino.GetBlendHelper().GetDefinition("Falling", true);
+			this.deadAlbino.ForceToAnimation("Falling", null, 0.3f, 0f, false);
+			this.deadAlbino.fallspeed = 0f;
+			this.grabState = DeadAlbino.GrabState.Falling;
+			Device.SetVoiceNone();
+			this.deadAlbino.onGround = false;
+			this.deadAlbino.SetFreefallMovement(true);
+			this.audioSlideStop.PostFast();
+			this.corpseThrown.Signal();
+		}
+	}
+
+	// Token: 0x06000402 RID: 1026 RVA: 0x0002B8E0 File Offset: 0x00029AE0
+	private void UpdateFalling()
+	{
+		if (!this.boyCleared && (!ScriptGlobals.boy.input.rawAction || ScriptGlobals.boy.input.looseDir.x > 0.5f) && ScriptGlobals.boy.input.looseDir.x != 0f)
+		{
+			BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+			this.boyCleared = true;
+		}
+		if (this.deadAlbino.onGround)
+		{
+			if (!this.boyCleared)
+			{
+				BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+			}
+			this.boyCleared = true;
+			ABDefinition definition = this.deadAlbino.GetBlendHelper().GetDefinition("Land", true);
+			definition.autoFallback = false;
+			this.deadAlbino.ForceToAnimation(definition, false, Vector3.zero, Vector3.zero, 0.1f, 0f, false);
+			this.grabState = DeadAlbino.GrabState.Done;
+			Device.SetVoiceNone();
+			this.audioLand.PostFast();
+		}
+		else
+		{
+			if (this.fallspeedTimer > 0f)
+			{
+				this.deadAlbino.fallspeed -= 5f * Time.deltaTime / 0.3f;
+			}
+			this.fallspeedTimer -= Time.deltaTime;
+		}
+	}
+
+	// Token: 0x06000403 RID: 1027 RVA: 0x0002BA38 File Offset: 0x00029C38
+	private void UpdateRelease()
+	{
+		bool flag = this.deadAlbino.GetBlendHelper().CanTransitTo(this.grabDef[this._animIndex]);
+		if (flag)
+		{
+			this.grabState = DeadAlbino.GrabState.NoGrabbing;
+			Device.SetVoiceNone();
+		}
+	}
+
+	// Token: 0x06000404 RID: 1028 RVA: 0x0002BA7C File Offset: 0x00029C7C
+	private void UpdateAudioEvents()
+	{
+		if (this.isDragging || this.grabState == DeadAlbino.GrabState.ThrowDown)
+		{
+			Vector3 position = this.movingPoint.position;
+			Vector3 vector = position - this.oldPos;
+			float magnitude = (vector / Time.deltaTime).magnitude;
+			this.oldPos = position;
+			float value = Mathf.InverseLerp(0f, 1.4f, magnitude) * 100f;
+			SoundEngine.RTPCs.phyDeadAlbinoSlide.SetFast(value, this.akGameObjMovingPoint);
+		}
+		if (!this.isFalling && this.grabState == DeadAlbino.GrabState.Grabbing && this.previousGrabState != DeadAlbino.GrabState.Grabbing)
+		{
+			this.audioSlideStart.PostFast();
+			this.isDragging = true;
+		}
+		else if (this.grabState != DeadAlbino.GrabState.ThrowDown && !this.isFalling && this.grabState != DeadAlbino.GrabState.Grabbing && this.previousGrabState == DeadAlbino.GrabState.Grabbing)
+		{
+			this.audioSlideStop.PostFast();
+			this.isDragging = false;
+		}
+		if (this.grabState == DeadAlbino.GrabState.ThrowDown && !this.isFalling)
+		{
+			this.fallTimer += Time.deltaTime;
+			if (this.fallTimer >= 2f)
+			{
+				this.audioSlideStop.PostFast();
+				this.isFalling = true;
+			}
+		}
+		else
+		{
+			this.fallTimer = 0f;
+		}
+		this.previousGrabState = this.grabState;
+	}
+
+	// Token: 0x06000405 RID: 1029 RVA: 0x0002BBEC File Offset: 0x00029DEC
+	private void UpdateBoneRot(GameObject bone, Vector3 wantedWorldPos, float fraction)
+	{
+		Vector3 vector = bone.transform.parent.InverseTransformPoint(wantedWorldPos).normalized * 57.29578f;
+		Quaternion quaternion = Quaternion.Euler(0f, vector.z, -vector.y);
+		quaternion = Quaternion.Slerp(Quaternion.identity, quaternion, fraction);
+		bone.transform.parent.rotation = bone.transform.parent.rotation * quaternion;
+	}
+
+	// Token: 0x06000406 RID: 1030 RVA: 0x0002BC6C File Offset: 0x00029E6C
+	private void LateUpdate()
+	{
+		if (this.grabState == DeadAlbino.GrabState.Grabbing)
+		{
+			if (this._animIndex > 0)
+			{
+				this.shoulderBlendIn = Mathf.Max(this.shoulderBlendIn - Time.deltaTime * 4f, 0f);
+				this.kneeBlendIn = Mathf.Min(this.kneeBlendIn + Time.deltaTime * 2f, 1f);
+			}
+			else
+			{
+				this.shoulderBlendIn = Mathf.Min(this.shoulderBlendIn + Time.deltaTime * 4f, 1f);
+				this.kneeBlendIn = Mathf.Max(this.kneeBlendIn - Time.deltaTime * 4f, 0f);
+			}
+		}
+		else
+		{
+			this.shoulderBlendIn = Mathf.Max(this.shoulderBlendIn - Time.deltaTime * 4f, 0f);
+			this.kneeBlendIn = Mathf.Max(this.kneeBlendIn - Time.deltaTime * 4f, 0f);
+		}
+		Actor actor = ScriptGlobals.boy.visualBoy.actor;
+		SpecificBones specificBones = actor.specificBones;
+		if (this.kneeBlendIn > 0f)
+		{
+			Actor.Bone bone = actor.bones[specificBones.wrists[1]];
+			Vector3 wantedWorldPos = bone.transform.TransformPoint(new Vector3(0.05f, 0f, 0f));
+			this.UpdateBoneRot(this.leftKneeBone, wantedWorldPos, this.kneeBlendIn);
+			bone = actor.bones[specificBones.wrists[0]];
+			wantedWorldPos = bone.transform.TransformPoint(new Vector3(-0.05f, 0f, 0f));
+			this.UpdateBoneRot(this.rightKneeBone, wantedWorldPos, this.kneeBlendIn);
+		}
+		if (this.shoulderBlendIn > 0f)
+		{
+			Actor.Bone bone2 = actor.bones[specificBones.wrists[1]];
+			Actor.Bone bone3 = actor.bones[specificBones.wrists[0]];
+			Vector3 vector = (bone2.transform.position + bone3.transform.position) * 0.5f;
+			float num = MathUtils.SmoothFraction(this.shoulderBlendIn);
+			Vector3 position = this.shoulderBone.transform.position * (1f - num) + vector * num;
+			this.shoulderBone.transform.position = position;
+		}
+	}
+
+	// Token: 0x06000407 RID: 1031 RVA: 0x0002BEFC File Offset: 0x0002A0FC
+	private void SafeRotate()
+	{
+		Vector3 eulerAngles = this.deadAlbino.transform.rotation.eulerAngles;
+		eulerAngles.y = 90f;
+		this.deadAlbino.transform.rotation = Quaternion.Slerp(this.deadAlbino.transform.rotation, Quaternion.Euler(eulerAngles), Mathf.Min(8f * Time.deltaTime, 1f));
+	}
+
+	// Token: 0x06000408 RID: 1032 RVA: 0x0002BF70 File Offset: 0x0002A170
+	private void Update()
+	{
+		Vector3 cachedPos = this.deadAlbino.GetCachedPos();
+		vector2f pos = ScriptGlobals.boy.pos;
+		if (this.grabState != DeadAlbino.GrabState.Falling && (FastMath.Abs(pos.x - cachedPos.x) > 10f || cachedPos.y - pos.y > 10f))
+		{
+			return;
+		}
+		float deltaTime = Time.deltaTime;
+		if (deltaTime > 0f)
+		{
+			this.UpdateAudioEvents();
+		}
+		if (this.disallowGrab > -0.5f)
+		{
+			this.disallowGrab = FastMath.Min(this.disallowGrab + deltaTime, 2f);
+			if (this.disallowGrab >= 1f && this.grabState != DeadAlbino.GrabState.Done && this.grabState != DeadAlbino.GrabState.Release && this.grabState != DeadAlbino.GrabState.NoGrabbing)
+			{
+				this.DoRelease(true);
+			}
+		}
+		if (this.grabState == DeadAlbino.GrabState.Done || !ScriptGlobals.boy.gameObject.activeInHierarchy)
+		{
+			return;
+		}
+		this.noGrabTimer = FastMath.Max(0f, this.noGrabTimer - deltaTime);
+		this.noReleaseTimer = FastMath.Max(0f, this.noReleaseTimer - deltaTime);
+		if (this.grabState == DeadAlbino.GrabState.Grabbing && this.leftDropDownPoint != null && this._animSign > 0f && !this.dumpReparented && ScriptGlobals.boy.input.looseDir.x < -0.5f && this.deadAlbino.transform.position.x <= this.leftDropDownPoint.transform.position.x + 0.2f)
+		{
+			this.zeroedLooseDir = false;
+			this.grabState = DeadAlbino.GrabState.ThrowDown;
+			Device.SetVoiceActive();
+			this.deadAlbino.ForceToAnimation(this.dumpDef[0], false, Vector3.zero, Vector3.zero, -1f, 0f, false);
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.dumpAnim[0], null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		if (this.extraMove > 0f)
+		{
+			Vector3 position = this.deadAlbino.transform.position;
+			float num = Mathf.Min(this.extraMove, deltaTime * 4f);
+			position.x -= num;
+			this.extraMove -= num;
+			this.RestrictXPos();
+		}
+		switch (this.grabState)
+		{
+		case DeadAlbino.GrabState.NoGrabbing:
+		{
+			this.RestrictXPos();
+			this.SafeRotate();
+			VisualBoyLand visualBoyLand = ScriptGlobals.boy.visualBoy.state as VisualBoyLand;
+			bool flag = visualBoyLand && visualBoyLand.isStunned;
+			if (ScriptGlobals.boy.state is BoyJumpState || this.noGrabTimer > 0f || flag || this.disallowGrab >= 1f)
+			{
+				return;
+			}
+			bool flag2 = false;
+			if (this.boySetInput && this.boySetInput.isActivated())
+			{
+				flag2 = true;
+			}
+			Vector3 vector = ScriptGlobals.boy.pos3 - this.deadAlbino.transform.position;
+			if (!flag2)
+			{
+				if (ScriptGlobals.boy.input.looseDir.x > 0f)
+				{
+					vector += ScriptGlobals.boy.input.looseDir.x * 0.2f * Vector3.right;
+				}
+				else if (ScriptGlobals.boy.input.looseDir.x < 0f)
+				{
+					vector -= ScriptGlobals.boy.input.looseDir.x * 0.4f * Vector3.right;
+				}
+			}
+			if (Mathf.Abs(vector.x) < 1.2f && Mathf.Abs(vector.y) < 2f && ScriptGlobals.boy.input.rawAction)
+			{
+				float num2 = ScriptGlobals.boy.input.looseDir.x;
+				if (num2 < 0f && (double)Mathf.Abs(vector.x) < 0.9 && this.leftDropDownPoint != null && this.leftDropDownPoint.transform.position.x + this.longThrowDownDist >= this.deadAlbino.transform.position.x)
+				{
+					num2 = 0f;
+				}
+				if (flag2)
+				{
+					if (!this.overshooting)
+					{
+						this.rotateTime -= deltaTime;
+					}
+					num2 = 0f;
+				}
+				if (num2 * vector.x >= 0f)
+				{
+					if (this.boySetInput != null)
+					{
+						if (!this.boySetInput.isActivated())
+						{
+							this.initialDif = vector.x;
+						}
+						else
+						{
+							if (this.overshooting)
+							{
+								this.minOvershootTime -= deltaTime;
+								if (this.minOvershootTime <= 0f && Mathf.Abs(vector.x + 0.1f) > 0.6f)
+								{
+									this.overshooting = false;
+									this.boySetInput.stickVal.x = Mathf.Sign(-Mathf.Sign(this.initialDif) * 0.25f);
+								}
+							}
+							vector.x = this.initialDif;
+						}
+						float thresholdDegrees = 50f;
+						if (this.bigAngle)
+						{
+							thresholdDegrees = 100f;
+						}
+						if (this.rotateTime > 0f && !ScriptGlobals.boy.visualBoy.IsPoseFacing(-this.initialDif, thresholdDegrees))
+						{
+							if (!this.boySetInput.isActivated())
+							{
+								this.initialDif = vector.x;
+								this.overshooting = (Mathf.Abs(this.initialDif) < 0.8f);
+								this.rotateTime = 0.25f;
+								if (Mathf.Abs(num2) < 0.2f)
+								{
+									if (!this.overshooting)
+									{
+										this.rotateTime = 0.15f;
+										this.bigAngle = true;
+									}
+								}
+								else
+								{
+									this.bigAngle = false;
+									this.overshooting = false;
+								}
+								this.minOvershootTime = 0.1f;
+								this.boySetInput.activateScript();
+								if (this.overshooting)
+								{
+									this.boySetInput.stickVal.x = Mathf.Sign(Mathf.Sign(this.initialDif) * 0.25f);
+								}
+								else
+								{
+									this.boySetInput.stickVal.x = Mathf.Sign(-Mathf.Sign(this.initialDif) * 0.25f);
+								}
+							}
+							return;
+						}
+						this.boySetInput.deactivateScript();
+					}
+					this.bigAngle = false;
+					this.rotateTime = 0.25f;
+					this.noReleaseTimer = 0.15f;
+					this.grabState = DeadAlbino.GrabState.EnterGrab;
+					this.moveDir = 0f;
+					if (vector.x < 0f)
+					{
+						this._animIndex = 0;
+						this._animSign = 1f;
+					}
+					else
+					{
+						this._animIndex = 1;
+						this._animSign = -1f;
+					}
+					if (ScriptGlobals.boy.facing * this._animSign >= 0f || num2 == 0f || Mathf.Abs(vector.x) > 0.5f || !this.deadAlbino.GetBlendHelper().CanTransitTo(this.grabTransDef[(this._animIndex + 1) % 2]))
+					{
+						this.deadAlbino.ForceToAnimation(this.grabDef[this._animIndex], false, Vector3.zero, Vector3.zero, -1f, 0f, false);
+						BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.grabAnim[this._animIndex], null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+						this.audioSlideStart.PostFast();
+						this.isDragging = true;
+					}
+					else
+					{
+						this._animIndex = (this._animIndex + 1) % 2;
+						this._animSign = -this._animSign;
+						float num3 = 0.5f;
+						this.deadAlbino.ForceToAnimation(this.grabTransDef[this._animIndex], false, Vector3.zero, Vector3.zero, -1f, num3, false);
+						BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.grabTransAnim[this._animIndex], new AnimClipNode.GotFocusArg(AnimClipNode.LoopingMode.FrozenEnding, this.grabTransAnim[this._animIndex].numFrames * num3), 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+						this.grabState = DeadAlbino.GrabState.ChangeSide;
+						Device.SetVoiceNone();
+					}
+				}
+			}
+			else if (this.boySetInput != null)
+			{
+				this.boySetInput.deactivateScript();
+			}
+			break;
+		}
+		case DeadAlbino.GrabState.EnterGrab:
+			this.UpdateEnterGrab();
+			this.RestrictXPos();
+			this.SafeRotate();
+			break;
+		case DeadAlbino.GrabState.Grabbing:
+			this.UpdateGrabbing();
+			this.RestrictXPos();
+			this.SafeRotate();
+			break;
+		case DeadAlbino.GrabState.ChangeSide:
+			this.UpdateChangeSide();
+			this.RestrictXPos();
+			this.SafeRotate();
+			break;
+		case DeadAlbino.GrabState.ThrowDown:
+			this.UpdateThrowDown();
+			break;
+		case DeadAlbino.GrabState.Release:
+			this.UpdateRelease();
+			this.RestrictXPos();
+			this.SafeRotate();
+			break;
+		case DeadAlbino.GrabState.Falling:
+			this.UpdateFalling();
+			break;
+		}
+	}
+
+	// Token: 0x04000664 RID: 1636
+	public AnimcontrolledCharacter deadAlbino;
+
+	// Token: 0x04000665 RID: 1637
+	public List<AnimClipNode> grabAnim;
+
+	// Token: 0x04000666 RID: 1638
+	public List<AnimClipNode> grabIdleAnim;
+
+	// Token: 0x04000667 RID: 1639
+	public List<AnimClipNode> grabWalkAnim;
+
+	// Token: 0x04000668 RID: 1640
+	public List<AnimClipNode> grabReleaseAnim;
+
+	// Token: 0x04000669 RID: 1641
+	public List<AnimClipNode> grabTransAnim;
+
+	// Token: 0x0400066A RID: 1642
+	public List<AnimClipNode> dumpAnim;
+
+	// Token: 0x0400066B RID: 1643
+	public Transform leftDropDownPoint;
+
+	// Token: 0x0400066C RID: 1644
+	public Transform leftBlocker;
+
+	// Token: 0x0400066D RID: 1645
+	public Transform rightBlocker;
+
+	// Token: 0x0400066E RID: 1646
+	public BoySetInput boySetInput;
+
+	// Token: 0x0400066F RID: 1647
+	public Transform movingPoint;
+
+	// Token: 0x04000670 RID: 1648
+	private Vector3 oldPos;
+
+	// Token: 0x04000671 RID: 1649
+	private bool isDragging;
+
+	// Token: 0x04000672 RID: 1650
+	private bool isFalling;
+
+	// Token: 0x04000673 RID: 1651
+	private float fallTimer;
+
+	// Token: 0x04000674 RID: 1652
+	private float extraMove;
+
+	// Token: 0x04000675 RID: 1653
+	private float longThrowDownDist = 0.8f;
+
+	// Token: 0x04000676 RID: 1654
+	private int _animIndex;
+
+	// Token: 0x04000677 RID: 1655
+	private float _animSign = 1f;
+
+	// Token: 0x04000678 RID: 1656
+	private SignalOut corpseThrown;
+
+	// Token: 0x04000679 RID: 1657
+	private SignalIn boyBlown;
+
+	// Token: 0x0400067A RID: 1658
+	private SignalIn counterReached;
+
+	// Token: 0x0400067B RID: 1659
+	public GameObject shoulderBone;
+
+	// Token: 0x0400067C RID: 1660
+	public GameObject leftKneeBone;
+
+	// Token: 0x0400067D RID: 1661
+	public GameObject rightKneeBone;
+
+	// Token: 0x0400067E RID: 1662
+	private bool alignShoulder;
+
+	// Token: 0x0400067F RID: 1663
+	private bool alignKnees;
+
+	// Token: 0x04000680 RID: 1664
+	private Quaternion shoulderRotOffset = Quaternion.identity;
+
+	// Token: 0x04000681 RID: 1665
+	private Quaternion leftKneeRotOffset = Quaternion.identity;
+
+	// Token: 0x04000682 RID: 1666
+	private Quaternion rightKneeRotOffset = Quaternion.identity;
+
+	// Token: 0x04000683 RID: 1667
+	private float shoulderBlendIn;
+
+	// Token: 0x04000684 RID: 1668
+	private float kneeBlendIn;
+
+	// Token: 0x04000685 RID: 1669
+	private DeadAlbino.GrabState grabState;
+
+	// Token: 0x04000686 RID: 1670
+	private DeadAlbino.GrabState previousGrabState;
+
+	// Token: 0x04000687 RID: 1671
+	private DeadAlbino.PushFailMode pushFail;
+
+	// Token: 0x04000688 RID: 1672
+	private ABDefinition idleDef;
+
+	// Token: 0x04000689 RID: 1673
+	private List<ABDefinition> grabDef = new List<ABDefinition>();
+
+	// Token: 0x0400068A RID: 1674
+	private List<ABDefinition> grabIdleDef = new List<ABDefinition>();
+
+	// Token: 0x0400068B RID: 1675
+	private List<ABDefinition> grabWalkDef = new List<ABDefinition>();
+
+	// Token: 0x0400068C RID: 1676
+	private List<ABDefinition> grabReleaseDef = new List<ABDefinition>();
+
+	// Token: 0x0400068D RID: 1677
+	private List<ABDefinition> grabTransDef = new List<ABDefinition>();
+
+	// Token: 0x0400068E RID: 1678
+	private List<ABDefinition> dumpDef = new List<ABDefinition>();
+
+	// Token: 0x0400068F RID: 1679
+	private float moveDir;
+
+	// Token: 0x04000690 RID: 1680
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioSlideStart;
+
+	// Token: 0x04000691 RID: 1681
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioSlideStop;
+
+	// Token: 0x04000692 RID: 1682
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioLand;
+
+	// Token: 0x04000693 RID: 1683
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObjMovingPoint;
+
+	// Token: 0x04000694 RID: 1684
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04000695 RID: 1685
+	private int colMask;
+
+	// Token: 0x04000696 RID: 1686
+	private bool playingIdleWhileFailing;
+
+	// Token: 0x04000697 RID: 1687
+	private float alignPosFactor = 1000f;
+
+	// Token: 0x04000698 RID: 1688
+	private bool dumpReparented;
+
+	// Token: 0x04000699 RID: 1689
+	private bool boyCleared;
+
+	// Token: 0x0400069A RID: 1690
+	private float xOffset;
+
+	// Token: 0x0400069B RID: 1691
+	private Vector3 normPos = Vector3.zero;
+
+	// Token: 0x0400069C RID: 1692
+	private float lastNormPos;
+
+	// Token: 0x0400069D RID: 1693
+	private bool zeroedLooseDir;
+
+	// Token: 0x0400069E RID: 1694
+	private float fallspeedTimer = 0.3f;
+
+	// Token: 0x0400069F RID: 1695
+	private float noReleaseTimer;
+
+	// Token: 0x040006A0 RID: 1696
+	private float noGrabTimer;
+
+	// Token: 0x040006A1 RID: 1697
+	private float initialDif;
+
+	// Token: 0x040006A2 RID: 1698
+	private bool overshooting;
+
+	// Token: 0x040006A3 RID: 1699
+	private float minOvershootTime = 0.1f;
+
+	// Token: 0x040006A4 RID: 1700
+	private float rotateTime = 0.25f;
+
+	// Token: 0x040006A5 RID: 1701
+	private bool bigAngle;
+
+	// Token: 0x040006A6 RID: 1702
+	private float disallowGrab = -1f;
+
+	// Token: 0x0200007B RID: 123
+	private enum GrabState
+	{
+		// Token: 0x040006A8 RID: 1704
+		NoGrabbing,
+		// Token: 0x040006A9 RID: 1705
+		EnterGrab,
+		// Token: 0x040006AA RID: 1706
+		Grabbing,
+		// Token: 0x040006AB RID: 1707
+		ChangeSide,
+		// Token: 0x040006AC RID: 1708
+		ThrowDown,
+		// Token: 0x040006AD RID: 1709
+		Release,
+		// Token: 0x040006AE RID: 1710
+		Falling,
+		// Token: 0x040006AF RID: 1711
+		Done
+	}
+
+	// Token: 0x0200007C RID: 124
+	private enum PushFailMode
+	{
+		// Token: 0x040006B1 RID: 1713
+		None,
+		// Token: 0x040006B2 RID: 1714
+		GoingUp,
+		// Token: 0x040006B3 RID: 1715
+		Up,
+		// Token: 0x040006B4 RID: 1716
+		GoingDown
+	}
+}

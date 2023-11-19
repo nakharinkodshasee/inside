@@ -1,0 +1,74 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200006B RID: 107
+public class CrowdAudioSwitch : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600037C RID: 892 RVA: 0x00026F00 File Offset: 0x00025100
+	public bool PreAwake(int callcount)
+	{
+		this.openDoor = SignalIn.Create("openDoor", base.gameObject, new Action(this.OnDoorOpen));
+		this.closeDoor = SignalIn.Create("closeDoor", base.gameObject, new Action(this.OnDoorClose));
+		return true;
+	}
+
+	// Token: 0x0600037D RID: 893 RVA: 0x00026F54 File Offset: 0x00025154
+	private void OnDisable()
+	{
+		this.Unmute();
+	}
+
+	// Token: 0x0600037E RID: 894 RVA: 0x00026F5C File Offset: 0x0002515C
+	private void Mute()
+	{
+		this.crowdMuted = true;
+		SoundEngine.States.crowdDudes.Set(SoundEngine.States.CrowdDudes.muted);
+	}
+
+	// Token: 0x0600037F RID: 895 RVA: 0x00026F74 File Offset: 0x00025174
+	private void Unmute()
+	{
+		this.crowdMuted = false;
+		SoundEngine.States.crowdDudes.Set(SoundEngine.States.CrowdDudes.unmuted);
+	}
+
+	// Token: 0x06000380 RID: 896 RVA: 0x00026F8C File Offset: 0x0002518C
+	private void Update()
+	{
+		if (this.crowdMuted)
+		{
+			if (this.isDoorOpen)
+			{
+				this.Unmute();
+			}
+		}
+		else if (!this.isDoorOpen)
+		{
+			this.Mute();
+		}
+	}
+
+	// Token: 0x06000381 RID: 897 RVA: 0x00026FCC File Offset: 0x000251CC
+	private void OnDoorClose()
+	{
+		this.isDoorOpen = false;
+	}
+
+	// Token: 0x06000382 RID: 898 RVA: 0x00026FD8 File Offset: 0x000251D8
+	private void OnDoorOpen()
+	{
+		this.isDoorOpen = true;
+	}
+
+	// Token: 0x040005A3 RID: 1443
+	private SignalIn openDoor;
+
+	// Token: 0x040005A4 RID: 1444
+	private SignalIn closeDoor;
+
+	// Token: 0x040005A5 RID: 1445
+	private bool crowdMuted;
+
+	// Token: 0x040005A6 RID: 1446
+	private bool isDoorOpen;
+}

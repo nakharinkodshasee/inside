@@ -1,0 +1,9 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000076 RID: 118
+public class CrowdPathPoint : MonoBehaviour
+{
+	// Token: 0x04000645 RID: 1605
+	public string hideAnim;
+}

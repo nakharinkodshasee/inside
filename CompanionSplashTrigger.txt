@@ -1,0 +1,225 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200038B RID: 907
+public class CompanionSplashTrigger : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001887 RID: 6279 RVA: 0x000D5318 File Offset: 0x000D3518
+	public bool PreAwake(int callcount)
+	{
+		this.splashEnter = SignalOut.GetOrCreate("splashEnter", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001888 RID: 6280 RVA: 0x000D5334 File Offset: 0x000D3534
+	private void Start()
+	{
+		this.splashPositionUpdateTimer = 0f;
+		if (this.splashPositionUpdateSeconds < 0f)
+		{
+			this.splashPositionUpdateSeconds = 0f;
+		}
+		this.state = CompanionSplashTrigger.State.None;
+	}
+
+	// Token: 0x06001889 RID: 6281 RVA: 0x000D5364 File Offset: 0x000D3564
+	private void Update()
+	{
+		if (this.state == CompanionSplashTrigger.State.Inside)
+		{
+			this.InsideState();
+		}
+		if (this.splashPositionUpdateTimer > 0f && this.splashPositionUpdateSeconds > 0f)
+		{
+			this.splashPositionUpdateTimer -= Time.deltaTime / this.splashPositionUpdateSeconds;
+			this.MoveSplash(ref this.fxEnterSplash);
+			this.MoveSplash(ref this.fxExitSplash);
+		}
+	}
+
+	// Token: 0x0600188A RID: 6282 RVA: 0x000D53D4 File Offset: 0x000D35D4
+	private void SetInsideState()
+	{
+		this.fxInside.Play();
+		this.state = CompanionSplashTrigger.State.Inside;
+	}
+
+	// Token: 0x0600188B RID: 6283 RVA: 0x000D53E8 File Offset: 0x000D35E8
+	private void InsideState()
+	{
+		if (this.fxInside != null && this.companion != null)
+		{
+			this.fxInside.transform.position = this.companion.transform.position;
+			this.fxInside.transform.localPosition += this.fxOffsetPosition;
+			this.fxInside.transform.rotation = this.companion.transform.rotation;
+		}
+		else if (this.fxInside != null && this.otherCollider != null)
+		{
+			this.fxInside.transform.position = this.otherCollider.transform.position;
+			this.fxInside.transform.localPosition += this.fxOffsetPosition;
+			this.fxInside.transform.rotation = this.otherCollider.transform.rotation;
+		}
+	}
+
+	// Token: 0x0600188C RID: 6284 RVA: 0x000D5500 File Offset: 0x000D3700
+	private bool isCompanionTarget()
+	{
+		return this.companionType != CompanionType.none;
+	}
+
+	// Token: 0x0600188D RID: 6285 RVA: 0x000D5510 File Offset: 0x000D3710
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (this.state == CompanionSplashTrigger.State.Inside)
+		{
+			return;
+		}
+		if (this.isCompanionTarget())
+		{
+			this.companion = coll.GetComponent<Companion>();
+			if (this.companion && this.companion.companionType == this.companionType)
+			{
+				this.MoveSplash(ref this.fxEnterSplash);
+				this.PlaySplash(ref this.fxEnterSplash);
+				if (this.fxInside != null)
+				{
+					this.SetInsideState();
+				}
+			}
+		}
+		else if (this.otherCollider != null && coll == this.otherCollider)
+		{
+			this.MoveSplash(ref this.fxEnterSplash);
+			this.PlaySplash(ref this.fxEnterSplash);
+			if (this.fxInside != null)
+			{
+				this.SetInsideState();
+			}
+		}
+	}
+
+	// Token: 0x0600188E RID: 6286 RVA: 0x000D55EC File Offset: 0x000D37EC
+	private void OnTriggerExit(Collider coll)
+	{
+		if (this.isCompanionTarget())
+		{
+			this.companion = coll.GetComponent<Companion>();
+			if (this.companion && this.companion.companionType == this.companionType)
+			{
+				this.MoveSplash(ref this.fxExitSplash);
+				this.PlaySplash(ref this.fxExitSplash);
+				this.state = CompanionSplashTrigger.State.None;
+			}
+		}
+		else if (this.otherCollider != null && coll == this.otherCollider)
+		{
+			this.MoveSplash(ref this.fxExitSplash);
+			this.PlaySplash(ref this.fxExitSplash);
+			if (this.fxInside != null)
+			{
+				this.fxInside.Stop();
+			}
+			this.state = CompanionSplashTrigger.State.None;
+		}
+	}
+
+	// Token: 0x0600188F RID: 6287 RVA: 0x000D56B8 File Offset: 0x000D38B8
+	private float GetWaterHeight()
+	{
+		if (this.water == null)
+		{
+			return 0f;
+		}
+		if (!this.useBottom)
+		{
+			return this.water.GetSurfaceHeight(Vector3.up);
+		}
+		return this.water.GetSurfaceHeight(Vector3.down);
+	}
+
+	// Token: 0x06001890 RID: 6288 RVA: 0x000D5708 File Offset: 0x000D3908
+	private void MoveSplash(ref ParticleSystem fxSplash)
+	{
+		if (fxSplash == null)
+		{
+			return;
+		}
+		float waterHeight = this.GetWaterHeight();
+		if (this.companion != null)
+		{
+			fxSplash.transform.position = this.companion.transform.position;
+			fxSplash.transform.localPosition += this.fxOffsetPosition;
+		}
+		else if (this.otherCollider != null)
+		{
+			fxSplash.transform.position = this.otherCollider.transform.position;
+			fxSplash.transform.localPosition += this.fxOffsetPosition;
+		}
+		Vector3 position = fxSplash.transform.position;
+		position.y = waterHeight;
+		fxSplash.transform.position = position;
+	}
+
+	// Token: 0x06001891 RID: 6289 RVA: 0x000D57E8 File Offset: 0x000D39E8
+	private void PlaySplash(ref ParticleSystem fxSplash)
+	{
+		if (fxSplash == null)
+		{
+			return;
+		}
+		fxSplash.Play();
+		if (fxSplash == this.fxEnterSplash)
+		{
+			this.splashEnter.Signal();
+		}
+		this.splashPositionUpdateTimer = this.splashPositionUpdateSeconds;
+	}
+
+	// Token: 0x04002C34 RID: 11316
+	public CompanionType companionType;
+
+	// Token: 0x04002C35 RID: 11317
+	public Collider otherCollider;
+
+	// Token: 0x04002C36 RID: 11318
+	public ParticleSystem fxEnterSplash;
+
+	// Token: 0x04002C37 RID: 11319
+	public ParticleSystem fxExitSplash;
+
+	// Token: 0x04002C38 RID: 11320
+	public ParticleSystem fxInside;
+
+	// Token: 0x04002C39 RID: 11321
+	public Vector3 fxOffsetPosition;
+
+	// Token: 0x04002C3A RID: 11322
+	public BoyWater water;
+
+	// Token: 0x04002C3B RID: 11323
+	public bool useBottom;
+
+	// Token: 0x04002C3C RID: 11324
+	public float splashPositionUpdateSeconds;
+
+	// Token: 0x04002C3D RID: 11325
+	private float splashPositionUpdateTimer;
+
+	// Token: 0x04002C3E RID: 11326
+	private SignalOut splashEnter;
+
+	// Token: 0x04002C3F RID: 11327
+	private CompanionSplashTrigger.State state;
+
+	// Token: 0x04002C40 RID: 11328
+	private Companion companion;
+
+	// Token: 0x0200038C RID: 908
+	private enum State
+	{
+		// Token: 0x04002C42 RID: 11330
+		None,
+		// Token: 0x04002C43 RID: 11331
+		Inside
+	}
+}

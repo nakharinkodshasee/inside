@@ -1,0 +1,331 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000529 RID: 1321
+public class DestructibleCrack : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600226D RID: 8813 RVA: 0x0011F794 File Offset: 0x0011D994
+	[ContextMenu("Remove NULL refs from Dynamic List")]
+	private void RemoveNullFromDynamicList()
+	{
+		for (int i = this.dynamicChunks.Count - 1; i >= 0; i--)
+		{
+			if (this.dynamicChunks[i] == null)
+			{
+				this.dynamicChunks.RemoveAt(i);
+			}
+		}
+	}
+
+	// Token: 0x0600226E RID: 8814 RVA: 0x0011F7E4 File Offset: 0x0011D9E4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioHitMetalGrid = new AudioEventSimple("env_sewer_submergedChamber_concreteWall_hitMetalGrid");
+		this.audioDestroySmall = new AudioEventSimple("env_sewer_submergedChamber_concreteWall_destroy_small");
+		this.audioDestroyMedium = new AudioEventSimple("env_sewer_submergedChamber_concreteWall_destroy_medium");
+		this.audioDestroyBig = new AudioEventSimple("env_sewer_submergedChamber_concreteWall_destroy_big");
+	}
+
+	// Token: 0x0600226F RID: 8815 RVA: 0x0011F844 File Offset: 0x0011DA44
+	public bool PreAwake(int callcount)
+	{
+		this.destroy = SignalIn.Create("destroy", base.gameObject, delegate
+		{
+			this.Destruction(false);
+		});
+		this.destroyOtherSide = SignalIn.Create("destroyOtherSide", base.gameObject, delegate
+		{
+			this.Destruction(true);
+		});
+		this.complete = SignalIn.Create("complete", base.gameObject, new Action(this.LoadCompletedState));
+		this.saveToLevelGlobals = SignalIn.Create("saveToLevelGlobals", base.gameObject, new Action(this.SaveToLevelGlobals));
+		return true;
+	}
+
+	// Token: 0x06002270 RID: 8816 RVA: 0x0011F8DC File Offset: 0x0011DADC
+	private void Start()
+	{
+		if (!this.preProcessed)
+		{
+			this.OnPreProcess();
+		}
+		if (SingletonBehaviour<CompanionManager>.instance)
+		{
+			Companion companion = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine);
+			if (companion)
+			{
+				this.subTrans = companion.transform;
+				this.subRBody = companion.GetComponent<Rigidbody>();
+				this.akGameObjSub = AudioUtils.EnsureAkGameObj(this.subTrans.gameObject, this);
+			}
+		}
+		for (int i = 0; i < this.dynamicChunks.Count; i++)
+		{
+			this.destroyedIndices.Add(false);
+		}
+	}
+
+	// Token: 0x06002271 RID: 8817 RVA: 0x0011F978 File Offset: 0x0011DB78
+	private void SaveToLevelGlobals()
+	{
+		for (int i = 0; i < this.destroyedIndices.Count; i++)
+		{
+			if (this.destroyedIndices[i])
+			{
+				LevelGlobals.submarine_crackDestructionIndices.Add(i);
+			}
+		}
+		if (LevelGlobals.submarine_crackDestructionIndices.Count > 0)
+		{
+			LevelGlobals.submarine_crackDestructionSet = true;
+		}
+	}
+
+	// Token: 0x06002272 RID: 8818 RVA: 0x0011F9D4 File Offset: 0x0011DBD4
+	private void LoadCompletedState()
+	{
+		if (!LevelGlobals.submarine_crackDestructionSet)
+		{
+			for (int i = 0; i < this.completedChunks.Count; i++)
+			{
+				int index = this.completedChunks[i];
+				this.dynamicChunks[index].gameObject.SetActive(false);
+				this.fallenChunks[index].SetActive(true);
+				this.destroyedIndices[index] = true;
+				if (this.removeSurroundingColl)
+				{
+					this.RemoveCloseCollision(this.dynamicChunks[index].gameObject);
+				}
+			}
+		}
+		else
+		{
+			for (int j = 0; j < LevelGlobals.submarine_crackDestructionIndices.Count; j++)
+			{
+				int index2 = LevelGlobals.submarine_crackDestructionIndices[j];
+				this.dynamicChunks[index2].gameObject.SetActive(false);
+				this.fallenChunks[index2].SetActive(true);
+				this.destroyedIndices[index2] = true;
+				if (this.removeSurroundingColl)
+				{
+					this.RemoveCloseCollision(this.dynamicChunks[index2].gameObject);
+				}
+			}
+		}
+	}
+
+	// Token: 0x06002273 RID: 8819 RVA: 0x0011FAF0 File Offset: 0x0011DCF0
+	private void RemoveCloseCollision(GameObject crackPiece)
+	{
+		DestructibleCrackDependency component = crackPiece.GetComponent<DestructibleCrackDependency>();
+		if (component != null)
+		{
+			foreach (Collider collider in component.removeCollFrom)
+			{
+				collider.isTrigger = true;
+			}
+		}
+	}
+
+	// Token: 0x06002274 RID: 8820 RVA: 0x0011FB6C File Offset: 0x0011DD6C
+	private void AudioEvents(int count)
+	{
+		if (count == 0)
+		{
+			this.audioHitMetalGrid.PostFast(this.akGameObjSub);
+		}
+		else if (count <= 4)
+		{
+			this.audioDestroySmall.PostFast(this.akGameObjSub);
+		}
+		else if (count > 4 && count <= 13)
+		{
+			this.audioDestroyMedium.PostFast(this.akGameObjSub);
+		}
+		else if (count > 13)
+		{
+			this.audioDestroyBig.PostFast(this.akGameObjSub);
+		}
+	}
+
+	// Token: 0x06002275 RID: 8821 RVA: 0x0011FBF0 File Offset: 0x0011DDF0
+	private void Destruction(bool otherSide)
+	{
+		Vector3 position = this.subTrans.position;
+		bool flag = base.transform.InverseTransformPoint(position).x < 0f;
+		float magnitude = this.subRBody.velocity.magnitude;
+		int num = 0;
+		if (magnitude > this.destroySpeed)
+		{
+			for (int i = this.dynamicChunks.Count - 1; i >= 0; i--)
+			{
+				if (!this.destroyedIndices[i] && Vector3.Distance(position, this.dynamicChunks[i].transform.position) < this.destroyDistance)
+				{
+					this.dynamicChunks[i].Play((!flag) ? this.anim : this.animOtherSide);
+					this.fallingChunks.Add(this.dynamicChunks[i].gameObject);
+					if (!this.destroyParticlesPlayed)
+					{
+						this.PlayParticles(this.destroyParticles, position, flag);
+						this.destroyParticlesPlayed = true;
+					}
+					if (this.removeSurroundingColl)
+					{
+						this.RemoveCloseCollision(this.dynamicChunks[i].gameObject);
+					}
+					this.destroyedIndices[i] = true;
+					if (flag)
+					{
+						this.fallenChunksOtherSide[this.chunksBroken].SetActive(true);
+					}
+					else
+					{
+						this.fallenChunks[this.chunksBroken].SetActive(true);
+					}
+					this.chunksBroken++;
+					num++;
+				}
+			}
+			this.AudioEvents(num);
+			this.chunkRemoveTimer = 2f;
+			this.destroyParticlesPlayed = false;
+		}
+	}
+
+	// Token: 0x06002276 RID: 8822 RVA: 0x0011FDA4 File Offset: 0x0011DFA4
+	private void PlayParticles(ParticleSystem partSys, Vector3 pos, bool otherSide)
+	{
+		partSys.transform.localRotation = Quaternion.Euler(0f, (!otherSide) ? 90f : -90f, 0f);
+		partSys.transform.position = pos;
+		Vector3 localPosition = partSys.transform.localPosition;
+		localPosition.x = 0f;
+		localPosition.y = 0f;
+		partSys.transform.localPosition = localPosition;
+		partSys.Play();
+	}
+
+	// Token: 0x06002277 RID: 8823 RVA: 0x0011FE24 File Offset: 0x0011E024
+	private void Update()
+	{
+		if (this.chunkRemoveTimer <= 0f)
+		{
+			return;
+		}
+		this.chunkRemoveTimer -= Time.deltaTime * Time.timeScale;
+		if (this.chunkRemoveTimer > 0f)
+		{
+			return;
+		}
+		for (int i = 0; i < this.fallingChunks.Count; i++)
+		{
+			this.fallingChunks[i].SetActive(false);
+		}
+		this.fallingChunks.Clear();
+	}
+
+	// Token: 0x04004036 RID: 16438
+	public List<Animation> dynamicChunks = new List<Animation>();
+
+	// Token: 0x04004037 RID: 16439
+	public List<GameObject> fallenChunks = new List<GameObject>();
+
+	// Token: 0x04004038 RID: 16440
+	public List<GameObject> fallenChunksOtherSide = new List<GameObject>();
+
+	// Token: 0x04004039 RID: 16441
+	public ParticleSystem chipParticles;
+
+	// Token: 0x0400403A RID: 16442
+	public ParticleSystem destroyParticles;
+
+	// Token: 0x0400403B RID: 16443
+	public bool removeSurroundingColl;
+
+	// Token: 0x0400403C RID: 16444
+	public string anim;
+
+	// Token: 0x0400403D RID: 16445
+	public string animOtherSide;
+
+	// Token: 0x0400403E RID: 16446
+	public List<int> completedChunks = new List<int>();
+
+	// Token: 0x0400403F RID: 16447
+	public float chipSpeed;
+
+	// Token: 0x04004040 RID: 16448
+	public float destroySpeed;
+
+	// Token: 0x04004041 RID: 16449
+	public float destroyDistance;
+
+	// Token: 0x04004042 RID: 16450
+	private SignalIn destroy;
+
+	// Token: 0x04004043 RID: 16451
+	private SignalIn destroyOtherSide;
+
+	// Token: 0x04004044 RID: 16452
+	private SignalIn complete;
+
+	// Token: 0x04004045 RID: 16453
+	private SignalIn saveToLevelGlobals;
+
+	// Token: 0x04004046 RID: 16454
+	private int chunksBroken;
+
+	// Token: 0x04004047 RID: 16455
+	private int chunksRemaining;
+
+	// Token: 0x04004048 RID: 16456
+	private float chunkRemoveTimer;
+
+	// Token: 0x04004049 RID: 16457
+	private List<GameObject> fallingChunks = new List<GameObject>();
+
+	// Token: 0x0400404A RID: 16458
+	private Transform subTrans;
+
+	// Token: 0x0400404B RID: 16459
+	private Rigidbody subRBody;
+
+	// Token: 0x0400404C RID: 16460
+	private AkGameObj akGameObjSub;
+
+	// Token: 0x0400404D RID: 16461
+	private bool destroyParticlesPlayed;
+
+	// Token: 0x0400404E RID: 16462
+	private List<bool> destroyedIndices = new List<bool>();
+
+	// Token: 0x0400404F RID: 16463
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioDestroySmall;
+
+	// Token: 0x04004050 RID: 16464
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioDestroyMedium;
+
+	// Token: 0x04004051 RID: 16465
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioDestroyBig;
+
+	// Token: 0x04004052 RID: 16466
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioHitMetalGrid;
+
+	// Token: 0x04004053 RID: 16467
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

@@ -1,0 +1,71 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003D3 RID: 979
+public class CornStalkPlacer : MonoBehaviour
+{
+	// Token: 0x06001A45 RID: 6725 RVA: 0x000E57D4 File Offset: 0x000E39D4
+	private void Start()
+	{
+	}
+
+	// Token: 0x06001A46 RID: 6726 RVA: 0x000E57D8 File Offset: 0x000E39D8
+	public void Generate()
+	{
+		if (this.spawnArea == null || this.cornPrefab == null || this.holder == null || this.amount <= 0)
+		{
+			return;
+		}
+		this.bounds = this.spawnArea.GetComponent<Collider>().bounds;
+		for (int i = this.holder.childCount - 1; i >= 0; i--)
+		{
+			PDUtilities.Destroy(this.holder.GetChild(i).gameObject);
+		}
+		for (int j = 0; j < this.amount; j++)
+		{
+			this.PlaceCorn();
+		}
+	}
+
+	// Token: 0x06001A47 RID: 6727 RVA: 0x000E588C File Offset: 0x000E3A8C
+	private void PlaceCorn()
+	{
+		Vector3 center = this.bounds.center;
+		center.x += Random.Range(-this.bounds.extents.x, this.bounds.extents.x);
+		center.y += Random.Range(-this.bounds.extents.y, this.bounds.extents.y);
+		center.z += Random.Range(-this.bounds.extents.z, this.bounds.extents.z);
+		Vector3 eulerAngles = this.cornPrefab.transform.rotation.eulerAngles;
+		eulerAngles.x += Random.Range(-this.randomRotation.x, this.randomRotation.x);
+		eulerAngles.y += Random.Range(-this.randomRotation.y, this.randomRotation.y);
+		eulerAngles.z += Random.Range(-this.randomRotation.z, this.randomRotation.z);
+		GameObject gameObject = Object.Instantiate(this.cornPrefab, center, Quaternion.Euler(eulerAngles)) as GameObject;
+		gameObject.transform.parent = this.holder;
+		Vector3 vector = this.cornPrefab.transform.localScale;
+		vector *= Random.Range(this.scaleMin, this.scaleMax);
+		gameObject.transform.localScale = vector;
+	}
+
+	// Token: 0x04002F53 RID: 12115
+	public Collider spawnArea;
+
+	// Token: 0x04002F54 RID: 12116
+	public GameObject cornPrefab;
+
+	// Token: 0x04002F55 RID: 12117
+	public Transform holder;
+
+	// Token: 0x04002F56 RID: 12118
+	public int amount;
+
+	// Token: 0x04002F57 RID: 12119
+	public float scaleMin = 0.8f;
+
+	// Token: 0x04002F58 RID: 12120
+	public float scaleMax = 1.2f;
+
+	// Token: 0x04002F59 RID: 12121
+	public Vector3 randomRotation = new Vector3(5f, 180f, 5f);
+
+	// Token: 0x04002F5A RID: 12122
+	private Bounds bounds;
+}

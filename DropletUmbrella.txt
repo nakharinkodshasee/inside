@@ -1,0 +1,7 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000582 RID: 1410
+public class DropletUmbrella : MonoBehaviour
+{
+}

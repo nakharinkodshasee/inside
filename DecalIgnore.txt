@@ -1,0 +1,76 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000003 RID: 3
+public class DecalIgnore : MonoBehaviour
+{
+}
+
+using System;
+using UnityEngine;
+
+// Token: 0x020003D5 RID: 981
+[ExecuteInEditMode]
+public class DecalSpecularParams : UmbrellaBehaviour<DecalSpecularParams>, IPreAwake
+{
+	// Token: 0x06001A4B RID: 6731 RVA: 0x000E5AB4 File Offset: 0x000E3CB4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.matinstance = base.GetComponent<MaterialInstance>();
+	}
+
+	// Token: 0x06001A4C RID: 6732 RVA: 0x000E5AD8 File Offset: 0x000E3CD8
+	public bool PreAwake(int callcount)
+	{
+		this.prop_vectorReflectionPivot = this.matinstance.GetOrAddVectorProperty("_ReflectionPivot");
+		this.prop_vectorReflectionPivotBoy = this.matinstance.GetOrAddVectorProperty("_ReflectionPivotBoy");
+		return true;
+	}
+
+	// Token: 0x06001A4D RID: 6733 RVA: 0x000E5B08 File Offset: 0x000E3D08
+	public void UmbrellaUpdate()
+	{
+		if (this.reflectionPivot != null)
+		{
+			Vector3 position = this.reflectionPivot.position;
+			Vector4 value;
+			value..ctor(position.x, position.y, position.z, this.reflectionPivot.localScale.x);
+			this.matinstance.SetVectorProperty(this.prop_vectorReflectionPivot, value);
+		}
+		if (ScriptGlobals.mainCharacter != null)
+		{
+			Vector3 pos = ScriptGlobals.mainCharacter.pos3;
+			Vector4 value2;
+			value2..ctor(pos.x + this.boyOffsetSize.x, pos.y + this.boyOffsetSize.y, pos.z + this.boyOffsetSize.z, this.boyOffsetSize.w);
+			this.matinstance.SetVectorProperty(this.prop_vectorReflectionPivotBoy, value2);
+		}
+	}
+
+	// Token: 0x04002F5B RID: 12123
+	public Transform reflectionPivot;
+
+	// Token: 0x04002F5C RID: 12124
+	public Vector4 boyOffsetSize = new Vector4(0f, 0f, 0f, 0.1f);
+
+	// Token: 0x04002F5D RID: 12125
+	private MaterialInstance.VectorProperty prop_vectorReflectionPivot;
+
+	// Token: 0x04002F5E RID: 12126
+	private MaterialInstance.VectorProperty prop_vectorReflectionPivotBoy;
+
+	// Token: 0x04002F5F RID: 12127
+	[HideInInspector]
+	[SerializeField]
+	private MaterialInstance matinstance;
+
+	// Token: 0x04002F60 RID: 12128
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

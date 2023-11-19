@@ -1,0 +1,34 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004FC RID: 1276
+public class CleanerPodRopeAttachments : MonoBehaviour
+{
+	// Token: 0x06002172 RID: 8562 RVA: 0x00118B64 File Offset: 0x00116D64
+	private void FixedUpdate()
+	{
+		if (!this.isActive)
+		{
+			return;
+		}
+		this.armAnchor1.MovePosition(this.armTransform1.position);
+		this.armAnchor1.MoveRotation(this.armTransform1.rotation);
+		this.armAnchor2.MovePosition(this.armTransform2.position);
+		this.armAnchor2.MoveRotation(this.armTransform2.rotation);
+	}
+
+	// Token: 0x04003E2E RID: 15918
+	public Transform armTransform1;
+
+	// Token: 0x04003E2F RID: 15919
+	public Transform armTransform2;
+
+	// Token: 0x04003E30 RID: 15920
+	public Rigidbody armAnchor1;
+
+	// Token: 0x04003E31 RID: 15921
+	public Rigidbody armAnchor2;
+
+	// Token: 0x04003E32 RID: 15922
+	public bool isActive;
+}

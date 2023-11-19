@@ -1,0 +1,519 @@
+using System;
+using System.Linq;
+using UnityEngine;
+
+// Token: 0x020005AF RID: 1455
+public class DrivableWheeledVehicleOld : MonoBehaviour
+{
+	// Token: 0x06002511 RID: 9489 RVA: 0x00130470 File Offset: 0x0012E670
+	private void Start()
+	{
+		if (this.driver != null)
+		{
+			this.boy = this.driver.GetComponentInChildren<Boy>();
+		}
+		else
+		{
+			this.boy = ScriptGlobals.boy;
+		}
+		this.boyInput = new CustomBoyInput();
+		this.boyInput.SetAction(false);
+		this.boyInput.SetGrab(false);
+		this.boyInput.SetJump(false);
+		this.boyInput.SetStick(Vector2.zero);
+		this.mState = DrivableWheeledVehicleOld.State.Idle;
+	}
+
+	// Token: 0x06002512 RID: 9490 RVA: 0x001304F8 File Offset: 0x0012E6F8
+	public void BoyIsOutsideVehicle()
+	{
+		this.boyIsOutsideVehicle = true;
+	}
+
+	// Token: 0x06002513 RID: 9491 RVA: 0x00130504 File Offset: 0x0012E704
+	public void BoyIsNotOutsideVehicle()
+	{
+		this.boyIsOutsideVehicle = false;
+	}
+
+	// Token: 0x06002514 RID: 9492 RVA: 0x00130510 File Offset: 0x0012E710
+	private void EnterVehicle()
+	{
+		this.BeginStunningAnimation(this.animations.enterAnimation);
+		this.vehicleEntered.OnEvent(this);
+		this.boyIsDrivingVehicle = true;
+		this.boy.input = this.boyInput;
+		this.mState = DrivableWheeledVehicleOld.State.BoyEnter;
+	}
+
+	// Token: 0x06002515 RID: 9493 RVA: 0x0013055C File Offset: 0x0012E75C
+	private void BeginStunningAnimation(AnimClipNode aAnimClipNode)
+	{
+		if (aAnimClipNode != null)
+		{
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, aAnimClipNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		this.mStunningAnimation = aAnimClipNode;
+	}
+
+	// Token: 0x06002516 RID: 9494 RVA: 0x00130590 File Offset: 0x0012E790
+	private void SetDrivingAnimation(AnimClipNode aAnimClipNode)
+	{
+		if (aAnimClipNode != null && this.mDrivingAnimation != aAnimClipNode)
+		{
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, aAnimClipNode, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		this.mDrivingAnimation = aAnimClipNode;
+	}
+
+	// Token: 0x06002517 RID: 9495 RVA: 0x001305D4 File Offset: 0x0012E7D4
+	private bool IsDrivingFrantically()
+	{
+		return this.mFranticTimer > 0f;
+	}
+
+	// Token: 0x06002518 RID: 9496 RVA: 0x001305E4 File Offset: 0x0012E7E4
+	private void DriveFrantically()
+	{
+		this.mFranticTimer = 1f;
+	}
+
+	// Token: 0x06002519 RID: 9497 RVA: 0x001305F4 File Offset: 0x0012E7F4
+	private void UpdateActionButton()
+	{
+		this.clickTimer += Time.deltaTime;
+		this.actionButtonReleased = false;
+		if (!GameInput.rawAction && this.oldRawAction && this.clickTimer < 0.5f)
+		{
+			this.actionButtonReleased = true;
+		}
+		if (!this.oldRawAction && GameInput.rawAction)
+		{
+			this.clickTimer = 0f;
+		}
+		this.oldRawAction = GameInput.rawAction;
+	}
+
+	// Token: 0x0600251A RID: 9498 RVA: 0x00130674 File Offset: 0x0012E874
+	private void Drive(float aDriveInput)
+	{
+		Vector3 vector = base.transform.InverseTransformDirection(base.GetComponent<Rigidbody>().velocity);
+		float num;
+		if (Mathf.Abs(aDriveInput) > 0.1f)
+		{
+			num = Mathf.Sign(aDriveInput);
+		}
+		else if (this.boyIsDrivingVehicle)
+		{
+			num = Mathf.Min(1f, Mathf.Abs(vector.z)) * -Mathf.Sign(vector.z);
+		}
+		else
+		{
+			num = Mathf.Min(this.rollSlowDownMultiplier, Mathf.Abs(vector.z)) * -Mathf.Sign(vector.z);
+		}
+		WheelOld[] array = (from o in this.wheels
+		where o.powered
+		select o).ToArray<WheelOld>();
+		WheelOld[] array2 = (from o in array
+		where o.IsGrounded
+		select o).ToArray<WheelOld>();
+		foreach (WheelOld wheelOld in array)
+		{
+			if (wheelOld.IsGrounded)
+			{
+				Vector3 vector2 = wheelOld.GetForwardVector(base.transform.right);
+				if (Vector3.Dot(vector2 * Mathf.Sign(num), Vector3.up) > 0f)
+				{
+					vector2 = Vector3.Project(vector2, Vector3.right);
+				}
+				if (Mathf.Sign(num) != Mathf.Sign(vector.z))
+				{
+					num *= this.deaccelerationMultiplier;
+				}
+				Vector3 vector3 = vector2 * (this.moveForce * num / (float)array.Length) * Time.deltaTime;
+				base.GetComponent<Rigidbody>().AddForceAtPosition(vector3, wheelOld.colliderObject.transform.position, 0);
+			}
+		}
+		if (array2.Length > 0)
+		{
+			this.HandleMaxSpeed(aDriveInput);
+		}
+	}
+
+	// Token: 0x0600251B RID: 9499 RVA: 0x00130850 File Offset: 0x0012EA50
+	private void HandleMaxSpeed(float aDriveInput)
+	{
+		Vector3 vector = base.transform.InverseTransformDirection(base.GetComponent<Rigidbody>().velocity);
+		if (Mathf.Abs(vector.z) > this.moveSpeed)
+		{
+			vector.z = this.moveSpeed * Mathf.Sign(vector.z);
+			base.GetComponent<Rigidbody>().velocity = base.transform.TransformDirection(vector);
+		}
+	}
+
+	// Token: 0x0600251C RID: 9500 RVA: 0x001308BC File Offset: 0x0012EABC
+	private void UpdateVisualWheels(float aDriveInput, Vector3 aRelativeVelocity)
+	{
+		foreach (WheelOld wheelOld in this.wheels)
+		{
+			wheelOld.SetMovementData(aRelativeVelocity.z, this.moveSpeed, aDriveInput);
+		}
+	}
+
+	// Token: 0x0600251D RID: 9501 RVA: 0x001308FC File Offset: 0x0012EAFC
+	private void FixedUpdate()
+	{
+		switch (this.mState)
+		{
+		case DrivableWheeledVehicleOld.State.Idle:
+			this.IdleState();
+			break;
+		case DrivableWheeledVehicleOld.State.BoyEnter:
+			this.BoyEnterState();
+			break;
+		case DrivableWheeledVehicleOld.State.BoyDriving:
+			this.BoyDrivingState();
+			break;
+		case DrivableWheeledVehicleOld.State.BoyExit:
+			this.BoyExitState();
+			break;
+		}
+	}
+
+	// Token: 0x0600251E RID: 9502 RVA: 0x0013095C File Offset: 0x0012EB5C
+	private void IdleState()
+	{
+		this.UpdateActionButton();
+		if (this.boyIsOutsideVehicle && this.actionButtonReleased)
+		{
+			this.EnterVehicle();
+		}
+		this.Drive(0f);
+	}
+
+	// Token: 0x0600251F RID: 9503 RVA: 0x0013098C File Offset: 0x0012EB8C
+	private void BoyEnterState()
+	{
+		this.Drive(0f);
+		if (this.mStunningAnimation != null && !this.mStunningAnimation.animFinished)
+		{
+			return;
+		}
+		this.mState = DrivableWheeledVehicleOld.State.BoyDriving;
+	}
+
+	// Token: 0x06002520 RID: 9504 RVA: 0x001309D0 File Offset: 0x0012EBD0
+	private void BoyExitState()
+	{
+		this.boy.facing = 1f;
+		this.Drive(0f);
+		if (this.mStunningAnimation != null && !this.mStunningAnimation.animFinished)
+		{
+			return;
+		}
+		if (!this.addedVelocity)
+		{
+			this.boy.plane.posz = this.exitPos.position.z;
+			vector2f dv = new vector2f(base.GetComponent<Rigidbody>().velocity.x - this.boy.velocity.x, base.GetComponent<Rigidbody>().velocity.y - this.boy.velocity.y);
+			this.boy.AddVelocity(dv, null, 1f);
+			this.addedVelocity = true;
+		}
+		if (this.boy.status.groundCollider == null)
+		{
+			return;
+		}
+		if (!this.checkedDeath)
+		{
+			this.checkedDeath = true;
+			return;
+		}
+		if (this.mExitLandingAnimation != null && !this.boy.isDead)
+		{
+			this.BeginStunningAnimation(this.mExitLandingAnimation);
+			this.mExitLandingAnimation = null;
+		}
+		this.addedVelocity = false;
+		this.checkedDeath = false;
+		this.mState = DrivableWheeledVehicleOld.State.Idle;
+	}
+
+	// Token: 0x06002521 RID: 9505 RVA: 0x00130B30 File Offset: 0x0012ED30
+	private void BoyDrivingState()
+	{
+		this.UpdateActionButton();
+		if (this.actionButtonReleased)
+		{
+			this.ExitVehicle();
+		}
+		this.Drive((!this.boyIsDrivingVehicle) ? 0f : GameInput.stick.x);
+	}
+
+	// Token: 0x06002522 RID: 9506 RVA: 0x00130B7C File Offset: 0x0012ED7C
+	private void ExitVehicle()
+	{
+		Vector3 vector = base.transform.InverseTransformDirection(base.GetComponent<Rigidbody>().velocity);
+		float magnitude = vector.magnitude;
+		AnimClipNode aAnimClipNode;
+		if (magnitude < this.casualSpeed)
+		{
+			aAnimClipNode = this.animations.exitIdleAnimation;
+		}
+		else if (Mathf.Abs(vector.z) > this.franticSpeed)
+		{
+			aAnimClipNode = this.animations.exitFranticAnimation;
+			if (vector.z < 0f)
+			{
+				this.mExitLandingAnimation = this.animations.exitLandingBwdFranticAnimation;
+			}
+			else
+			{
+				this.mExitLandingAnimation = this.animations.exitLandingFwdFranticAnimation;
+			}
+		}
+		else
+		{
+			aAnimClipNode = this.animations.exitCasualAnimation;
+			if (vector.z < 0f)
+			{
+				this.mExitLandingAnimation = this.animations.exitLandingBwdCasualAnimation;
+			}
+			else
+			{
+				this.mExitLandingAnimation = this.animations.exitLandingFwdCasualAnimation;
+			}
+		}
+		this.BeginStunningAnimation(aAnimClipNode);
+		this.vehicleExited.OnEvent(this);
+		this.boyIsDrivingVehicle = false;
+		this.mDrivingAnimation = null;
+		this.boy.input = null;
+		this.mState = DrivableWheeledVehicleOld.State.BoyExit;
+	}
+
+	// Token: 0x06002523 RID: 9507 RVA: 0x00130CA0 File Offset: 0x0012EEA0
+	private void Update()
+	{
+		this.mFranticTimer -= Time.deltaTime;
+		if (base.GetComponent<Rigidbody>().velocity.magnitude > this.franticSpeed || base.GetComponent<Rigidbody>().angularVelocity.magnitude > this.franticAngularVelocity)
+		{
+			this.DriveFrantically();
+		}
+		Vector3 aRelativeVelocity = base.transform.InverseTransformDirection(base.GetComponent<Rigidbody>().velocity);
+		if ((this.mStunningAnimation == null || this.mStunningAnimation.animFinished) && this.boyIsDrivingVehicle)
+		{
+			this.HandleBoyDrivingAnimations(aRelativeVelocity);
+		}
+		this.UpdateVisualWheels((!this.boyIsDrivingVehicle) ? 0f : GameInput.stick.x, aRelativeVelocity);
+		if (Mathf.Sign(this.boy.facing) != Mathf.Sign(this.facing))
+		{
+			this.boyInput.SetStick(new Vector2(this.facing, 0f));
+		}
+		else
+		{
+			this.boyInput.SetStick(Vector2.zero);
+		}
+	}
+
+	// Token: 0x06002524 RID: 9508 RVA: 0x00130DC4 File Offset: 0x0012EFC4
+	private void HandleBoyDrivingAnimations(Vector3 aRelativeVelocity)
+	{
+		float magnitude = aRelativeVelocity.magnitude;
+		AnimClipNode drivingAnimation;
+		if (magnitude < this.casualSpeed)
+		{
+			drivingAnimation = this.animations.idleAnimation;
+		}
+		else if ((aRelativeVelocity.z > 0f || GameInput.stick.x > 0f) && this.IsDrivingFrantically())
+		{
+			drivingAnimation = this.animations.forwardFranticAnimation;
+		}
+		else if (aRelativeVelocity.z < 0f && this.IsDrivingFrantically())
+		{
+			drivingAnimation = this.animations.backwardFranticAnimation;
+		}
+		else if (aRelativeVelocity.z > 0f || GameInput.stick.x > 0f)
+		{
+			drivingAnimation = this.animations.forwardCasualAnimation;
+		}
+		else
+		{
+			drivingAnimation = this.animations.backwardCasualAnimation;
+		}
+		this.SetDrivingAnimation(drivingAnimation);
+	}
+
+	// Token: 0x06002525 RID: 9509 RVA: 0x00130EB4 File Offset: 0x0012F0B4
+	private void OnCollisionStay(Collision aCollision)
+	{
+		for (int i = 0; i < aCollision.contacts.Length; i++)
+		{
+			ContactPoint contactPoint = aCollision.contacts[i];
+			if (!(contactPoint.thisCollider.GetComponent<WheelOld>() == null) || !contactPoint.thisCollider.GetComponent<WheelOld>())
+			{
+				WheelOld wheelOld = null;
+				Vector3 vector = contactPoint.normal;
+				foreach (WheelOld wheelOld2 in this.wheels)
+				{
+					if (wheelOld2.colliderObject == contactPoint.thisCollider)
+					{
+						wheelOld = wheelOld2;
+						break;
+					}
+					if (wheelOld2.colliderObject == contactPoint.otherCollider)
+					{
+						wheelOld = wheelOld2;
+						vector *= -1f;
+						break;
+					}
+				}
+				if (!(wheelOld == null))
+				{
+					wheelOld.AddNormal(vector);
+				}
+			}
+		}
+	}
+
+	// Token: 0x040043E5 RID: 17381
+	public Boy driver;
+
+	// Token: 0x040043E6 RID: 17382
+	public float facing = 1f;
+
+	// Token: 0x040043E7 RID: 17383
+	public float moveSpeed = 10f;
+
+	// Token: 0x040043E8 RID: 17384
+	public float moveForce = 500f;
+
+	// Token: 0x040043E9 RID: 17385
+	public float deaccelerationMultiplier = 2f;
+
+	// Token: 0x040043EA RID: 17386
+	public float rollSlowDownMultiplier = 0.3f;
+
+	// Token: 0x040043EB RID: 17387
+	public Transform exitPos;
+
+	// Token: 0x040043EC RID: 17388
+	public WheelOld[] wheels;
+
+	// Token: 0x040043ED RID: 17389
+	public DrivableWheeledVehicleOld.Animations animations;
+
+	// Token: 0x040043EE RID: 17390
+	public float casualSpeed = 1f;
+
+	// Token: 0x040043EF RID: 17391
+	public float franticSpeed = 9f;
+
+	// Token: 0x040043F0 RID: 17392
+	public float franticAngularVelocity = 1f;
+
+	// Token: 0x040043F1 RID: 17393
+	private float mFranticTimer;
+
+	// Token: 0x040043F2 RID: 17394
+	private AnimClipNode mStunningAnimation;
+
+	// Token: 0x040043F3 RID: 17395
+	private AnimClipNode mDrivingAnimation;
+
+	// Token: 0x040043F4 RID: 17396
+	private bool boyIsOutsideVehicle;
+
+	// Token: 0x040043F5 RID: 17397
+	private bool boyIsDrivingVehicle;
+
+	// Token: 0x040043F6 RID: 17398
+	private SimpleEvent<DrivableWheeledVehicleOld> vehicleEntered = new SimpleEvent<DrivableWheeledVehicleOld>("vehicleEntered");
+
+	// Token: 0x040043F7 RID: 17399
+	private SimpleEvent<DrivableWheeledVehicleOld> vehicleExited = new SimpleEvent<DrivableWheeledVehicleOld>("vehicleExited");
+
+	// Token: 0x040043F8 RID: 17400
+	private Boy boy;
+
+	// Token: 0x040043F9 RID: 17401
+	private CustomBoyInput boyInput;
+
+	// Token: 0x040043FA RID: 17402
+	private DrivableWheeledVehicleOld.State mState;
+
+	// Token: 0x040043FB RID: 17403
+	private bool actionButtonReleased;
+
+	// Token: 0x040043FC RID: 17404
+	private bool oldRawAction;
+
+	// Token: 0x040043FD RID: 17405
+	private float clickTimer;
+
+	// Token: 0x040043FE RID: 17406
+	private AnimClipNode mExitLandingAnimation;
+
+	// Token: 0x040043FF RID: 17407
+	private bool checkedDeath;
+
+	// Token: 0x04004400 RID: 17408
+	private bool addedVelocity;
+
+	// Token: 0x020005B0 RID: 1456
+	[Serializable]
+	public class Animations
+	{
+		// Token: 0x04004403 RID: 17411
+		public AnimClipNode enterAnimation;
+
+		// Token: 0x04004404 RID: 17412
+		public AnimClipNode exitIdleAnimation;
+
+		// Token: 0x04004405 RID: 17413
+		public AnimClipNode exitCasualAnimation;
+
+		// Token: 0x04004406 RID: 17414
+		public AnimClipNode exitLandingFwdCasualAnimation;
+
+		// Token: 0x04004407 RID: 17415
+		public AnimClipNode exitLandingBwdCasualAnimation;
+
+		// Token: 0x04004408 RID: 17416
+		public AnimClipNode exitFranticAnimation;
+
+		// Token: 0x04004409 RID: 17417
+		public AnimClipNode exitLandingFwdFranticAnimation;
+
+		// Token: 0x0400440A RID: 17418
+		public AnimClipNode exitLandingBwdFranticAnimation;
+
+		// Token: 0x0400440B RID: 17419
+		public AnimClipNode idleAnimation;
+
+		// Token: 0x0400440C RID: 17420
+		public AnimClipNode forwardCasualAnimation;
+
+		// Token: 0x0400440D RID: 17421
+		public AnimClipNode backwardCasualAnimation;
+
+		// Token: 0x0400440E RID: 17422
+		public AnimClipNode forwardFranticAnimation;
+
+		// Token: 0x0400440F RID: 17423
+		public AnimClipNode backwardFranticAnimation;
+	}
+
+	// Token: 0x020005B1 RID: 1457
+	private enum State
+	{
+		// Token: 0x04004411 RID: 17425
+		None,
+		// Token: 0x04004412 RID: 17426
+		Idle,
+		// Token: 0x04004413 RID: 17427
+		BoyEnter,
+		// Token: 0x04004414 RID: 17428
+		BoyDriving,
+		// Token: 0x04004415 RID: 17429
+		BoyExit
+	}
+}

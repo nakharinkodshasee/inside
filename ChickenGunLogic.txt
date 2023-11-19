@@ -1,0 +1,659 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000064 RID: 100
+public class ChickenGunLogic : MonoBehaviour, IFastEventExListener<Collider>, IFastEventExListener<Collision>, IPreAwake
+{
+	// Token: 0x0600033C RID: 828 RVA: 0x00025814 File Offset: 0x00023A14
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioChickenShoot = new AudioEventSimpleLocal("env_farm_chickenGun_chicken_shoot", akGameObj);
+		this.audioChickenHit = new AudioEventSimpleLocal("env_farm_chickenGun_chicken_hit", akGameObj);
+		this.chickenGunSwitchAkGameObj = AudioUtils.EnsureAkGameObj(this.chickenGunSwitch.gameObject, this);
+		this.audioMachinStartAttempt1 = new AudioEventSimpleLocal("env_farm_chickenGun_machineStartAttempt1", this.chickenGunSwitchAkGameObj);
+		this.audioMachinStartAttempt2 = new AudioEventSimpleLocal("env_farm_chickenGun_machineStartAttempt2", this.chickenGunSwitchAkGameObj);
+		this.rtpcVacumAmount = new RTPCLocal("rtpc_farm_chickenGun_vacumAmount", akGameObj, false, float.Epsilon);
+	}
+
+	// Token: 0x0600033D RID: 829 RVA: 0x000258C0 File Offset: 0x00023AC0
+	public bool PreAwake(int callcount)
+	{
+		this.electricityOn = SignalIn.Create("electricityOn", base.gameObject, new Action(this.OnElectricityOn));
+		this.startSuction = SignalIn.Create("startSuction", base.gameObject, new Action(this.ToggleSuctionOn));
+		this.stopSuction = SignalIn.Create("stopSuction", base.gameObject, new Action(this.ToggleSuctionOff));
+		this.switchPull = SignalIn.Create("switchPull", base.gameObject, new Action(this.OnSwitchPull));
+		this.loadComplete = SignalIn.Create("loadComplete", base.gameObject, new Action(this.OnLoadComplete));
+		this.startRunning = SignalOut.Create("startRunning", base.gameObject);
+		int i = 0;
+		int count = this.strawParticleSystems.Count;
+		while (i < count)
+		{
+			this.strawParticleSystemRates.Add(this.strawParticleSystems[i].emissionRate);
+			i++;
+		}
+		return true;
+	}
+
+	// Token: 0x0600033E RID: 830 RVA: 0x000259C8 File Offset: 0x00023BC8
+	private void Awake()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x0600033F RID: 831 RVA: 0x000259D0 File Offset: 0x00023BD0
+	private void OnEnable()
+	{
+		if (this.isElectricityOn)
+		{
+			SoundEngine.Events.chickenGunStart.Post(this.chickenGunSwitchAkGameObj);
+		}
+	}
+
+	// Token: 0x06000340 RID: 832 RVA: 0x000259F0 File Offset: 0x00023BF0
+	private void OnDisable()
+	{
+		if (this.isElectricityOn)
+		{
+			SoundEngine.Events.chickenGunStart.Stop(0.02f);
+		}
+	}
+
+	// Token: 0x06000341 RID: 833 RVA: 0x00025A0C File Offset: 0x00023C0C
+	private void Start()
+	{
+		if (this.boxCollisions)
+		{
+			this.boxCollisions.collisionEnter.Register(this, ref this.collisionEnterHandle);
+		}
+		this.killCountdown += Random.Range(-1, 2);
+		this.fallTrigger.enterTrigger.Register(this, ref this.fallTriggerEnterHandle);
+		this.vacuumTrigger.enterTrigger.Register(this, ref this.vacuumTriggerEnterHandle);
+		this.vacuumTrigger.exitTrigger.Register(this, ref this.vacuumTriggerExitHandle);
+		if (this.blowFx.isPlaying)
+		{
+			this.blowFx.Stop();
+		}
+		this.particleFalloffCounter = 0f;
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000342 RID: 834 RVA: 0x00025AC8 File Offset: 0x00023CC8
+	private void SetIdleState()
+	{
+		if (this.isElectricityOn)
+		{
+			this.animGun.CrossFade(this.animGunIdle.name);
+		}
+		if (this.suctionFx.isPlaying)
+		{
+			this.suctionFx.Stop();
+			this.windZone.SetActive(false);
+		}
+		if (this.blowFx.isPlaying)
+		{
+			this.blowFx.Stop();
+		}
+		this.shootTimer = 0.6f;
+		this.state = ChickenGunLogic.State.Idle;
+	}
+
+	// Token: 0x06000343 RID: 835 RVA: 0x00025B4C File Offset: 0x00023D4C
+	private void IdleState()
+	{
+		if (!this.isElectricityOn)
+		{
+			return;
+		}
+		if (this.isSucking)
+		{
+			this.SetSuctionState();
+		}
+	}
+
+	// Token: 0x06000344 RID: 836 RVA: 0x00025B6C File Offset: 0x00023D6C
+	private void SetSuctionState()
+	{
+		this.chimeReady = true;
+		this.animGun.CrossFade(this.animGunSuction.name);
+		this.suctionTimer = this.suctionDelay;
+		this.vacuumTimer = 0f;
+		this.suctionFx.Play();
+		this.windZone.SetActive(true);
+		this.blowFx.Play();
+		this.state = ChickenGunLogic.State.Suction;
+	}
+
+	// Token: 0x06000345 RID: 837 RVA: 0x00025BD8 File Offset: 0x00023DD8
+	private void SuctionState()
+	{
+		if (this.suctionTimer > 0f)
+		{
+			this.suctionTimer -= Time.deltaTime;
+			float num = Mathf.InverseLerp(this.suctionDelay, 0f, this.suctionTimer);
+			float value = num * 100f;
+			this.rtpcVacumAmount.SetFast(value, 0f);
+		}
+		else
+		{
+			this.vacuumTimer += Time.deltaTime;
+			float num2 = Mathf.Min(this.vacuumTimer / this.vacuumEaseInTime, 1f);
+			float num3 = this.vacuumForce * num2;
+			for (int i = 0; i < this.chickensInVacuum.Count; i++)
+			{
+				Chicken chicken = this.chickensInVacuum[i];
+				float num4 = Vector3.Distance(chicken.transform.position, this.vacuumTarget.position);
+				if (num4 <= 0.5f)
+				{
+					this.chickensInVacuum.Remove(chicken);
+					this.ChickenCaptured(chicken);
+				}
+				else
+				{
+					float num5 = Mathf.InverseLerp(0f, 7f, num4);
+					float num6 = Mathf.Lerp(num3 * 0.1f, num3, num5);
+					Vector3 vector = (this.vacuumTarget.transform.position - chicken.transform.position).normalized * 0.001f * num3;
+					Rigidbody component = chicken.GetComponent<Rigidbody>();
+					if (component.velocity.magnitude <= 2f)
+					{
+						component.AddForce(vector, 1);
+					}
+				}
+			}
+		}
+		this.particleFalloffCounter += Time.deltaTime;
+		if (this.particleFalloffCounter < this.particleFalloffTime)
+		{
+			float num7 = this.particleFalloffCounter / this.particleFalloffTime;
+			float num8 = this.strawFalloffCurve.Evaluate(num7);
+			Color startColor = this.dustFalloffColor.Evaluate(num7);
+			int j = 0;
+			int count = this.strawParticleSystems.Count;
+			while (j < count)
+			{
+				this.strawParticleSystems[j].emissionRate = this.strawParticleSystemRates[j] * num8;
+				j++;
+			}
+			if (this.dustParticleSystem != null)
+			{
+				this.dustParticleSystem.startColor = startColor;
+			}
+		}
+		this.BlowChickens();
+		if (!this.isSucking)
+		{
+			this.SetBlowState();
+		}
+	}
+
+	// Token: 0x06000346 RID: 838 RVA: 0x00025E3C File Offset: 0x0002403C
+	private void SetBlowState()
+	{
+		this.animGun.CrossFade(this.animGunBlow.name);
+		this.suctionFx.Stop();
+		this.windZone.SetActive(false);
+		this.state = ChickenGunLogic.State.Blow;
+	}
+
+	// Token: 0x06000347 RID: 839 RVA: 0x00025E80 File Offset: 0x00024080
+	private void BlowState()
+	{
+		this.BlowChickens();
+		if (this.isSucking)
+		{
+			this.SetSuctionState();
+		}
+		if (this.chickensToBlow.Count <= 0)
+		{
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x06000348 RID: 840 RVA: 0x00025EBC File Offset: 0x000240BC
+	private void FixedUpdate()
+	{
+		if (this.state != ChickenGunLogic.State.None)
+		{
+			switch (this.state)
+			{
+			case ChickenGunLogic.State.Idle:
+				this.IdleState();
+				break;
+			case ChickenGunLogic.State.Blow:
+				this.BlowState();
+				break;
+			case ChickenGunLogic.State.Suction:
+				this.SuctionState();
+				break;
+			}
+		}
+	}
+
+	// Token: 0x06000349 RID: 841 RVA: 0x00025F18 File Offset: 0x00024118
+	private void BlowChickens()
+	{
+		if (this.shootDirection == Vector3.zero)
+		{
+			this.shootDirection = (this.shootAim.position - this.shootPosition.position).normalized;
+		}
+		if (this.chickensToBlow.Count <= 0)
+		{
+			return;
+		}
+		this.shootTimer -= Time.deltaTime;
+		if (this.shootTimer <= 0f)
+		{
+			if (this.chimeReady)
+			{
+				this.chimeReady = false;
+			}
+			Chicken chicken = this.chickensToBlow[0];
+			this.chickensToBlow.RemoveAt(0);
+			Rigidbody component = chicken.GetComponent<Rigidbody>();
+			component.isKinematic = false;
+			component.velocity = Vector3.zero;
+			component.AddForce(this.shootDirection * this.shootForce, 2);
+			this.audioChickenShoot.PostFast();
+			if (this.chickensToBlow.Count > 0)
+			{
+				this.shootTimer = Random.Range(0.03f, 0.2f);
+			}
+		}
+	}
+
+	// Token: 0x0600034A RID: 842 RVA: 0x00026028 File Offset: 0x00024228
+	private void ChickenCaptured(Chicken chicken)
+	{
+		chicken.GetComponent<Rigidbody>().isKinematic = true;
+		Vector3 position = this.shootPosition.position;
+		position.x += Random.Range(-0.15f, 0.15f);
+		position.y += Random.Range(-0.15f, 0.15f);
+		chicken.transform.position = position;
+		this.chickensToBlow.Add(chicken);
+	}
+
+	// Token: 0x0600034B RID: 843 RVA: 0x000260A0 File Offset: 0x000242A0
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.fallTrigger.enterTrigger)
+		{
+			this.OnFallEnter(collider);
+		}
+		else if (sender == this.vacuumTrigger.enterTrigger)
+		{
+			this.OnChickenEnter(collider);
+		}
+		else if (sender == this.vacuumTrigger.exitTrigger)
+		{
+			this.OnChickenExit(collider);
+		}
+	}
+
+	// Token: 0x0600034C RID: 844 RVA: 0x00026104 File Offset: 0x00024304
+	public void OnFastEventEx(FastEventEx<Collision> sender, ref Collision collision)
+	{
+		if (sender == this.boxCollisions.collisionEnter)
+		{
+			float sqrMagnitude = collision.relativeVelocity.sqrMagnitude;
+			if (sqrMagnitude > 50f)
+			{
+				this.box.AddForceAtPosition(this.box.transform.right * this.boxHitForce, this.boxHitPosition.position);
+				this.audioChickenHit.PostFast();
+			}
+		}
+	}
+
+	// Token: 0x0600034D RID: 845 RVA: 0x0002617C File Offset: 0x0002437C
+	private void ToggleSuctionOn()
+	{
+		this.OnToggleSuction(true);
+	}
+
+	// Token: 0x0600034E RID: 846 RVA: 0x00026188 File Offset: 0x00024388
+	private void ToggleSuctionOff()
+	{
+		this.OnToggleSuction(false);
+	}
+
+	// Token: 0x0600034F RID: 847 RVA: 0x00026194 File Offset: 0x00024394
+	private void OnToggleSuction(bool value)
+	{
+		if (!this.isElectricityOn)
+		{
+			return;
+		}
+		if (!this.isSucking && value)
+		{
+			this.vacumSounds.PlayStartEvent();
+			this.vacumEngineSounds.PlayStartEvent();
+		}
+		else if (this.isSucking && !value)
+		{
+			this.vacumSounds.PlayStopEvent();
+			this.vacumEngineSounds.PlayStopEvent();
+		}
+		this.isSucking = value;
+	}
+
+	// Token: 0x06000350 RID: 848 RVA: 0x00026208 File Offset: 0x00024408
+	private void OnLoadComplete()
+	{
+		if (!this.isElectricityOn)
+		{
+			SoundEngine.Events.chickenGunStart.Post(this.chickenGunSwitchAkGameObj);
+		}
+		this.OnElectricityOn();
+	}
+
+	// Token: 0x06000351 RID: 849 RVA: 0x0002622C File Offset: 0x0002442C
+	private void OnElectricityOn()
+	{
+		this.animMotor.CrossFade(this.animMotorRun.name, 0.2f);
+		this.startRunning.Signal();
+		this.isElectricityOn = true;
+	}
+
+	// Token: 0x06000352 RID: 850 RVA: 0x0002625C File Offset: 0x0002445C
+	private void OnSwitchPull()
+	{
+		if (this.isElectricityOn)
+		{
+			return;
+		}
+		if (this.currentAnimState != null && this.currentAnimState.clip == this.animMotorJogA && this.currentAnimState.normalizedTime < 0.75f)
+		{
+			this.audioMachinStartAttempt2.PostFast();
+			this.currentAnimState = this.animMotor.CrossFadeQueued(this.animMotorJogB.name, 0.2f, 2);
+		}
+		else if (this.currentAnimState != null && this.currentAnimState.clip == this.animMotorJogB && this.currentAnimState.normalizedTime < 0.6f)
+		{
+			if (this.currentAnimState.normalizedTime < 0.45f)
+			{
+				SoundEngine.Events.chickenGunStart.Post(this.chickenGunSwitchAkGameObj);
+				this.OnElectricityOn();
+			}
+			else
+			{
+				this.audioMachinStartAttempt2.PostFast();
+				this.currentAnimState = this.animMotor.CrossFadeQueued(this.animMotorJogB.name, 0.2f, 2);
+			}
+		}
+		else
+		{
+			this.audioMachinStartAttempt1.PostFast();
+			this.currentAnimState = this.animMotor.CrossFadeQueued(this.animMotorJogA.name, 0.2f, 2);
+		}
+	}
+
+	// Token: 0x06000353 RID: 851 RVA: 0x000263BC File Offset: 0x000245BC
+	private void OnFallEnter(Collider collider)
+	{
+		if (!collider.attachedRigidbody)
+		{
+			return;
+		}
+		Chicken component = collider.attachedRigidbody.GetComponent<Chicken>();
+		if (component)
+		{
+			this.killCountdown--;
+			if (this.killCountdown == 0)
+			{
+				component.Kill();
+			}
+		}
+	}
+
+	// Token: 0x06000354 RID: 852 RVA: 0x00026410 File Offset: 0x00024610
+	private void OnChickenEnter(Collider collider)
+	{
+		if (!collider.attachedRigidbody)
+		{
+			return;
+		}
+		Chicken component = collider.attachedRigidbody.GetComponent<Chicken>();
+		if (component)
+		{
+			this.chickensInVacuum.Add(component);
+		}
+	}
+
+	// Token: 0x06000355 RID: 853 RVA: 0x00026454 File Offset: 0x00024654
+	private void OnChickenExit(Collider collider)
+	{
+		if (!collider.attachedRigidbody)
+		{
+			return;
+		}
+		Chicken component = collider.attachedRigidbody.GetComponent<Chicken>();
+		if (component)
+		{
+			this.chickensInVacuum.Remove(component);
+		}
+	}
+
+	// Token: 0x0400053B RID: 1339
+	public CollisionEvents vacuumTrigger;
+
+	// Token: 0x0400053C RID: 1340
+	public CollisionEvents fallTrigger;
+
+	// Token: 0x0400053D RID: 1341
+	public ParticleSystem suctionFx;
+
+	// Token: 0x0400053E RID: 1342
+	public ParticleSystem blowFx;
+
+	// Token: 0x0400053F RID: 1343
+	public ParticleSystem dustParticleSystem;
+
+	// Token: 0x04000540 RID: 1344
+	public List<ParticleSystem> strawParticleSystems = new List<ParticleSystem>();
+
+	// Token: 0x04000541 RID: 1345
+	private List<float> strawParticleSystemRates = new List<float>();
+
+	// Token: 0x04000542 RID: 1346
+	public AnimationCurve strawFalloffCurve;
+
+	// Token: 0x04000543 RID: 1347
+	public Gradient dustFalloffColor;
+
+	// Token: 0x04000544 RID: 1348
+	public float particleFalloffTime = 10f;
+
+	// Token: 0x04000545 RID: 1349
+	private float particleFalloffCounter;
+
+	// Token: 0x04000546 RID: 1350
+	public GameObject windZone;
+
+	// Token: 0x04000547 RID: 1351
+	public Transform vacuumTarget;
+
+	// Token: 0x04000548 RID: 1352
+	public Transform shootPosition;
+
+	// Token: 0x04000549 RID: 1353
+	public Transform shootAim;
+
+	// Token: 0x0400054A RID: 1354
+	public float shootForce = 10f;
+
+	// Token: 0x0400054B RID: 1355
+	public float suctionDelay = 0.5f;
+
+	// Token: 0x0400054C RID: 1356
+	public float vacuumForce = 15f;
+
+	// Token: 0x0400054D RID: 1357
+	public float vacuumEaseInTime = 1f;
+
+	// Token: 0x0400054E RID: 1358
+	public Animation animMotor;
+
+	// Token: 0x0400054F RID: 1359
+	public AnimationClip animMotorRun;
+
+	// Token: 0x04000550 RID: 1360
+	public AnimationClip animMotorStop;
+
+	// Token: 0x04000551 RID: 1361
+	public AnimationClip animMotorJogA;
+
+	// Token: 0x04000552 RID: 1362
+	public AnimationClip animMotorJogB;
+
+	// Token: 0x04000553 RID: 1363
+	public Animation animGun;
+
+	// Token: 0x04000554 RID: 1364
+	public AnimationClip animGunIdle;
+
+	// Token: 0x04000555 RID: 1365
+	public AnimationClip animGunSuction;
+
+	// Token: 0x04000556 RID: 1366
+	public AnimationClip animGunBlow;
+
+	// Token: 0x04000557 RID: 1367
+	public Rigidbody box;
+
+	// Token: 0x04000558 RID: 1368
+	public CollisionEvents boxCollisions;
+
+	// Token: 0x04000559 RID: 1369
+	public Transform boxHitPosition;
+
+	// Token: 0x0400055A RID: 1370
+	public float boxHitForce = 0.5f;
+
+	// Token: 0x0400055B RID: 1371
+	public ChickenGunSwitch chickenGunSwitch;
+
+	// Token: 0x0400055C RID: 1372
+	public AudioSequenceStopSelector vacumSounds;
+
+	// Token: 0x0400055D RID: 1373
+	public AudioSequenceStopSelector vacumEngineSounds;
+
+	// Token: 0x0400055E RID: 1374
+	private SignalIn electricityOn;
+
+	// Token: 0x0400055F RID: 1375
+	private SignalIn switchPull;
+
+	// Token: 0x04000560 RID: 1376
+	private SignalIn startSuction;
+
+	// Token: 0x04000561 RID: 1377
+	private SignalIn stopSuction;
+
+	// Token: 0x04000562 RID: 1378
+	private SignalIn loadComplete;
+
+	// Token: 0x04000563 RID: 1379
+	private SignalOut startRunning;
+
+	// Token: 0x04000564 RID: 1380
+	private ChickenGunLogic.State state;
+
+	// Token: 0x04000565 RID: 1381
+	private List<Chicken> chickensInVacuum = new List<Chicken>();
+
+	// Token: 0x04000566 RID: 1382
+	private List<Chicken> chickensToBlow = new List<Chicken>();
+
+	// Token: 0x04000567 RID: 1383
+	private bool isElectricityOn;
+
+	// Token: 0x04000568 RID: 1384
+	private bool isSucking;
+
+	// Token: 0x04000569 RID: 1385
+	private bool chimeReady;
+
+	// Token: 0x0400056A RID: 1386
+	private float shootTimer;
+
+	// Token: 0x0400056B RID: 1387
+	private float suctionTimer;
+
+	// Token: 0x0400056C RID: 1388
+	private float vacuumTimer;
+
+	// Token: 0x0400056D RID: 1389
+	private Vector3 shootDirection;
+
+	// Token: 0x0400056E RID: 1390
+	private int killCountdown = 6;
+
+	// Token: 0x0400056F RID: 1391
+	private int collisionEnterHandle = -1;
+
+	// Token: 0x04000570 RID: 1392
+	private int fallTriggerEnterHandle = -1;
+
+	// Token: 0x04000571 RID: 1393
+	private int vacuumTriggerEnterHandle = -1;
+
+	// Token: 0x04000572 RID: 1394
+	private int vacuumTriggerExitHandle = -1;
+
+	// Token: 0x04000573 RID: 1395
+	[SerializeField]
+	[HideInInspector]
+	private RTPCLocal rtpcVacumAmount;
+
+	// Token: 0x04000574 RID: 1396
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioChickenShoot;
+
+	// Token: 0x04000575 RID: 1397
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioChickenHit;
+
+	// Token: 0x04000576 RID: 1398
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioMachinStartAttempt1;
+
+	// Token: 0x04000577 RID: 1399
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioMachinStartAttempt2;
+
+	// Token: 0x04000578 RID: 1400
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj chickenGunSwitchAkGameObj;
+
+	// Token: 0x04000579 RID: 1401
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x0400057A RID: 1402
+	private AnimationState currentAnimState;
+
+	// Token: 0x02000065 RID: 101
+	private enum State
+	{
+		// Token: 0x0400057C RID: 1404
+		None,
+		// Token: 0x0400057D RID: 1405
+		Idle,
+		// Token: 0x0400057E RID: 1406
+		Blow,
+		// Token: 0x0400057F RID: 1407
+		Suction
+	}
+}

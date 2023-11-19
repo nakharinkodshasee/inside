@@ -1,0 +1,101 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000067 RID: 103
+public class CornPushTrigger : MonoBehaviour
+{
+	// Token: 0x0600035D RID: 861 RVA: 0x00026614 File Offset: 0x00024814
+	private void Start()
+	{
+		if (this.autoStart)
+		{
+			this.isPushing = true;
+		}
+	}
+
+	// Token: 0x0600035E RID: 862 RVA: 0x00026628 File Offset: 0x00024828
+	public void EnableSucking()
+	{
+		this.isPushing = true;
+		base.GetComponent<Renderer>().enabled = true;
+	}
+
+	// Token: 0x0600035F RID: 863 RVA: 0x00026640 File Offset: 0x00024840
+	public void DisableSucking()
+	{
+		this.isPushing = false;
+		base.GetComponent<Renderer>().enabled = false;
+	}
+
+	// Token: 0x06000360 RID: 864 RVA: 0x00026658 File Offset: 0x00024858
+	private void FixedUpdate()
+	{
+		if (!this.isPushing)
+		{
+			return;
+		}
+		Vector3 vector = this.force;
+		if (this.forceTowards != null)
+		{
+			vector = (this.forceTowards.position - base.gameObject.transform.position).normalized * this.forceTowardsStrength;
+		}
+		foreach (Chicken chicken in this.chickensInZone)
+		{
+			if (Random.Range(0f, 1f) < this.randomForceChance)
+			{
+				chicken.GetComponent<Rigidbody>().AddForce(vector * chicken.GetComponent<Rigidbody>().mass * Random.Range(1f - this.forceRandomScale, 1f + this.forceRandomScale), 1);
+			}
+		}
+	}
+
+	// Token: 0x06000361 RID: 865 RVA: 0x00026768 File Offset: 0x00024968
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.attachedRigidbody)
+		{
+			Chicken componentInChildren = coll.attachedRigidbody.GetComponentInChildren<Chicken>();
+			if (componentInChildren)
+			{
+				this.chickensInZone.Add(componentInChildren);
+			}
+		}
+	}
+
+	// Token: 0x06000362 RID: 866 RVA: 0x000267A8 File Offset: 0x000249A8
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.attachedRigidbody)
+		{
+			Chicken componentInChildren = coll.attachedRigidbody.GetComponentInChildren<Chicken>();
+			if (componentInChildren)
+			{
+				this.chickensInZone.Remove(componentInChildren);
+			}
+		}
+	}
+
+	// Token: 0x04000585 RID: 1413
+	public bool autoStart;
+
+	// Token: 0x04000586 RID: 1414
+	public Vector3 force;
+
+	// Token: 0x04000587 RID: 1415
+	public Transform forceTowards;
+
+	// Token: 0x04000588 RID: 1416
+	public float forceTowardsStrength;
+
+	// Token: 0x04000589 RID: 1417
+	public float forceRandomScale;
+
+	// Token: 0x0400058A RID: 1418
+	public float randomForceChance;
+
+	// Token: 0x0400058B RID: 1419
+	private bool isPushing;
+
+	// Token: 0x0400058C RID: 1420
+	private List<Chicken> chickensInZone = new List<Chicken>();
+}

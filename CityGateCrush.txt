@@ -1,0 +1,182 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000402 RID: 1026
+public class CityGateCrush : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06001B0F RID: 6927 RVA: 0x000ECE5C File Offset: 0x000EB05C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioCrushed = new AudioEventSimple("boy_mindHatJumpIntoWater_crushed");
+	}
+
+	// Token: 0x06001B10 RID: 6928 RVA: 0x000ECE84 File Offset: 0x000EB084
+	public bool PreAwake(int callcount)
+	{
+		this.crush = SignalOut.Create("crush", base.gameObject);
+		this.leaveGap = SignalOut.Create("leaveGap", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001B11 RID: 6929 RVA: 0x000ECEC0 File Offset: 0x000EB0C0
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.triggerGap.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.triggerGap.exitTrigger.Register(this, ref this.triggerExitHandle);
+	}
+
+	// Token: 0x06001B12 RID: 6930 RVA: 0x000ECF04 File Offset: 0x000EB104
+	private void FixedUpdate()
+	{
+		float num = Mathf.Abs(this.gateClosedPos.position.x - this.gate.position.x);
+		bool flag = num < this.checkDistance;
+		if (flag != this.previouslyClosed)
+		{
+			if (flag)
+			{
+				this.CrushCheck();
+			}
+			this.previouslyClosed = flag;
+		}
+	}
+
+	// Token: 0x06001B13 RID: 6931 RVA: 0x000ECF68 File Offset: 0x000EB168
+	private void CrushCheck()
+	{
+		Boy boy = ScriptGlobals.boy;
+		if (boy.state is BoyJumpState || boy.state is BoyRagdollState)
+		{
+			float num = base.transform.position.y - boy.pos.y;
+			if (num < this.aboveDistance)
+			{
+				this.colliderBackup.SetActive(true);
+			}
+			else if (num > this.belowDistance)
+			{
+				this.gateCollider.enabled = false;
+			}
+			else if (!boy.isDead)
+			{
+				boy.Kill();
+				AnimClipNode anim = (boy.facing != 1f) ? this.animCrushBW : this.animCrush;
+				BoyUtils.StartCustomAnim(boy, anim, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+				SingletonBehaviour<BoyAudio>.instance.KillBoyWithEmotion(VoiceConfigProbe.Emotion.crushed, 0f, false, true);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.FadeOut, 0.2f, 0.65f, 0, 0f);
+				this.audioCrushed.PostFast(AudioKeyObject.AkGameObjs.boy);
+				this.points += 300f;
+				this.crush.Signal();
+			}
+			else if (this.partsInsideGap.Count > 0)
+			{
+				this.points += 300f;
+				this.leaveGap.Signal();
+			}
+			else
+			{
+				this.colliderBackup.SetActive(true);
+			}
+		}
+	}
+
+	// Token: 0x06001B14 RID: 6932 RVA: 0x000ED0DC File Offset: 0x000EB2DC
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.triggerGap.enterTrigger)
+		{
+			this.OnTriggerGapEnter(collider);
+		}
+		else if (sender == this.triggerGap.exitTrigger)
+		{
+			this.OnTriggerGapExit(collider);
+		}
+	}
+
+	// Token: 0x06001B15 RID: 6933 RVA: 0x000ED118 File Offset: 0x000EB318
+	private void OnTriggerGapExit(Collider collider)
+	{
+		AudioRagdollBody component = collider.GetComponent<AudioRagdollBody>();
+		if (component)
+		{
+			this.partsInsideGap.Remove(component);
+		}
+	}
+
+	// Token: 0x06001B16 RID: 6934 RVA: 0x000ED144 File Offset: 0x000EB344
+	private void OnTriggerGapEnter(Collider collider)
+	{
+		AudioRagdollBody component = collider.GetComponent<AudioRagdollBody>();
+		if (component && !this.partsInsideGap.Contains(component))
+		{
+			this.partsInsideGap.Add(component);
+		}
+	}
+
+	// Token: 0x040030F5 RID: 12533
+	public CollisionEvents triggerGap;
+
+	// Token: 0x040030F6 RID: 12534
+	public GameObject colliderBackup;
+
+	// Token: 0x040030F7 RID: 12535
+	public Collider gateCollider;
+
+	// Token: 0x040030F8 RID: 12536
+	public Transform gate;
+
+	// Token: 0x040030F9 RID: 12537
+	public Transform gateClosedPos;
+
+	// Token: 0x040030FA RID: 12538
+	public AnimClipNode animCrush;
+
+	// Token: 0x040030FB RID: 12539
+	public AnimClipNode animCrushBW;
+
+	// Token: 0x040030FC RID: 12540
+	private SignalOut crush;
+
+	// Token: 0x040030FD RID: 12541
+	private SignalOut leaveGap;
+
+	// Token: 0x040030FE RID: 12542
+	private bool previouslyClosed = true;
+
+	// Token: 0x040030FF RID: 12543
+	private float checkDistance = 0.6f;
+
+	// Token: 0x04003100 RID: 12544
+	private float aboveDistance = -1.5f;
+
+	// Token: 0x04003101 RID: 12545
+	private float belowDistance = 0.4f;
+
+	// Token: 0x04003102 RID: 12546
+	private float points;
+
+	// Token: 0x04003103 RID: 12547
+	private List<AudioRagdollBody> partsInsideGap = new List<AudioRagdollBody>();
+
+	// Token: 0x04003104 RID: 12548
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04003105 RID: 12549
+	private int triggerExitHandle = -1;
+
+	// Token: 0x04003106 RID: 12550
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioCrushed;
+
+	// Token: 0x04003107 RID: 12551
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

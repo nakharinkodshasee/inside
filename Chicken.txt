@@ -1,0 +1,721 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200005E RID: 94
+public class Chicken : MonoBehaviour, IPreAwake, IUnityAnimEventHandler, IUnityAnimEventComponent
+{
+	// Token: 0x1700000E RID: 14
+	// (get) Token: 0x06000300 RID: 768 RVA: 0x00023914 File Offset: 0x00021B14
+	// (set) Token: 0x060002FF RID: 767 RVA: 0x000238DC File Offset: 0x00021ADC
+	public GameObject Target
+	{
+		get
+		{
+			return this.target;
+		}
+		set
+		{
+			this.target = value;
+			this.targetIsBoy = (this.target == ScriptGlobals.boy.gameObject);
+			this.targetTransform = this.target.transform;
+		}
+	}
+
+	// Token: 0x1700000F RID: 15
+	// (get) Token: 0x06000301 RID: 769 RVA: 0x0002391C File Offset: 0x00021B1C
+	public UnityAnimEventTriggerConnection connection
+	{
+		get
+		{
+			return this.triggerConnection;
+		}
+	}
+
+	// Token: 0x06000302 RID: 770 RVA: 0x00023924 File Offset: 0x00021B24
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.chickenAnim = base.GetComponentsInChildren<Animation>(true)[0];
+		this.chickenAnim.gameObject.transform.localScale = Vector3.one * Random.Range(0.85f, 1f);
+		this.chickenAnim.transform.Rotate(0f, Random.Range(0f, 360f), 0f);
+		this.localRotation = this.chickenAnim.transform.localRotation;
+		this._collider = base.GetComponentsInChildren<Collider>(true)[0];
+	}
+
+	// Token: 0x06000303 RID: 771 RVA: 0x000239D0 File Offset: 0x00021BD0
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		this.initialMoveSpeed = this.moveSpeed;
+		this.initialPathLength = this.idlePathLength;
+		this.chickenAnimRun = this.chickenAnim["Run"];
+		this.chickenAnimRun.time = Random.Range(0f, this.chickenAnimRun.length);
+		this.chickenAnimIdleInPlace = this.chickenAnim["Run"];
+		this.chickenAnimIdleInPlace.time = Random.Range(0f, this.chickenAnimIdleInPlace.length);
+		this._gameObject = base.gameObject;
+		this._transform = base.transform;
+		this._rigidbody = base.GetComponent<Rigidbody>();
+		this._visualTransform = this.chickenAnim.transform;
+		this.currentPosition = this._transform.position;
+		this.currentVelocity = Vector3Fast.zero;
+		this.currentSpeed = 0f;
+		this.currentComfortZone = this.startComfortZone;
+		this.targetPosTranslation.x = Random.Range(-1f, 1f);
+		this.targetPosTranslation.z = Random.Range(-1f, 1f);
+		if (this.startActive)
+		{
+			this.isStarted = true;
+		}
+		this.idlePos = this._transform.position;
+		this.chickenAnimRun.time = Random.Range(0f, this.chickenAnimRun.length);
+		this.chickenAnimIdleInPlace.time = Random.Range(0f, this.chickenAnimIdleInPlace.length);
+		this.distToBoy = (ScriptGlobals.boy.pos3 - this._transform.position).sqrMagnitude;
+		this.tweeter = new Tweeter(base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000304 RID: 772 RVA: 0x00023BA0 File Offset: 0x00021DA0
+	private void Start()
+	{
+		if (this.useBoyAsTarget)
+		{
+			this.Target = ScriptGlobals.boy.gameObject;
+		}
+	}
+
+	// Token: 0x06000305 RID: 773 RVA: 0x00023BC0 File Offset: 0x00021DC0
+	public void SetNewTarget(GameObject newTarget)
+	{
+		if (this.isStarted)
+		{
+			this.sleeping = false;
+			this.Target = newTarget;
+		}
+	}
+
+	// Token: 0x06000306 RID: 774 RVA: 0x00023BDC File Offset: 0x00021DDC
+	public void SetDisableMovementTimer(float t)
+	{
+		this.disableMovementTimer = t;
+	}
+
+	// Token: 0x06000307 RID: 775 RVA: 0x00023BE8 File Offset: 0x00021DE8
+	public float GetDisableMovementTimer()
+	{
+		return this.disableMovementTimer;
+	}
+
+	// Token: 0x06000308 RID: 776 RVA: 0x00023BF0 File Offset: 0x00021DF0
+	private Vector3 CalculateDesiredVelocity()
+	{
+		Vector3 vector = (!this.isStarted) ? this.idlePos : this.targetPosition;
+		Vector3 vector2;
+		vector2.x = vector.x + this.targetPosTranslation.x - this.currentPosition.x;
+		vector2.y = 0f;
+		vector2.z = vector.z + this.targetPosTranslation.z - this.currentPosition.z;
+		float num = Vector3Fast.Norm(ref vector2);
+		float num2 = (this.fearSpeedCooldown <= 0f) ? 1f : 1.5f;
+		float num3 = num2 * this.moveSpeed * Mathf.Min(1f, num);
+		Vector3 result;
+		result.x = vector2.x / num * num3;
+		result.y = 0f;
+		result.z = vector2.z / num * num3;
+		if (vector2.x > 0f)
+		{
+			if (this.forceGoForwardRight)
+			{
+				result.x = 0f;
+				result.z = -num3;
+			}
+			else if (this.forceGoBackRight)
+			{
+				result.x = 0f;
+				result.z = num3;
+			}
+			else if (this.rightBlockers > 0)
+			{
+				float num4 = (this.rightExtends.x <= this.currentPosition.z) ? (this.currentPosition.z - this.rightExtends.x) : (this.rightExtends.x - this.currentPosition.z);
+				float num5 = (this.rightExtends.y <= this.currentPosition.z) ? (this.currentPosition.z - this.rightExtends.y) : (this.rightExtends.y - this.currentPosition.z);
+				if (num4 > num5)
+				{
+					if (num5 < 5f)
+					{
+						result.x = 0f;
+						result.z = num3;
+					}
+					else
+					{
+						result.x = num3;
+						result.z = 0f;
+					}
+				}
+				else if (num4 < 5f)
+				{
+					result.x = 0f;
+					result.z = -num3;
+				}
+				else
+				{
+					result.x = num3;
+					result.z = 0f;
+				}
+			}
+		}
+		else if (vector2.x < 0f)
+		{
+			if (this.forceGoForwardLeft)
+			{
+				result.x = 0f;
+				result.z = -num3;
+			}
+			else if (this.forceGoBackLeft)
+			{
+				result.x = 0f;
+				result.z = num3;
+			}
+			else if (this.leftBlockers > 0)
+			{
+				float num6 = (this.leftExtends.x <= this.currentPosition.z) ? (this.currentPosition.z - this.leftExtends.x) : (this.leftExtends.x - this.currentPosition.z);
+				float num7 = (this.leftExtends.y <= this.currentPosition.z) ? (this.currentPosition.z - this.leftExtends.y) : (this.leftExtends.y - this.currentPosition.z);
+				if (num6 > num7)
+				{
+					if (num7 < 5f)
+					{
+						result.x = 0f;
+						result.z = num3;
+					}
+					else
+					{
+						result.x = -num3;
+						result.z = 0f;
+					}
+				}
+				else if (num6 < 5f)
+				{
+					result.x = 0f;
+					result.z = -num3;
+				}
+				else
+				{
+					result.x = -num3;
+					result.z = 0f;
+				}
+			}
+		}
+		return result;
+	}
+
+	// Token: 0x06000309 RID: 777 RVA: 0x00024008 File Offset: 0x00022208
+	private void UpdateMovement()
+	{
+		Vector3 vector = this.CalculateDesiredVelocity();
+		Vector3 vector2;
+		vector2.x = 0.01f * (vector.x - this.currentVelocity.x);
+		vector2.y = 0f;
+		vector2.z = 0.01f * (vector.z - this.currentVelocity.z);
+		this._rigidbody.AddForce(vector2, 0);
+	}
+
+	// Token: 0x0600030A RID: 778 RVA: 0x00024078 File Offset: 0x00022278
+	private void UpdateAnimations()
+	{
+		if (this.currentSpeed > this.runSpeed)
+		{
+			this.chickenAnimRun.speed = Mathf.Clamp(this.currentSpeed / this.animAdjust, 1f, 1.5f);
+			this.chickenAnim.CrossFade("Run", 0.4f);
+		}
+		else
+		{
+			this.chickenAnim.CrossFade("IdleInPlace", 0.4f);
+		}
+	}
+
+	// Token: 0x0600030B RID: 779 RVA: 0x000240EC File Offset: 0x000222EC
+	private void ResetBlockers()
+	{
+		this.backBlockers = 0;
+		this.frontBlockers = 0;
+		this.leftBlockers = 0;
+		this.rightBlockers = 0;
+		this.groundBlockers = 0;
+		this.leftExtends = Vector3.zero;
+		this.rightExtends = Vector3.zero;
+		this.forceGoBackRight = false;
+		this.forceGoForwardRight = false;
+		this.forceGoBackLeft = false;
+		this.forceGoForwardLeft = false;
+	}
+
+	// Token: 0x0600030C RID: 780 RVA: 0x00024150 File Offset: 0x00022350
+	private void UpdateTranslationPos()
+	{
+		this.fearSpeedCooldown -= Time.deltaTime;
+		Vector3 vector;
+		vector.x = this.targetPosition.x - this.currentPosition.x;
+		vector.y = 0f;
+		vector.z = this.targetPosition.z - this.currentPosition.z;
+		this.distToBoy = Vector3Fast.NormSqr(ref vector);
+		this.distY = ((this.targetPosition.y <= this.currentPosition.y) ? (this.currentPosition.y - this.targetPosition.y) : (this.targetPosition.y - this.currentPosition.y));
+		float num = 0f;
+		bool flag = this.fearBoy && this.distToBoy < 2.25f && this.distY < 1f;
+		if (flag && this.targetIsBoy && this.target.activeInHierarchy)
+		{
+			num = ScriptGlobals.boy.velocity.GetSqrLength();
+		}
+		if (flag && num > 1f)
+		{
+			float num2 = Mathf.Sqrt(this.distToBoy);
+			vector.x /= num2;
+			vector.z /= num2;
+			this.targetPosTranslation.x = Random.Range(-0.5f, 0.5f) - vector.x * 3f;
+			this.targetPosTranslation.z = Random.Range(-0.5f, 0.5f) - vector.z * 3f;
+			this.newPosTimer = 0.5f;
+			this.fearSpeedCooldown = 0.2f;
+			this.previousPosFromFear = true;
+			this.currentComfortZone = this.startComfortZone;
+			this.idlePathLength = this.initialPathLength;
+			this.tweeter.OnFleeing();
+		}
+		else if (this.currentSpeed < 0.5f || (this.previousPosFromFear && this.distToBoy > 9f))
+		{
+			this.newPosTimer -= Time.deltaTime;
+			if (this.newPosTimer <= 0f)
+			{
+				if (this.isStarted)
+				{
+					this.SetBoyIdlePos();
+				}
+				else
+				{
+					this.targetPosTranslation.x = Random.Range(-1f, 1f);
+					this.targetPosTranslation.z = Random.Range(-1f, 1f);
+				}
+				this.newPosTimer = 1f;
+				this.previousPosFromFear = false;
+			}
+		}
+	}
+
+	// Token: 0x0600030D RID: 781 RVA: 0x000243F8 File Offset: 0x000225F8
+	private void SetBoyIdlePos()
+	{
+		if (this.distToBoy > (this.startComfortZone + this.idlePathLength) * 2f)
+		{
+			Vector3 vector;
+			vector.x = this.currentPosition.x - this.targetPosition.x;
+			vector.y = this.currentPosition.y - this.targetPosition.y;
+			vector.z = this.currentPosition.z - this.targetPosition.z;
+			vector.Normalize();
+			float num = Random.Range(0.4f, this.startComfortZone);
+			this.targetPosTranslation.x = num * vector.x;
+			this.targetPosTranslation.z = num * vector.z;
+		}
+		else
+		{
+			float num2 = this.currentPosition.x;
+			float num3 = this.currentPosition.z;
+			num2 = Mathf.Clamp(num2, this.targetPosition.x - this.currentComfortZone, this.targetPosition.x + this.currentComfortZone);
+			num3 = Mathf.Clamp(num3, this.targetPosition.z - this.currentComfortZone, this.targetPosition.z + this.currentComfortZone);
+			this.targetPosTranslation.x = Random.Range(num2 - this.idlePathLength, num2 + this.idlePathLength) - this.targetPosition.x;
+			this.targetPosTranslation.z = Random.Range(num3 - this.idlePathLength, num3 + this.idlePathLength) - this.targetPosition.z;
+		}
+	}
+
+	// Token: 0x0600030E RID: 782 RVA: 0x00024588 File Offset: 0x00022788
+	private void UpdateStatus()
+	{
+		bool flag = true;
+		if (!this.isStarted && !this.sleeping && flag)
+		{
+			this.isStarted = true;
+			this.SetBoyIdlePos();
+		}
+		else if (!this.isStarted)
+		{
+			float num = ScriptGlobals.boy.pos.x - this.currentPosition.x;
+			if (num < 0f)
+			{
+				num = -num;
+			}
+			if (num < this.startDistance && flag)
+			{
+				this.isStarted = true;
+				this.sleeping = false;
+				this.SetBoyIdlePos();
+			}
+		}
+		else
+		{
+			this.currentComfortZone -= Time.deltaTime * 0.03f;
+			this.currentComfortZone = Mathf.Clamp(this.currentComfortZone, 0.2f, this.startComfortZone);
+			this.idlePathLength -= Time.deltaTime * 0.015f;
+			this.idlePathLength = Mathf.Clamp(this.idlePathLength, 0.5f, 1f);
+			if (!flag && !this.followBoyOnDifferentHeight)
+			{
+				this.isStarted = false;
+				float num2 = Random.Range(-1f, 1f);
+				float num3 = Random.Range(-1f, 1f);
+				this.idlePos.x = this.currentPosition.x + num2;
+				this.idlePos.y = this.currentPosition.y;
+				this.idlePos.z = this.currentPosition.z + num3;
+			}
+		}
+	}
+
+	// Token: 0x0600030F RID: 783 RVA: 0x00024710 File Offset: 0x00022910
+	private void SetLookAt()
+	{
+		if (this.currentVelocity.x != 0f && this.currentVelocity.z != 0f)
+		{
+			Vector3 vector;
+			vector.x = this.currentVelocity.x;
+			vector.y = 0f;
+			vector.z = this.currentVelocity.z;
+			if (vector != Vector3.zero)
+			{
+				this.localRotation = Quaternion.RotateTowards(this.localRotation, Quaternion.LookRotation(vector, Vector3Fast.up), 6.5f);
+				this._visualTransform.SetLocalRotationNoNotify(this.localRotation);
+			}
+		}
+	}
+
+	// Token: 0x06000310 RID: 784 RVA: 0x000247BC File Offset: 0x000229BC
+	public void Kill()
+	{
+		this.isDying = true;
+	}
+
+	// Token: 0x06000311 RID: 785 RVA: 0x000247C8 File Offset: 0x000229C8
+	private void FixedUpdate()
+	{
+		if (this.dead)
+		{
+			return;
+		}
+		if (this.currentAINode)
+		{
+			if (this.currentAINode.forceGoBack)
+			{
+				this.forceGoBackLeft = true;
+				this.forceGoBackRight = true;
+			}
+			else if (this.currentAINode.forceGoForward)
+			{
+				this.forceGoForwardLeft = true;
+				this.forceGoForwardRight = true;
+			}
+		}
+		float fixedDeltaTime = Time.fixedDeltaTime;
+		this.currentPosition = this._transform.position;
+		this.currentVelocity = this._rigidbody.velocity;
+		this.currentSpeed = Vector3Fast.Norm(ref this.currentVelocity);
+		this.targetPosition = this.targetTransform.position;
+		if (this.isDying && this.currentPosition.z > -1.4f)
+		{
+			this._rigidbody.AddForce(0f, 0f, -0.012f);
+		}
+		this.UpdateStatus();
+		if (this.disableMovementTimer > 0f)
+		{
+			this.disableMovementTimer -= Time.deltaTime;
+		}
+		else if (this.groundBlockers > 0)
+		{
+			this.UpdateMovement();
+		}
+		this.UpdateTranslationPos();
+		this.SetLookAt();
+		this.ResetBlockers();
+		this.UpdateAnimations();
+		this.tweeter.OnUpdate(Time.fixedTimeDbl, fixedDeltaTime, (this.currentPosition - ScriptGlobals.boy.pos3).magnitude);
+	}
+
+	// Token: 0x06000312 RID: 786 RVA: 0x0002493C File Offset: 0x00022B3C
+	private void OnTriggerEnter(Collider collider)
+	{
+		ChickenAINode component = collider.GetComponent<ChickenAINode>();
+		if (component)
+		{
+			this.currentAINode = component;
+		}
+	}
+
+	// Token: 0x06000313 RID: 787 RVA: 0x00024964 File Offset: 0x00022B64
+	private void OnTriggerExit(Collider collider)
+	{
+		ChickenAINode component = collider.GetComponent<ChickenAINode>();
+		if (component)
+		{
+			this.currentAINode = null;
+		}
+	}
+
+	// Token: 0x06000314 RID: 788 RVA: 0x0002498C File Offset: 0x00022B8C
+	private void OnCollisionStay(Collision collision)
+	{
+		if (this.isDying)
+		{
+			bool flag = Mathf.Abs(ScriptGlobals.boy.pos3.y - this.currentPosition.y) < 2.25f;
+			if (flag && this.currentPosition.z <= -1.4f)
+			{
+				this.dead = true;
+				this.chickenAnim.Stop();
+				this.moveSpeed = 0f;
+				this._rigidbody.isKinematic = true;
+				this._collider.gameObject.layer = LayerMask.NameToLayer("NoCollision");
+				return;
+			}
+		}
+		ContactPoint[] contacts = collision.contacts;
+		int i = 0;
+		int num = contacts.Length;
+		while (i < num)
+		{
+			if (contacts[i].normal.y > 0.33f)
+			{
+				this.groundBlockers++;
+				return;
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06000315 RID: 789 RVA: 0x00024A7C File Offset: 0x00022C7C
+	public void HandleAnimEvent(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent)
+	{
+		if (animEvent.type == UnityAnimEvent.AudioType.Voice)
+		{
+			this.tweeter.Chirp(false);
+		}
+	}
+
+	// Token: 0x06000316 RID: 790 RVA: 0x00024A98 File Offset: 0x00022C98
+	public void HandleAnimEventEditor(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent)
+	{
+		if (animEvent.type == UnityAnimEvent.AudioType.Voice)
+		{
+			new Tweeter(Camera.main.gameObject).Chirp(false);
+		}
+	}
+
+	// Token: 0x06000317 RID: 791 RVA: 0x00024ABC File Offset: 0x00022CBC
+	public void HandleContinuousAnimEvent(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent, bool isActive)
+	{
+		throw new NotImplementedException();
+	}
+
+	// Token: 0x06000318 RID: 792 RVA: 0x00024AC4 File Offset: 0x00022CC4
+	public void HandleAnimationChange(IUnityAnimEventTrigger trigger, Object oldAnim, Object newAnim)
+	{
+	}
+
+	// Token: 0x06000319 RID: 793 RVA: 0x00024AC8 File Offset: 0x00022CC8
+	public void PreprocessUnityAnimEvents(int animID, List<UnityAnimEvent> events)
+	{
+	}
+
+	// Token: 0x0600031A RID: 794 RVA: 0x00024ACC File Offset: 0x00022CCC
+	virtual bool get_enabled()
+	{
+		return base.enabled;
+	}
+
+	// Token: 0x0600031B RID: 795 RVA: 0x00024AD4 File Offset: 0x00022CD4
+	virtual GameObject get_gameObject()
+	{
+		return base.gameObject;
+	}
+
+	// Token: 0x040004CF RID: 1231
+	public bool startActive = true;
+
+	// Token: 0x040004D0 RID: 1232
+	public float startDistance = -1f;
+
+	// Token: 0x040004D1 RID: 1233
+	public bool useBoyAsTarget = true;
+
+	// Token: 0x040004D2 RID: 1234
+	public float moveSpeed = 1f;
+
+	// Token: 0x040004D3 RID: 1235
+	public bool fearBoy;
+
+	// Token: 0x040004D4 RID: 1236
+	public bool followBoyOnDifferentHeight = true;
+
+	// Token: 0x040004D5 RID: 1237
+	public float startComfortZone = 1f;
+
+	// Token: 0x040004D6 RID: 1238
+	public float currentComfortZone;
+
+	// Token: 0x040004D7 RID: 1239
+	public float idlePathLength = 0.8f;
+
+	// Token: 0x040004D8 RID: 1240
+	public float runSpeed = 0.15f;
+
+	// Token: 0x040004D9 RID: 1241
+	public float moveSpeedVariation = 0.05f;
+
+	// Token: 0x040004DA RID: 1242
+	public bool debug;
+
+	// Token: 0x040004DB RID: 1243
+	private GameObject _gameObject;
+
+	// Token: 0x040004DC RID: 1244
+	private Transform _transform;
+
+	// Token: 0x040004DD RID: 1245
+	private Rigidbody _rigidbody;
+
+	// Token: 0x040004DE RID: 1246
+	private Transform _visualTransform;
+
+	// Token: 0x040004DF RID: 1247
+	private bool targetIsBoy;
+
+	// Token: 0x040004E0 RID: 1248
+	private Transform targetTransform;
+
+	// Token: 0x040004E1 RID: 1249
+	private Vector3 targetPosition;
+
+	// Token: 0x040004E2 RID: 1250
+	private Vector3 currentPosition;
+
+	// Token: 0x040004E3 RID: 1251
+	private Vector3 currentVelocity;
+
+	// Token: 0x040004E4 RID: 1252
+	private float currentSpeed;
+
+	// Token: 0x040004E5 RID: 1253
+	[SerializeField]
+	private GameObject target;
+
+	// Token: 0x040004E6 RID: 1254
+	private float initialPathLength;
+
+	// Token: 0x040004E7 RID: 1255
+	private float initialMoveSpeed;
+
+	// Token: 0x040004E8 RID: 1256
+	private Vector3 targetPosTranslation;
+
+	// Token: 0x040004E9 RID: 1257
+	private float fearSpeedCooldown;
+
+	// Token: 0x040004EA RID: 1258
+	private float disableMovementTimer;
+
+	// Token: 0x040004EB RID: 1259
+	[HideInInspector]
+	public bool isStarted;
+
+	// Token: 0x040004EC RID: 1260
+	[HideInInspector]
+	public bool dead;
+
+	// Token: 0x040004ED RID: 1261
+	private bool sleeping = true;
+
+	// Token: 0x040004EE RID: 1262
+	private bool isDying;
+
+	// Token: 0x040004EF RID: 1263
+	private Vector3 idlePos;
+
+	// Token: 0x040004F0 RID: 1264
+	private AnimationState chickenAnimRun;
+
+	// Token: 0x040004F1 RID: 1265
+	private AnimationState chickenAnimIdleInPlace;
+
+	// Token: 0x040004F2 RID: 1266
+	private Tweeter tweeter;
+
+	// Token: 0x040004F3 RID: 1267
+	private UnityAnimEventTriggerConnection triggerConnection;
+
+	// Token: 0x040004F4 RID: 1268
+	[SerializeField]
+	[HideInInspector]
+	private Quaternion localRotation;
+
+	// Token: 0x040004F5 RID: 1269
+	[SerializeField]
+	[HideInInspector]
+	private Collider _collider;
+
+	// Token: 0x040004F6 RID: 1270
+	[HideInInspector]
+	[SerializeField]
+	private Animation chickenAnim;
+
+	// Token: 0x040004F7 RID: 1271
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x040004F8 RID: 1272
+	private int backBlockers;
+
+	// Token: 0x040004F9 RID: 1273
+	private int frontBlockers;
+
+	// Token: 0x040004FA RID: 1274
+	private int leftBlockers;
+
+	// Token: 0x040004FB RID: 1275
+	private int rightBlockers;
+
+	// Token: 0x040004FC RID: 1276
+	private int groundBlockers;
+
+	// Token: 0x040004FD RID: 1277
+	private Vector3 leftExtends = Vector2.zero;
+
+	// Token: 0x040004FE RID: 1278
+	private Vector3 rightExtends = Vector2.zero;
+
+	// Token: 0x040004FF RID: 1279
+	private bool forceGoBackRight;
+
+	// Token: 0x04000500 RID: 1280
+	private bool forceGoForwardRight;
+
+	// Token: 0x04000501 RID: 1281
+	private bool forceGoBackLeft;
+
+	// Token: 0x04000502 RID: 1282
+	private bool forceGoForwardLeft;
+
+	// Token: 0x04000503 RID: 1283
+	private ChickenAINode currentAINode;
+
+	// Token: 0x04000504 RID: 1284
+	public float animAdjust = 5f;
+
+	// Token: 0x04000505 RID: 1285
+	private float newPosTimer;
+
+	// Token: 0x04000506 RID: 1286
+	private bool previousPosFromFear;
+
+	// Token: 0x04000507 RID: 1287
+	[HideInInspector]
+	public float distToBoy;
+
+	// Token: 0x04000508 RID: 1288
+	[HideInInspector]
+	public float distY;
+}

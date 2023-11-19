@@ -1,0 +1,306 @@
+using System;
+using AudioCommands;
+using UnityEngine;
+
+// Token: 0x02000264 RID: 612
+public class DrowningEffectRenderer : MonoBehaviour, IFastEventListener
+{
+	// Token: 0x060012C7 RID: 4807 RVA: 0x000B0844 File Offset: 0x000AEA44
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.bubbles.gameObject, this);
+		this.audioAirBubble = new AudioEventSimpleLocal("boy_voc_dive_airBubble", akGameObj);
+		this.audioDrownDeath = new AudioEventSimpleLocal("boy_voc_dive_drownDeath", akGameObj);
+		this.audioDrownWarning = new AudioEventSimpleLocal("boy_voc_dive_drownWarning", akGameObj);
+	}
+
+	// Token: 0x060012C8 RID: 4808 RVA: 0x000B08AC File Offset: 0x000AEAAC
+	private void Start()
+	{
+		DrowningEffectRenderer.instance = this;
+		this.OnPreProcess();
+		this.boy = ScriptGlobals.boy;
+		this.boyVisual = this.boy.visualBoy;
+		this.bubblesTransform = this.bubbles.transform;
+		GameManager.scenesLoaded.Register(this, ref this.scenesLoadedHandle);
+		MaterialInstance[] componentsInChildren = this.bubbles.GetComponentsInChildren<MaterialInstance>();
+		MaterialInstance[] componentsInChildren2 = this.warning.GetComponentsInChildren<MaterialInstance>();
+		MaterialInstance[] componentsInChildren3 = this.drown.GetComponentsInChildren<MaterialInstance>();
+		this.mis = new MaterialInstance[componentsInChildren.Length + componentsInChildren2.Length + componentsInChildren3.Length];
+		int num = 0;
+		for (int i = 0; i < componentsInChildren.Length; i++)
+		{
+			this.mis[num] = componentsInChildren[i];
+			num++;
+		}
+		for (int j = 0; j < componentsInChildren2.Length; j++)
+		{
+			this.mis[num] = componentsInChildren2[j];
+			num++;
+		}
+		for (int k = 0; k < componentsInChildren3.Length; k++)
+		{
+			this.mis[num] = componentsInChildren3[k];
+			num++;
+		}
+		this.cols = new MaterialInstance.ColorProperty[this.mis.Length];
+		for (int l = 0; l < this.mis.Length; l++)
+		{
+			this.cols[l] = this.mis[l].GetColorProperty("_MainCol");
+		}
+	}
+
+	// Token: 0x060012C9 RID: 4809 RVA: 0x000B0A04 File Offset: 0x000AEC04
+	private void OnDestroy()
+	{
+		GameManager.scenesLoaded.Unregister(ref this.scenesLoadedHandle);
+	}
+
+	// Token: 0x060012CA RID: 4810 RVA: 0x000B0A18 File Offset: 0x000AEC18
+	public void OnFastEvent(FastEvent sender)
+	{
+		if (sender == GameManager.scenesLoaded && ScriptGlobals.boy.isCharacterActive)
+		{
+			this.bubblesColliderTransform.parent = Dynamics.container.transform;
+			this.bubblesColliderTransform.localScale = Vector3.one;
+			this.bubblesColliderTransform.rotation = Quaternion.Euler(0f, 0f, 180f);
+		}
+	}
+
+	// Token: 0x060012CB RID: 4811 RVA: 0x000B0A84 File Offset: 0x000AEC84
+	private void Update()
+	{
+		BoyWater boyWater = (!(this.boy != null)) ? null : this.boy.status.water;
+		if (EditorMode.DebugFlagActive(EditorMode.EDebugFlags.InvincibleBoy))
+		{
+			this.previousWater = null;
+			this.warningActive = false;
+			return;
+		}
+		if (!boyWater || boyWater.AtSurface(this.boy, false, false) || this.boy.specialBoyMode == Boy.SpecialBoyMode.InsideSub)
+		{
+			if (this.warningActive)
+			{
+				ThemeUtils.SetVoiceConfig(ScriptGlobals.boy.gameObject, this.voiceAlmostDrowned);
+				this.warningActive = false;
+			}
+			this.previousWater = null;
+			return;
+		}
+		if (boyWater && boyWater != this.previousWater)
+		{
+			float num = boyWater.GetSurfaceHeight(Vector3.up);
+			FluidVolume component = boyWater.GetComponent<FluidVolume>();
+			if (component && component.noSurface)
+			{
+				num += 200f;
+				this.dynamicSurfaceHeight = false;
+			}
+			else
+			{
+				this.dynamicSurfaceHeight = boyWater.GetComponent<Rigidbody>();
+			}
+			this.SetColliderHeight(num);
+			WaterSplashHandler component2 = boyWater.GetComponent<WaterSplashHandler>();
+			if (component2)
+			{
+				this.splashColor = boyWater.GetComponent<WaterSplashHandler>().splashColor;
+			}
+			else
+			{
+				this.splashColor = Color.white;
+			}
+			for (int i = 0; i < this.mis.Length; i++)
+			{
+				this.mis[i].SetColorProperty(this.cols[i], this.splashColor.Alpha(this.mis[i].GetColorValue(this.cols[i]).a));
+			}
+			this.previousWater = boyWater;
+		}
+		if (this.dynamicSurfaceHeight)
+		{
+			this.SetColliderHeight(boyWater.GetSurfaceHeight(Vector3.up));
+		}
+		if (!this.boy.isDead && !boyWater.infiniteAir)
+		{
+			if (this.bubbleTimer > 0f)
+			{
+				this.bubbleTimer -= Time.deltaTime;
+			}
+			else
+			{
+				this.Bubbles();
+			}
+		}
+		if (boyWater.infiniteAir)
+		{
+			return;
+		}
+		float divingTimeElapsed = this.boy.divingTimeElapsed;
+		float maxDivingTime = boyWater.maxDivingTime;
+		float warningInterval = boyWater.warningInterval;
+		if (!this.boy.isDead)
+		{
+			if (this.warningActive)
+			{
+				if (this.warningTimer > 0f)
+				{
+					this.warningTimer -= Time.deltaTime;
+				}
+				else
+				{
+					this.Warning();
+					this.warningTimer = warningInterval * Random.Range(0.9f, 1.1f);
+				}
+			}
+			else if (divingTimeElapsed > boyWater.warningDivingTime)
+			{
+				float num2 = boyWater.GetSurfaceHeight(this.boy) - BoyUtils.GetTopPosy(this.boy);
+				if (num2 > 4f || !this.boy.SwimmingTowardsSurface() || this.boy.ignoreWaterSurfaceAir > 0)
+				{
+					this.warningTimer = 0f;
+					this.warningActive = true;
+				}
+			}
+		}
+		if (divingTimeElapsed > maxDivingTime && this.previousDiveTime <= maxDivingTime)
+		{
+			this.Drown();
+		}
+		this.previousDiveTime = this.boy.divingTimeElapsed;
+	}
+
+	// Token: 0x060012CC RID: 4812 RVA: 0x000B0DC4 File Offset: 0x000AEFC4
+	private void SetColliderHeight(float y)
+	{
+		Vector3 zero = Vector3Fast.zero;
+		zero.y = y;
+		this.bubblesColliderTransform.position = zero;
+	}
+
+	// Token: 0x060012CD RID: 4813 RVA: 0x000B0DEC File Offset: 0x000AEFEC
+	private void Bubbles()
+	{
+		this.bubbles.Emit(1);
+		this.audioAirBubble.PostFast();
+		this.bubbleTimer = Random.Range(this.bobbleDelayMin, this.bobbleDelayMax);
+	}
+
+	// Token: 0x060012CE RID: 4814 RVA: 0x000B0E20 File Offset: 0x000AF020
+	private void Drown()
+	{
+		SingletonBehaviour<BoyAudio>.instance.KillBoy(0f, true, false);
+		this.DrownEffect();
+	}
+
+	// Token: 0x060012CF RID: 4815 RVA: 0x000B0E3C File Offset: 0x000AF03C
+	public void DrownEffect()
+	{
+		this.drown.Play();
+		this.audioDrownDeath.PostFast();
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.FadeOut, 0.2f, 0.65f, 0, 0f);
+	}
+
+	// Token: 0x060012D0 RID: 4816 RVA: 0x000B0E7C File Offset: 0x000AF07C
+	private void Warning()
+	{
+		if (this.animWarning && !(this.boy.state is BoyCustomAnimState))
+		{
+			this.boyVisual.additiveAnim = this.animWarning;
+		}
+		this.warning.Play();
+		this.audioDrownWarning.PostFast();
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.FadeOut, 0.2f, 0.4f, 0, 0f);
+	}
+
+	// Token: 0x040022AF RID: 8879
+	public ParticleSystem bubbles;
+
+	// Token: 0x040022B0 RID: 8880
+	public ParticleSystem warning;
+
+	// Token: 0x040022B1 RID: 8881
+	public ParticleSystem drown;
+
+	// Token: 0x040022B2 RID: 8882
+	public Transform bubblesColliderTransform;
+
+	// Token: 0x040022B3 RID: 8883
+	public AnimClipNode animWarning;
+
+	// Token: 0x040022B4 RID: 8884
+	public BoyVoiceConfig voiceAlmostDrowned;
+
+	// Token: 0x040022B5 RID: 8885
+	private float bubbleTimer = 0.2f;
+
+	// Token: 0x040022B6 RID: 8886
+	private float bobbleDelayMin = 0.1f;
+
+	// Token: 0x040022B7 RID: 8887
+	private float bobbleDelayMax = 0.5f;
+
+	// Token: 0x040022B8 RID: 8888
+	private bool warningActive;
+
+	// Token: 0x040022B9 RID: 8889
+	private float warningTimer;
+
+	// Token: 0x040022BA RID: 8890
+	private float previousDiveTime;
+
+	// Token: 0x040022BB RID: 8891
+	private BoyWater previousWater;
+
+	// Token: 0x040022BC RID: 8892
+	private bool dynamicSurfaceHeight;
+
+	// Token: 0x040022BD RID: 8893
+	private Boy boy;
+
+	// Token: 0x040022BE RID: 8894
+	private VisualBoy boyVisual;
+
+	// Token: 0x040022BF RID: 8895
+	private Transform bubblesTransform;
+
+	// Token: 0x040022C0 RID: 8896
+	private Color splashColor;
+
+	// Token: 0x040022C1 RID: 8897
+	private MaterialInstance[] mis;
+
+	// Token: 0x040022C2 RID: 8898
+	private MaterialInstance.ColorProperty[] cols;
+
+	// Token: 0x040022C3 RID: 8899
+	private int scenesLoadedHandle = -1;
+
+	// Token: 0x040022C4 RID: 8900
+	public static DrowningEffectRenderer instance;
+
+	// Token: 0x040022C5 RID: 8901
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioAirBubble;
+
+	// Token: 0x040022C6 RID: 8902
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioDrownDeath;
+
+	// Token: 0x040022C7 RID: 8903
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioDrownWarning;
+
+	// Token: 0x040022C8 RID: 8904
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

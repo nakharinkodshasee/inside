@@ -1,0 +1,17 @@
+using System;
+
+// Token: 0x020003D6 RID: 982
+public class DecalSpecularParamsUmbrella : Umbrella<DecalSpecularParams>
+{
+	// Token: 0x06001A4F RID: 6735 RVA: 0x000E5BF4 File Offset: 0x000E3DF4
+	public override void DispatchUpdate()
+	{
+		int num = 0;
+		int size = this.size;
+		while (num != size)
+		{
+			this.targets[num].UmbrellaUpdate();
+			num++;
+		}
+	}
+}

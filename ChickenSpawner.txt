@@ -1,0 +1,93 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000435 RID: 1077
+public class ChickenSpawner : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001C39 RID: 7225 RVA: 0x000F6F78 File Offset: 0x000F5178
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.spawnPositions = new Vector3[this.chickens.Count];
+		Ray ray = default(Ray);
+		ray.direction = Vector3.down;
+		int i = 0;
+		int count = this.chickens.Count;
+		while (i < count)
+		{
+			Vector3 vector = this.spawnTarget.position;
+			vector.x += Random.Range(-this.randomVariation, this.randomVariation);
+			vector.z += Random.Range(-this.randomVariation, this.randomVariation);
+			ray.origin = vector;
+			RaycastHit raycastHit;
+			if (this.groundCollider.Raycast(ray, ref raycastHit, 5f))
+			{
+				vector = raycastHit.point + raycastHit.normal * this.groundOffset;
+			}
+			this.spawnPositions[i] = vector;
+			i++;
+		}
+	}
+
+	// Token: 0x06001C3A RID: 7226 RVA: 0x000F7084 File Offset: 0x000F5284
+	public bool PreAwake(int callcount)
+	{
+		this.spawn = SignalIn.Create("spawn", base.gameObject, new Action(this.DoSpawn));
+		return true;
+	}
+
+	// Token: 0x06001C3B RID: 7227 RVA: 0x000F70AC File Offset: 0x000F52AC
+	private void Awake()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x06001C3C RID: 7228 RVA: 0x000F70B4 File Offset: 0x000F52B4
+	private void DoSpawn()
+	{
+		int i = 0;
+		int count = this.chickens.Count;
+		while (i < count)
+		{
+			Chicken chicken = this.chickens[i];
+			chicken.transform.position = this.spawnPositions[i];
+			chicken.isStarted = true;
+			chicken.SetNewTarget(ScriptGlobals.boy.gameObject);
+			i++;
+		}
+	}
+
+	// Token: 0x040033B5 RID: 13237
+	public List<Chicken> chickens;
+
+	// Token: 0x040033B6 RID: 13238
+	public Transform spawnTarget;
+
+	// Token: 0x040033B7 RID: 13239
+	public float randomVariation;
+
+	// Token: 0x040033B8 RID: 13240
+	public float groundOffset = 0.08f;
+
+	// Token: 0x040033B9 RID: 13241
+	public Collider groundCollider;
+
+	// Token: 0x040033BA RID: 13242
+	private SignalIn spawn;
+
+	// Token: 0x040033BB RID: 13243
+	[SerializeField]
+	[HideInInspector]
+	private Vector3[] spawnPositions;
+
+	// Token: 0x040033BC RID: 13244
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

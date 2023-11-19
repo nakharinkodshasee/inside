@@ -1,0 +1,10 @@
+using System;
+
+// Token: 0x02000581 RID: 1409
+public class Droplet : UmbrellaBehaviour<Droplet>
+{
+	// Token: 0x06002447 RID: 9287 RVA: 0x0012BA30 File Offset: 0x00129C30
+	public void UmbrellaUpdate()
+	{
+	}
+}

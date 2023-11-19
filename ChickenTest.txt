@@ -1,0 +1,16 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200059B RID: 1435
+[ExecuteInEditMode]
+public class ChickenTest : MonoBehaviour
+{
+	// Token: 0x060024C3 RID: 9411 RVA: 0x0012EAB8 File Offset: 0x0012CCB8
+	private void OnGUI()
+	{
+		Vector3 vector = Camera.main.WorldToScreenPoint(base.transform.position);
+		Rect rect;
+		rect..ctor(vector.x, (float)Screen.height - vector.y - 20f, 125f, 20f);
+		GUI.TextField(rect, "Particle Count : 35");
+	}
+}

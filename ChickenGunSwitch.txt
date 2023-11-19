@@ -1,0 +1,658 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020001CF RID: 463
+public class ChickenGunSwitch : Device, IPreAwake
+{
+	// Token: 0x06000DAE RID: 3502 RVA: 0x00082E1C File Offset: 0x0008101C
+	public bool PreAwake(int callcount)
+	{
+		this.pull = SignalOut.Create("pull", base.gameObject);
+		this.on = SignalOut.Create("on", base.gameObject);
+		this.loadOn = SignalIn.Create("loadOn", base.gameObject, new Action(this.OnLoad));
+		if (!this.turnedOn)
+		{
+			this.SetLightIntensity(0f);
+		}
+		this.animDevicePullBlendState = this.animDevice[this.animDevicePullBlend.name];
+		this.animDevicePullBlendState.speed = 0f;
+		this.animDeviceKeepPullReturnState = this.animDevice[this.animDeviceKeepPullReturn.name];
+		this.animDevicePullDropState = this.animDevice[this.animDevicePullDrop.name];
+		this.animDeviceGrabFumbleState = this.animDevice[this.animDeviceGrabFumble.name];
+		this.lightMaterialInstance = this.lightSurface.GetComponent<MaterialInstance>();
+		if (!this.lightMaterialInstance)
+		{
+			this.lightMaterialInstance = this.lightSurface.gameObject.AddComponent<MaterialInstance>();
+		}
+		this.lightColorProperty = this.lightMaterialInstance.GetOrAddColorProperty("_Color");
+		this.lightColor = this.lightSurface.material.color;
+		return true;
+	}
+
+	// Token: 0x06000DAF RID: 3503 RVA: 0x00082F74 File Offset: 0x00081174
+	private void OnEnable()
+	{
+		if (this.turnedOn)
+		{
+			if (this.engineStartFx != null)
+			{
+				this.engineStartFx.Play();
+			}
+			if (this.engineStartFx2 != null)
+			{
+				this.engineStartFx2.Play();
+			}
+		}
+	}
+
+	// Token: 0x06000DB0 RID: 3504 RVA: 0x00082FC4 File Offset: 0x000811C4
+	protected override void Start()
+	{
+		base.Start();
+		this.SetWaitState();
+	}
+
+	// Token: 0x06000DB1 RID: 3505 RVA: 0x00082FD4 File Offset: 0x000811D4
+	private void SetWaitState()
+	{
+		this.boyGrabbing = null;
+		this.state = ChickenGunSwitch.State.Wait;
+	}
+
+	// Token: 0x06000DB2 RID: 3506 RVA: 0x00082FE4 File Offset: 0x000811E4
+	private void WaitState()
+	{
+		if (!this.animDevice.isPlaying)
+		{
+			this.animDevice.CrossFade(this.animDevicePullBlendState.name);
+		}
+		float num = this.animDevicePullBlendState.normalizedTime;
+		if (num != 0f)
+		{
+			num += Time.deltaTime * -5f;
+			if (num < 0f)
+			{
+				num = 0f;
+			}
+			this.animDevicePullBlendState.normalizedTime = num;
+		}
+		if (this.releaseTimer > 0f)
+		{
+			this.releaseTimer -= Time.deltaTime;
+			return;
+		}
+		if (this.turnedOn)
+		{
+			return;
+		}
+		int i = 0;
+		int count = this.boysInside.Count;
+		while (i < count)
+		{
+			Boy boy = this.boysInside[i];
+			if (Device.GrabCheck(boy, true))
+			{
+				this.SetGrabState(boy);
+				return;
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06000DB3 RID: 3507 RVA: 0x000830C8 File Offset: 0x000812C8
+	private void SetGrabState(Boy boy)
+	{
+		this.boyGrabbing = boy;
+		this.pullAmount = 0;
+		this.pullTimer = 0f;
+		this.targetBlend = 0.5f;
+		this.currentBlend = 0.5f;
+		this.grabStunTimer = this.grabStunDelay;
+		this.animIdleToAnticipate.currentBlendValue = this.currentBlend;
+		float num = 1f;
+		if (this.animDevice.IsPlaying(this.animDevicePullDropState.name))
+		{
+			num = this.animDevicePullDropState.normalizedTime;
+		}
+		if (num < 0.2f)
+		{
+			this.animDevice.CrossFade(this.animDeviceGrabFumble.name);
+			this.grabTimer = this.grabDelay * 2f;
+			Device.SetVoiceActive();
+			this.currentGrab = this.animGrabFumble;
+		}
+		else
+		{
+			this.animDevice.CrossFade(this.animDevicePullBlendState.name);
+			this.grabTimer = this.grabDelay;
+			Device.SetVoicePassive();
+			this.currentGrab = this.animGrab;
+		}
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.currentGrab, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.state = ChickenGunSwitch.State.Grab;
+	}
+
+	// Token: 0x06000DB4 RID: 3508 RVA: 0x000831EC File Offset: 0x000813EC
+	private void GrabState()
+	{
+		if (this.grabStunTimer > 0f)
+		{
+			this.grabStunTimer -= Time.deltaTime;
+			if (this.boyGrabbing.input.jump)
+			{
+				this.grabStunTimer = 0f;
+			}
+		}
+		if ((!this.boyGrabbing.input.rawAction && this.grabStunTimer <= 0f) || this.boyGrabbing.isDead)
+		{
+			this.Release(null, 0.2f);
+			return;
+		}
+		if (!this.animDevice.isPlaying)
+		{
+			this.animDevice.CrossFade(this.animDevicePullBlendState.name);
+		}
+		if (this.grabTimer > 0f)
+		{
+			this.grabTimer -= Time.deltaTime;
+			return;
+		}
+		if (Mathf.Abs(this.boyGrabbing.input.stick.x) > 0.3f || this.currentGrab.animFinished)
+		{
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x06000DB5 RID: 3509 RVA: 0x00083304 File Offset: 0x00081504
+	private void SetIdleState()
+	{
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animIdleToAnticipate, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.animDevice.CrossFade(this.animDevicePullBlendState.name, 0.2f);
+		Device.SetVoicePassive();
+		this.state = ChickenGunSwitch.State.Idle;
+	}
+
+	// Token: 0x06000DB6 RID: 3510 RVA: 0x00083354 File Offset: 0x00081554
+	private void IdleState()
+	{
+		if (!this.boyGrabbing.input.rawAction)
+		{
+			this.Release(null, 0.2f);
+			return;
+		}
+		float x = this.boyGrabbing.input.stick.x;
+		this.targetBlend = x * 0.5f + 0.5f;
+		float num = Mathf.Sign(this.targetBlend - this.currentBlend);
+		this.currentBlend += num * Time.deltaTime * (((double)x >= -0.75) ? 2f : 4f);
+		if ((num == 1f && this.currentBlend > this.targetBlend) || (num == -1f && this.currentBlend < this.targetBlend))
+		{
+			this.currentBlend = this.targetBlend;
+		}
+		this.animIdleToAnticipate.currentBlendValue = this.currentBlend;
+		float num2 = (this.currentBlend * 2f - 1f) * -1f;
+		num2 = Mathf.Max(num2, 0f);
+		this.animDevicePullBlendState.normalizedTime = num2;
+		if (x > -0.5f)
+		{
+			this.pullTimer = 0f;
+			this.pullAmount = 0;
+		}
+		else
+		{
+			if (x < -0.75f)
+			{
+				this.pullAmount++;
+				if (this.pullAmount > 6 && this.pullTimer < 0.3f)
+				{
+					this.SetPullState(true, 1f);
+					return;
+				}
+			}
+			this.pullTimer += Time.deltaTime;
+		}
+	}
+
+	// Token: 0x06000DB7 RID: 3511 RVA: 0x000834F4 File Offset: 0x000816F4
+	private void SetPullState(bool crossFade, float strength)
+	{
+		this.pullTimer = 2f;
+		this.pullAmount = 0;
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightThenLeft, 0.3f * strength, -1f, 0, 0f);
+		this.AttemptStart(strength);
+		if (crossFade)
+		{
+			this.animDevicePullState = this.animDevice.CrossFadeQueued(this.animDevicePull.name, 0.15f, 2);
+		}
+		else
+		{
+			this.animDevicePullState = this.animDevice.PlayQueued(this.animDevicePull.name, 2);
+		}
+		this.SetAnimSpeed(1f, this.animDevicePullState, this.animPull);
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animPull, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		Device.SetVoiceActive();
+		this.state = ChickenGunSwitch.State.Pull;
+	}
+
+	// Token: 0x06000DB8 RID: 3512 RVA: 0x000835C0 File Offset: 0x000817C0
+	private void PullState()
+	{
+		float num = this.animPull.frame / this.animPull.numFrames;
+		float x = this.boyGrabbing.input.stick.x;
+		if (!this.boyGrabbing.input.rawAction && num > 0.12f)
+		{
+			if (num < 0.18f)
+			{
+				this.Release(this.animDevicePullDrop, 0.35f);
+			}
+			else
+			{
+				this.Release(null, 0.2f);
+			}
+			return;
+		}
+		if (!this.animDevice.isPlaying)
+		{
+			this.animDevice.Play(this.animDeviceHanging.name);
+		}
+		if (num > this.returnFraction && this.boyGrabbing.input.stick.x > 0.3f)
+		{
+			this.SetAnimSpeed(this.returnSpeedIncrease, this.animDevicePullState, this.animPull);
+			if (num > this.anticipateReadyFraction)
+			{
+				this.animIdleToAnticipate.currentBlendValue = (this.currentBlend = (this.targetBlend = 1f));
+				this.SetIdleState();
+				return;
+			}
+		}
+		if (num >= 1f)
+		{
+			this.animIdleToAnticipate.currentBlendValue = (this.currentBlend = (this.targetBlend = 0.5f));
+			this.SetIdleState();
+			return;
+		}
+		if (x > -0.5f)
+		{
+			this.pullTimer = 0f;
+			this.pullAmount = 0;
+		}
+		else
+		{
+			if (x < -0.75f)
+			{
+				this.pullAmount++;
+				if (this.pullAmount > 6 && this.pullTimer < 0.3f)
+				{
+					float num2 = (num - 0.15f) / 0.18f;
+					num2 = Mathf.Clamp(num2, 0f, 1f);
+					this.SetPullState(true, num2);
+					return;
+				}
+			}
+			this.pullTimer += Time.deltaTime;
+		}
+		if (num > this.keepPullFraction && num < this.keepPullFraction + 0.04f && x < -0.75f)
+		{
+			this.SetKeepPullState();
+			return;
+		}
+	}
+
+	// Token: 0x06000DB9 RID: 3513 RVA: 0x000837EC File Offset: 0x000819EC
+	private void SetKeepPullState()
+	{
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animKeepPull, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		AnimationState animationState = this.animDevice[this.animDeviceKeepPull.name];
+		animationState.time = 0.01f;
+		this.animDevice.CrossFade(animationState.name, 0.2f);
+		this.pullTimer = 1f;
+		this.pullAmount = 0;
+		this.state = ChickenGunSwitch.State.KeepPull;
+	}
+
+	// Token: 0x06000DBA RID: 3514 RVA: 0x00083864 File Offset: 0x00081A64
+	private void KeepPullState()
+	{
+		float x = this.boyGrabbing.input.stick.x;
+		BoyCustomAnimState boyCustomAnimState = this.boyGrabbing.state as BoyCustomAnimState;
+		float num = 0f;
+		if (boyCustomAnimState != null && boyCustomAnimState.anim == this.animKeepPullReturn)
+		{
+			num = this.animKeepPullReturn.frame / this.animKeepPullReturn.numFrames;
+		}
+		if (!this.boyGrabbing.input.rawAction)
+		{
+			if (num < 0.07f)
+			{
+				this.Release(this.animDevicePullDrop, 0.35f);
+			}
+			else
+			{
+				this.Release(null, 0.2f);
+			}
+			return;
+		}
+		if (num >= 1f)
+		{
+			this.animIdleToAnticipate.currentBlendValue = (this.currentBlend = (this.targetBlend = 0.5f));
+			this.SetIdleState();
+			return;
+		}
+		if (num > 0.1f && x > 0.3f)
+		{
+			this.SetAnimSpeed(this.returnSpeedIncrease, this.animDeviceKeepPullReturnState, this.animKeepPullReturn);
+			if (num > 0.22f)
+			{
+				this.animIdleToAnticipate.currentBlendValue = (this.currentBlend = (this.targetBlend = 1f));
+				this.SetIdleState();
+				return;
+			}
+		}
+		if (x > -0.75f)
+		{
+			this.pullTimer = 0f;
+			this.pullAmount = 0;
+			if (boyCustomAnimState != null && boyCustomAnimState.anim != this.animKeepPullReturn)
+			{
+				this.SetAnimSpeed(1f, this.animDeviceKeepPullReturnState, this.animKeepPullReturn);
+				BoyUtils.StartCustomAnim(this.boyGrabbing, this.animKeepPullReturn, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				this.animDevice.CrossFade(this.animDeviceKeepPullReturnState.name, 0.2f);
+			}
+		}
+		else
+		{
+			this.pullTimer += Time.deltaTime;
+			if (num > 0.09f)
+			{
+				this.pullAmount++;
+				if ((float)this.pullAmount > 6f && this.pullTimer < 0.3f)
+				{
+					float num2 = (num - 0.04f) / 0.18f;
+					num2 = Mathf.Clamp(num2, 0f, 1f);
+					this.SetPullState(true, num2);
+					return;
+				}
+			}
+			else if (this.animKeepPull.frame >= this.animKeepPull.numFrames && boyCustomAnimState != null && boyCustomAnimState.anim != this.animKeepPullLoop)
+			{
+				BoyUtils.StartCustomAnim(this.boyGrabbing, this.animKeepPullLoop, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				this.animDevice.CrossFade(this.animDeviceKeepPullLoop.name, 0.2f);
+			}
+		}
+	}
+
+	// Token: 0x06000DBB RID: 3515 RVA: 0x00083B24 File Offset: 0x00081D24
+	private void FixedUpdate()
+	{
+		if (this.state != ChickenGunSwitch.State.None)
+		{
+			switch (this.state)
+			{
+			case ChickenGunSwitch.State.Idle:
+				this.IdleState();
+				break;
+			case ChickenGunSwitch.State.Grab:
+				this.GrabState();
+				break;
+			case ChickenGunSwitch.State.Pull:
+				this.PullState();
+				break;
+			case ChickenGunSwitch.State.Wait:
+				this.WaitState();
+				break;
+			case ChickenGunSwitch.State.KeepPull:
+				this.KeepPullState();
+				break;
+			}
+		}
+	}
+
+	// Token: 0x06000DBC RID: 3516 RVA: 0x00083B9C File Offset: 0x00081D9C
+	private void SetLightIntensity(float intensityFraction)
+	{
+		float num = this.lightIntesityCurve.Evaluate(intensityFraction);
+		if (this.lightSource)
+		{
+			if (this.lightStartIntensity == 0f)
+			{
+				this.lightStartIntensity = this.lightSource.intensity;
+			}
+			this.lightSource.intensity = num * this.lightStartIntensity;
+		}
+		if (this.lightSurface && this.lightColorProperty != null)
+		{
+			Color value = num * this.lightColor;
+			this.lightMaterialInstance.SetColorProperty(this.lightColorProperty, value);
+		}
+	}
+
+	// Token: 0x06000DBD RID: 3517 RVA: 0x00083C34 File Offset: 0x00081E34
+	private void AttemptStart(float v)
+	{
+		if (this.engineAttemptFx != null)
+		{
+			this.engineAttemptFx.Play(false);
+		}
+		this.pull.Signal();
+	}
+
+	// Token: 0x06000DBE RID: 3518 RVA: 0x00083C6C File Offset: 0x00081E6C
+	private void SetAnimSpeed(float speed, AnimationState animState, AnimClipNode boyAnim)
+	{
+		animState.speed = speed;
+		boyAnim.fps = speed * boyAnim.defaultfps;
+	}
+
+	// Token: 0x06000DBF RID: 3519 RVA: 0x00083C84 File Offset: 0x00081E84
+	private void Release(AnimationClip dropAnim = null, float blendSpeed = 0.2f)
+	{
+		if (!ScriptGlobals.boy.isDead)
+		{
+			BoyUtils.ClearState(this.boyGrabbing, blendSpeed);
+		}
+		this.boyGrabbing = null;
+		Device.SetVoiceNone();
+		if (dropAnim != null)
+		{
+			this.animDevice.CrossFade(dropAnim.name);
+		}
+		else
+		{
+			this.releaseTimer = this.releaseDelay;
+		}
+		this.SetWaitState();
+	}
+
+	// Token: 0x06000DC0 RID: 3520 RVA: 0x00083CEC File Offset: 0x00081EEC
+	private void OnLoad()
+	{
+		this.SetLightIntensity(1f);
+		if (this.engineStartFx != null)
+		{
+			this.engineStartFx.Play();
+		}
+		if (this.engineStartFx2 != null)
+		{
+			this.engineStartFx2.Play();
+		}
+		this.turnedOn = true;
+	}
+
+	// Token: 0x04001849 RID: 6217
+	public Light lightSource;
+
+	// Token: 0x0400184A RID: 6218
+	public Renderer lightSurface;
+
+	// Token: 0x0400184B RID: 6219
+	public Material lightOnMaterial;
+
+	// Token: 0x0400184C RID: 6220
+	public Material lightOffMaterial;
+
+	// Token: 0x0400184D RID: 6221
+	public AnimationCurve lightIntesityCurve;
+
+	// Token: 0x0400184E RID: 6222
+	private MaterialInstance lightMaterialInstance;
+
+	// Token: 0x0400184F RID: 6223
+	private MaterialInstance.ColorProperty lightColorProperty;
+
+	// Token: 0x04001850 RID: 6224
+	private Color lightColor = Color.white;
+
+	// Token: 0x04001851 RID: 6225
+	private float lightStartIntensity;
+
+	// Token: 0x04001852 RID: 6226
+	private float maxHealth;
+
+	// Token: 0x04001853 RID: 6227
+	private float returnSpeedIncrease = 1.65f;
+
+	// Token: 0x04001854 RID: 6228
+	private float keepPullFraction = 0.09f;
+
+	// Token: 0x04001855 RID: 6229
+	public AnimBlendNode animIdleToAnticipate;
+
+	// Token: 0x04001856 RID: 6230
+	public AnimClipNode animGrab;
+
+	// Token: 0x04001857 RID: 6231
+	public AnimClipNode animGrabFumble;
+
+	// Token: 0x04001858 RID: 6232
+	public AnimClipNode animPull;
+
+	// Token: 0x04001859 RID: 6233
+	public AnimClipNode animKeepPull;
+
+	// Token: 0x0400185A RID: 6234
+	public AnimClipNode animKeepPullLoop;
+
+	// Token: 0x0400185B RID: 6235
+	public AnimClipNode animKeepPullReturn;
+
+	// Token: 0x0400185C RID: 6236
+	public Animation animDevice;
+
+	// Token: 0x0400185D RID: 6237
+	public AnimationClip animDeviceHanging;
+
+	// Token: 0x0400185E RID: 6238
+	public AnimationClip animDevicePull;
+
+	// Token: 0x0400185F RID: 6239
+	public AnimationClip animDevicePullDrop;
+
+	// Token: 0x04001860 RID: 6240
+	public AnimationClip animDevicePullBlend;
+
+	// Token: 0x04001861 RID: 6241
+	public AnimationClip animDeviceKeepPull;
+
+	// Token: 0x04001862 RID: 6242
+	public AnimationClip animDeviceKeepPullLoop;
+
+	// Token: 0x04001863 RID: 6243
+	public AnimationClip animDeviceKeepPullReturn;
+
+	// Token: 0x04001864 RID: 6244
+	public AnimationClip animDeviceGrabFumble;
+
+	// Token: 0x04001865 RID: 6245
+	public ParticleSystem engineStartFx;
+
+	// Token: 0x04001866 RID: 6246
+	public ParticleSystem engineStartFx2;
+
+	// Token: 0x04001867 RID: 6247
+	public ParticleSystem engineAttemptFx;
+
+	// Token: 0x04001868 RID: 6248
+	public SignalOut pull;
+
+	// Token: 0x04001869 RID: 6249
+	public SignalOut on;
+
+	// Token: 0x0400186A RID: 6250
+	public SignalIn loadOn;
+
+	// Token: 0x0400186B RID: 6251
+	private ChickenGunSwitch.State state;
+
+	// Token: 0x0400186C RID: 6252
+	private AnimationState animDevicePullDropState;
+
+	// Token: 0x0400186D RID: 6253
+	private AnimationState animDeviceGrabFumbleState;
+
+	// Token: 0x0400186E RID: 6254
+	private AnimationState animDevicePullBlendState;
+
+	// Token: 0x0400186F RID: 6255
+	private AnimationState animDevicePullState;
+
+	// Token: 0x04001870 RID: 6256
+	private AnimationState animDeviceKeepPullReturnState;
+
+	// Token: 0x04001871 RID: 6257
+	private float pullTimer;
+
+	// Token: 0x04001872 RID: 6258
+	private int pullAmount;
+
+	// Token: 0x04001873 RID: 6259
+	private AnimClipNode currentGrab;
+
+	// Token: 0x04001874 RID: 6260
+	private float anticipateReadyFraction = 0.4f;
+
+	// Token: 0x04001875 RID: 6261
+	private float returnFraction = 0.13f;
+
+	// Token: 0x04001876 RID: 6262
+	private float targetBlend;
+
+	// Token: 0x04001877 RID: 6263
+	private float currentBlend;
+
+	// Token: 0x04001878 RID: 6264
+	private bool turnedOn;
+
+	// Token: 0x04001879 RID: 6265
+	private float grabTimer;
+
+	// Token: 0x0400187A RID: 6266
+	private float grabDelay = 0.2f;
+
+	// Token: 0x0400187B RID: 6267
+	private float grabStunTimer;
+
+	// Token: 0x0400187C RID: 6268
+	private float grabStunDelay = 0.17f;
+
+	// Token: 0x0400187D RID: 6269
+	private float releaseTimer;
+
+	// Token: 0x0400187E RID: 6270
+	private float releaseDelay = 0.12f;
+
+	// Token: 0x020001D0 RID: 464
+	private enum State
+	{
+		// Token: 0x04001880 RID: 6272
+		None,
+		// Token: 0x04001881 RID: 6273
+		Idle,
+		// Token: 0x04001882 RID: 6274
+		Grab,
+		// Token: 0x04001883 RID: 6275
+		Pull,
+		// Token: 0x04001884 RID: 6276
+		Wait,
+		// Token: 0x04001885 RID: 6277
+		KeepPull
+	}
+}

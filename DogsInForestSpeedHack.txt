@@ -1,0 +1,116 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000448 RID: 1096
+public class DogsInForestSpeedHack : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001CAA RID: 7338 RVA: 0x000F99D4 File Offset: 0x000F7BD4
+	public bool PreAwake(int callcount)
+	{
+		this.startChase = SignalIn.Create("startChase", base.gameObject, new Action(this.OnStartChase));
+		this.setHulvToKillMode = SignalOut.Create("setHulvToKillMode", base.gameObject);
+		this.chaseHasStartedForRealz = SignalOut.Create("chaseHasStartedForRealz", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001CAB RID: 7339 RVA: 0x000F9A30 File Offset: 0x000F7C30
+	private void Start()
+	{
+		this.waypoint1.speedPercentage = 0f;
+		this.waypoint2.speedPercentage = 0f;
+	}
+
+	// Token: 0x06001CAC RID: 7340 RVA: 0x000F9A60 File Offset: 0x000F7C60
+	private void OnStartChase()
+	{
+		this.chaseStarted = true;
+	}
+
+	// Token: 0x06001CAD RID: 7341 RVA: 0x000F9A6C File Offset: 0x000F7C6C
+	private void Update()
+	{
+		if (this.chaseStarted)
+		{
+			this.chaseTimer += Time.deltaTime;
+			if (!this.chaseStartedForRealz && this.chaseTimer > 4f && GameInput.stick.x < 0.65f)
+			{
+				this.chaseStartedForRealz = true;
+				this.chaseHasStartedForRealz.Signal();
+			}
+			if (!this.chaseStartedForRealz && this.startDelayed)
+			{
+				this.delayTimer += Time.deltaTime;
+				if (this.delayTimer > 0.18f)
+				{
+					this.chaseStartedForRealz = true;
+					this.chaseHasStartedForRealz.Signal();
+				}
+			}
+			if (!this.chaseStartedForRealz && ScriptGlobals.boy.transform.position.x > this.startChaseForRealsPivot.position.x && !this.startDelayed)
+			{
+				if (ScriptGlobals.boy.velocity.x > 4.75f)
+				{
+					this.chaseStartedForRealz = true;
+					this.chaseHasStartedForRealz.Signal();
+				}
+				else
+				{
+					this.startDelayed = true;
+				}
+			}
+			if (this.chaseStartedForRealz)
+			{
+				this.speedCurveTimer += Time.deltaTime;
+				if (!this.hulvSetToKillMode && this.speedCurveTimer > 4.8f)
+				{
+					this.hulvSetToKillMode = true;
+					this.setHulvToKillMode.Signal();
+				}
+				this.waypoint1.speedPercentage = this.speedCurve.Evaluate(this.speedCurveTimer);
+				this.waypoint2.speedPercentage = this.speedCurve.Evaluate(this.speedCurveTimer);
+			}
+		}
+	}
+
+	// Token: 0x0400347F RID: 13439
+	public AnimationCurve speedCurve;
+
+	// Token: 0x04003480 RID: 13440
+	public HulvWaypoint waypoint1;
+
+	// Token: 0x04003481 RID: 13441
+	public HulvWaypoint waypoint2;
+
+	// Token: 0x04003482 RID: 13442
+	public Transform startChaseForRealsPivot;
+
+	// Token: 0x04003483 RID: 13443
+	private SignalIn startChase;
+
+	// Token: 0x04003484 RID: 13444
+	private SignalOut chaseHasStartedForRealz;
+
+	// Token: 0x04003485 RID: 13445
+	private SignalOut setHulvToKillMode;
+
+	// Token: 0x04003486 RID: 13446
+	private bool chaseStarted;
+
+	// Token: 0x04003487 RID: 13447
+	private float chaseTimer;
+
+	// Token: 0x04003488 RID: 13448
+	private bool chaseStartedForRealz;
+
+	// Token: 0x04003489 RID: 13449
+	private float speedCurveTimer;
+
+	// Token: 0x0400348A RID: 13450
+	private bool hulvSetToKillMode;
+
+	// Token: 0x0400348B RID: 13451
+	private bool startDelayed;
+
+	// Token: 0x0400348C RID: 13452
+	private float delayTimer;
+}

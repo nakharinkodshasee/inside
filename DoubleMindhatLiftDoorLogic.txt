@@ -1,0 +1,355 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000437 RID: 1079
+public class DoubleMindhatLiftDoorLogic : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001C3F RID: 7231 RVA: 0x000F7164 File Offset: 0x000F5364
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.door.gameObject, this);
+		this.audioFinalOpenEvent = new AudioEventSimpleLocal(this.audioPrefix + "_finalOpen", akGameObj);
+		this.audioImpactDownEvent = new AudioEventSimpleLocal(this.audioPrefix + "_impactDown", akGameObj);
+		this.audioImpactUpEvent = new AudioEventSimpleLocal(this.audioPrefix + "_impactUp", akGameObj);
+		this.audioGrabEvent = new AudioEventSimpleLocal(this.audioPrefix + "_grab", akGameObj);
+		this.audioLetGoEvent = new AudioEventSimpleLocal(this.audioPrefix + "_letGo", akGameObj);
+	}
+
+	// Token: 0x06001C40 RID: 7232 RVA: 0x000F7224 File Offset: 0x000F5424
+	public bool PreAwake(int callcount)
+	{
+		this.openSuccess = SignalOut.Create("openSuccess", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001C41 RID: 7233 RVA: 0x000F7240 File Offset: 0x000F5440
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.doorStart = this.door.position;
+	}
+
+	// Token: 0x06001C42 RID: 7234 RVA: 0x000F725C File Offset: 0x000F545C
+	private void ClearBoyState(DoubleMindhatGrabPoint boyStatus)
+	{
+		boyStatus.boyState = DoubleMindhatLiftDoorLogic.BoyState.Free;
+		BoyUtils.ClearState(boyStatus.boy.GetBoy(), -1f);
+		this.audioLetGoEvent.PostFast();
+	}
+
+	// Token: 0x06001C43 RID: 7235 RVA: 0x000F7294 File Offset: 0x000F5494
+	private void Update()
+	{
+		this.boysPulling = 0;
+		float num = 0f;
+		float num2 = 0f;
+		int i = 0;
+		int num3 = this.grabPoints.Length;
+		while (i < num3)
+		{
+			DoubleMindhatGrabPoint doubleMindhatGrabPoint = this.grabPoints[i];
+			if (!(doubleMindhatGrabPoint.boy == null))
+			{
+				Boy boy = doubleMindhatGrabPoint.boy.GetBoy();
+				if (!(boy == null))
+				{
+					switch (doubleMindhatGrabPoint.boyState)
+					{
+					case DoubleMindhatLiftDoorLogic.BoyState.Free:
+						if (Device.GrabCheck(boy, true))
+						{
+							Vector3 position = doubleMindhatGrabPoint.idleToGrab.transform.position;
+							if (Mathf.Abs(boy.pos.x - position.x) < 0.5f && Mathf.Abs(boy.pos.y - position.y) < 1.5f)
+							{
+								doubleMindhatGrabPoint.boyState = DoubleMindhatLiftDoorLogic.BoyState.EnterGrab;
+								BoyUtils.StartCustomAnim(boy, doubleMindhatGrabPoint.idleToGrab, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+							}
+						}
+						break;
+					case DoubleMindhatLiftDoorLogic.BoyState.EnterGrab:
+						if (!boy.input.rawAction)
+						{
+							this.ClearBoyState(doubleMindhatGrabPoint);
+						}
+						else if (doubleMindhatGrabPoint.idleToGrab.frame > doubleMindhatGrabPoint.idleToGrab.numFrames - 3f)
+						{
+							this.audioGrabEvent.PostFast();
+							if (boy.input.looseDir.y > 0f)
+							{
+								doubleMindhatGrabPoint.boyState = DoubleMindhatLiftDoorLogic.BoyState.GrabLifting;
+								BoyUtils.StartCustomAnim(boy, doubleMindhatGrabPoint.lift, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+								int j = 0;
+								int num4 = this.grabPoints.Length;
+								while (j < num4)
+								{
+									DoubleMindhatGrabPoint doubleMindhatGrabPoint2 = this.grabPoints[j];
+									if (doubleMindhatGrabPoint2 != doubleMindhatGrabPoint && doubleMindhatGrabPoint2.boyState == DoubleMindhatLiftDoorLogic.BoyState.GrabLifting && doubleMindhatGrabPoint2.lift.frame > 1f)
+									{
+										doubleMindhatGrabPoint.lift.frame = doubleMindhatGrabPoint2.lift.frame;
+									}
+									j++;
+								}
+							}
+							else
+							{
+								doubleMindhatGrabPoint.boyState = DoubleMindhatLiftDoorLogic.BoyState.GrabIdle;
+								BoyUtils.StartCustomAnim(boy, doubleMindhatGrabPoint.idle, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+							}
+						}
+						break;
+					case DoubleMindhatLiftDoorLogic.BoyState.GrabIdle:
+						if (!boy.input.rawAction)
+						{
+							this.ClearBoyState(doubleMindhatGrabPoint);
+						}
+						else if (boy.input.looseDir.y > 0f)
+						{
+							doubleMindhatGrabPoint.boyState = DoubleMindhatLiftDoorLogic.BoyState.GrabLifting;
+							BoyUtils.StartCustomAnim(boy, doubleMindhatGrabPoint.lift, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+						}
+						break;
+					case DoubleMindhatLiftDoorLogic.BoyState.GrabLifting:
+						if (!boy.input.rawAction)
+						{
+							this.ClearBoyState(doubleMindhatGrabPoint);
+						}
+						else if (boy.input.looseDir.y <= 0f)
+						{
+							doubleMindhatGrabPoint.boyState = DoubleMindhatLiftDoorLogic.BoyState.GrabIdle;
+							BoyUtils.StartCustomAnim(boy, doubleMindhatGrabPoint.idle, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+						}
+						else
+						{
+							this.sineCounter += Time.deltaTime * 23f;
+							this.boysPulling++;
+							float num5 = doubleMindhatGrabPoint.lift.frame;
+							if (num5 > num2 * doubleMindhatGrabPoint.lift.numFrames)
+							{
+								num2 = num5 / doubleMindhatGrabPoint.lift.numFrames;
+							}
+							if (this.boysPullingLastFrame >= this.boysNeeded)
+							{
+								num = this.liftTimeLastFrame + Time.deltaTime;
+								if (num > this.pullopenTime)
+								{
+									if (!this.doorIsOpening)
+									{
+										this.audioFinalOpenEvent.PostFast();
+										this.openSuccess.Signal();
+									}
+									this.doorIsOpening = true;
+									this.doorFallVel = 2f;
+									doubleMindhatGrabPoint.boyState = DoubleMindhatLiftDoorLogic.BoyState.Opening;
+									BoyUtils.StartCustomAnim(boy, doubleMindhatGrabPoint.open, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+								}
+							}
+							else if (this.boysPullingLastFrame > 0)
+							{
+								float num6 = doubleMindhatGrabPoint.lift.numFrames * 0.3f + Mathf.Sin(this.sineCounter) * 4f;
+								if (num5 > num6)
+								{
+									num5 += (num6 - num5) * Time.deltaTime * 4f;
+									doubleMindhatGrabPoint.lift.frame = num5;
+								}
+							}
+						}
+						break;
+					case DoubleMindhatLiftDoorLogic.BoyState.Opening:
+					{
+						this.doorFallVel += 6f * Time.deltaTime;
+						Vector3 position2 = this.door.position + Vector3.up * this.doorFallVel * Time.deltaTime;
+						if (position2.y > this.doorPoint.position.y)
+						{
+							position2.y = this.doorPoint.position.y;
+							if (this.doorBounce < 3)
+							{
+								this.doorBounce++;
+								this.doorFallVel = -0.3f * this.doorFallVel;
+							}
+							else
+							{
+								this.audioImpactUpEvent.PostFast();
+								base.gameObject.SetActive(false);
+							}
+						}
+						this.door.position = position2;
+						break;
+					}
+					}
+				}
+			}
+			i++;
+		}
+		if (this.doorIsOpening)
+		{
+			return;
+		}
+		if (this.boysPulling == 0 && this.boysPullingLastFrame > 0)
+		{
+			this.moveSoundEventSent = false;
+		}
+		if (num2 > 0f || this.currentDoorLift > 0f)
+		{
+			if (this.boysPulling > 0 && num2 >= this.currentDoorLift)
+			{
+				this.doorFallVel = 0f;
+				if (!this.moveSoundEventSent)
+				{
+					this.moveSoundEventSent = true;
+				}
+				if (this.boysPulling == 1)
+				{
+					if (num2 <= this.lastHighestLift)
+					{
+						num2 = this.lastHighestLift + (num2 - this.lastHighestLift) * Time.deltaTime * 5f;
+					}
+					this.currentDoorLift = num2 * this.doorLiftFactor;
+					float num7 = num2 / 0.4f * 100f;
+					if (num7 >= 95f && !this.highReached)
+					{
+						this.highReached = true;
+					}
+					else if (num7 <= 94f && this.highReached)
+					{
+						this.highReached = false;
+					}
+				}
+				else
+				{
+					this.currentDoorLift = num2 * this.doorLiftFactor;
+					float num7 = num2 / 0.4f * 100f;
+				}
+			}
+			else
+			{
+				this.doorFallVel += Time.deltaTime * 10f;
+				this.currentDoorLift -= this.doorFallVel * Time.deltaTime;
+				if (this.currentDoorLift <= 0f)
+				{
+					this.audioImpactDownEvent.PostFast();
+					this.currentDoorLift = 0f;
+					this.doorFallVel = 0f;
+				}
+			}
+			this.door.position = this.doorStart + Vector3.up * this.currentDoorLift;
+		}
+		this.liftTimeLastFrame = num;
+		this.boysPullingLastFrame = this.boysPulling;
+		this.lastHighestLift = num2;
+		if (this.boysPulling == 0)
+		{
+			this.sineCounter = 0f;
+		}
+	}
+
+	// Token: 0x040033C3 RID: 13251
+	public DoubleMindhatGrabPoint[] grabPoints;
+
+	// Token: 0x040033C4 RID: 13252
+	public int boysNeeded = 2;
+
+	// Token: 0x040033C5 RID: 13253
+	public float pullopenTime = 1f;
+
+	// Token: 0x040033C6 RID: 13254
+	public Transform door;
+
+	// Token: 0x040033C7 RID: 13255
+	public Transform doorPoint;
+
+	// Token: 0x040033C8 RID: 13256
+	public string audioPrefix = "_farm_pigFight";
+
+	// Token: 0x040033C9 RID: 13257
+	private Vector3 doorStart;
+
+	// Token: 0x040033CA RID: 13258
+	private SignalOut openSuccess;
+
+	// Token: 0x040033CB RID: 13259
+	private int boysPullingLastFrame;
+
+	// Token: 0x040033CC RID: 13260
+	private float liftTimeLastFrame;
+
+	// Token: 0x040033CD RID: 13261
+	private float sineCounter;
+
+	// Token: 0x040033CE RID: 13262
+	private bool doorIsOpening;
+
+	// Token: 0x040033CF RID: 13263
+	private float currentDoorLift;
+
+	// Token: 0x040033D0 RID: 13264
+	private float doorLiftFactor = 0.7f;
+
+	// Token: 0x040033D1 RID: 13265
+	private float doorFallVel;
+
+	// Token: 0x040033D2 RID: 13266
+	private int doorBounce;
+
+	// Token: 0x040033D3 RID: 13267
+	private bool moveSoundEventSent;
+
+	// Token: 0x040033D4 RID: 13268
+	private bool highReached;
+
+	// Token: 0x040033D5 RID: 13269
+	private int boysPulling;
+
+	// Token: 0x040033D6 RID: 13270
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x040033D7 RID: 13271
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioFinalOpenEvent;
+
+	// Token: 0x040033D8 RID: 13272
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioImpactDownEvent;
+
+	// Token: 0x040033D9 RID: 13273
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioImpactUpEvent;
+
+	// Token: 0x040033DA RID: 13274
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioGrabEvent;
+
+	// Token: 0x040033DB RID: 13275
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioLetGoEvent;
+
+	// Token: 0x040033DC RID: 13276
+	private float lastHighestLift;
+
+	// Token: 0x02000438 RID: 1080
+	public enum BoyState
+	{
+		// Token: 0x040033DE RID: 13278
+		Free,
+		// Token: 0x040033DF RID: 13279
+		EnterGrab,
+		// Token: 0x040033E0 RID: 13280
+		GrabIdle,
+		// Token: 0x040033E1 RID: 13281
+		GrabLifting,
+		// Token: 0x040033E2 RID: 13282
+		Opening
+	}
+}

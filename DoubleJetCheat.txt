@@ -1,0 +1,147 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000199 RID: 409
+public class DoubleJetCheat : MonoBehaviour, IFastEventListener
+{
+	// Token: 0x06000C03 RID: 3075 RVA: 0x00075888 File Offset: 0x00073A88
+	private void Start()
+	{
+		this.fixedJetCrate.jetCrateForceActive.Register(this, ref this.jetCrateForceActiveHandle);
+		this.fixedJetCrateInitPos = this.fixedJetCrate.transform.position;
+		this.companionJetCrate = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.labJetCrate).GetComponent<JetCrate>();
+		this.companionJetCrate.jetCrateForceActive.Register(this, ref this.companionCrateForceActiveHandle);
+		this.originalWarmupTime = this.companionJetCrate.jetwarmUpTime;
+	}
+
+	// Token: 0x06000C04 RID: 3076 RVA: 0x00075900 File Offset: 0x00073B00
+	private void OnDestroy()
+	{
+		this.companionJetCrate.jetCrateForceActive.Unregister(ref this.companionCrateForceActiveHandle);
+		this.companionJetCrate.jetwarmUpTime = this.originalWarmupTime;
+	}
+
+	// Token: 0x06000C05 RID: 3077 RVA: 0x0007592C File Offset: 0x00073B2C
+	private void JetCrateForceActive(JetCrate jetCrate)
+	{
+		JetCrate jetCrateOnTopOfYou = jetCrate.GetJetCrateOnTopOfYou();
+		if (jetCrateOnTopOfYou)
+		{
+			float timeToJet = jetCrateOnTopOfYou.GetTimeToJet();
+			if (timeToJet < this.minWorkingTimeDif)
+			{
+				jetCrateOnTopOfYou.SetTimeToJet(this.minWorkingTimeDif);
+			}
+			else if (timeToJet > this.maxWorkingTimeDif && timeToJet <= this.maxResqueTimeDif)
+			{
+				jetCrateOnTopOfYou.SetTimeToJet(this.maxWorkingTimeDif);
+			}
+			else if (timeToJet > this.maxResqueTimeDif)
+			{
+				float num = this.maxResqueTimeDif - this.maxWorkingTimeDif;
+				jetCrateOnTopOfYou.SetTimeToJet(timeToJet - num * 0.9f);
+			}
+		}
+	}
+
+	// Token: 0x06000C06 RID: 3078 RVA: 0x000759C8 File Offset: 0x00073BC8
+	public void OnFastEvent(FastEvent sender)
+	{
+		if (sender == this.fixedJetCrate.jetCrateForceActive)
+		{
+			this.fixedJetCrate_jetCrateForceActive();
+		}
+		else if (sender == this.companionJetCrate.jetCrateForceActive)
+		{
+			this.otherJetCrate_jetCrateForceActive();
+		}
+	}
+
+	// Token: 0x06000C07 RID: 3079 RVA: 0x00075A00 File Offset: 0x00073C00
+	private void otherJetCrate_jetCrateForceActive()
+	{
+		if (this.companionJetCrate != null && this.fixedJetCrate.transform.position.y > this.companionJetCrate.transform.position.y)
+		{
+			this.JetCrateForceActive(this.companionJetCrate);
+		}
+	}
+
+	// Token: 0x06000C08 RID: 3080 RVA: 0x00075A60 File Offset: 0x00073C60
+	private void fixedJetCrate_jetCrateForceActive()
+	{
+		if (this.companionJetCrate == null || this.companionJetCrate.transform.position.y > this.fixedJetCrate.transform.position.y)
+		{
+			this.JetCrateForceActive(this.fixedJetCrate);
+		}
+	}
+
+	// Token: 0x06000C09 RID: 3081 RVA: 0x00075AC0 File Offset: 0x00073CC0
+	private bool JetCratesAreStacked()
+	{
+		float y = this.fixedJetCrate.transform.position.y;
+		if (this.companionJetCrate != null && this.fixedJetCrateInitPos.y < y - 0.5f)
+		{
+			Vector3 position = this.companionJetCrate.transform.position;
+			if (Mathf.Abs(position.x - this.fixedJetCrateInitPos.x) < 0.5f && position.y < y)
+			{
+				float num = y + Mathf.Min(this.fixedJetCrate.GetComponent<Rigidbody>().velocity.y, 0f) * 1f;
+				if (num - position.y < 1.4f)
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x06000C0A RID: 3082 RVA: 0x00075B90 File Offset: 0x00073D90
+	private void FixedUpdate()
+	{
+		if (this.companionJetCrate != null)
+		{
+			if (this.companionJetCrate.transform.position.y < this.fixedJetCrate.transform.position.y - 0.2f)
+			{
+				this.companionJetCrate.jetwarmUpTime = 5.5f;
+			}
+			else
+			{
+				this.companionJetCrate.jetwarmUpTime = this.originalWarmupTime;
+			}
+		}
+		float x = ScriptGlobals.boy.pos.x;
+		float y = ScriptGlobals.boy.pos.y;
+		Vector3 position = this.fixedJetCrate.transform.position;
+		float num = -0.5f;
+		if (x > position.x - 0.6f && x < position.x + 0.6f && y < position.y + num && y > position.y - 1.5f && ScriptGlobals.boy.state is BoyJumpState && Mathf.Abs(ScriptGlobals.boy.velocity.x) < 0.2f && this.JetCratesAreStacked() && !this.fixedJetCrate.IsJetting() && !this.companionJetCrate.IsJetting() && ScriptGlobals.boy.velocity.y > 1.5f && ScriptGlobals.boy.velocity.y < 2.5f)
+		{
+			ScriptGlobals.boy.AddVelocity(vector2f.up * 20f * Time.deltaTime, null, 1f);
+		}
+	}
+
+	// Token: 0x0400150C RID: 5388
+	public JetCrate fixedJetCrate;
+
+	// Token: 0x0400150D RID: 5389
+	public float minWorkingTimeDif = 0.68f;
+
+	// Token: 0x0400150E RID: 5390
+	public float maxWorkingTimeDif = 2f;
+
+	// Token: 0x0400150F RID: 5391
+	public float maxResqueTimeDif = 3f;
+
+	// Token: 0x04001510 RID: 5392
+	private JetCrate companionJetCrate;
+
+	// Token: 0x04001511 RID: 5393
+	private float originalWarmupTime = 4f;
+
+	// Token: 0x04001512 RID: 5394
+	private Vector3 fixedJetCrateInitPos;
+
+	// Token: 0x04001513 RID: 5395
+	private int jetCrateForceActiveHandle = -1;
+
+	// Token: 0x04001514 RID: 5396
+	private int companionCrateForceActiveHandle = -1;
+}

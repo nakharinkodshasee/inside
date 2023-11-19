@@ -1,0 +1,426 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000196 RID: 406
+public class DartWater : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000BE3 RID: 3043 RVA: 0x00074C9C File Offset: 0x00072E9C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.gunLocation.gameObject, this);
+		this.audioShot = new AudioEventSimpleLocal(this.audioPrefix + "_dart_shot", akGameObj);
+		this.audioMissBoy = new AudioEventSimple(this.audioPrefix + "_dart_hit" + this.audioMissMaterial);
+		this.audioHitBoy = new AudioEventSimple(this.audioPrefix + "_dart_hitBoy");
+		this.dartEffectHolder = new GameObject("DartEffectHolder").transform;
+		this.dartEffectHolder.parent = base.transform.parent;
+		this.dartEffectHolder.localPosition = Vector3Fast.zero;
+		this.dartEffects = new DartEffect[this.dartsMissingBoy];
+		this.killTrigger.SetActive(false);
+		for (int i = 0; i < this.dartsMissingBoy; i++)
+		{
+			Transform transform = Object.Instantiate<GameObject>(this.dartEffectPrefab).transform;
+			transform.parent = this.dartEffectHolder;
+			transform.localPosition = Vector3Fast.zero;
+			DartEffect component = transform.GetComponent<DartEffect>();
+			component.SetupWaterQueue(this.waterQueueMaster);
+			this.dartEffects[i] = component;
+		}
+	}
+
+	// Token: 0x06000BE4 RID: 3044 RVA: 0x00074DDC File Offset: 0x00072FDC
+	public bool PreAwake(int callcount)
+	{
+		this.tranquilise = SignalIn.Create("tranquilise", base.gameObject, new Action(this.OnTranquilise));
+		this.kill = SignalIn.Create("kill", base.gameObject, new Action(this.OnKill));
+		this.boyShot = SignalOut.Create("boyShot", base.gameObject);
+		this.doFirstShot = SignalOut.Create("doFirstShot", base.gameObject);
+		this.shotFired = SignalOut.Create("shotFired", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06000BE5 RID: 3045 RVA: 0x00074E70 File Offset: 0x00073070
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.limitInput = base.GetComponent<BoySetInput>();
+		this.dartTransform = this.dartParent.transform;
+		if (this.dartParent.activeSelf)
+		{
+			this.dartParent.SetActive(false);
+		}
+		this.pauseTimer = this.pauseDelay;
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x06000BE6 RID: 3046 RVA: 0x00074ED4 File Offset: 0x000730D4
+	private void SetShootState()
+	{
+		if (this.state != DartWater.State.None)
+		{
+			return;
+		}
+		this.killTrigger.SetActive(true);
+		this.state = DartWater.State.Shoot;
+	}
+
+	// Token: 0x06000BE7 RID: 3047 RVA: 0x00074EF8 File Offset: 0x000730F8
+	private void ShootState()
+	{
+		if (!this.firstShot)
+		{
+			this.doFirstShot.Signal();
+			this.firstShot = true;
+		}
+		if (this.boy.velocity3.magnitude < 0.5f)
+		{
+			this.pauseTimer -= Time.deltaTime;
+			if (this.pauseTimer <= 0f)
+			{
+				this.SetPrepareState();
+				return;
+			}
+		}
+		else if (this.pauseTimer < this.pauseDelay)
+		{
+			this.pauseTimer += Time.deltaTime;
+		}
+		if (this.shootTimer > 0f)
+		{
+			this.shootTimer -= Time.deltaTime;
+		}
+		else if (this.currentDartCount >= this.dartsMissingBoy)
+		{
+			this.SetPrepareState();
+		}
+		else
+		{
+			this.shootTimer = Random.Range(this.minShootDelay, this.maxShootDelay);
+			this.shotFired.Signal();
+			this.audioShot.PostFast();
+			this.shotQue++;
+			this.shotDelayTimer = 0f;
+		}
+	}
+
+	// Token: 0x06000BE8 RID: 3048 RVA: 0x0007501C File Offset: 0x0007321C
+	private void SetPrepareState()
+	{
+		this.shotFired.Signal();
+		this.audioShot.PostFast();
+		this.state = DartWater.State.Prepare;
+	}
+
+	// Token: 0x06000BE9 RID: 3049 RVA: 0x0007503C File Offset: 0x0007323C
+	private void PrepareState()
+	{
+		this.killShotDelayTimer += Time.deltaTime;
+		if (this.killShotDelayTimer >= this.timeFromShotToHit && !this.boy.isDead)
+		{
+			this.SetTranquiliseState();
+			this.audioHitBoy.PostFast(AudioKeyObject.AkGameObjs.boy);
+			this.boyShot.Signal();
+		}
+	}
+
+	// Token: 0x06000BEA RID: 3050 RVA: 0x000750A0 File Offset: 0x000732A0
+	private void SetTranquiliseState()
+	{
+		Transform transform = this.boy.visualBoy.actor.bones[this.boy.visualBoy.actor.GetBone("SpineB")].transform;
+		this.dartTransform.position = transform.position;
+		this.dartTransform.rotation = transform.rotation;
+		this.dartTransform.parent = transform;
+		this.limitInput.activateScript();
+		if (this.animHitSwimming)
+		{
+			this.boy.visualBoy.additiveAnim = this.animHitSwimming;
+		}
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.5f, 0.2f, 0, 0f);
+		this.dartParent.SetActive(true);
+		this.state = DartWater.State.Tranquilise;
+	}
+
+	// Token: 0x06000BEB RID: 3051 RVA: 0x00075178 File Offset: 0x00073378
+	private void TranquiliseState()
+	{
+		this.timer += Time.deltaTime;
+		if (this.timer >= this.timeTotal)
+		{
+			this.FallAsleep();
+			return;
+		}
+		float num = 1f - this.inputLimitCurve.Evaluate(this.timer / this.timeTotal);
+		this.limitInput.negCapX = (this.limitInput.negCapY = num * -1f);
+		this.limitInput.posCapX = (this.limitInput.posCapY = num * 1f);
+	}
+
+	// Token: 0x06000BEC RID: 3052 RVA: 0x00075210 File Offset: 0x00073410
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case DartWater.State.Shoot:
+			this.ShootState();
+			break;
+		case DartWater.State.Prepare:
+			this.PrepareState();
+			break;
+		case DartWater.State.Tranquilise:
+			this.TranquiliseState();
+			break;
+		}
+		if (this.shotQue > 0 && this.currentDartCount <= this.dartsMissingBoy - 1)
+		{
+			this.shotDelayTimer += Time.deltaTime;
+			if (this.shotDelayTimer >= this.timeFromShotToHit)
+			{
+				this.PlaceDartShot();
+				this.currentDartCount++;
+				this.shotQue--;
+				if (this.shotQue > 0)
+				{
+					this.shotDelayTimer = 0f;
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000BED RID: 3053 RVA: 0x000752DC File Offset: 0x000734DC
+	private void PlaceDartShot()
+	{
+		Vector3 vector = this.FindDartTarget();
+		if (vector != Vector3Fast.zero)
+		{
+			DartEffect dartEffect = this.dartEffects[this.currentDartCount];
+			Vector3 position = this.gunLocation.position;
+			Ray ray;
+			ray..ctor(position, vector - position);
+			RaycastHit raycastHit = default(RaycastHit);
+			if (this.waterCollider && this.waterCollider.Raycast(ray, ref raycastHit, 200f))
+			{
+				dartEffect.Place(raycastHit.point + ray.direction.normalized, position, raycastHit.point);
+				this.audioMissBoy.PostFast(dartEffect.akGameObj);
+			}
+		}
+	}
+
+	// Token: 0x06000BEE RID: 3054 RVA: 0x00075394 File Offset: 0x00073594
+	private Vector3 FindDartTarget()
+	{
+		Vector2 vector = Random.insideUnitCircle.normalized * (0.6f + Random.value * 1f);
+		Vector3 pos = this.boy.pos3;
+		Vector3 result = pos;
+		result.x += vector.x;
+		result.z += vector.y;
+		result.y -= 0.2f + Random.value;
+		if (this.previousShotInDepth && result.z > 0f)
+		{
+			result.z *= -1f;
+		}
+		this.previousShotInDepth = (result.z > 0f);
+		float num = result.x - pos.x;
+		if (result.z < 0f && Mathf.Abs(num) < this.dartMinDistX)
+		{
+			result.x = pos.x + Mathf.Sign(num) * this.dartMinDistX;
+		}
+		return result;
+	}
+
+	// Token: 0x06000BEF RID: 3055 RVA: 0x000754AC File Offset: 0x000736AC
+	private void FallAsleep()
+	{
+		this.boy.DrownKill();
+		this.state = DartWater.State.None;
+	}
+
+	// Token: 0x06000BF0 RID: 3056 RVA: 0x000754C0 File Offset: 0x000736C0
+	private void OnKill()
+	{
+		if (this.state == DartWater.State.None || this.state == DartWater.State.Shoot)
+		{
+			this.SetPrepareState();
+		}
+	}
+
+	// Token: 0x06000BF1 RID: 3057 RVA: 0x000754E0 File Offset: 0x000736E0
+	private void OnTranquilise()
+	{
+		this.SetShootState();
+	}
+
+	// Token: 0x040014CF RID: 5327
+	public float timeTotal = 3f;
+
+	// Token: 0x040014D0 RID: 5328
+	public AnimationCurve inputLimitCurve;
+
+	// Token: 0x040014D1 RID: 5329
+	public AnimClipNode animHitSwimming;
+
+	// Token: 0x040014D2 RID: 5330
+	public AnimClipNode animDieSwiming;
+
+	// Token: 0x040014D3 RID: 5331
+	public GameObject dartParent;
+
+	// Token: 0x040014D4 RID: 5332
+	public Transform dartVisuals;
+
+	// Token: 0x040014D5 RID: 5333
+	public Transform dartFrontPos;
+
+	// Token: 0x040014D6 RID: 5334
+	public Transform gunLocation;
+
+	// Token: 0x040014D7 RID: 5335
+	public GameObject killTrigger;
+
+	// Token: 0x040014D8 RID: 5336
+	public GameObject dartEffectPrefab;
+
+	// Token: 0x040014D9 RID: 5337
+	public Transform dartTargetsHolder;
+
+	// Token: 0x040014DA RID: 5338
+	public Collider waterCollider;
+
+	// Token: 0x040014DB RID: 5339
+	public WaterQueueMaster waterQueueMaster;
+
+	// Token: 0x040014DC RID: 5340
+	public int dartsMissingBoy = 3;
+
+	// Token: 0x040014DD RID: 5341
+	public float minShootDelay = 0.2f;
+
+	// Token: 0x040014DE RID: 5342
+	public float maxShootDelay = 0.5f;
+
+	// Token: 0x040014DF RID: 5343
+	public string audioPrefix = string.Empty;
+
+	// Token: 0x040014E0 RID: 5344
+	public string audioMissMaterial = "Water";
+
+	// Token: 0x040014E1 RID: 5345
+	private float shootTimer;
+
+	// Token: 0x040014E2 RID: 5346
+	private int currentDartCount;
+
+	// Token: 0x040014E3 RID: 5347
+	private float pauseDelay = 0.3f;
+
+	// Token: 0x040014E4 RID: 5348
+	private float pauseTimer;
+
+	// Token: 0x040014E5 RID: 5349
+	private float dartMinDistX = 0.6f;
+
+	// Token: 0x040014E6 RID: 5350
+	private bool previousShotInDepth;
+
+	// Token: 0x040014E7 RID: 5351
+	private BoySetInput limitInput;
+
+	// Token: 0x040014E8 RID: 5352
+	private bool isJumpDisabled;
+
+	// Token: 0x040014E9 RID: 5353
+	private float timer;
+
+	// Token: 0x040014EA RID: 5354
+	private Boy boy;
+
+	// Token: 0x040014EB RID: 5355
+	private Transform dartTransform;
+
+	// Token: 0x040014EC RID: 5356
+	private float timeFromShotToHit = 0.19f;
+
+	// Token: 0x040014ED RID: 5357
+	private float shotDelayTimer;
+
+	// Token: 0x040014EE RID: 5358
+	private float killShotDelayTimer;
+
+	// Token: 0x040014EF RID: 5359
+	private int shotQue;
+
+	// Token: 0x040014F0 RID: 5360
+	public bool debug;
+
+	// Token: 0x040014F1 RID: 5361
+	private SignalIn tranquilise;
+
+	// Token: 0x040014F2 RID: 5362
+	private SignalIn kill;
+
+	// Token: 0x040014F3 RID: 5363
+	private SignalOut doFirstShot;
+
+	// Token: 0x040014F4 RID: 5364
+	private SignalOut boyShot;
+
+	// Token: 0x040014F5 RID: 5365
+	private SignalOut shotFired;
+
+	// Token: 0x040014F6 RID: 5366
+	private DartWater.State state;
+
+	// Token: 0x040014F7 RID: 5367
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x040014F8 RID: 5368
+	[HideInInspector]
+	[SerializeField]
+	private Transform dartEffectHolder;
+
+	// Token: 0x040014F9 RID: 5369
+	[HideInInspector]
+	[SerializeField]
+	private DartEffect[] dartEffects;
+
+	// Token: 0x040014FA RID: 5370
+	[HideInInspector]
+	[SerializeField]
+	private Transform[] dartTargets;
+
+	// Token: 0x040014FB RID: 5371
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioMissBoy;
+
+	// Token: 0x040014FC RID: 5372
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioHitBoy;
+
+	// Token: 0x040014FD RID: 5373
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioShot;
+
+	// Token: 0x040014FE RID: 5374
+	private bool firstShot;
+
+	// Token: 0x02000197 RID: 407
+	private enum State
+	{
+		// Token: 0x04001500 RID: 5376
+		None,
+		// Token: 0x04001501 RID: 5377
+		Shoot,
+		// Token: 0x04001502 RID: 5378
+		Prepare,
+		// Token: 0x04001503 RID: 5379
+		Tranquilise
+	}
+}

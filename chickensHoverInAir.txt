@@ -1,0 +1,96 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200006A RID: 106
+public class chickensHoverInAir : MonoBehaviour
+{
+	// Token: 0x06000374 RID: 884 RVA: 0x00026CD0 File Offset: 0x00024ED0
+	private void OnEnable()
+	{
+		this.chickensInZone.Clear();
+	}
+
+	// Token: 0x06000375 RID: 885 RVA: 0x00026CE0 File Offset: 0x00024EE0
+	private void Start()
+	{
+		if (this.autoStart)
+		{
+			this.isSucking = true;
+		}
+		this.forceVector = (this.forceTowards.position - base.gameObject.transform.position).normalized * 0.001f * this.forceFactor;
+	}
+
+	// Token: 0x06000376 RID: 886 RVA: 0x00026D44 File Offset: 0x00024F44
+	public void EnableSucking()
+	{
+		this.isSucking = true;
+		base.GetComponent<Renderer>().enabled = true;
+	}
+
+	// Token: 0x06000377 RID: 887 RVA: 0x00026D5C File Offset: 0x00024F5C
+	public void DisableSucking()
+	{
+		this.isSucking = false;
+		base.GetComponent<Renderer>().enabled = false;
+	}
+
+	// Token: 0x06000378 RID: 888 RVA: 0x00026D74 File Offset: 0x00024F74
+	private void FixedUpdate()
+	{
+		foreach (Chicken chicken in this.chickensInZone)
+		{
+			if (chicken.GetComponent<Rigidbody>().velocity.magnitude <= 2f)
+			{
+				chicken.GetComponent<Rigidbody>().velocity = Vector3.zero;
+				this.forceVector = (this.forceTowards.position - chicken.transform.position).normalized * 0.001f * this.forceFactor;
+				chicken.GetComponent<Rigidbody>().AddForce(this.forceVector, 1);
+			}
+		}
+	}
+
+	// Token: 0x06000379 RID: 889 RVA: 0x00026E50 File Offset: 0x00025050
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (this.isSucking && coll.attachedRigidbody)
+		{
+			Chicken componentInChildren = coll.attachedRigidbody.GetComponentInChildren<Chicken>();
+			if (componentInChildren)
+			{
+				componentInChildren.GetComponent<Rigidbody>().velocity = Vector3.zero;
+				this.chickensInZone.Add(componentInChildren);
+			}
+		}
+	}
+
+	// Token: 0x0600037A RID: 890 RVA: 0x00026EAC File Offset: 0x000250AC
+	private void OnTriggerExit(Collider coll)
+	{
+		if (this.isSucking && coll.attachedRigidbody)
+		{
+			Chicken componentInChildren = coll.attachedRigidbody.GetComponentInChildren<Chicken>();
+			if (componentInChildren)
+			{
+				this.chickensInZone.Remove(componentInChildren);
+			}
+		}
+	}
+
+	// Token: 0x0400059D RID: 1437
+	public bool autoStart;
+
+	// Token: 0x0400059E RID: 1438
+	public Transform forceTowards;
+
+	// Token: 0x0400059F RID: 1439
+	public float forceFactor;
+
+	// Token: 0x040005A0 RID: 1440
+	private Vector3 forceVector;
+
+	// Token: 0x040005A1 RID: 1441
+	private bool isSucking;
+
+	// Token: 0x040005A2 RID: 1442
+	private List<Chicken> chickensInZone = new List<Chicken>();
+}

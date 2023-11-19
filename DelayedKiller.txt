@@ -1,0 +1,94 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200038D RID: 909
+public class DelayedKiller : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001893 RID: 6291 RVA: 0x000D584C File Offset: 0x000D3A4C
+	public bool PreAwake(int callcount)
+	{
+		this.delayedKill = SignalOut.Create("delayedKill", base.gameObject);
+		this.enableTrigger = SignalIn.Create("enableTrigger", base.gameObject, delegate
+		{
+			this.isEnabled = true;
+		});
+		if (this.startEnabled)
+		{
+			this.isEnabled = true;
+		}
+		return true;
+	}
+
+	// Token: 0x06001894 RID: 6292 RVA: 0x000D58A4 File Offset: 0x000D3AA4
+	private void FixedUpdate()
+	{
+		if (this.delayKillActive)
+		{
+			if (!this.boy.isDead)
+			{
+				Boy.Status status = this.boy.status;
+				if (status.groundCollider != null || (status.groundPlateau != null && status.groundPlateau.collider != null))
+				{
+					this.delayKillActive = false;
+					AlbinoGroupManager.mInstance.JetCrateJustStarted(this.boy.gameObject);
+					this.boy.Kill();
+					if (this.killedByFalling)
+					{
+						SingletonBehaviour<BoyAudio>.instance.KillBoyFatalLanding(false);
+					}
+				}
+				if (this.killIfCustomAnim && ScriptGlobals.boy.state is BoyCustomAnimState)
+				{
+					this.delayKillActive = false;
+					AlbinoGroupManager.mInstance.JetCrateJustStarted(this.boy.gameObject);
+					this.boy.Kill();
+					if (this.killedByFalling)
+					{
+						SingletonBehaviour<BoyAudio>.instance.KillBoyFatalLanding(false);
+					}
+				}
+			}
+			else
+			{
+				this.delayKillActive = false;
+				AlbinoGroupManager.mInstance.JetCrateJustStarted(this.boy.gameObject);
+			}
+		}
+	}
+
+	// Token: 0x06001895 RID: 6293 RVA: 0x000D59C4 File Offset: 0x000D3BC4
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (!this.delayKillActive && collider.GetComponent<BoyProbe>() && this.isEnabled)
+		{
+			this.delayKillActive = true;
+			AlbinoGroupManager.mInstance.SetDelayedBoyKill();
+			this.boy = ScriptGlobals.boy;
+			this.delayedKill.Signal();
+		}
+	}
+
+	// Token: 0x04002C44 RID: 11332
+	public bool killedByFalling = true;
+
+	// Token: 0x04002C45 RID: 11333
+	public bool startEnabled = true;
+
+	// Token: 0x04002C46 RID: 11334
+	public bool killIfCustomAnim;
+
+	// Token: 0x04002C47 RID: 11335
+	private SignalOut delayedKill;
+
+	// Token: 0x04002C48 RID: 11336
+	private SignalIn enableTrigger;
+
+	// Token: 0x04002C49 RID: 11337
+	private bool delayKillActive;
+
+	// Token: 0x04002C4A RID: 11338
+	private Boy boy;
+
+	// Token: 0x04002C4B RID: 11339
+	private bool isEnabled;
+}

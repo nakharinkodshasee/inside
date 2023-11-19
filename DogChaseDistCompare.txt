@@ -1,0 +1,135 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200052B RID: 1323
+public class DogChaseDistCompare : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600227C RID: 8828 RVA: 0x0011FED8 File Offset: 0x0011E0D8
+	public bool PreAwake(int callcount)
+	{
+		this.startEntry = SignalIn.Create("startEntry", base.gameObject, new Action(this.StartEntry));
+		this.entered = SignalIn.Create("entered", base.gameObject, new Action(this.SetStartChecking));
+		this.rerouteHulvs = SignalOut.Create("rerouteHulvs", base.gameObject);
+		this.enableDoorHulvs = SignalOut.Create("enableDoorHulvs", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x0600227D RID: 8829 RVA: 0x0011FF58 File Offset: 0x0011E158
+	private float GetShortestDistance(bool disallowKill = false)
+	{
+		float num = float.MaxValue;
+		foreach (Transform transform in this.hulvs)
+		{
+			float magnitude = (transform.position - this.staticDoorPoint.position).magnitude;
+			if (disallowKill && magnitude > this.instantRerouteDistMin)
+			{
+				Hulv component = transform.GetComponent<Hulv>();
+				component.DisableKill(true);
+			}
+			if (magnitude < num)
+			{
+				num = magnitude;
+			}
+		}
+		return num;
+	}
+
+	// Token: 0x0600227E RID: 8830 RVA: 0x0012000C File Offset: 0x0011E20C
+	private void StartEntry()
+	{
+		float shortestDistance = this.GetShortestDistance(true);
+		if (shortestDistance >= this.instantRerouteDistMin && shortestDistance <= this.instantRerouteDistMax && shortestDistance < this.lastFrameDist)
+		{
+			this.rerouteHulvs.Signal();
+		}
+	}
+
+	// Token: 0x0600227F RID: 8831 RVA: 0x00120050 File Offset: 0x0011E250
+	private void SetStartChecking()
+	{
+		this.isChecking = true;
+		float shortestDistance = this.GetShortestDistance(false);
+		float num = Mathf.InverseLerp(this.shortDist, this.longDist, shortestDistance);
+		float num2 = this.swapBlend.Evaluate(num);
+		this.actualSwapTime = Mathf.Lerp(this.shortSwapTime, this.longSwapTime, num2);
+		if (this.logOn)
+		{
+		}
+	}
+
+	// Token: 0x06002280 RID: 8832 RVA: 0x001200B0 File Offset: 0x0011E2B0
+	private void FixedUpdate()
+	{
+		if (this.logOn)
+		{
+		}
+		if (this.isChecking)
+		{
+			this.timer += Time.deltaTime;
+			if (this.timer >= this.actualSwapTime)
+			{
+				this.enableDoorHulvs.Signal();
+				if (this.logOn)
+				{
+				}
+				this.isChecking = false;
+			}
+		}
+		this.lastFrameDist = this.GetShortestDistance(false);
+	}
+
+	// Token: 0x04004055 RID: 16469
+	public List<Transform> hulvs = new List<Transform>();
+
+	// Token: 0x04004056 RID: 16470
+	public Transform staticDoorPoint;
+
+	// Token: 0x04004057 RID: 16471
+	public float instantRerouteDistMin;
+
+	// Token: 0x04004058 RID: 16472
+	public float instantRerouteDistMax;
+
+	// Token: 0x04004059 RID: 16473
+	public float shortDist;
+
+	// Token: 0x0400405A RID: 16474
+	public float longDist;
+
+	// Token: 0x0400405B RID: 16475
+	public float shortSwapTime;
+
+	// Token: 0x0400405C RID: 16476
+	public float longSwapTime;
+
+	// Token: 0x0400405D RID: 16477
+	public AnimationCurve swapBlend;
+
+	// Token: 0x0400405E RID: 16478
+	public bool logOn;
+
+	// Token: 0x0400405F RID: 16479
+	private SignalIn startEntry;
+
+	// Token: 0x04004060 RID: 16480
+	private SignalIn entered;
+
+	// Token: 0x04004061 RID: 16481
+	private SignalOut rerouteHulvs;
+
+	// Token: 0x04004062 RID: 16482
+	private SignalOut enableDoorHulvs;
+
+	// Token: 0x04004063 RID: 16483
+	private bool isChecking;
+
+	// Token: 0x04004064 RID: 16484
+	private float timer;
+
+	// Token: 0x04004065 RID: 16485
+	private float actualSwapTime;
+
+	// Token: 0x04004066 RID: 16486
+	private float lastFrameDist;
+}

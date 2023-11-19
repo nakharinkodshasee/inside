@@ -1,0 +1,59 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000664 RID: 1636
+public class CoroutineExample : MonoBehaviour
+{
+	// Token: 0x06002824 RID: 10276 RVA: 0x001435E0 File Offset: 0x001417E0
+	private void Start()
+	{
+		this.StartMoveAround();
+	}
+
+	// Token: 0x06002825 RID: 10277 RVA: 0x001435E8 File Offset: 0x001417E8
+	private IEnumerator MoveAround()
+	{
+		while (this.wanderPoints.Count != 0)
+		{
+			Vector3 targetPosition = this.wanderPoints[Random.Range(0, this.wanderPoints.Count)].position;
+			yield return base.StartCoroutine(this.MoveTo(targetPosition));
+			yield return new WaitForSeconds(Random.Range(0f, 2f));
+		}
+		yield break;
+		yield break;
+	}
+
+	// Token: 0x06002826 RID: 10278 RVA: 0x00143604 File Offset: 0x00141804
+	private IEnumerator MoveTo(Vector3 position)
+	{
+		while (!this.ReachedTarget(position))
+		{
+			yield return new WaitForFixedUpdate();
+			base.transform.position = Vector3.MoveTowards(base.transform.position, position, this.speed * Time.deltaTime);
+		}
+		yield break;
+	}
+
+	// Token: 0x06002827 RID: 10279 RVA: 0x00143630 File Offset: 0x00141830
+	public bool ReachedTarget(Vector3 target)
+	{
+		return (base.transform.position - target).sqrMagnitude < 0.01f;
+	}
+
+	// Token: 0x06002828 RID: 10280 RVA: 0x00143660 File Offset: 0x00141860
+	public void StartMoveAround()
+	{
+		base.StartCoroutine(this.MoveAround());
+	}
+
+	// Token: 0x040047E9 RID: 18409
+	private const float reachTargetDistance = 0.01f;
+
+	// Token: 0x040047EA RID: 18410
+	public List<Transform> wanderPoints = new List<Transform>();
+
+	// Token: 0x040047EB RID: 18411
+	public float speed = 5f;
+}

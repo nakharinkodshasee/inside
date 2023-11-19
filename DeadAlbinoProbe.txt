@@ -1,0 +1,7 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200007D RID: 125
+public class DeadAlbinoProbe : MonoBehaviour
+{
+}

@@ -1,0 +1,63 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000635 RID: 1589
+public class ConstructionYardButton : MonoBehaviour
+{
+	// Token: 0x06002771 RID: 10097 RVA: 0x0013D4B8 File Offset: 0x0013B6B8
+	private void Start()
+	{
+		Rigidbody rigidbody = this.lowestRopeBody;
+		while (rigidbody != null)
+		{
+			this.bodyList.Insert(0, rigidbody);
+			SpringJoint component = rigidbody.GetComponent<SpringJoint>();
+			if (component != null)
+			{
+				rigidbody = component.connectedBody;
+			}
+			else
+			{
+				rigidbody = null;
+			}
+		}
+		int count = this.bodyList.Count;
+		if (count > 1)
+		{
+			float num = this.totalRopeLength / (float)(count - 1);
+			for (int i = 1; i < count; i++)
+			{
+				Rigidbody rigidbody2 = this.bodyList[i];
+				SpringJoint component2 = rigidbody2.GetComponent<SpringJoint>();
+				if (component2 != null)
+				{
+					component2.maxDistance = num;
+					component2.minDistance = Mathf.Max(0f, num - 0.1f);
+					rigidbody2.position = this.bodyList[0].position + Vector3.down * ((float)i * num);
+				}
+			}
+		}
+	}
+
+	// Token: 0x06002772 RID: 10098 RVA: 0x0013D5B4 File Offset: 0x0013B7B4
+	private void OnDrawGizmos()
+	{
+		if (!EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay) || Application.isPlaying)
+		{
+			return;
+		}
+		Gizmos.color = Color.black;
+		Vector3 vector = base.transform.position + Vector3.down * this.totalRopeLength * 0.5f;
+		Gizmos.DrawCube(vector, new Vector3(0.1f, this.totalRopeLength, 0.1f));
+	}
+
+	// Token: 0x040046DA RID: 18138
+	public Rigidbody lowestRopeBody;
+
+	// Token: 0x040046DB RID: 18139
+	public float totalRopeLength = 4f;
+
+	// Token: 0x040046DC RID: 18140
+	private List<Rigidbody> bodyList = new List<Rigidbody>();
+}

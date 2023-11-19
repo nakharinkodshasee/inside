@@ -1,0 +1,162 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000063 RID: 99
+public class ChickenGun : MonoBehaviour, IFastEventExListener<Collider>
+{
+	// Token: 0x06000333 RID: 819 RVA: 0x000254B4 File Offset: 0x000236B4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioChickChime = new AudioEventSimpleLocal("chick_chime", akGameObj);
+	}
+
+	// Token: 0x06000334 RID: 820 RVA: 0x000254F4 File Offset: 0x000236F4
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.chickenCounter += Random.Range(-1, 1);
+		this.fallTrigger.enterTrigger.Register(this, ref this.fallTriggerEnterHandle);
+		if (this.autsoStart)
+		{
+			this.isSucking = true;
+		}
+	}
+
+	// Token: 0x06000335 RID: 821 RVA: 0x00025544 File Offset: 0x00023744
+	private void FixedUpdate()
+	{
+		if (this.chickensInGun.Count > 0)
+		{
+			this.shootTimer -= Time.deltaTime;
+			if (this.shootTimer <= 0f)
+			{
+				this.shootTimer = Random.Range(0.01f, 0.33f);
+				Chicken chicken = this.chickensInGun[0];
+				chicken.gameObject.SetActive(true);
+				this.chickensInGun.RemoveAt(0);
+				chicken.GetComponent<Rigidbody>().AddForce(this.forceVector * Random.Range(0.95f, 1.05f), 1);
+				if (!this.hasFired)
+				{
+					this.audioChickChime.PostFast();
+					this.hasFired = true;
+				}
+			}
+		}
+		else if (this.hasFired && this.chickensInGun.Count == 0)
+		{
+			this.hasFired = false;
+			this.shootTimer = 2.5f;
+		}
+	}
+
+	// Token: 0x06000336 RID: 822 RVA: 0x00025634 File Offset: 0x00023834
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.fallTrigger.enterTrigger)
+		{
+			this.OnFallTriggerEnter(collider);
+		}
+	}
+
+	// Token: 0x06000337 RID: 823 RVA: 0x00025650 File Offset: 0x00023850
+	private void OnFallTriggerEnter(Collider coll)
+	{
+		Rigidbody attachedRigidbody = coll.attachedRigidbody;
+		if (!attachedRigidbody)
+		{
+			return;
+		}
+		Chicken componentInChildren = attachedRigidbody.GetComponentInChildren<Chicken>();
+		if (!componentInChildren)
+		{
+			return;
+		}
+		float y = attachedRigidbody.velocity.y;
+		if (y < -5f)
+		{
+			this.chickenCounter--;
+			if (this.chickenCounter == 0)
+			{
+				componentInChildren.Kill();
+			}
+		}
+	}
+
+	// Token: 0x06000338 RID: 824 RVA: 0x000256BC File Offset: 0x000238BC
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (this.isSucking && coll.attachedRigidbody)
+		{
+			Chicken componentInChildren = coll.attachedRigidbody.GetComponentInChildren<Chicken>();
+			if (componentInChildren)
+			{
+				this.chickensInGun.Add(componentInChildren);
+				componentInChildren.GetComponent<Rigidbody>().velocity = Vector3.zero;
+				componentInChildren.transform.position = this.shootPosition.transform.position;
+				componentInChildren.gameObject.SetActive(false);
+			}
+		}
+	}
+
+	// Token: 0x06000339 RID: 825 RVA: 0x00025740 File Offset: 0x00023940
+	public void EnableSucking()
+	{
+		this.isSucking = true;
+		base.GetComponent<Renderer>().enabled = true;
+	}
+
+	// Token: 0x0600033A RID: 826 RVA: 0x00025758 File Offset: 0x00023958
+	public void DisableSucking()
+	{
+		this.isSucking = false;
+		base.GetComponent<Renderer>().enabled = false;
+	}
+
+	// Token: 0x0400052F RID: 1327
+	public GameObject shootPosition;
+
+	// Token: 0x04000530 RID: 1328
+	public Vector3 forceVector;
+
+	// Token: 0x04000531 RID: 1329
+	public bool autsoStart;
+
+	// Token: 0x04000532 RID: 1330
+	private List<Chicken> chickensInGun = new List<Chicken>();
+
+	// Token: 0x04000533 RID: 1331
+	public CollisionEvents fallTrigger;
+
+	// Token: 0x04000534 RID: 1332
+	private float shootTimer;
+
+	// Token: 0x04000535 RID: 1333
+	private bool isSucking;
+
+	// Token: 0x04000536 RID: 1334
+	private int chickenCounter = 6;
+
+	// Token: 0x04000537 RID: 1335
+	private bool hasFired;
+
+	// Token: 0x04000538 RID: 1336
+	private int fallTriggerEnterHandle = -1;
+
+	// Token: 0x04000539 RID: 1337
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioChickChime;
+
+	// Token: 0x0400053A RID: 1338
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

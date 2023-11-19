@@ -1,0 +1,12 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005D9 RID: 1497
+public class collisionTestScript : MonoBehaviour
+{
+	// Token: 0x060025E5 RID: 9701 RVA: 0x001352E8 File Offset: 0x001334E8
+	private void OnCollisionEnter()
+	{
+		base.GetComponent<Renderer>().material.color = Color.green;
+	}
+}

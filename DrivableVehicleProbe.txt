@@ -1,0 +1,16 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200019A RID: 410
+public class DrivableVehicleProbe : MonoBehaviour
+{
+	// Token: 0x06000C0C RID: 3084 RVA: 0x00075D64 File Offset: 0x00073F64
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000C0D RID: 3085 RVA: 0x00075D68 File Offset: 0x00073F68
+	private void Update()
+	{
+	}
+}

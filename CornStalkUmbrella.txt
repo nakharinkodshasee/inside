@@ -1,0 +1,17 @@
+using System;
+
+// Token: 0x020003D4 RID: 980
+public class CornStalkUmbrella : Umbrella<CornStalk>
+{
+	// Token: 0x06001A49 RID: 6729 RVA: 0x000E5A58 File Offset: 0x000E3C58
+	public override void DispatchFixedUpdate()
+	{
+		int num = 0;
+		int size = this.size;
+		while (num != size)
+		{
+			this.targets[num].UmbrellaFixedUpdate();
+			num++;
+		}
+	}
+}

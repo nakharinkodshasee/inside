@@ -1,0 +1,250 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003D2 RID: 978
+public class CornStalk : UmbrellaBehaviour<CornStalk>, IFastEventExListener<Collider>
+{
+	// Token: 0x06001A3C RID: 6716 RVA: 0x000E5044 File Offset: 0x000E3244
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.visuals == null || this.trigger == null || (double)Mathf.Abs(this.trigger.transform.position.z) > 0.12 + (double)(this.trigger.GetComponent<Collider>().bounds.size.x / 2f))
+		{
+			this.trigger.gameObject.SetActive(false);
+			return;
+		}
+		this.holder.rotation = Quaternion.Euler(0f, 0f, 0f);
+		this.holderTransform = this.holder.transform;
+		this.visuals.parent = this.holder;
+	}
+
+	// Token: 0x06001A3D RID: 6717 RVA: 0x000E5130 File Offset: 0x000E3330
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.trigger.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.trigger.exitTrigger.Register(this, ref this.triggerExitHandle);
+	}
+
+	// Token: 0x06001A3E RID: 6718 RVA: 0x000E5174 File Offset: 0x000E3374
+	public void UmbrellaFixedUpdate()
+	{
+		if (this.cornRenderer && !this.cornRenderer.isVisible)
+		{
+			return;
+		}
+		if (this.velocity != Vector3.zero)
+		{
+			this.velocity += -this.rot * Time.deltaTime * this.acceleration;
+			this.velocity += this.velocity * Time.deltaTime * -this.friction;
+			this.velocity.x = Mathf.Clamp(this.velocity.x, -this.velMax, this.velMax);
+			this.velocity.y = Mathf.Clamp(this.velocity.y, -this.velMax, this.velMax);
+			this.velocity.z = Mathf.Clamp(this.velocity.z, -this.velMax, this.velMax);
+			this.rot += this.velocity;
+			this.holderTransform.rotation = Quaternion.Euler(this.rot * this.angles);
+			if (this.cornPointVelocity)
+			{
+				this.wobbleTimer += Time.deltaTime;
+				this.cornPointVelocity.UpdateMaterials(this.wobbleTimer);
+			}
+		}
+		else
+		{
+			this.wobbleTimer = 0f;
+		}
+		this.currentJumpState = (ScriptGlobals.boy.state is BoyJumpState);
+		if (this.boyInside && this.currentJumpState && !this.previousJumpState)
+		{
+			this.ApplyForce(Vector3.right * Mathf.Sign(this.visuals.transform.position.z), Vector3.one * this.pushForce * 1.25f, true);
+			SoundEngine.Events.cornShake.PostFast(AudioKeyObject.AkGameObjs.boy);
+		}
+		this.previousJumpState = this.currentJumpState;
+	}
+
+	// Token: 0x06001A3F RID: 6719 RVA: 0x000E53A4 File Offset: 0x000E35A4
+	private void Shake(Vector3 vel, Vector3 pos)
+	{
+		SoundEngine.Events.cornShake.PostFast(AudioKeyObject.AkGameObjs.boy);
+		Vector3 vector = this.visuals.transform.position - pos;
+		vector.y = 0f;
+		vector.Normalize();
+		float num = Mathf.Acos(vector.x) * 57.29578f;
+		if (num > 90f)
+		{
+			num -= 180f;
+		}
+		Vector3 zero = Vector3.zero;
+		zero.z = 1f - Mathf.Abs(num) / 90f;
+		zero.x = (1f - zero.z) * Mathf.Sign(this.visuals.transform.position.z) * -Mathf.Sign(vel.x);
+		float num2 = -vel.x / 3f;
+		if (Mathf.Abs(num2) < 0.4f)
+		{
+			num2 = Mathf.Sign(num2) * 0.4f;
+		}
+		float value = Random.value;
+		float num3 = 1f;
+		if (value < 0.1f)
+		{
+			num3 += 0.1f;
+		}
+		else if (value > 0.9f)
+		{
+			num3 += 0.5f;
+		}
+		else
+		{
+			num3 += Random.Range(-0.3f, 0.3f);
+		}
+		Vector3 zero2 = Vector3.zero;
+		zero2.x = num2 * this.pushForce * num3;
+		zero2.z = num2 * this.pushForce * num3;
+		if (this.debug)
+		{
+			Debug.DrawLine(base.transform.position, base.transform.position + vector * 2f, Color.green, 0.5f);
+			Debug.DrawLine(base.transform.position, base.transform.position + zero * 2f, Color.red, 0.5f);
+		}
+		this.ApplyForce(zero, zero2, true);
+	}
+
+	// Token: 0x06001A40 RID: 6720 RVA: 0x000E55A0 File Offset: 0x000E37A0
+	private void ApplyForce(Vector3 dir, Vector3 force, bool playAnim)
+	{
+		this.velocity.x = this.velocity.x + dir.x * force.x;
+		this.velocity.y = this.velocity.y + dir.y * force.y;
+		this.velocity.z = this.velocity.z + dir.z * force.z;
+		if (playAnim && this.anim && this.animClip)
+		{
+			this.anim.CrossFadeQueued(this.animClip.name, 0.2f, 2);
+		}
+	}
+
+	// Token: 0x06001A41 RID: 6721 RVA: 0x000E5654 File Offset: 0x000E3854
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.trigger.enterTrigger)
+		{
+			this.TriggerEnter(collider);
+		}
+		else if (sender == this.trigger.exitTrigger)
+		{
+			this.TriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06001A42 RID: 6722 RVA: 0x000E5690 File Offset: 0x000E3890
+	private void TriggerEnter(Collider c)
+	{
+		if (c.GetComponent<BoyProbe>() != null)
+		{
+			this.boyInside = true;
+			this.Shake(ScriptGlobals.boy.velocity3, ScriptGlobals.boy.pos3);
+		}
+		else if (c.GetComponent<HuddleProbe>() != null)
+		{
+			this.boyInside = true;
+			this.Shake(ScriptGlobals.huddle.velocity3, ScriptGlobals.huddle.pos3);
+		}
+	}
+
+	// Token: 0x06001A43 RID: 6723 RVA: 0x000E5708 File Offset: 0x000E3908
+	private void TriggerExit(Collider c)
+	{
+		if (c.GetComponent<BoyProbe>() != null)
+		{
+			this.boyInside = false;
+			if (this.rotateOnExit)
+			{
+				this.Shake(ScriptGlobals.boy.velocity3, ScriptGlobals.boy.pos3);
+			}
+		}
+		if (c.GetComponent<HuddleProbe>() != null)
+		{
+			this.boyInside = false;
+			if (this.rotateOnExit)
+			{
+				this.Shake(ScriptGlobals.huddle.velocity3, ScriptGlobals.huddle.pos3);
+			}
+		}
+	}
+
+	// Token: 0x04002F3B RID: 12091
+	public Transform visuals;
+
+	// Token: 0x04002F3C RID: 12092
+	public Transform holder;
+
+	// Token: 0x04002F3D RID: 12093
+	public CollisionEvents trigger;
+
+	// Token: 0x04002F3E RID: 12094
+	public CornPointVelocity cornPointVelocity;
+
+	// Token: 0x04002F3F RID: 12095
+	public Renderer cornRenderer;
+
+	// Token: 0x04002F40 RID: 12096
+	public bool rotateOnExit = true;
+
+	// Token: 0x04002F41 RID: 12097
+	public Animation anim;
+
+	// Token: 0x04002F42 RID: 12098
+	public AnimationClip animClip;
+
+	// Token: 0x04002F43 RID: 12099
+	public float acceleration = 0.5f;
+
+	// Token: 0x04002F44 RID: 12100
+	public float friction = 2.5f;
+
+	// Token: 0x04002F45 RID: 12101
+	public float velMax = 0.1f;
+
+	// Token: 0x04002F46 RID: 12102
+	public float pushForce = 0.072f;
+
+	// Token: 0x04002F47 RID: 12103
+	public float angles = 22f;
+
+	// Token: 0x04002F48 RID: 12104
+	public bool debug;
+
+	// Token: 0x04002F49 RID: 12105
+	private Vector3 rot;
+
+	// Token: 0x04002F4A RID: 12106
+	private Vector3 velocity;
+
+	// Token: 0x04002F4B RID: 12107
+	private bool boyInside;
+
+	// Token: 0x04002F4C RID: 12108
+	private bool currentJumpState;
+
+	// Token: 0x04002F4D RID: 12109
+	private bool previousJumpState;
+
+	// Token: 0x04002F4E RID: 12110
+	private float wobbleTimer;
+
+	// Token: 0x04002F4F RID: 12111
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04002F50 RID: 12112
+	private int triggerExitHandle = -1;
+
+	// Token: 0x04002F51 RID: 12113
+	[HideInInspector]
+	[SerializeField]
+	private Transform holderTransform;
+
+	// Token: 0x04002F52 RID: 12114
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

@@ -1,0 +1,78 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003A6 RID: 934
+public class ClubCarInterface : MonoBehaviour
+{
+	// Token: 0x06001902 RID: 6402 RVA: 0x000D7BB8 File Offset: 0x000D5DB8
+	private void Start()
+	{
+		this.turnOffLamp();
+	}
+
+	// Token: 0x06001903 RID: 6403 RVA: 0x000D7BC0 File Offset: 0x000D5DC0
+	public void turnOnLamp()
+	{
+		this.gateLamp.GetComponent<Renderer>().material.color = Color.green;
+		this.gateLampLight.intensity = 1f;
+		this.lampOn = true;
+	}
+
+	// Token: 0x06001904 RID: 6404 RVA: 0x000D7C00 File Offset: 0x000D5E00
+	public void turnOffLamp()
+	{
+		this.lampOn = false;
+		this.gateLamp.GetComponent<Renderer>().material.color = Color.white;
+		this.gateLampLight.intensity = 0f;
+	}
+
+	// Token: 0x06001905 RID: 6405 RVA: 0x000D7C40 File Offset: 0x000D5E40
+	public void startBlink()
+	{
+		this.doBlinkLamp = true;
+		this.timer = 0f;
+	}
+
+	// Token: 0x06001906 RID: 6406 RVA: 0x000D7C54 File Offset: 0x000D5E54
+	public void stopBlink()
+	{
+		this.doBlinkLamp = false;
+	}
+
+	// Token: 0x06001907 RID: 6407 RVA: 0x000D7C60 File Offset: 0x000D5E60
+	private void Update()
+	{
+		if (this.doBlinkLamp)
+		{
+			this.timer += Time.deltaTime;
+			if ((double)this.timer >= 0.75 && this.lampOn)
+			{
+				this.turnOffLamp();
+				this.timer = 0f;
+			}
+			else if ((double)this.timer >= 0.75 && !this.lampOn)
+			{
+				this.turnOnLamp();
+				this.timer = 0f;
+			}
+		}
+	}
+
+	// Token: 0x04002CDC RID: 11484
+	public GameObject probe;
+
+	// Token: 0x04002CDD RID: 11485
+	public GameObject gateLamp;
+
+	// Token: 0x04002CDE RID: 11486
+	public Light gateLampLight;
+
+	// Token: 0x04002CDF RID: 11487
+	private bool doBlinkLamp;
+
+	// Token: 0x04002CE0 RID: 11488
+	private bool lampOn;
+
+	// Token: 0x04002CE1 RID: 11489
+	private float timer;
+}

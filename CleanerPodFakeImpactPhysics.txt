@@ -1,0 +1,138 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004F8 RID: 1272
+public class CleanerPodFakeImpactPhysics : MonoBehaviour
+{
+	// Token: 0x06002157 RID: 8535 RVA: 0x00116D50 File Offset: 0x00114F50
+	private void FixedUpdate()
+	{
+		if (!ScriptGlobals.boy.Initialized())
+		{
+			return;
+		}
+		BoyJumpState boyJumpState = ScriptGlobals.boy.state as BoyJumpState;
+		this.sinceGroundTime += Time.deltaTime;
+		this.landTime += Time.deltaTime;
+		if (boyJumpState != null)
+		{
+			this.landTime = 0f;
+			if (this.sinceGroundTime > 0.4f)
+			{
+				this.podController.SetCurrentCabinTiltAngle(0f);
+			}
+			else
+			{
+				this.podController.SetCurrentCabinTiltAngle(-Mathf.Min(1.7f * this.angleFactorAtGroundTime * this.anglePerMeter, 1.7f * this.maxAngle) * (0.4f - this.sinceGroundTime) / 0.4f);
+			}
+			this.wasFlying = true;
+			this.flySpeed = ScriptGlobals.boy.velocity3;
+			if (this.wasOnBody)
+			{
+				this.cabinSpring.AddVelocity(-this.flySpeed * this.landSpeedFactor);
+				this.armSpring.AddVelocity(-this.flySpeed * this.landSpeedFactor * 0.8f);
+			}
+			this.wasOnBody = false;
+		}
+		else
+		{
+			this.wasOnBody = false;
+			Rigidbody groundBody = ScriptGlobals.boy.status.groundBody;
+			if (groundBody == this.bodyToTest)
+			{
+				this.sinceGroundTime = 0f;
+				this.wasOnBody = true;
+				if (this.wasFlying)
+				{
+					this.cabinSpring.AddVelocity(this.flySpeed * this.landSpeedFactor);
+					this.armSpring.AddVelocity(this.flySpeed * this.landSpeedFactor * 0.8f);
+					this.lastFootstepImpact = Time.timeDbl;
+					if (this.flySpeed.y < -8f && !this.firstHitGiven)
+					{
+						this.podController.DoFirstVeryHardHit();
+					}
+				}
+				float x = base.transform.InverseTransformPoint(ScriptGlobals.boy.pos3).x;
+				this.angleFactorAtGroundTime = Mathf.Clamp(x, 0f, this.maxAngle / this.anglePerMeter);
+				float num = this.angleFactorAtGroundTime * this.anglePerMeter;
+				this.podController.SetCurrentCabinTiltAngle(-num + this.angleFactorAtGroundTime * this.flySpeed.y * Mathf.Max(0f, 0.3f - this.landTime) * 0.4f);
+				if (AudioKeyObject.boy != null)
+				{
+					BoyAudio component = AudioKeyObject.boy.GetComponent<BoyAudio>();
+					double lastFootstepTime = component.GetLastFootstepTime();
+					if (lastFootstepTime != this.lastFootstepImpact && lastFootstepTime > this.lastFootstepImpact)
+					{
+						this.cabinSpring.AddVelocity(Vector3.down * 0.2f);
+						this.armSpring.AddVelocity(Vector3.down * 0.16f);
+						this.lastFootstepImpact = lastFootstepTime;
+					}
+					else
+					{
+						Boy boy = ScriptGlobals.boy;
+						if (boy.state is BoyRunState && boy.visualBoy.state.typeIndex != VisualBoyNode.TypeIndex.VisualBoyObstructed)
+						{
+							float x2 = boy.input.looseDir.x;
+							if (x2 != 0f && x2 * boy.velocity.x <= 0f && Time.timeDbl - this.lastFootstepImpact > 0.2)
+							{
+								this.lastFootstepImpact = Time.timeDbl;
+								Vector3 vector = Vector3.down * 0.1f - x2 * Vector3.right * 0.4f;
+								this.cabinSpring.AddVelocity(vector);
+								this.armSpring.AddVelocity(vector * 0.3f);
+							}
+						}
+					}
+				}
+			}
+			else
+			{
+				this.podController.SetCurrentCabinTiltAngle(0f);
+			}
+			this.wasFlying = false;
+		}
+	}
+
+	// Token: 0x04003DC4 RID: 15812
+	public Rigidbody bodyToTest;
+
+	// Token: 0x04003DC5 RID: 15813
+	public FakeSpring cabinSpring;
+
+	// Token: 0x04003DC6 RID: 15814
+	public FakeSpring armSpring;
+
+	// Token: 0x04003DC7 RID: 15815
+	public float landSpeedFactor = 0.1f;
+
+	// Token: 0x04003DC8 RID: 15816
+	public float anglePerMeter = 3f;
+
+	// Token: 0x04003DC9 RID: 15817
+	public float maxAngle = 4f;
+
+	// Token: 0x04003DCA RID: 15818
+	public CleanerPodLogicControllerNEWEST podController;
+
+	// Token: 0x04003DCB RID: 15819
+	private bool wasFlying;
+
+	// Token: 0x04003DCC RID: 15820
+	private bool wasOnBody;
+
+	// Token: 0x04003DCD RID: 15821
+	private Vector3 flySpeed;
+
+	// Token: 0x04003DCE RID: 15822
+	private float sinceGroundTime = -1f;
+
+	// Token: 0x04003DCF RID: 15823
+	private float angleFactorAtGroundTime;
+
+	// Token: 0x04003DD0 RID: 15824
+	private float landTime;
+
+	// Token: 0x04003DD1 RID: 15825
+	private bool firstHitGiven;
+
+	// Token: 0x04003DD2 RID: 15826
+	private double lastFootstepImpact;
+}

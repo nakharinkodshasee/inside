@@ -1,0 +1,48 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003A7 RID: 935
+public class ClubCarLoader : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001909 RID: 6409 RVA: 0x000D7CFC File Offset: 0x000D5EFC
+	public bool PreAwake(int callcount)
+	{
+		SignalIn.Create("placeCar", base.gameObject, new Action(this.doPlaceCar));
+		return true;
+	}
+
+	// Token: 0x0600190A RID: 6410 RVA: 0x000D7D1C File Offset: 0x000D5F1C
+	private void Start()
+	{
+		if (this.labClubCar)
+		{
+			this.clubCar = LevelGlobals.labClubCar;
+		}
+	}
+
+	// Token: 0x0600190B RID: 6411 RVA: 0x000D7D34 File Offset: 0x000D5F34
+	private void doPlaceCar()
+	{
+		if (this.clubCar)
+		{
+			this.clubCar.transform.position = this.placeToLoad.position;
+		}
+	}
+
+	// Token: 0x0600190C RID: 6412 RVA: 0x000D7D64 File Offset: 0x000D5F64
+	private void Update()
+	{
+	}
+
+	// Token: 0x04002CE2 RID: 11490
+	public Transform placeToLoad;
+
+	// Token: 0x04002CE3 RID: 11491
+	public bool labClubCar;
+
+	// Token: 0x04002CE4 RID: 11492
+	private SignalIn placeCar;
+
+	// Token: 0x04002CE5 RID: 11493
+	private LabClubCar clubCar;
+}

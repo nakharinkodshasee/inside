@@ -1,0 +1,81 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000066 RID: 102
+public class ChickensTeleport : MonoBehaviour
+{
+	// Token: 0x06000357 RID: 855 RVA: 0x000264AC File Offset: 0x000246AC
+	private void Start()
+	{
+		if (this.autoStart)
+		{
+			this.isSucking = true;
+		}
+	}
+
+	// Token: 0x06000358 RID: 856 RVA: 0x000264C0 File Offset: 0x000246C0
+	public void EnableSucking()
+	{
+		this.isSucking = true;
+		base.GetComponent<Renderer>().enabled = true;
+	}
+
+	// Token: 0x06000359 RID: 857 RVA: 0x000264D8 File Offset: 0x000246D8
+	public void DisableSucking()
+	{
+		this.isSucking = false;
+		base.GetComponent<Renderer>().enabled = false;
+	}
+
+	// Token: 0x0600035A RID: 858 RVA: 0x000264F0 File Offset: 0x000246F0
+	private void FixedUpdate()
+	{
+		if (this.chickensInGun.Count > 0)
+		{
+			this.shootTimer -= Time.deltaTime;
+			if (this.shootTimer <= 0f)
+			{
+				this.shootTimer = Random.Range(0.01f, 0.25f);
+				Chicken chicken = this.chickensInGun[0];
+				chicken.gameObject.SetActive(true);
+				this.chickensInGun.RemoveAt(0);
+			}
+		}
+		else
+		{
+			this.shootTimer = 1f;
+		}
+	}
+
+	// Token: 0x0600035B RID: 859 RVA: 0x0002657C File Offset: 0x0002477C
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (this.isSucking && coll.attachedRigidbody)
+		{
+			Chicken componentInChildren = coll.attachedRigidbody.GetComponentInChildren<Chicken>();
+			if (componentInChildren)
+			{
+				this.chickensInGun.Add(componentInChildren);
+				componentInChildren.GetComponent<Rigidbody>().velocity = Vector3.zero;
+				componentInChildren.transform.position = this.teleportDestination.transform.position;
+				componentInChildren.gameObject.SetActive(false);
+			}
+		}
+	}
+
+	// Token: 0x04000580 RID: 1408
+	public GameObject teleportDestination;
+
+	// Token: 0x04000581 RID: 1409
+	public bool autoStart;
+
+	// Token: 0x04000582 RID: 1410
+	private List<Chicken> chickensInGun = new List<Chicken>();
+
+	// Token: 0x04000583 RID: 1411
+	private float shootTimer;
+
+	// Token: 0x04000584 RID: 1412
+	private bool isSucking;
+}
