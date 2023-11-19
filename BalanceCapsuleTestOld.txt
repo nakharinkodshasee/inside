@@ -1,0 +1,270 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000650 RID: 1616
+public class BalanceCapsuleTestOld : MonoBehaviour
+{
+	// Token: 0x060027E1 RID: 10209 RVA: 0x00140984 File Offset: 0x0013EB84
+	private void Start()
+	{
+		this.mNextAngleThreshold = this.angleThreshold;
+		this.mTargetPos = base.GetComponent<Rigidbody>().position;
+		Physics.gravity *= 0.5f;
+		Random.seed = 4;
+	}
+
+	// Token: 0x060027E2 RID: 10210 RVA: 0x001409C8 File Offset: 0x0013EBC8
+	private void OnCollisionEnter(Collision collision)
+	{
+		if (collision.contacts.Length != 0)
+		{
+			this.touchedGround = true;
+		}
+	}
+
+	// Token: 0x060027E3 RID: 10211 RVA: 0x001409E0 File Offset: 0x0013EBE0
+	private float RandomScale(float scale)
+	{
+		return 1f + (float)Math.Sin(Time.fixedTimeDbl) * scale;
+	}
+
+	// Token: 0x060027E4 RID: 10212 RVA: 0x001409F8 File Offset: 0x0013EBF8
+	private Vector3 ProjectToPlane(Vector3 a, Vector3 planeNormal)
+	{
+		return a - Vector3.Dot(a, planeNormal) * planeNormal;
+	}
+
+	// Token: 0x060027E5 RID: 10213 RVA: 0x00140A10 File Offset: 0x0013EC10
+	private Vector3 ClampLength(Vector3 a, float maxLength)
+	{
+		float magnitude = a.magnitude;
+		if (maxLength < magnitude)
+		{
+			a *= maxLength / magnitude;
+		}
+		return a;
+	}
+
+	// Token: 0x060027E6 RID: 10214 RVA: 0x00140A38 File Offset: 0x0013EC38
+	private void FixedUpdate()
+	{
+		if (!this.touchedGround)
+		{
+			return;
+		}
+		float fixedDeltaTime = Time.fixedDeltaTime;
+		Vector3 vector = base.transform.up;
+		vector -= Vector3.Dot(vector, Vector3.up) * Vector3.up;
+		float num = MathUtils.AngleBetweenVectors(Vector3.up, base.transform.up);
+		Vector3 vector2 = base.GetComponent<Rigidbody>().position - 0.5f * base.GetComponent<CapsuleCollider>().height * base.transform.up;
+		Vector3 pointVelocity = base.GetComponent<Rigidbody>().GetPointVelocity(vector2);
+		this.oldVelocities.Add(base.GetComponent<Rigidbody>().velocity);
+		if (180 < this.oldVelocities.Count)
+		{
+			this.oldVelocities.RemoveAt(0);
+		}
+		Vector3 vector3 = Vector3.zero;
+		foreach (Vector3 vector4 in this.oldVelocities)
+		{
+			vector3 += vector4;
+		}
+		vector3 /= (float)this.oldVelocities.Count;
+		if (this.mode == BalanceCapsuleTestOld.Mode.PosWithoutReactionTime)
+		{
+			Vector3 vector5 = base.transform.up;
+			Vector3 vector6 = Vector3.Cross(base.GetComponent<Rigidbody>().angularVelocity, Vector3.up) * this.angularVelocityFactor;
+			vector5 += vector6;
+			Vector3 vector7 = vector5;
+			vector7 -= Vector3.Dot(vector7, Vector3.up) * Vector3.up;
+			float num2 = MathUtils.AngleBetweenVectors(Vector3.up, vector5);
+			if (Random.value < 0.3f)
+			{
+				Vector3 vector8 = vector7.normalized * this.offsetRange * this.mNextAngleThreshold;
+				vector8 *= Random.Range(0.7f, 1.2f);
+				if (this.mNextAngleThreshold < num2 && this.mState == BalanceCapsuleTestOld.State.Balanced)
+				{
+					this.mTargetDeltaPos = vector8;
+					this.mNextAngleThreshold = this.angleThreshold * Random.Range(0.8f, 2.2f);
+					this.mLastTiltDir = vector7;
+					this.mState = BalanceCapsuleTestOld.State.Recover;
+				}
+				if (this.mNextAngleThreshold * 2f < num2 && this.mState != BalanceCapsuleTestOld.State.BigRecover)
+				{
+					this.mState = BalanceCapsuleTestOld.State.BigRecover;
+					this.mTargetDeltaPos = vector8 * 2f;
+					this.mNextAngleThreshold = this.angleThreshold * Random.Range(0.8f, 2.2f);
+					this.mLastTiltDir = vector7;
+				}
+				if (Vector3.Dot(vector7, this.mLastTiltDir) < 0f && this.mState != BalanceCapsuleTestOld.State.Balanced)
+				{
+					this.mTargetDeltaPos = -this.ClampLength(this.ProjectToPlane(this.mTargetPos - base.GetComponent<Rigidbody>().position, Vector3.up) * this.longTermStrength, 0.5f);
+					this.mTargetDeltaPos += this.ProjectToPlane(base.GetComponent<Rigidbody>().velocity, Vector3.up) * this.longTermDamping;
+					this.mState = BalanceCapsuleTestOld.State.Balanced;
+				}
+			}
+			Vector3 vector9 = this.mTargetDeltaPos;
+			Vector3 vector10 = base.GetComponent<Rigidbody>().position - vector2;
+			Vector3 vector11 = vector9 - vector10;
+			vector11 -= Vector3.Dot(vector11, Vector3.up) * Vector3.up;
+			Vector3 vector12 = vector11 * this.moveStrength * fixedDeltaTime;
+			vector12 += (vector3 - pointVelocity) * this.moveDamping * fixedDeltaTime;
+			float num3 = this.maxAcc * fixedDeltaTime * base.GetComponent<Rigidbody>().mass;
+			if (num3 < vector12.magnitude)
+			{
+				vector12 = vector12.normalized * num3;
+			}
+			PhysicsUtils.ApplyImpulseAtPosition(base.GetComponent<Rigidbody>(), vector12, vector2);
+		}
+		else if (this.mode == BalanceCapsuleTestOld.Mode.Pos)
+		{
+			Vector3 vector13 = Vector3.zero;
+			if (0.001f < vector.magnitude)
+			{
+				vector13 = vector.normalized * Mathf.Min(num, this.angleThreshold) * this.angleFactor;
+			}
+			Vector3 vector14 = Vector3.Cross(base.GetComponent<Rigidbody>().angularVelocity, Vector3.up) * this.angularVelocityFactor;
+			vector13 += vector14;
+			int i = Math.Max(1, (int)(this.reactionTime / fixedDeltaTime));
+			this.poss.Add(vector13);
+			while (i < this.poss.Count)
+			{
+				this.poss.RemoveAt(0);
+			}
+			Vector3 vector15 = this.poss[0];
+			Vector3 vector16 = base.GetComponent<Rigidbody>().position - vector2;
+			Vector3 vector17 = vector15 - vector16;
+			vector17 -= Vector3.Dot(vector17, Vector3.up) * Vector3.up;
+			Vector3 vector18 = vector17 * this.moveStrength * fixedDeltaTime;
+			vector18 += (base.GetComponent<Rigidbody>().velocity * 0f - pointVelocity) * this.moveDamping * fixedDeltaTime;
+			PhysicsUtils.ApplyImpulseAtPosition(base.GetComponent<Rigidbody>(), vector18, vector2);
+		}
+		else if (this.mode == BalanceCapsuleTestOld.Mode.Velocity)
+		{
+			Vector3 vector19 = Vector3.zero;
+			if (0.001f < vector.magnitude)
+			{
+				vector19 = vector.normalized * num * this.angleFactor;
+			}
+			Vector3 vector20 = Vector3.Cross(base.GetComponent<Rigidbody>().angularVelocity, Vector3.up) * this.angularVelocityFactor;
+			vector19 += vector20;
+			int j = Math.Max(1, (int)(this.reactionTime / fixedDeltaTime));
+			this.velocities.Add(vector19);
+			while (j < this.velocities.Count)
+			{
+				this.velocities.RemoveAt(0);
+			}
+			Vector3 vector21 = this.velocities[0];
+			Vector3 vector22 = (vector21 - pointVelocity) * base.GetComponent<Rigidbody>().mass * 0.1f;
+			vector22 -= Vector3.Dot(vector22, Vector3.up) * Vector3.up;
+			PhysicsUtils.ApplyImpulseAtPosition(base.GetComponent<Rigidbody>(), vector22, vector2);
+		}
+		else
+		{
+			Vector3 item = Vector3.zero;
+			if (0.001f < vector.magnitude)
+			{
+				item = vector.normalized * num * this.angleFactor;
+			}
+			Vector3 vector23 = Vector3.Cross(base.GetComponent<Rigidbody>().angularVelocity, Vector3.up) * this.angularVelocityFactor;
+			int num4 = Math.Max(1, (int)(this.reactionTime / fixedDeltaTime));
+			this.accs.Add(item);
+			if (num4 < this.accs.Count)
+			{
+				this.accs.RemoveAt(0);
+			}
+			Vector3 vector24 = this.accs[0];
+			vector24 += vector23;
+			Vector3 vector25 = vector24 * fixedDeltaTime * base.GetComponent<Rigidbody>().mass;
+			vector25 -= Vector3.Dot(vector25, Vector3.up) * Vector3.up;
+			PhysicsUtils.ApplyImpulseAtPosition(base.GetComponent<Rigidbody>(), vector25, vector2);
+		}
+	}
+
+	// Token: 0x04004762 RID: 18274
+	public float angleFactor = 10f;
+
+	// Token: 0x04004763 RID: 18275
+	public float angularVelocityFactor = 1f;
+
+	// Token: 0x04004764 RID: 18276
+	public float angleThreshold = 10f;
+
+	// Token: 0x04004765 RID: 18277
+	public float offsetRange = 1f;
+
+	// Token: 0x04004766 RID: 18278
+	public float moveStrength = 1f;
+
+	// Token: 0x04004767 RID: 18279
+	public float moveDamping = 1f;
+
+	// Token: 0x04004768 RID: 18280
+	public float longTermStrength = 0.1f;
+
+	// Token: 0x04004769 RID: 18281
+	public float longTermDamping = 1f;
+
+	// Token: 0x0400476A RID: 18282
+	public float maxAcc = 13.5f;
+
+	// Token: 0x0400476B RID: 18283
+	public float reactionTime = 0.5f;
+
+	// Token: 0x0400476C RID: 18284
+	public BalanceCapsuleTestOld.Mode mode;
+
+	// Token: 0x0400476D RID: 18285
+	private BalanceCapsuleTestOld.State mState;
+
+	// Token: 0x0400476E RID: 18286
+	private List<Vector3> poss = new List<Vector3>();
+
+	// Token: 0x0400476F RID: 18287
+	private List<Vector3> velocities = new List<Vector3>();
+
+	// Token: 0x04004770 RID: 18288
+	private List<Vector3> accs = new List<Vector3>();
+
+	// Token: 0x04004771 RID: 18289
+	private bool touchedGround;
+
+	// Token: 0x04004772 RID: 18290
+	private Vector3 mTargetDeltaPos = Vector3.zero;
+
+	// Token: 0x04004773 RID: 18291
+	private List<Vector3> oldVelocities = new List<Vector3>();
+
+	// Token: 0x04004774 RID: 18292
+	private float mNextAngleThreshold;
+
+	// Token: 0x04004775 RID: 18293
+	private Vector3 mLastTiltDir = Vector3.zero;
+
+	// Token: 0x04004776 RID: 18294
+	private Vector3 mTargetPos;
+
+	// Token: 0x02000651 RID: 1617
+	public enum Mode
+	{
+		// Token: 0x04004778 RID: 18296
+		Pos,
+		// Token: 0x04004779 RID: 18297
+		Velocity,
+		// Token: 0x0400477A RID: 18298
+		Acc,
+		// Token: 0x0400477B RID: 18299
+		PosWithoutReactionTime
+	}
+
+	// Token: 0x02000652 RID: 1618
+	public enum State
+	{
+		// Token: 0x0400477D RID: 18301
+		Balanced,
+		// Token: 0x0400477E RID: 18302
+		Recover,
+		// Token: 0x0400477F RID: 18303
+		BigRecover
+	}
+}

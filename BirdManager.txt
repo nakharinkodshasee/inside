@@ -1,0 +1,116 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200004B RID: 75
+public class BirdManager : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600026C RID: 620 RVA: 0x0001C9A8 File Offset: 0x0001ABA8
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.birds = base.transform.GetComponentsInChildren<Bird>();
+	}
+
+	// Token: 0x0600026D RID: 621 RVA: 0x0001C9DC File Offset: 0x0001ABDC
+	public bool PreAwake(int callcount)
+	{
+		this.activate = SignalIn.Create("activate", base.gameObject, new Action(this.OnActivate));
+		this.activateAndReturn = SignalIn.Create("activateAndReturn", base.gameObject, new Action(this.OnActivateAndReturn));
+		this.deactivate = SignalIn.Create("deactivate", base.gameObject, new Action(this.OnDeactivate));
+		this.scareAway = SignalIn.Create("scareAway", base.gameObject, new Action(this.OnScare));
+		return true;
+	}
+
+	// Token: 0x0600026E RID: 622 RVA: 0x0001CA74 File Offset: 0x0001AC74
+	private void Start()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x0600026F RID: 623 RVA: 0x0001CA7C File Offset: 0x0001AC7C
+	private void OnActivate()
+	{
+		int i = 0;
+		int num = this.birds.Length;
+		while (i < num)
+		{
+			Bird bird = this.birds[i];
+			bird.isActive = true;
+			i++;
+		}
+	}
+
+	// Token: 0x06000270 RID: 624 RVA: 0x0001CAB4 File Offset: 0x0001ACB4
+	private void OnActivateAndReturn()
+	{
+		int i = 0;
+		int num = this.birds.Length;
+		while (i < num)
+		{
+			Bird bird = this.birds[i];
+			bird.isActive = true;
+			if (bird.landOnHuddle)
+			{
+				bird.SetHuddleFlyBackDelayState();
+			}
+			else
+			{
+				bird.SetFlyBackState();
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x06000271 RID: 625 RVA: 0x0001CB08 File Offset: 0x0001AD08
+	private void OnDeactivate()
+	{
+		int i = 0;
+		int num = this.birds.Length;
+		while (i < num)
+		{
+			Bird bird = this.birds[i];
+			bird.isActive = false;
+			i++;
+		}
+	}
+
+	// Token: 0x06000272 RID: 626 RVA: 0x0001CB40 File Offset: 0x0001AD40
+	private void OnScare()
+	{
+		int i = 0;
+		int num = this.birds.Length;
+		while (i < num)
+		{
+			Bird bird = this.birds[i];
+			bird.ScareAway();
+			i++;
+		}
+	}
+
+	// Token: 0x04000371 RID: 881
+	private SignalIn activate;
+
+	// Token: 0x04000372 RID: 882
+	private SignalIn activateAndReturn;
+
+	// Token: 0x04000373 RID: 883
+	private SignalIn deactivate;
+
+	// Token: 0x04000374 RID: 884
+	private SignalIn scareAway;
+
+	// Token: 0x04000375 RID: 885
+	[HideInInspector]
+	[SerializeField]
+	private Bird[] birds;
+
+	// Token: 0x04000376 RID: 886
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

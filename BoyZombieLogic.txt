@@ -1,0 +1,179 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000401 RID: 1025
+public class BoyZombieLogic : BoyInput, IPreAwake
+{
+	// Token: 0x06001B01 RID: 6913 RVA: 0x000ECAE4 File Offset: 0x000EACE4
+	public bool PreAwake(int callcount)
+	{
+		this.lineStart = SignalIn.Create("lineStart", base.gameObject, new Action(this.OnLineStart));
+		this.lineStop = SignalIn.Create("lineStop", base.gameObject, new Action(this.OnLineStop));
+		this.enableZombieLogic = SignalIn.Create("enableZombieLogic", base.gameObject, new Action(this.EnableZombieLogic));
+		this.disableZombieLogic = SignalIn.Create("disableZombieLogic", base.gameObject, new Action(this.DisableZombieLogic));
+		return true;
+	}
+
+	// Token: 0x17000085 RID: 133
+	// (get) Token: 0x06001B02 RID: 6914 RVA: 0x000ECB7C File Offset: 0x000EAD7C
+	public override vector2f stick
+	{
+		get
+		{
+			vector2f a = GameInput.stick;
+			if (a.x < -0.7f)
+			{
+				a.x = -1f;
+			}
+			if (this.forcedFoward)
+			{
+				a = vector2f.right;
+			}
+			if (this.updateScale)
+			{
+				this.scale = this.inputXScaleCurve.Evaluate(Mathf.Abs(a.x));
+				this.scale *= 1f + this.outOfPlaceScale * 0.2f;
+			}
+			if (a.x < 0f)
+			{
+				this.scale = 0.37f;
+			}
+			vector2f result = a * this.scale;
+			if (a.x < 0.3f && result.x > 0.3f)
+			{
+				result.x = 0.295f;
+			}
+			else if (a.x > 0.3f && result.x < 0.3f)
+			{
+				result.x = 0.305f;
+			}
+			return result;
+		}
+	}
+
+	// Token: 0x06001B03 RID: 6915 RVA: 0x000ECC90 File Offset: 0x000EAE90
+	public void ForceFoward()
+	{
+		this.forcedFoward = true;
+	}
+
+	// Token: 0x06001B04 RID: 6916 RVA: 0x000ECC9C File Offset: 0x000EAE9C
+	public override void UpdateInput()
+	{
+		base.UpdateInput();
+	}
+
+	// Token: 0x17000086 RID: 134
+	// (get) Token: 0x06001B05 RID: 6917 RVA: 0x000ECCA4 File Offset: 0x000EAEA4
+	public override bool action
+	{
+		get
+		{
+			return !this.forcedFoward && GameInput.action;
+		}
+	}
+
+	// Token: 0x17000087 RID: 135
+	// (get) Token: 0x06001B06 RID: 6918 RVA: 0x000ECCB8 File Offset: 0x000EAEB8
+	public override bool jump
+	{
+		get
+		{
+			return !this.forcedFoward && GameInput.jump;
+		}
+	}
+
+	// Token: 0x17000088 RID: 136
+	// (get) Token: 0x06001B07 RID: 6919 RVA: 0x000ECCCC File Offset: 0x000EAECC
+	public override bool rawJump
+	{
+		get
+		{
+			return !this.forcedFoward && GameInput.rawJump;
+		}
+	}
+
+	// Token: 0x17000089 RID: 137
+	// (get) Token: 0x06001B08 RID: 6920 RVA: 0x000ECCE0 File Offset: 0x000EAEE0
+	public override bool grab
+	{
+		get
+		{
+			return !this.forcedFoward && GameInput.grab;
+		}
+	}
+
+	// Token: 0x06001B09 RID: 6921 RVA: 0x000ECCF4 File Offset: 0x000EAEF4
+	public void EnableZombieLogic()
+	{
+		VisualBoy visualBoy = ScriptGlobals.boy.visualBoy;
+		Transform childComponentAE = visualBoy.transform.GetChildComponentAE("Themes");
+		Transform childComponentAE2 = childComponentAE.GetChildComponentAE("Zombie");
+		visualBoy.theme = childComponentAE2;
+		ScriptGlobals.boy.input = this;
+	}
+
+	// Token: 0x06001B0A RID: 6922 RVA: 0x000ECD3C File Offset: 0x000EAF3C
+	public void DisableZombieLogic()
+	{
+		VisualBoy visualBoy = ScriptGlobals.boy.visualBoy;
+		visualBoy.theme = null;
+		ScriptGlobals.boy.input = null;
+	}
+
+	// Token: 0x06001B0B RID: 6923 RVA: 0x000ECD68 File Offset: 0x000EAF68
+	private void FixedUpdate()
+	{
+		float num = this.boyLineUpPos.transform.position.x - 0.3f - ScriptGlobals.boy.transform.position.x;
+		this.outOfPlaceScale = Mathf.Sign(num) * Mathf.InverseLerp(0f, 0.75f, Mathf.Abs(num));
+		if (this.outOfPlaceScale > 0f)
+		{
+			this.outOfPlaceScale *= 1.3f;
+		}
+	}
+
+	// Token: 0x06001B0C RID: 6924 RVA: 0x000ECDF0 File Offset: 0x000EAFF0
+	private void OnLineStop()
+	{
+		this.updateScale = false;
+	}
+
+	// Token: 0x06001B0D RID: 6925 RVA: 0x000ECDFC File Offset: 0x000EAFFC
+	private void OnLineStart()
+	{
+		this.updateScale = true;
+	}
+
+	// Token: 0x040030EA RID: 12522
+	public AnimationCurve inputXScaleCurve;
+
+	// Token: 0x040030EB RID: 12523
+	public GameObject boyLineUpPos;
+
+	// Token: 0x040030EC RID: 12524
+	public float scale;
+
+	// Token: 0x040030ED RID: 12525
+	private SignalIn lineStart;
+
+	// Token: 0x040030EE RID: 12526
+	private SignalIn lineStop;
+
+	// Token: 0x040030EF RID: 12527
+	private SignalIn enableZombieLogic;
+
+	// Token: 0x040030F0 RID: 12528
+	private SignalIn disableZombieLogic;
+
+	// Token: 0x040030F1 RID: 12529
+	private float outOfPlaceScale;
+
+	// Token: 0x040030F2 RID: 12530
+	private bool forcedFoward;
+
+	// Token: 0x040030F3 RID: 12531
+	private bool updateScale = true;
+
+	// Token: 0x040030F4 RID: 12532
+	private bool currentlyWalking;
+}

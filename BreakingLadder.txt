@@ -1,0 +1,75 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000522 RID: 1314
+public class BreakingLadder : MonoBehaviour
+{
+	// Token: 0x06002241 RID: 8769 RVA: 0x0011E6E0 File Offset: 0x0011C8E0
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioLadderSmash = new AudioEventSimpleLocal("env_sewer_stealSubmarine_ladderSmash", akGameObj);
+	}
+
+	// Token: 0x06002242 RID: 8770 RVA: 0x0011E720 File Offset: 0x0011C920
+	private void Awake()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x06002243 RID: 8771 RVA: 0x0011E728 File Offset: 0x0011C928
+	private void OnTriggerEnter(Collider col)
+	{
+		if (this.broken)
+		{
+			return;
+		}
+		Submarine component = col.GetComponent<Submarine>();
+		if (!component)
+		{
+			return;
+		}
+		this.ladderObj.SetActive(false);
+		this.audioLadderSmash.PostFast();
+		if (component.transform.position.x > base.transform.position.x)
+		{
+			this.anim.Play(this.animBreakLeft.name);
+		}
+		else
+		{
+			this.anim.Play(this.animBreakRight.name);
+		}
+		this.broken = true;
+	}
+
+	// Token: 0x04003FE5 RID: 16357
+	public GameObject ladderObj;
+
+	// Token: 0x04003FE6 RID: 16358
+	public Animation anim;
+
+	// Token: 0x04003FE7 RID: 16359
+	public AnimationClip animBreakLeft;
+
+	// Token: 0x04003FE8 RID: 16360
+	public AnimationClip animBreakRight;
+
+	// Token: 0x04003FE9 RID: 16361
+	private bool broken;
+
+	// Token: 0x04003FEA RID: 16362
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioLadderSmash;
+
+	// Token: 0x04003FEB RID: 16363
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

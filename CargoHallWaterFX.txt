@@ -1,0 +1,54 @@
+using System;
+using HutongGames.PlayMaker;
+using UnityEngine;
+
+// Token: 0x02000482 RID: 1154
+public class CargoHallWaterFX : MonoBehaviour
+{
+	// Token: 0x06001E4A RID: 7754 RVA: 0x00104014 File Offset: 0x00102214
+	private void Start()
+	{
+		this.filterIn = new AttackReleaseFilter(0, this.coolDown);
+		this.filterOut = new AttackReleaseFilter(this.fadeIn, 0);
+	}
+
+	// Token: 0x06001E4B RID: 7755 RVA: 0x00104048 File Offset: 0x00102248
+	private void Update()
+	{
+		float output = this.lever.GetOutput();
+		this.accel = this.filterOut.Filter(this.filterIn.Filter(Mathf.Abs(output - this.oldSpeed)));
+		this.oldSpeed = output;
+		if (this.fsm)
+		{
+			FsmFloat fsmFloat = this.fsm.Fsm.GetFsmFloat("bump");
+			fsmFloat.Value = this.accel * this.multiplier;
+		}
+	}
+
+	// Token: 0x040037DF RID: 14303
+	public LeverAnalogWater lever;
+
+	// Token: 0x040037E0 RID: 14304
+	public PlayMakerFSM fsm;
+
+	// Token: 0x040037E1 RID: 14305
+	public int fadeIn;
+
+	// Token: 0x040037E2 RID: 14306
+	public int coolDown;
+
+	// Token: 0x040037E3 RID: 14307
+	public float multiplier;
+
+	// Token: 0x040037E4 RID: 14308
+	public float accel;
+
+	// Token: 0x040037E5 RID: 14309
+	private AttackReleaseFilter filterIn;
+
+	// Token: 0x040037E6 RID: 14310
+	private AttackReleaseFilter filterOut;
+
+	// Token: 0x040037E7 RID: 14311
+	private float oldSpeed;
+}

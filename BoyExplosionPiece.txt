@@ -1,0 +1,223 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000F2 RID: 242
+public class BoyExplosionPiece : MonoBehaviour, IFastEventExListener<Collision>
+{
+	// Token: 0x0600077F RID: 1919 RVA: 0x00052D08 File Offset: 0x00050F08
+	public void Init()
+	{
+		this.originalParent = base.transform.parent;
+		if (this.jointObject == null)
+		{
+			this.joint = base.gameObject.GetComponent<Joint>();
+		}
+		else
+		{
+			this.joint = this.jointObject.gameObject.GetComponent<Joint>();
+			this.collisionEvent = this.jointObject.AddComponent<CollisionEvents>();
+			if (this.joint == null)
+			{
+				this.cfgJoint = this.jointObject.AddComponent<ConfigurableJoint>();
+				if (this.cfgJoint != null)
+				{
+					this.cfgJoint.anchor = Vector3Fast.zero;
+					this.cfgJoint.autoConfigureConnectedAnchor = true;
+					this.cfgJoint.xMotion = 0;
+					this.cfgJoint.yMotion = 0;
+					this.cfgJoint.zMotion = 0;
+					this.cfgJoint.angularXMotion = 0;
+					this.cfgJoint.angularYMotion = 0;
+					this.cfgJoint.angularZMotion = 0;
+					this.joint = this.cfgJoint;
+				}
+			}
+		}
+		base.gameObject.SetActive(false);
+	}
+
+	// Token: 0x06000780 RID: 1920 RVA: 0x00052E24 File Offset: 0x00051024
+	public void Setup(Boy boy)
+	{
+		int bone = boy.visualBoy.actor.GetBone(this.bodyPart.ToString());
+		RagdollSkeleton ragdoll = boy.visualBoy.ragdoll;
+		if (this.type == BoyExplosionPiece.Type.Parent)
+		{
+			this.target = boy.visualBoy.actor.bones[bone].transform.gameObject;
+		}
+		else
+		{
+			RagdollSkeleton.BodyIndex bodyID = ragdoll.GetBodyID(bone);
+			this.target = ragdoll[bodyID].gameObject;
+		}
+		if (this.cfgJoint != null)
+		{
+			this.cfgJoint.projectionMode = ((!ragdoll.useProjection) ? 0 : 1);
+			this.cfgJoint.projectionDistance = ragdoll.projectionDistance;
+			this.cfgJoint.projectionAngle = ragdoll.projectionAngle;
+		}
+		if (this.collisionEvent)
+		{
+			this.collisionEvent.collisionEnter.Register(this, ref this.collisionEnterHandle);
+		}
+	}
+
+	// Token: 0x06000781 RID: 1921 RVA: 0x00052F2C File Offset: 0x0005112C
+	public void Explode()
+	{
+		base.transform.position = this.target.gameObject.transform.position;
+		base.transform.rotation = this.target.gameObject.transform.rotation;
+		if (this.joint != null)
+		{
+			this.joint.connectedBody = this.target.GetComponent<Rigidbody>();
+		}
+		if (this.type != BoyExplosionPiece.Type.Parent)
+		{
+			base.transform.parent = this.originalParent;
+			foreach (Transform transform in base.gameObject.GetComponentsInChildren<Transform>(true))
+			{
+				if (this.joint != null)
+				{
+					transform.gameObject.layer = LayerMask.NameToLayer("Player");
+				}
+				else
+				{
+					transform.gameObject.layer = LayerMask.NameToLayer("Default");
+				}
+			}
+		}
+		else
+		{
+			base.transform.parent = this.target.transform;
+		}
+		base.gameObject.SetActive(true);
+		if (this.activateOnBreak != null)
+		{
+			this.activateOnBreak.SetActive(false);
+		}
+		if (this.disableBodyPart)
+		{
+			this.target.GetComponent<Collider>().enabled = false;
+		}
+	}
+
+	// Token: 0x06000782 RID: 1922 RVA: 0x00053084 File Offset: 0x00051284
+	public void ExplosionForce(float explosionForce, Vector3 explosionPos, float explosionRadius)
+	{
+		Rigidbody[] componentsInChildren = base.gameObject.GetComponentsInChildren<Rigidbody>(true);
+		foreach (Rigidbody rigidbody in componentsInChildren)
+		{
+			rigidbody.GetComponent<Rigidbody>().AddExplosionForce(explosionForce * rigidbody.GetComponent<Rigidbody>().mass, explosionPos, explosionRadius, this.upwardsModifier, 1);
+			rigidbody.GetComponent<Rigidbody>().AddForce(this.pieceForce * rigidbody.GetComponent<Rigidbody>().mass, 1);
+		}
+	}
+
+	// Token: 0x06000783 RID: 1923 RVA: 0x000530FC File Offset: 0x000512FC
+	public void OnFastEventEx(FastEventEx<Collision> sender, ref Collision collision)
+	{
+		if (sender == this.collisionEvent.collisionEnter && this.joint != null)
+		{
+			Object.Destroy(this.joint);
+			this.OnJointBreak();
+		}
+	}
+
+	// Token: 0x06000784 RID: 1924 RVA: 0x00053134 File Offset: 0x00051334
+	private void OnJointBreak()
+	{
+		if (this.activateOnBreak != null)
+		{
+			this.activateOnBreak.SetActive(true);
+			Transform[] componentsInChildren = base.gameObject.GetComponentsInChildren<Transform>(true);
+			foreach (Transform transform in componentsInChildren)
+			{
+				transform.gameObject.layer = LayerMask.NameToLayer("Default");
+			}
+		}
+	}
+
+	// Token: 0x04000CFD RID: 3325
+	public BoyExplosionPiece.BodyPart bodyPart;
+
+	// Token: 0x04000CFE RID: 3326
+	public BoyExplosionPiece.Type type;
+
+	// Token: 0x04000CFF RID: 3327
+	public GameObject jointObject;
+
+	// Token: 0x04000D00 RID: 3328
+	public float upwardsModifier;
+
+	// Token: 0x04000D01 RID: 3329
+	public bool disableBodyPart;
+
+	// Token: 0x04000D02 RID: 3330
+	public Vector3 pieceForce;
+
+	// Token: 0x04000D03 RID: 3331
+	public GameObject activateOnBreak;
+
+	// Token: 0x04000D04 RID: 3332
+	private GameObject target;
+
+	// Token: 0x04000D05 RID: 3333
+	private int collisionEnterHandle = -1;
+
+	// Token: 0x04000D06 RID: 3334
+	[SerializeField]
+	[HideInInspector]
+	private Transform originalParent;
+
+	// Token: 0x04000D07 RID: 3335
+	[SerializeField]
+	[HideInInspector]
+	private Joint joint;
+
+	// Token: 0x04000D08 RID: 3336
+	[SerializeField]
+	[HideInInspector]
+	private CollisionEvents collisionEvent;
+
+	// Token: 0x04000D09 RID: 3337
+	[SerializeField]
+	[HideInInspector]
+	private ConfigurableJoint cfgJoint;
+
+	// Token: 0x020000F3 RID: 243
+	public enum BodyPart
+	{
+		// Token: 0x04000D0B RID: 3339
+		Head,
+		// Token: 0x04000D0C RID: 3340
+		LeftArm,
+		// Token: 0x04000D0D RID: 3341
+		LeftElbow,
+		// Token: 0x04000D0E RID: 3342
+		LeftHip,
+		// Token: 0x04000D0F RID: 3343
+		LeftKnee,
+		// Token: 0x04000D10 RID: 3344
+		RightArm,
+		// Token: 0x04000D11 RID: 3345
+		RightElbow,
+		// Token: 0x04000D12 RID: 3346
+		RightHip,
+		// Token: 0x04000D13 RID: 3347
+		RightKnee,
+		// Token: 0x04000D14 RID: 3348
+		Root,
+		// Token: 0x04000D15 RID: 3349
+		SpineB
+	}
+
+	// Token: 0x020000F4 RID: 244
+	public enum Type
+	{
+		// Token: 0x04000D17 RID: 3351
+		Free,
+		// Token: 0x04000D18 RID: 3352
+		Parent,
+		// Token: 0x04000D19 RID: 3353
+		Joint
+	}
+}

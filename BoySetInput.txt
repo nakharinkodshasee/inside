@@ -1,0 +1,232 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200015C RID: 348
+public class BoySetInput : DefaultBoyInput, IPreAwake
+{
+	// Token: 0x06000A5C RID: 2652 RVA: 0x000665F8 File Offset: 0x000647F8
+	public bool PreAwake(int callcount)
+	{
+		this.enableSetInput = SignalIn.Create("enableSetInput", base.gameObject, new Action(this.activateScript));
+		this.disableSetInput = SignalIn.Create("disableSetInput", base.gameObject, new Action(this.deactivateScript));
+		return true;
+	}
+
+	// Token: 0x06000A5D RID: 2653 RVA: 0x0006664C File Offset: 0x0006484C
+	public bool isActivated()
+	{
+		return this.scriptActive;
+	}
+
+	// Token: 0x06000A5E RID: 2654 RVA: 0x00066654 File Offset: 0x00064854
+	public void activateScript()
+	{
+		this.scriptActive = true;
+	}
+
+	// Token: 0x06000A5F RID: 2655 RVA: 0x00066660 File Offset: 0x00064860
+	public void deactivateScript()
+	{
+		this.scriptActive = false;
+		if (ScriptGlobals.boy != null && ScriptGlobals.boy.input == this)
+		{
+			if (ScriptGlobals.boy.isCharacterActive)
+			{
+				ScriptGlobals.boy.input = null;
+			}
+		}
+		else if (ScriptGlobals.huddle != null && ScriptGlobals.huddle.input == this && ScriptGlobals.huddle.isCharacterActive)
+		{
+			ScriptGlobals.huddle.input = null;
+		}
+	}
+
+	// Token: 0x17000034 RID: 52
+	// (get) Token: 0x06000A60 RID: 2656 RVA: 0x000666F8 File Offset: 0x000648F8
+	public override vector2f stick
+	{
+		get
+		{
+			return this.stickValue;
+		}
+	}
+
+	// Token: 0x17000035 RID: 53
+	// (get) Token: 0x06000A61 RID: 2657 RVA: 0x00066700 File Offset: 0x00064900
+	public override bool action
+	{
+		get
+		{
+			return this.actionValue;
+		}
+	}
+
+	// Token: 0x17000036 RID: 54
+	// (get) Token: 0x06000A62 RID: 2658 RVA: 0x00066708 File Offset: 0x00064908
+	public override bool grab
+	{
+		get
+		{
+			return this.grabValue;
+		}
+	}
+
+	// Token: 0x17000037 RID: 55
+	// (get) Token: 0x06000A63 RID: 2659 RVA: 0x00066710 File Offset: 0x00064910
+	public override bool rawJump
+	{
+		get
+		{
+			return this.rawJumpValue;
+		}
+	}
+
+	// Token: 0x17000038 RID: 56
+	// (get) Token: 0x06000A64 RID: 2660 RVA: 0x00066718 File Offset: 0x00064918
+	public override bool jump
+	{
+		get
+		{
+			return this.jumpValue;
+		}
+	}
+
+	// Token: 0x06000A65 RID: 2661 RVA: 0x00066720 File Offset: 0x00064920
+	private void FixedUpdate()
+	{
+		if (this.scriptActive)
+		{
+			if (this.useActionVal)
+			{
+				this.actionValue = this.actionVal;
+			}
+			else
+			{
+				this.actionValue = GameInput.action;
+			}
+			if (this.useGrabVal)
+			{
+				this.grabValue = this.grabVal;
+			}
+			else
+			{
+				this.grabValue = GameInput.grab;
+			}
+			if (this.useJumpVal)
+			{
+				this.jumpValue = this.jumpVal;
+			}
+			else
+			{
+				this.jumpValue = GameInput.jump;
+			}
+			if (this.useJumpVal)
+			{
+				this.rawJumpValue = this.jumpVal;
+			}
+			else
+			{
+				this.rawJumpValue = GameInput.rawJump;
+			}
+			vector2f stick = GameInput.stick;
+			if (this.useStickVal_X)
+			{
+				this.stickValue.x = this.stickVal.x;
+			}
+			else
+			{
+				this.stickValue.x = stick.x * ((stick.x <= 0f) ? Mathf.Abs(this.negCapX) : this.posCapX);
+			}
+			if (this.useStickVal_Y)
+			{
+				this.stickValue.y = this.stickVal.y;
+			}
+			else
+			{
+				this.stickValue.y = stick.y * ((stick.y <= 0f) ? Mathf.Abs(this.negCapY) : this.posCapY);
+			}
+			if (ScriptGlobals.boy != null && ScriptGlobals.boy.isCharacterActive)
+			{
+				ScriptGlobals.boy.input = this;
+			}
+			else if (ScriptGlobals.huddle != null && ScriptGlobals.huddle.isCharacterActive)
+			{
+				ScriptGlobals.huddle.input = this;
+			}
+		}
+		else if (ScriptGlobals.boy != null && ScriptGlobals.boy.input == this)
+		{
+			if (ScriptGlobals.boy.isCharacterActive)
+			{
+				ScriptGlobals.boy.input = null;
+			}
+		}
+		else if (ScriptGlobals.huddle != null && ScriptGlobals.huddle.input == this && ScriptGlobals.huddle.isCharacterActive)
+		{
+			ScriptGlobals.huddle.input = null;
+		}
+	}
+
+	// Token: 0x040011DB RID: 4571
+	public bool useActionVal;
+
+	// Token: 0x040011DC RID: 4572
+	public bool actionVal;
+
+	// Token: 0x040011DD RID: 4573
+	public bool useGrabVal;
+
+	// Token: 0x040011DE RID: 4574
+	public bool grabVal;
+
+	// Token: 0x040011DF RID: 4575
+	public bool useJumpVal;
+
+	// Token: 0x040011E0 RID: 4576
+	public bool jumpVal;
+
+	// Token: 0x040011E1 RID: 4577
+	public bool useStickVal_X;
+
+	// Token: 0x040011E2 RID: 4578
+	public bool useStickVal_Y;
+
+	// Token: 0x040011E3 RID: 4579
+	public Vector2 stickVal;
+
+	// Token: 0x040011E4 RID: 4580
+	public float posCapX = 1f;
+
+	// Token: 0x040011E5 RID: 4581
+	public float negCapX = 1f;
+
+	// Token: 0x040011E6 RID: 4582
+	public float posCapY = 1f;
+
+	// Token: 0x040011E7 RID: 4583
+	public float negCapY = 1f;
+
+	// Token: 0x040011E8 RID: 4584
+	private SignalIn enableSetInput;
+
+	// Token: 0x040011E9 RID: 4585
+	private SignalIn disableSetInput;
+
+	// Token: 0x040011EA RID: 4586
+	private vector2f stickValue;
+
+	// Token: 0x040011EB RID: 4587
+	private bool scriptActive;
+
+	// Token: 0x040011EC RID: 4588
+	private bool grabValue;
+
+	// Token: 0x040011ED RID: 4589
+	private bool actionValue;
+
+	// Token: 0x040011EE RID: 4590
+	private bool jumpValue;
+
+	// Token: 0x040011EF RID: 4591
+	private bool rawJumpValue;
+}

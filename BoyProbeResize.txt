@@ -1,0 +1,48 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000158 RID: 344
+public class BoyProbeResize : MonoBehaviour
+{
+	// Token: 0x06000A50 RID: 2640 RVA: 0x00066300 File Offset: 0x00064500
+	private void Start()
+	{
+		this.startPos = base.transform.localPosition;
+		this.boy = base.GetComponent<Collider>().attachedRigidbody.GetComponent<Boy>();
+		this.capsule = (base.GetComponent<Collider>() as CapsuleCollider);
+	}
+
+	// Token: 0x06000A51 RID: 2641 RVA: 0x00066348 File Offset: 0x00064548
+	private void FixedUpdate()
+	{
+		if (!Mathf.Approximately(this.boy.properties.height, this.previousHeight) || !Mathf.Approximately(this.boy.properties.radius, this.previousRadius) || !Mathf.Approximately(this.boy.shrinkHeight, this.previousShrinkHeight))
+		{
+			this.capsule.height = this.boy.properties.height - this.boy.shrinkHeight;
+			this.capsule.radius = this.boy.properties.radius;
+			Vector3 localPosition = this.startPos;
+			localPosition.y -= this.boy.shrinkHeight * 0.5f;
+			base.transform.localPosition = localPosition;
+			this.previousHeight = this.boy.properties.height;
+			this.previousRadius = this.boy.properties.radius;
+			this.previousShrinkHeight = this.boy.shrinkHeight;
+		}
+	}
+
+	// Token: 0x040011D3 RID: 4563
+	private Vector3 startPos;
+
+	// Token: 0x040011D4 RID: 4564
+	private float previousHeight;
+
+	// Token: 0x040011D5 RID: 4565
+	private float previousRadius;
+
+	// Token: 0x040011D6 RID: 4566
+	private float previousShrinkHeight;
+
+	// Token: 0x040011D7 RID: 4567
+	private Boy boy;
+
+	// Token: 0x040011D8 RID: 4568
+	private CapsuleCollider capsule;
+}

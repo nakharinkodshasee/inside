@@ -1,0 +1,85 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000318 RID: 792
+public class CameraBasedFader : MonoBehaviour
+{
+	// Token: 0x06001685 RID: 5765 RVA: 0x000C5C34 File Offset: 0x000C3E34
+	private void Start()
+	{
+		this.colorProperty = this.materialToFade.GetColorProperty(this.materialInstanceProperty);
+		this.orgColor = this.materialToFade.GetColorValue(this.colorProperty);
+		if (this.axisToUse == CameraBasedFader.AxisToUse.X)
+		{
+			this.axisValue1 = this.pos1_newValue.position.x;
+			this.axisValue2 = this.pos2_orgValue.position.x;
+		}
+		else if (this.axisToUse == CameraBasedFader.AxisToUse.Y)
+		{
+			this.axisValue1 = this.pos1_newValue.position.y;
+			this.axisValue2 = this.pos2_orgValue.position.y;
+		}
+	}
+
+	// Token: 0x06001686 RID: 5766 RVA: 0x000C5CF0 File Offset: 0x000C3EF0
+	private void Update()
+	{
+		if (this.colorProperty == null)
+		{
+			return;
+		}
+		if (this.axisToUse == CameraBasedFader.AxisToUse.X)
+		{
+			this.camAxisValue = Camera.main.transform.position.x;
+		}
+		else if (this.axisToUse == CameraBasedFader.AxisToUse.Y)
+		{
+			this.camAxisValue = Camera.main.transform.position.y;
+		}
+		float num = Mathf.InverseLerp(this.axisValue1, this.axisValue2, this.camAxisValue);
+		Color value = Color.Lerp(this.newValue, this.orgColor, num);
+		this.materialToFade.SetColorProperty(this.colorProperty, value);
+	}
+
+	// Token: 0x040027D3 RID: 10195
+	public CameraBasedFader.AxisToUse axisToUse;
+
+	// Token: 0x040027D4 RID: 10196
+	public Transform pos1_newValue;
+
+	// Token: 0x040027D5 RID: 10197
+	public Transform pos2_orgValue;
+
+	// Token: 0x040027D6 RID: 10198
+	public Color newValue;
+
+	// Token: 0x040027D7 RID: 10199
+	public MaterialInstance materialToFade;
+
+	// Token: 0x040027D8 RID: 10200
+	public string materialInstanceProperty = "_Color";
+
+	// Token: 0x040027D9 RID: 10201
+	private float axisValue1;
+
+	// Token: 0x040027DA RID: 10202
+	private float axisValue2;
+
+	// Token: 0x040027DB RID: 10203
+	private float camAxisValue;
+
+	// Token: 0x040027DC RID: 10204
+	private MaterialInstance.ColorProperty colorProperty;
+
+	// Token: 0x040027DD RID: 10205
+	private Color orgColor;
+
+	// Token: 0x02000319 RID: 793
+	public enum AxisToUse
+	{
+		// Token: 0x040027DF RID: 10207
+		X,
+		// Token: 0x040027E0 RID: 10208
+		Y
+	}
+}

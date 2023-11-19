@@ -1,0 +1,168 @@
+using System;
+
+// Token: 0x02000156 RID: 342
+public class BoyLimitInput : DefaultBoyInput
+{
+	// Token: 0x06000A43 RID: 2627 RVA: 0x00065F60 File Offset: 0x00064160
+	public void activateScript()
+	{
+		this.scriptActive = true;
+	}
+
+	// Token: 0x06000A44 RID: 2628 RVA: 0x00065F6C File Offset: 0x0006416C
+	public void deactivateScript()
+	{
+		this.scriptActive = false;
+	}
+
+	// Token: 0x1700002F RID: 47
+	// (get) Token: 0x06000A45 RID: 2629 RVA: 0x00065F78 File Offset: 0x00064178
+	public override vector2f stick
+	{
+		get
+		{
+			return this.stickValue;
+		}
+	}
+
+	// Token: 0x17000030 RID: 48
+	// (get) Token: 0x06000A46 RID: 2630 RVA: 0x00065F80 File Offset: 0x00064180
+	public override bool action
+	{
+		get
+		{
+			return this.actionValue;
+		}
+	}
+
+	// Token: 0x17000031 RID: 49
+	// (get) Token: 0x06000A47 RID: 2631 RVA: 0x00065F88 File Offset: 0x00064188
+	public override bool grab
+	{
+		get
+		{
+			return this.grabValue;
+		}
+	}
+
+	// Token: 0x17000032 RID: 50
+	// (get) Token: 0x06000A48 RID: 2632 RVA: 0x00065F90 File Offset: 0x00064190
+	public override bool jump
+	{
+		get
+		{
+			return this.jumpValue;
+		}
+	}
+
+	// Token: 0x17000033 RID: 51
+	// (get) Token: 0x06000A49 RID: 2633 RVA: 0x00065F98 File Offset: 0x00064198
+	public override bool rawJump
+	{
+		get
+		{
+			return this.jumpValue;
+		}
+	}
+
+	// Token: 0x06000A4A RID: 2634 RVA: 0x00065FA0 File Offset: 0x000641A0
+	private void FixedUpdate()
+	{
+		if (this.scriptActive)
+		{
+			this.actionValue = (!this.disableAction && GameInput.action);
+			this.grabValue = (!this.disableGrab && GameInput.grab);
+			this.jumpValue = (!this.disableJump && GameInput.jump);
+			float num = (!this.disableLeft) ? this.leftLimit : 0f;
+			float num2 = (!this.disableRight) ? this.rightLimit : 0f;
+			if (GameInput.stick.x > 0f)
+			{
+				this.stickValue.x = GameInput.stick.x * num2;
+			}
+			else
+			{
+				this.stickValue.x = GameInput.stick.x * -num;
+			}
+			float num3 = (!this.disableDown) ? (-this.downLimit) : 0f;
+			float num4 = (!this.disableUp) ? this.upLimit : 0f;
+			if (GameInput.stick.y > 0f)
+			{
+				this.stickValue.y = GameInput.stick.y * num4;
+			}
+			else
+			{
+				this.stickValue.y = GameInput.stick.y * num3;
+			}
+		}
+		if (this.scriptActive)
+		{
+			if (ScriptGlobals.boy.isCharacterActive && ScriptGlobals.boy.input != this)
+			{
+				ScriptGlobals.boy.input = this;
+			}
+			if (ScriptGlobals.huddle.isCharacterActive && ScriptGlobals.huddle.input != this)
+			{
+				ScriptGlobals.huddle.input = this;
+			}
+		}
+		else
+		{
+			if (ScriptGlobals.boy.isCharacterActive && ScriptGlobals.boy.input == this)
+			{
+				ScriptGlobals.boy.input = null;
+			}
+			if (ScriptGlobals.huddle.isCharacterActive && ScriptGlobals.huddle.input == this)
+			{
+				ScriptGlobals.huddle.input = null;
+			}
+		}
+	}
+
+	// Token: 0x040011C0 RID: 4544
+	public bool disableAction;
+
+	// Token: 0x040011C1 RID: 4545
+	public bool disableGrab;
+
+	// Token: 0x040011C2 RID: 4546
+	public bool disableJump;
+
+	// Token: 0x040011C3 RID: 4547
+	public bool disableUp;
+
+	// Token: 0x040011C4 RID: 4548
+	public bool disableDown;
+
+	// Token: 0x040011C5 RID: 4549
+	public bool disableRight;
+
+	// Token: 0x040011C6 RID: 4550
+	public bool disableLeft;
+
+	// Token: 0x040011C7 RID: 4551
+	public float upLimit = 1f;
+
+	// Token: 0x040011C8 RID: 4552
+	public float downLimit = 1f;
+
+	// Token: 0x040011C9 RID: 4553
+	public float rightLimit = 1f;
+
+	// Token: 0x040011CA RID: 4554
+	public float leftLimit = 1f;
+
+	// Token: 0x040011CB RID: 4555
+	private bool scriptActive;
+
+	// Token: 0x040011CC RID: 4556
+	private vector2f stickValue = new vector2f(0f, 0f);
+
+	// Token: 0x040011CD RID: 4557
+	private bool grabValue;
+
+	// Token: 0x040011CE RID: 4558
+	private bool actionValue;
+
+	// Token: 0x040011CF RID: 4559
+	private bool jumpValue;
+}

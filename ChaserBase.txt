@@ -1,0 +1,356 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000051 RID: 81
+public class ChaserBase : MonoBehaviour
+{
+	// Token: 0x060002B5 RID: 693 RVA: 0x0001ECC4 File Offset: 0x0001CEC4
+	protected void InitPreProcessBuild()
+	{
+		this.colMask = (1 << CollisionUtils.Layers.ungrouped | 1 << CollisionUtils.Layers.environment | 1 << CollisionUtils.Layers.item | 1 << CollisionUtils.Layers.defaultLayer);
+		this.anim = base.GetComponent<Animation>();
+	}
+
+	// Token: 0x060002B6 RID: 694 RVA: 0x0001ED04 File Offset: 0x0001CF04
+	protected void PreAwakeBase()
+	{
+		this.chargeToKill = SignalIn.Create("chargeToKill", base.gameObject, new Action(this.OnChargeToKill));
+		this.stopChasing = SignalIn.Create("stopChasing", base.gameObject, new Action(this.OnStopChasing));
+		this.startStrangling = SignalOut.Create("startStrangling", base.gameObject);
+		this.animDB = GlobalCachedAnimationMovementInfo.mInstance.GetMoveInfo("movementinfo/" + this.animationData);
+		this.genericAnimDB = GlobalCachedAnimationMovementInfo.mInstance.GetMoveInfo("movementinfo/GenericCharacter");
+		if (this.anim != null)
+		{
+			int i = 0;
+			int count = this.moveAnims.Count;
+			while (i < count)
+			{
+				AnimationState animationState = this.anim[this.moveAnims[i].name];
+				if (animationState != null)
+				{
+					this.moveAnimStates.Add(animationState);
+					MovementData movementData = this.animDB.GetMovementData(this.moveAnims[i].name);
+					if (movementData == null)
+					{
+						movementData = this.genericAnimDB.GetMovementData(this.moveAnims[i].name);
+					}
+					this.movementDataList.Add(movementData);
+				}
+				i++;
+			}
+			this.chargeAnimState = this.anim[this.chargeAnim];
+		}
+		if (this.chargeAnimState != null && !this.moveAnimStates.Contains(this.chargeAnimState))
+		{
+			MovementData movementData2 = this.animDB.GetMovementData(this.chargeAnim);
+			if (movementData2 != null)
+			{
+				this.moveAnimStates.Add(this.chargeAnimState);
+				this.movementDataList.Add(movementData2);
+			}
+		}
+	}
+
+	// Token: 0x060002B7 RID: 695 RVA: 0x0001EEC8 File Offset: 0x0001D0C8
+	protected virtual void OnStopChasing()
+	{
+		AnimationState animationState = this.anim[this.stopChargeAnim];
+		if (this.setHighAnimLayer)
+		{
+			animationState.layer = 1000;
+		}
+		this.anim.CrossFade(this.stopChargeAnim, 0.4f);
+		this.guardMode = ChaserBase.GuardMode.None;
+	}
+
+	// Token: 0x060002B8 RID: 696 RVA: 0x0001EF1C File Offset: 0x0001D11C
+	protected virtual void OnChargeToKill()
+	{
+		if (this.guardMode == ChaserBase.GuardMode.None)
+		{
+			this.guardMode = ChaserBase.GuardMode.ChasingBoy;
+			if (this.anim != null)
+			{
+				AnimationState animationState = this.anim[this.chargeAnim];
+				if (this.setHighAnimLayer)
+				{
+					animationState.layer = 1000;
+				}
+				this.anim.CrossFade(this.chargeAnim, 0.4f);
+			}
+		}
+	}
+
+	// Token: 0x060002B9 RID: 697 RVA: 0x0001EF8C File Offset: 0x0001D18C
+	protected virtual void GotoStrangling()
+	{
+		this.guardMode = ChaserBase.GuardMode.StranglingBoy;
+		this.wantedStranglingRot = base.transform.rotation;
+		this.startStrangling.Signal();
+	}
+
+	// Token: 0x060002BA RID: 698 RVA: 0x0001EFB4 File Offset: 0x0001D1B4
+	protected void GroundChar(float dTime)
+	{
+		Vector3 position = base.transform.position;
+		CollisionUtils.Type type = CollisionUtils.Type.Solid;
+		RaycastHit[] array;
+		int num = CollisionUtils.RaycastAllVolatile(out array, position + Vector3Fast.up * 0.8f, Vector3Fast.down, 0.85f, this.colMask, type, false);
+		int num2 = -1;
+		if (num == 1)
+		{
+			num2 = 0;
+		}
+		else
+		{
+			float num3 = float.MaxValue;
+			for (int num4 = 0; num4 != num; num4++)
+			{
+				float distance = array[num4].distance;
+				if (distance < num3)
+				{
+					num2 = num4;
+					num3 = distance;
+				}
+			}
+		}
+		if (num2 >= 0)
+		{
+			position.y += (array[num2].point.y - position.y) * Mathf.Min(dTime * 10f, 1f);
+			base.transform.position = position;
+			this.yVel = 0f;
+		}
+		else
+		{
+			this.yVel = Mathf.Max(this.yVel - 10f * dTime, -10f);
+			position.y += this.yVel * dTime;
+			base.transform.position = position;
+		}
+	}
+
+	// Token: 0x060002BB RID: 699 RVA: 0x0001F0F0 File Offset: 0x0001D2F0
+	protected void UpdateStrangling(float speedReductionFactor = 5f)
+	{
+		base.transform.rotation = Quaternion.Slerp(base.transform.rotation, this.wantedStranglingRot, Time.deltaTime * 5f);
+		this.chargeAnimSpeed *= 1f - Time.deltaTime * speedReductionFactor;
+		Vector3 vector = base.transform.forward * this.chargeAnimSpeed;
+		vector.y = 0f;
+		base.transform.position = base.transform.position + vector * Time.deltaTime;
+	}
+
+	// Token: 0x060002BC RID: 700 RVA: 0x0001F18C File Offset: 0x0001D38C
+	protected bool UpdateVelocity(bool doGroundcheck = true, float weight = 1f)
+	{
+		float num = Time.deltaTime;
+		bool result = false;
+		while (num > 0f)
+		{
+			float num2 = Mathf.Min(num, 0.05f);
+			num -= 0.05f;
+			Quaternion quaternion = Quaternion.identity;
+			Vector3 vector = Vector3.zero;
+			bool flag = false;
+			int i = 0;
+			int count = this.moveAnimStates.Count;
+			while (i < count)
+			{
+				AnimationState animationState = this.moveAnimStates[i];
+				if (animationState.weight > 0f)
+				{
+					flag = true;
+					result = true;
+					MovementData movementData = this.movementDataList[i];
+					if (movementData != null)
+					{
+						float num3 = num2 * animationState.speed;
+						Vector3 vector2;
+						vector2..ctor(movementData.velocityX.Evaluate(animationState.time) * num3, movementData.velocityY.Evaluate(animationState.time) * num3, movementData.velocityZ.Evaluate(animationState.time) * num3);
+						Quaternion quaternion2 = Quaternion.Euler(movementData.eulerVelocityX.Evaluate(animationState.time) * num3, movementData.eulerVelocityY.Evaluate(animationState.time) * num3, movementData.eulerVelocityZ.Evaluate(animationState.time) * num3);
+						vector += base.transform.TransformDirection(vector2) * animationState.weight * weight;
+						quaternion *= quaternion2;
+					}
+				}
+				i++;
+			}
+			if (flag)
+			{
+				base.transform.position += vector;
+				base.transform.rotation = base.transform.rotation * quaternion;
+			}
+			if (doGroundcheck)
+			{
+				this.GroundChar(num2);
+			}
+		}
+		return result;
+	}
+
+	// Token: 0x060002BD RID: 701 RVA: 0x0001F34C File Offset: 0x0001D54C
+	protected void UpdateChase(bool doGroundCheck = true)
+	{
+		Vector3 vector = ScriptGlobals.boy.pos3;
+		float num = base.transform.position.z - vector.z;
+		float num2 = Mathf.Sign(vector.x - base.transform.position.x);
+		vector.x += ScriptGlobals.boy.velocity.x * num / 7f;
+		if (this.chargeViaPoint != null && !this.viaPointReached)
+		{
+			Vector3 position = this.chargeViaPoint.position;
+			position.y = base.transform.position.y;
+			if ((position - base.transform.position).sqrMagnitude < 1f)
+			{
+				this.viaPointReached = true;
+			}
+			else
+			{
+				vector = this.chargeViaPoint.position;
+			}
+		}
+		Quaternion quaternion = Quaternion.LookRotation((vector - base.transform.position).normalized);
+		float num3 = 4f;
+		int i = 0;
+		int count = this.objectsToAvoid.Count;
+		while (i < count)
+		{
+			float z = this.defautObjectSize;
+			Rigidbody component = this.objectsToAvoid[i].GetComponent<Rigidbody>();
+			if (component != null)
+			{
+				z = component.GetComponent<Collider>().bounds.extents.z;
+			}
+			Vector3 position2 = this.objectsToAvoid[i].transform.position;
+			Vector3 vector2 = position2 - base.transform.position;
+			Vector3 vector3 = Quaternion.Inverse(quaternion) * vector2;
+			if ((num2 * vector3.x < z + 1.5f || (num2 * vector3.x < z + 0.5f && vector3.z < 5f)) && -num2 * vector2.x < z && vector2.x * num2 > 0f)
+			{
+				float num4 = position2.z - z - 0.5f;
+				if (num4 < vector.z)
+				{
+					vector.z = num4;
+				}
+				if (vector2.z < z)
+				{
+					float num5 = position2.x - num2 * (z + 0.5f);
+					if (num2 * num5 < num2 * vector.x)
+					{
+						vector.x = num5;
+					}
+				}
+				num3 = 7f;
+			}
+			i++;
+		}
+		Vector3 vector4 = vector - base.transform.position;
+		vector4.y = 0f;
+		vector4.x -= Mathf.Max(vector4.z * 0.15f, 0f);
+		vector4.Normalize();
+		Quaternion quaternion2 = Quaternion.LookRotation(vector4);
+		base.transform.rotation = Quaternion.Slerp(base.transform.rotation, quaternion2, Time.deltaTime * num3);
+		if (this.anim != null)
+		{
+			if (!this.moveAnimStates.Contains(this.chargeAnimState))
+			{
+				this.UpdateVelocity(doGroundCheck, 1f - this.chargeAnimState.weight);
+				Vector3 vector5 = base.transform.forward * this.chargeAnimState.weight * this.chargeAnimSpeed;
+				vector5.y = 0f;
+				base.transform.position = base.transform.position + vector5 * Time.deltaTime;
+			}
+			else
+			{
+				this.UpdateVelocity(doGroundCheck, 1f);
+			}
+		}
+		Vector3 vector6 = ScriptGlobals.boy.pos3 - base.transform.position;
+		vector6.y = 0f;
+		if (vector6.magnitude < 1.5f)
+		{
+			this.GotoStrangling();
+		}
+	}
+
+	// Token: 0x040003D4 RID: 980
+	public string animationData = "Scientist_A";
+
+	// Token: 0x040003D5 RID: 981
+	public List<AnimationClip> moveAnims = new List<AnimationClip>();
+
+	// Token: 0x040003D6 RID: 982
+	[HideInInspector]
+	[SerializeField]
+	protected List<AnimationState> moveAnimStates = new List<AnimationState>();
+
+	// Token: 0x040003D7 RID: 983
+	protected List<MovementData> movementDataList = new List<MovementData>();
+
+	// Token: 0x040003D8 RID: 984
+	public string chargeAnim = "Gen_RunB";
+
+	// Token: 0x040003D9 RID: 985
+	public float chargeAnimSpeed = 7f;
+
+	// Token: 0x040003DA RID: 986
+	protected AnimationState chargeAnimState;
+
+	// Token: 0x040003DB RID: 987
+	public string stopChargeAnim;
+
+	// Token: 0x040003DC RID: 988
+	public List<GameObject> objectsToAvoid = new List<GameObject>();
+
+	// Token: 0x040003DD RID: 989
+	public float defautObjectSize = 0.1f;
+
+	// Token: 0x040003DE RID: 990
+	public bool setHighAnimLayer;
+
+	// Token: 0x040003DF RID: 991
+	public Transform chargeViaPoint;
+
+	// Token: 0x040003E0 RID: 992
+	private bool viaPointReached;
+
+	// Token: 0x040003E1 RID: 993
+	protected ChaserBase.GuardMode guardMode;
+
+	// Token: 0x040003E2 RID: 994
+	protected Quaternion wantedStranglingRot;
+
+	// Token: 0x040003E3 RID: 995
+	public SignalIn chargeToKill;
+
+	// Token: 0x040003E4 RID: 996
+	public SignalIn stopChasing;
+
+	// Token: 0x040003E5 RID: 997
+	public SignalOut startStrangling;
+
+	// Token: 0x040003E6 RID: 998
+	private AnimationMovementInfo animDB;
+
+	// Token: 0x040003E7 RID: 999
+	private AnimationMovementInfo genericAnimDB;
+
+	// Token: 0x040003E8 RID: 1000
+	[HideInInspector]
+	[SerializeField]
+	protected Animation anim;
+
+	// Token: 0x040003E9 RID: 1001
+	[HideInInspector]
+	[SerializeField]
+	private int colMask;
+
+	// Token: 0x040003EA RID: 1002
+	private float yVel;
+
+	// Token: 0x02000052 RID: 82
+	public enum GuardMode
+	{
+		// Token: 0x040003EC RID: 1004
+		None,
+		// Token: 0x040003ED RID: 1005
+		ChasingBoy,
+		// Token: 0x040003EE RID: 1006
+		StranglingBoy
+	}
+}

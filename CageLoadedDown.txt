@@ -1,0 +1,132 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000524 RID: 1316
+public class CageLoadedDown : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002247 RID: 8775 RVA: 0x0011E82C File Offset: 0x0011CA2C
+	public bool PreAwake(int callcount)
+	{
+		this.placeCageDown = SignalIn.Create("placeCageDown", base.gameObject, new Action(this.DoPlaceCageDown));
+		return true;
+	}
+
+	// Token: 0x06002248 RID: 8776 RVA: 0x0011E854 File Offset: 0x0011CA54
+	private void DoPlaceCageDown()
+	{
+		if (this.switchCircleTarget)
+		{
+			this.switchCircleTarget.stopExecuting();
+		}
+		if (this.switchValveTarget)
+		{
+			this.switchValveTarget.stopExecuting();
+		}
+		this.Cage.GetComponent<Rigidbody>().isKinematic = true;
+		this.ropeMoveDistance = this.RopeAttachment.position - this.RopeAttachmentTargetDown.position;
+		this.ropeParts = this.RopeContainer.GetComponentsInChildren<Rigidbody>();
+		foreach (Rigidbody rigidbody in this.ropeParts)
+		{
+			rigidbody.isKinematic = true;
+			rigidbody.transform.position = rigidbody.transform.position - this.ropeMoveDistance * 0.9f;
+		}
+		this.fakeNoSpeedCounter = 10;
+		this.Cage.position = this.Cage.position - this.ropeMoveDistance;
+		this.RopeAttachment.position = this.RopeAttachmentTargetDown.position;
+		if (this.switchCircle)
+		{
+			this.switchCircle.DoLoadAtMax();
+		}
+		if (this.switchValve)
+		{
+			this.switchValve.LoadAtPercentage(0.95f);
+		}
+		if (this.switchCircleTarget)
+		{
+			this.switchCircleTarget.startExecuting();
+		}
+		if (this.switchValveTarget)
+		{
+			this.switchValveTarget.startExecuting();
+		}
+		this.kinematicRemoved = 4;
+	}
+
+	// Token: 0x06002249 RID: 8777 RVA: 0x0011E9E4 File Offset: 0x0011CBE4
+	private void FixedUpdate()
+	{
+		if (this.fakeNoSpeedCounter > 0 && this.kinematicRemoved <= 2)
+		{
+			this.fakeNoSpeedCounter--;
+			this.Cage.GetComponent<Rigidbody>().velocity = Vector3.zero;
+			this.Cage.GetComponent<Rigidbody>().angularVelocity = Vector3.zero;
+			foreach (Rigidbody rigidbody in this.ropeParts)
+			{
+				rigidbody.velocity = Vector3.zero;
+				rigidbody.angularVelocity = Vector3.zero;
+			}
+		}
+		if (this.kinematicRemoved > 0)
+		{
+			this.kinematicRemoved--;
+			if (this.kinematicRemoved == 2)
+			{
+				this.Cage.GetComponent<Rigidbody>().isKinematic = false;
+				this.Cage.GetComponent<Rigidbody>().velocity = Vector3.zero;
+				this.Cage.GetComponent<Rigidbody>().angularVelocity = Vector3.zero;
+				foreach (Rigidbody rigidbody2 in this.ropeParts)
+				{
+					rigidbody2.isKinematic = false;
+					rigidbody2.velocity = Vector3.zero;
+					rigidbody2.angularVelocity = Vector3.zero;
+				}
+			}
+			else if (this.kinematicRemoved == 0)
+			{
+				ScriptGlobals.boy.Teleport(this.BoyInCagePos.position);
+			}
+		}
+	}
+
+	// Token: 0x04003FED RID: 16365
+	public Transform Cage;
+
+	// Token: 0x04003FEE RID: 16366
+	public Transform RopeAttachment;
+
+	// Token: 0x04003FEF RID: 16367
+	public Transform RopeContainer;
+
+	// Token: 0x04003FF0 RID: 16368
+	public Transform RopeAttachmentTargetDown;
+
+	// Token: 0x04003FF1 RID: 16369
+	public Transform BoyInCagePos;
+
+	// Token: 0x04003FF2 RID: 16370
+	public SwitchCircle switchCircle;
+
+	// Token: 0x04003FF3 RID: 16371
+	public SwitchCircleTarget switchCircleTarget;
+
+	// Token: 0x04003FF4 RID: 16372
+	public SwitchValve switchValve;
+
+	// Token: 0x04003FF5 RID: 16373
+	public SwitchValveTarget switchValveTarget;
+
+	// Token: 0x04003FF6 RID: 16374
+	private Vector3 ropeMoveDistance;
+
+	// Token: 0x04003FF7 RID: 16375
+	private Rigidbody[] ropeParts;
+
+	// Token: 0x04003FF8 RID: 16376
+	private SignalIn placeCageDown;
+
+	// Token: 0x04003FF9 RID: 16377
+	private int kinematicRemoved;
+
+	// Token: 0x04003FFA RID: 16378
+	private int fakeNoSpeedCounter;
+}

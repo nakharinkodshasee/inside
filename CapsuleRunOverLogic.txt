@@ -1,0 +1,422 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000525 RID: 1317
+public class CapsuleRunOverLogic : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x0600224B RID: 8779 RVA: 0x0011EB98 File Offset: 0x0011CD98
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioCapsuleCrush1 = new AudioEventSimple("boy_submergedChamber_capsuleCrush1");
+		this.audioCapsuleCrush2 = new AudioEventSimple("boy_submergedChamber_capsuleCrush2");
+	}
+
+	// Token: 0x0600224C RID: 8780 RVA: 0x0011EBD0 File Offset: 0x0011CDD0
+	public bool PreAwake(int callcount)
+	{
+		this.boyHit = SignalOut.Create("boyHit", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x0600224D RID: 8781 RVA: 0x0011EBEC File Offset: 0x0011CDEC
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.capsuleCollision.enterTrigger.Register(this, ref this.capsuleTriggerEnterHandle);
+		this.runOverCollision.enterTrigger.Register(this, ref this.runOverTriggerEnterHandle);
+		this.SetIdleState();
+	}
+
+	// Token: 0x0600224E RID: 8782 RVA: 0x0011EC34 File Offset: 0x0011CE34
+	private void SetIdleState()
+	{
+		this.state = CapsuleRunOverLogic.State.Idle;
+	}
+
+	// Token: 0x0600224F RID: 8783 RVA: 0x0011EC40 File Offset: 0x0011CE40
+	private void IdleState()
+	{
+		this.MoveAnimHolder(true, false);
+		Vector3 position = this.capsuleCollision.transform.position;
+		if (position.x - 0.4f < ScriptGlobals.boy.pos.x && (ScriptGlobals.boy.state is BoyReachPlateauState || ScriptGlobals.boy.state is BoyGrabPlateauState))
+		{
+			BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+			this.state = CapsuleRunOverLogic.State.None;
+		}
+		if (position.x < this.edgePos.position.x && ScriptGlobals.boy.state is BoySwimState)
+		{
+			this.SetCompleteState();
+		}
+	}
+
+	// Token: 0x06002250 RID: 8784 RVA: 0x0011ED04 File Offset: 0x0011CF04
+	private void SetCrushState(Boy boy)
+	{
+		if (this.state != CapsuleRunOverLogic.State.Idle)
+		{
+			return;
+		}
+		this.boy = boy;
+		BoyReachPlateauState boyReachPlateauState = boy.state as BoyReachPlateauState;
+		if (boy.state is BoyGrabPlateauState || (boyReachPlateauState != null && boyReachPlateauState.edge.pos.y - boy.pos.y > 0.25f))
+		{
+			BoyUtils.ClearState(boy, -1f);
+		}
+		else if (this.animHolder.position.x > this.edgePos.position.x)
+		{
+			SingletonBehaviour<BoyAudio>.instance.KillBoyWithEmotion(VoiceConfigProbe.Emotion.crushed, 0f, false, true);
+			this.audioCapsuleCrush1.PostFast(AudioKeyObject.AkGameObjs.boy);
+			this.boyHit.Signal();
+			bool flag = boy.state is BoyJumpState;
+			if (flag)
+			{
+				this.currentCrushAnim = this.animCrushedJump;
+			}
+			else if (this.animHolder.position.x > this.earlyPos.position.x)
+			{
+				this.currentCrushAnim = this.animCrushedEarly;
+			}
+			else
+			{
+				this.currentCrushAnim = this.animCrushedStand;
+			}
+			BoyUtils.StartCustomAnim(boy, this.currentCrushAnim, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.8f, (!flag) ? 0.5f : 0.7f, 0, 0f);
+			this.state = CapsuleRunOverLogic.State.Crush;
+		}
+		else
+		{
+			SingletonBehaviour<BoyAudio>.instance.KillBoyWithEmotion(VoiceConfigProbe.Emotion.tranquillized, 0f, true, true);
+			this.boyHit.Signal();
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 1f, 0.25f, 0, 0f);
+			this.SetRagdollState();
+		}
+	}
+
+	// Token: 0x06002251 RID: 8785 RVA: 0x0011EED8 File Offset: 0x0011D0D8
+	private void SetRagdollState()
+	{
+		this.boy.Kill();
+		this.forceTimer = this.totalForceTime;
+		this.state = CapsuleRunOverLogic.State.Ragdoll;
+	}
+
+	// Token: 0x06002252 RID: 8786 RVA: 0x0011EEF8 File Offset: 0x0011D0F8
+	private void RagdollState()
+	{
+		this.AddBoyForce();
+		this.forceTimer -= Time.deltaTime;
+		if (this.forceTimer <= 0f)
+		{
+			this.state = CapsuleRunOverLogic.State.None;
+		}
+	}
+
+	// Token: 0x06002253 RID: 8787 RVA: 0x0011EF2C File Offset: 0x0011D12C
+	private void CrushState()
+	{
+		bool fadeToGround = this.currentCrushAnim.frame > this.currentCrushAnim.numFrames * 0.75f;
+		this.MoveAnimHolder(true, fadeToGround);
+		if (this.currentCrushAnim.animFinished)
+		{
+			this.SetPostCrushState();
+		}
+	}
+
+	// Token: 0x06002254 RID: 8788 RVA: 0x0011EF78 File Offset: 0x0011D178
+	private void SetPostCrushState()
+	{
+		this.boy.Kill();
+		if (this.fxGroundSplat)
+		{
+			this.fxGroundSplat.SetActive(true);
+		}
+		if (this.fxAttachSplat)
+		{
+			this.fxAttachSplat.SetActive(true);
+			this.fxAttachSplat.transform.parent = this.cylinder.parent;
+		}
+		BoyUtils.StartCustomAnim(this.boy, this.animDeadRunOver, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+		this.state = CapsuleRunOverLogic.State.Ground;
+	}
+
+	// Token: 0x06002255 RID: 8789 RVA: 0x0011F004 File Offset: 0x0011D204
+	private void GroundState()
+	{
+		this.MoveAnimHolder(false, true);
+		if (this.runOverTimer > 0f)
+		{
+			this.runOverTimer -= Time.deltaTime;
+		}
+	}
+
+	// Token: 0x06002256 RID: 8790 RVA: 0x0011F03C File Offset: 0x0011D23C
+	private void SetCompleteState()
+	{
+		this.state = CapsuleRunOverLogic.State.Complete;
+	}
+
+	// Token: 0x06002257 RID: 8791 RVA: 0x0011F048 File Offset: 0x0011D248
+	private void CompleteState()
+	{
+		this.MoveAnimHolder(true, false);
+	}
+
+	// Token: 0x06002258 RID: 8792 RVA: 0x0011F054 File Offset: 0x0011D254
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case CapsuleRunOverLogic.State.Idle:
+			this.IdleState();
+			break;
+		case CapsuleRunOverLogic.State.Ground:
+			this.GroundState();
+			break;
+		case CapsuleRunOverLogic.State.Ragdoll:
+			this.RagdollState();
+			break;
+		case CapsuleRunOverLogic.State.Crush:
+			this.CrushState();
+			break;
+		case CapsuleRunOverLogic.State.Complete:
+			this.CompleteState();
+			break;
+		}
+	}
+
+	// Token: 0x06002259 RID: 8793 RVA: 0x0011F0C0 File Offset: 0x0011D2C0
+	private void RunOver()
+	{
+		if (this.state != CapsuleRunOverLogic.State.Ground || this.runOverTimer > 0f)
+		{
+			return;
+		}
+		BoyUtils.StartCustomAnim(this.boy, this.animDeadRunOverSecond, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.8f, 0.25f, 0, 0f);
+		this.audioCapsuleCrush2.PostFast(AudioKeyObject.AkGameObjs.boy);
+		this.runOverTimer = this.runOverDelay;
+	}
+
+	// Token: 0x0600225A RID: 8794 RVA: 0x0011F13C File Offset: 0x0011D33C
+	private void AddBoyForce()
+	{
+		RagdollSkeleton ragdoll = this.boy.visualBoy.ragdoll;
+		Vector3 position = this.cylinder.position;
+		position.z = 0f;
+		position.y = Mathf.Max(position.y, this.boy.pos.y);
+		RagdollSkeleton.BodyIndex bodyIndex = ragdoll.begin;
+		while (bodyIndex != ragdoll.end)
+		{
+			Rigidbody rigidbody = ragdoll[bodyIndex];
+			if (rigidbody != null)
+			{
+				rigidbody.AddExplosionForce(this.boyImpactForce, position, this.explosionRadius, 0f, 1);
+			}
+			bodyIndex = ++bodyIndex;
+		}
+	}
+
+	// Token: 0x0600225B RID: 8795 RVA: 0x0011F1EC File Offset: 0x0011D3EC
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.capsuleCollision.enterTrigger)
+		{
+			this.OnCapsuleTriggerEnter(collider);
+		}
+		else if (sender == this.runOverCollision.enterTrigger)
+		{
+			this.OnRunOverTriggerEnter(collider);
+		}
+	}
+
+	// Token: 0x0600225C RID: 8796 RVA: 0x0011F228 File Offset: 0x0011D428
+	private void OnCapsuleTriggerEnter(Collider collider)
+	{
+		BoyProbe component = collider.GetComponent<BoyProbe>();
+		if (!component)
+		{
+			return;
+		}
+		Boy boy = component.boy;
+		if (boy.isDead)
+		{
+			return;
+		}
+		this.SetCrushState(boy);
+	}
+
+	// Token: 0x0600225D RID: 8797 RVA: 0x0011F264 File Offset: 0x0011D464
+	private void OnRunOverTriggerEnter(Collider collider)
+	{
+		BoyProbe component = collider.GetComponent<BoyProbe>();
+		if (!component)
+		{
+			return;
+		}
+		this.RunOver();
+	}
+
+	// Token: 0x0600225E RID: 8798 RVA: 0x0011F28C File Offset: 0x0011D48C
+	private void MoveAnimHolder(bool followCylinder, bool fadeToGround)
+	{
+		if (followCylinder)
+		{
+			this.cylinderPos = this.cylinder.position + this.animHolderOffset;
+			this.cylinderPos.z = 0f;
+		}
+		Vector3 vector = this.cylinderPos;
+		if (fadeToGround)
+		{
+			if (this.blendTimer < this.totalBlendTime)
+			{
+				this.blendTimer += Time.deltaTime;
+				if (this.blendTimer > this.totalBlendTime)
+				{
+					this.blendTimer = this.totalBlendTime;
+				}
+			}
+			Vector3 vector2 = this.groundPlane.position + Vector3.Project(this.animHolder.position - this.groundPlane.position, this.groundPlane.forward);
+			Vector3 vector3 = vector2 - this.cylinderPos;
+			vector += vector3 * (this.blendTimer / this.totalBlendTime);
+		}
+		this.animHolder.position = vector;
+	}
+
+	// Token: 0x04003FFB RID: 16379
+	public Transform animHolder;
+
+	// Token: 0x04003FFC RID: 16380
+	public Transform cylinder;
+
+	// Token: 0x04003FFD RID: 16381
+	public Transform edgePos;
+
+	// Token: 0x04003FFE RID: 16382
+	public Transform earlyPos;
+
+	// Token: 0x04003FFF RID: 16383
+	public Transform groundPlane;
+
+	// Token: 0x04004000 RID: 16384
+	public Transform groundDummy;
+
+	// Token: 0x04004001 RID: 16385
+	public AnimClipNode animCrushedEarly;
+
+	// Token: 0x04004002 RID: 16386
+	public AnimClipNode animCrushedStand;
+
+	// Token: 0x04004003 RID: 16387
+	public AnimClipNode animCrushedJump;
+
+	// Token: 0x04004004 RID: 16388
+	public AnimClipNode animDeadRunOver;
+
+	// Token: 0x04004005 RID: 16389
+	public AnimClipNode animDeadRunOverSecond;
+
+	// Token: 0x04004006 RID: 16390
+	public Vector3 animHolderOffset;
+
+	// Token: 0x04004007 RID: 16391
+	public float runOverForce = 5f;
+
+	// Token: 0x04004008 RID: 16392
+	public float totalBlendTime = 1f;
+
+	// Token: 0x04004009 RID: 16393
+	public float boyImpactForce;
+
+	// Token: 0x0400400A RID: 16394
+	public float explosionRadius = 0.5f;
+
+	// Token: 0x0400400B RID: 16395
+	public CollisionEvents capsuleCollision;
+
+	// Token: 0x0400400C RID: 16396
+	public CollisionEvents runOverCollision;
+
+	// Token: 0x0400400D RID: 16397
+	public Vector3 runOverDirection;
+
+	// Token: 0x0400400E RID: 16398
+	public GameObject fxGroundSplat;
+
+	// Token: 0x0400400F RID: 16399
+	public GameObject fxAttachSplat;
+
+	// Token: 0x04004010 RID: 16400
+	private SignalOut boyHit;
+
+	// Token: 0x04004011 RID: 16401
+	private CapsuleRunOverLogic.State state;
+
+	// Token: 0x04004012 RID: 16402
+	private Vector3 cylinderPos;
+
+	// Token: 0x04004013 RID: 16403
+	private Boy boy;
+
+	// Token: 0x04004014 RID: 16404
+	private AnimClipNode currentCrushAnim;
+
+	// Token: 0x04004015 RID: 16405
+	private float runOverTimer;
+
+	// Token: 0x04004016 RID: 16406
+	private float runOverDelay = 1f;
+
+	// Token: 0x04004017 RID: 16407
+	private float blendTimer;
+
+	// Token: 0x04004018 RID: 16408
+	private float forceTimer;
+
+	// Token: 0x04004019 RID: 16409
+	private float totalForceTime = 1.25f;
+
+	// Token: 0x0400401A RID: 16410
+	private int capsuleTriggerEnterHandle = -1;
+
+	// Token: 0x0400401B RID: 16411
+	private int runOverTriggerEnterHandle = -1;
+
+	// Token: 0x0400401C RID: 16412
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioCapsuleCrush1;
+
+	// Token: 0x0400401D RID: 16413
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioCapsuleCrush2;
+
+	// Token: 0x0400401E RID: 16414
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x02000526 RID: 1318
+	private enum State
+	{
+		// Token: 0x04004020 RID: 16416
+		None,
+		// Token: 0x04004021 RID: 16417
+		Idle,
+		// Token: 0x04004022 RID: 16418
+		Ground,
+		// Token: 0x04004023 RID: 16419
+		Ragdoll,
+		// Token: 0x04004024 RID: 16420
+		Crush,
+		// Token: 0x04004025 RID: 16421
+		Complete
+	}
+}

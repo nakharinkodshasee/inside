@@ -1,0 +1,349 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200045A RID: 1114
+public class CEO : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001D5A RID: 7514 RVA: 0x000FD8C4 File Offset: 0x000FBAC4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioCeoHitGround = new AudioEventSimple("env_huddle_ceoDogs_ceoHitGround");
+	}
+
+	// Token: 0x06001D5B RID: 7515 RVA: 0x000FD8EC File Offset: 0x000FBAEC
+	public bool PreAwake(int callcount)
+	{
+		this.wallSmashed = SignalIn.Create("wallSmashed", base.gameObject, new Action(this.OnWallSmashed));
+		this.flyOutWindow = SignalIn.Create("flyOutWindow", base.gameObject, new Action(this.OnFlyOutWindow));
+		this.loadSplatted = SignalIn.Create("loadSplatted", base.gameObject, new Action(this.OnLoadSplatted));
+		this.splatEvent = SignalOut.Create("splatEvent", base.gameObject);
+		this.ceoFlees = SignalOut.Create("ceoFlees", base.gameObject);
+		this.throughWindow = SignalOut.Create("throughWindow", base.gameObject);
+		this.ceoSafe = SignalOut.Create("ceoSafe", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001D5C RID: 7516 RVA: 0x000FD9B8 File Offset: 0x000FBBB8
+	private void Start()
+	{
+		this.OnPreProcess();
+		if (AudioKeyObject.huddle != null)
+		{
+			this.huddleShaderHelper = AudioKeyObject.huddle.GetComponent<Shader_SetHuddlePosition>();
+		}
+		this.goToWindowState = this.ceoAnim.GetComponent<Animation>()["Gen_CEO_ShockGoToWindow"];
+		this.goToFleeState = this.ceoAnim.GetComponent<Animation>()["Gen_CEO_Flee"];
+	}
+
+	// Token: 0x06001D5D RID: 7517 RVA: 0x000FDA24 File Offset: 0x000FBC24
+	private void OnLoadSplatted()
+	{
+		this.groundSplat.SetActive(true);
+		this.groundSplatFX.SetActive(false);
+		this.groundSplat.GetComponent<Animation>()["Blast"].normalizedTime = 1f;
+		this.loadedAsSplatted = true;
+	}
+
+	// Token: 0x06001D5E RID: 7518 RVA: 0x000FDA70 File Offset: 0x000FBC70
+	public GameObject FindHeadBone()
+	{
+		Transform transform = this.ceoAnim.transform.Find("bones/Logic/Root/SpineA/SpineB/SpineC/Neck/Head");
+		if (transform != null)
+		{
+			return transform.gameObject;
+		}
+		return null;
+	}
+
+	// Token: 0x06001D5F RID: 7519 RVA: 0x000FDAA8 File Offset: 0x000FBCA8
+	private void OnWallSmashed()
+	{
+		this.ceoMode = CEO.CEOMode.RunToWindow;
+		this.ceoAnim.Play("Gen_CEO_ShockGoToWindow");
+	}
+
+	// Token: 0x06001D60 RID: 7520 RVA: 0x000FDAC4 File Offset: 0x000FBCC4
+	private void OnFlyOutWindow()
+	{
+		if (this.ceoMode == CEO.CEOMode.FallOutOfWindow || this.ceoMode == CEO.CEOMode.Safe || (this.fleeTimer > 4.5f && this.ceoMode == CEO.CEOMode.FleeFromWindow))
+		{
+			return;
+		}
+		this.throughWindow.Signal();
+		this.ceoMode = CEO.CEOMode.FallOutOfWindow;
+		this.ceoAnim.CrossFade("Gen_CEO_Ragdolly", 0.5f);
+		this.SetAttachedAnimPos(true);
+	}
+
+	// Token: 0x06001D61 RID: 7521 RVA: 0x000FDB38 File Offset: 0x000FBD38
+	private void SetAttachedAnimPos(bool setInitPos = false)
+	{
+		this.initCounter = Mathf.Min(1f, this.initCounter + Time.deltaTime * 9f);
+		this.slowInitCounter += Time.deltaTime;
+		if (setInitPos)
+		{
+			this.initPos = this.ceoAnim.transform.position;
+			this.initCounter = 0f;
+		}
+		Vector3 vector = ScriptGlobals.huddle.visualHuddle.cloth.transform.position;
+		Vector3 normalized = ScriptGlobals.huddle.velocity3.normalized;
+		float num = Mathf.Acos(Vector3.Dot(normalized, Vector3.right)) * 57.29578f;
+		if (this.initCounter < 1f)
+		{
+			num = 0f;
+		}
+		this.lastAngle += (num - this.lastAngle) * Time.deltaTime * 5f;
+		float num2 = Mathf.Min(this.slowInitCounter * 0.7f, 1f);
+		float num3 = Mathf.Min(this.slowInitCounter * 1.2f, 1f);
+		float num4 = this.attachedHuddleDist + (1f - num3) * 0.9f;
+		Vector3 vector2 = normalized * num4 + ScriptGlobals.huddle.velocity3 * Time.deltaTime;
+		float num5 = this.minYOffset * num2 + this.maxYOffset * (1f - num2);
+		if (vector2.y > num5)
+		{
+			vector2.y = num5;
+		}
+		vector += vector2;
+		float num6 = MathUtils.SmoothFraction(this.initCounter);
+		vector = vector * num6 + this.initPos * (1f - num6);
+		this.ceoAnim.transform.position = vector;
+		this.ceoAnim.transform.rotation = Quaternion.Euler(0f, 0f, -this.lastAngle);
+	}
+
+	// Token: 0x06001D62 RID: 7522 RVA: 0x000FDD24 File Offset: 0x000FBF24
+	private void Update()
+	{
+		if (this.ceoMode == CEO.CEOMode.RunToWindow)
+		{
+			if (this.goToWindowState.normalizedTime > 0.99f)
+			{
+				this.ceoAnim.CrossFade("Gen_CEO_StandAtWindow", 0.4f);
+				this.ceoMode = CEO.CEOMode.StandAtWindownNormal;
+			}
+		}
+		else if (this.ceoMode == CEO.CEOMode.StandAtWindownNormal)
+		{
+			this.forceToFleeTimer += Time.deltaTime;
+			if (this.forceToFleeTimer > this.fleeTime)
+			{
+				this.ceoAnim.CrossFade("Gen_CEO_Flee", 0.3f);
+				this.ceoMode = CEO.CEOMode.FleeFromWindow;
+				this.ceoFlees.Signal();
+			}
+		}
+		else if (this.ceoMode == CEO.CEOMode.FleeFromWindow)
+		{
+			this.fleeTimer += Time.deltaTime;
+			if (!this.ceoSafeSignalSent && this.fleeTimer > 4.5f)
+			{
+				this.ceoSafe.Signal();
+				this.ceoSafeSignalSent = true;
+			}
+			if (this.goToFleeState.normalizedTime > 0.98f)
+			{
+				this.ceoAnim.CrossFade("Gen_CEO_FleeIdle", 0.3f);
+				this.ceoMode = CEO.CEOMode.Safe;
+			}
+		}
+		else if (this.ceoMode == CEO.CEOMode.FallOutOfWindow)
+		{
+			if (this.slowInitCounter >= this.fallOffTime)
+			{
+				this.attachedHuddleDist += Time.deltaTime * this.fallOffSpeed;
+			}
+			this.SetAttachedAnimPos(false);
+			Vector3 position = this.groundSplat.transform.position;
+			position.x = this.ceoAnim.transform.position.x;
+			this.groundSplat.transform.position = position;
+			this.bloodSplatterParticleSystem.transform.position = position;
+			if (this.ceoAnim.transform.position.y < position.y + 0.15f)
+			{
+				this.audioCeoHitGround.PostFast(AudioKeyObject.AkGameObjs.huddle);
+				RTPCSphere component = this.ceoVoiceSphere.GetComponent<RTPCSphere>();
+				if (component)
+				{
+					component.FallAsleep();
+				}
+				this.splatEvent.Signal();
+				this.ceoMode = CEO.CEOMode.Ground;
+				this.splatTimer = this.splatDelay;
+			}
+		}
+		else if (this.ceoMode == CEO.CEOMode.Ground)
+		{
+			this.splatTimer -= Time.deltaTime;
+			if (!this.huddleSplatted)
+			{
+				this.huddleShaderHelper.BloodSplat();
+				this.huddleSplatted = true;
+			}
+			if (this.splatTimer < 0f)
+			{
+				this.bloodSplatterParticleSystem.Play();
+				this.groundSplatStatic.SetActive(true);
+				this.groundSplat.SetActive(true);
+				this.ceoAnim.gameObject.SetActive(false);
+				this.ceoMode = CEO.CEOMode.Splat;
+			}
+		}
+	}
+
+	// Token: 0x040035DD RID: 13789
+	public Animation ceoAnim;
+
+	// Token: 0x040035DE RID: 13790
+	public ParticleSystem bloodSplatterParticleSystem;
+
+	// Token: 0x040035DF RID: 13791
+	public GameObject groundSplat;
+
+	// Token: 0x040035E0 RID: 13792
+	public GameObject groundSplatFX;
+
+	// Token: 0x040035E1 RID: 13793
+	public GameObject groundSplatStatic;
+
+	// Token: 0x040035E2 RID: 13794
+	public GameObject headExplodeFX;
+
+	// Token: 0x040035E3 RID: 13795
+	public Mesh headlessMesh;
+
+	// Token: 0x040035E4 RID: 13796
+	public GameObject ceoVoiceSphere;
+
+	// Token: 0x040035E5 RID: 13797
+	public float fallOffTime = 3f;
+
+	// Token: 0x040035E6 RID: 13798
+	public float fallOffSpeed = 0.7f;
+
+	// Token: 0x040035E7 RID: 13799
+	public float fleeTime = 13f;
+
+	// Token: 0x040035E8 RID: 13800
+	public float splatDelay = 0.15f;
+
+	// Token: 0x040035E9 RID: 13801
+	public SignalIn wallSmashed;
+
+	// Token: 0x040035EA RID: 13802
+	public SignalIn flyOutWindow;
+
+	// Token: 0x040035EB RID: 13803
+	public SignalIn loadSplatted;
+
+	// Token: 0x040035EC RID: 13804
+	public SignalOut splatEvent;
+
+	// Token: 0x040035ED RID: 13805
+	public SignalOut ceoFlees;
+
+	// Token: 0x040035EE RID: 13806
+	public SignalOut throughWindow;
+
+	// Token: 0x040035EF RID: 13807
+	public SignalOut ceoSafe;
+
+	// Token: 0x040035F0 RID: 13808
+	private bool ceoSafeSignalSent;
+
+	// Token: 0x040035F1 RID: 13809
+	private AnimationState goToWindowState;
+
+	// Token: 0x040035F2 RID: 13810
+	private AnimationState headPopState;
+
+	// Token: 0x040035F3 RID: 13811
+	private AnimationState goToFleeState;
+
+	// Token: 0x040035F4 RID: 13812
+	private ParticleSystem bloodParticles;
+
+	// Token: 0x040035F5 RID: 13813
+	private Transform particleGroundCollider;
+
+	// Token: 0x040035F6 RID: 13814
+	private float attachedHuddleDist = 0.8f;
+
+	// Token: 0x040035F7 RID: 13815
+	private float minYOffset = -1.6f;
+
+	// Token: 0x040035F8 RID: 13816
+	private float maxYOffset = -2f;
+
+	// Token: 0x040035F9 RID: 13817
+	private float lastAngle;
+
+	// Token: 0x040035FA RID: 13818
+	private float initCounter;
+
+	// Token: 0x040035FB RID: 13819
+	private float slowInitCounter;
+
+	// Token: 0x040035FC RID: 13820
+	private float forceToFleeTimer;
+
+	// Token: 0x040035FD RID: 13821
+	private float fleeTimer;
+
+	// Token: 0x040035FE RID: 13822
+	private Vector3 initPos = Vector3.zero;
+
+	// Token: 0x040035FF RID: 13823
+	private float splatTimer;
+
+	// Token: 0x04003600 RID: 13824
+	private bool huddleSplatted;
+
+	// Token: 0x04003601 RID: 13825
+	private Shader_SetHuddlePosition huddleShaderHelper;
+
+	// Token: 0x04003602 RID: 13826
+	private CEO.CEOMode ceoMode;
+
+	// Token: 0x04003603 RID: 13827
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioCeoHitGround;
+
+	// Token: 0x04003604 RID: 13828
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04003605 RID: 13829
+	private bool loadedAsSplatted;
+
+	// Token: 0x0200045B RID: 1115
+	public enum CEOMode
+	{
+		// Token: 0x04003607 RID: 13831
+		Initial,
+		// Token: 0x04003608 RID: 13832
+		RunToWindow,
+		// Token: 0x04003609 RID: 13833
+		StandAtWindownNormal,
+		// Token: 0x0400360A RID: 13834
+		StandAtWindowProtect,
+		// Token: 0x0400360B RID: 13835
+		HeadExplodeImminent,
+		// Token: 0x0400360C RID: 13836
+		HeadExploded,
+		// Token: 0x0400360D RID: 13837
+		FallOutOfWindow,
+		// Token: 0x0400360E RID: 13838
+		Ground,
+		// Token: 0x0400360F RID: 13839
+		Splat,
+		// Token: 0x04003610 RID: 13840
+		FleeFromWindow,
+		// Token: 0x04003611 RID: 13841
+		Safe
+	}
+}

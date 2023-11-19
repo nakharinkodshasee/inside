@@ -1,0 +1,263 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200054F RID: 1359
+public class BoxIntersection_ERP : MonoBehaviour
+{
+	// Token: 0x06002332 RID: 9010 RVA: 0x001261D0 File Offset: 0x001243D0
+	public void Other()
+	{
+		if (!this.other)
+		{
+			return;
+		}
+		BoxCollider boxCollider = base.transform.GetComponent<Collider>() as BoxCollider;
+		BoxCollider boxCollider2 = this.other.GetComponent<Collider>() as BoxCollider;
+		if (!boxCollider || !boxCollider2)
+		{
+			return;
+		}
+		this.Test(boxCollider, boxCollider2);
+		this.UpdateCurve();
+	}
+
+	// Token: 0x06002333 RID: 9011 RVA: 0x00126238 File Offset: 0x00124438
+	private void Test(BoxCollider boxA, BoxCollider boxB)
+	{
+		Vector2 vector = boxB.center + new Vector2(-boxB.size.x, boxB.size.y) / 2f;
+		Vector2 vector2 = boxB.center + new Vector2(boxB.size.x, boxB.size.y) / 2f;
+		Vector2 vector3 = boxB.center + new Vector2(boxB.size.x, -boxB.size.y) / 2f;
+		Vector2 vector4 = boxB.center + new Vector2(-boxB.size.x, -boxB.size.y) / 2f;
+		this.A = boxA.transform.InverseTransformPoint(boxB.transform.TransformPoint(vector));
+		this.B = boxA.transform.InverseTransformPoint(boxB.transform.TransformPoint(vector2));
+		this.C = boxA.transform.InverseTransformPoint(boxB.transform.TransformPoint(vector3));
+		this.D = boxA.transform.InverseTransformPoint(boxB.transform.TransformPoint(vector4));
+		this.E = boxA.center + (Vector3.left * boxA.size.x + Vector3.up * boxA.size.y) / 2f;
+		this.F = boxA.center + (Vector3.right * boxA.size.x + Vector3.up * boxA.size.y) / 2f;
+		this.G = boxA.center + (Vector3.right * boxA.size.x + Vector3.down * boxA.size.y) / 2f;
+		this.H = boxA.center + (Vector3.left * boxA.size.x + Vector3.down * boxA.size.y) / 2f;
+		this.intersections.Clear();
+		Vector3[] array = new Vector3[]
+		{
+			this.A,
+			this.B,
+			this.C,
+			this.D
+		};
+		Vector3[] array2 = new Vector3[]
+		{
+			this.E,
+			this.F,
+			this.G,
+			this.H
+		};
+		int i = 0;
+		int num = array.Length;
+		while (i < num + 1)
+		{
+			Vector2 vector5 = array[i % num];
+			Vector2 vector6 = array[(i + 1) % num];
+			int j = 0;
+			int num2 = array2.Length;
+			while (j < num2 + 1)
+			{
+				Vector2 b = array2[j % num2];
+				Vector2 b2 = array2[(j + 1) % num2];
+				Vector2 vector7 = BoxIntersection_ERP.LineSegmentIntersection(vector5, vector6, b, b2);
+				if (vector7.x >= 0f && vector7.x <= 1f && vector7.y >= 0f && vector7.y <= 1f)
+				{
+					this.intersections.Add(vector5 + vector7.x * (vector6 - vector5));
+				}
+				j++;
+			}
+			i++;
+		}
+		foreach (Vector3 vector8 in array)
+		{
+			if (BoxIntersection_ERP.IsInside(vector8, array2))
+			{
+				this.intersections.Add(vector8);
+			}
+		}
+		foreach (Vector3 vector9 in array2)
+		{
+			if (BoxIntersection_ERP.IsInside(vector9, array))
+			{
+				this.intersections.Add(vector9);
+			}
+		}
+		this.left = (this.intersections.MinElement((Vector3 t) => t.x).x - boxA.center.x) / boxA.size.x + 0.5f;
+		this.right = (this.intersections.MaxElement((Vector3 t) => t.x).x - boxA.center.x) / boxA.size.x + 0.5f;
+		this.bottom = (this.intersections.MinElement((Vector3 t) => t.y).y - boxA.center.y) / boxA.size.y + 0.5f;
+		this.upper = (this.intersections.MaxElement((Vector3 t) => t.y).y - boxA.center.y) / boxA.size.y + 0.5f;
+	}
+
+	// Token: 0x06002334 RID: 9012 RVA: 0x0012690C File Offset: 0x00124B0C
+	private void UpdateCurve()
+	{
+		float num = (this.left > 0f) ? 1f : 0f;
+		float num2 = (this.right < 1f) ? 1f : 0f;
+		AnimationCurve animationCurve = AnimationCurve.EaseInOut(this.left, num, this.right, num2);
+		if (num == num2)
+		{
+			animationCurve.AddKey(new Keyframe((this.left + this.right) / 2f, (num != 0f) ? 0f : 1f));
+		}
+		this.curve = animationCurve;
+	}
+
+	// Token: 0x06002335 RID: 9013 RVA: 0x001269B4 File Offset: 0x00124BB4
+	private static Vector2 LineSegmentIntersection(Vector2 A1, Vector2 A2, Vector2 B1, Vector2 B2)
+	{
+		float num = (B2.x - B1.x) * (A1.y - B1.y) - (B2.y - B1.y) * (A1.x - B1.x);
+		float num2 = (A2.x - A1.x) * (A1.y - B1.y) - (A2.y - A1.y) * (A1.x - B1.x);
+		float num3 = (B2.y - B1.y) * (A2.x - A1.x) - (B2.x - B1.x) * (A2.y - A1.y);
+		return new Vector2(num / num3, num2 / num3);
+	}
+
+	// Token: 0x06002336 RID: 9014 RVA: 0x00126A8C File Offset: 0x00124C8C
+	private static bool IsInside(Vector3 P, Vector3[] Q)
+	{
+		for (int i = 0; i < Q.Length; i++)
+		{
+			Vector2 vector = Q[i % Q.Length];
+			Vector2 vector2 = Q[(i + 1) % Q.Length];
+			Vector2 vector3 = vector2 - vector;
+			Vector2 vector4;
+			vector4..ctor(-vector3.y, vector3.x);
+			Vector2 vector5 = P - vector;
+			if (Vector2.Dot(vector4, vector5) > 0f)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	// Token: 0x06002337 RID: 9015 RVA: 0x00126B20 File Offset: 0x00124D20
+	private void DrawPoints()
+	{
+		this.Other();
+		Gizmos.color = this.color;
+		float num = 0.05f;
+		Vector3 vector = 0.05f * Vector3.one;
+		BoxCollider boxCollider = base.GetComponent<Collider>() as BoxCollider;
+		Vector3 vector2 = Vector3.right * ((this.left - 0.5f) * boxCollider.size.x + boxCollider.center.x);
+		Vector3 vector3 = Vector3.right * ((this.right - 0.5f) * boxCollider.size.x + boxCollider.center.x);
+		Vector3 vector4 = Vector3.up * ((this.bottom - 0.5f) * boxCollider.size.y + boxCollider.center.y);
+		Vector3 vector5 = Vector3.up * ((this.upper - 0.5f) * boxCollider.size.y + boxCollider.center.y);
+		Gizmos.DrawCube(base.transform.TransformPoint(vector2), vector);
+		Gizmos.DrawCube(base.transform.TransformPoint(vector3), vector);
+		Gizmos.DrawCube(base.transform.TransformPoint(vector4), vector);
+		Gizmos.DrawCube(base.transform.TransformPoint(vector5), vector);
+		Gizmos.DrawLine(base.transform.TransformPoint(vector2), base.transform.TransformPoint(vector3));
+		Gizmos.DrawLine(base.transform.TransformPoint(vector4), base.transform.TransformPoint(vector5));
+		foreach (Vector3 vector6 in this.intersections)
+		{
+			Gizmos.DrawSphere(base.transform.TransformPoint(vector6), num);
+		}
+	}
+
+	// Token: 0x06002338 RID: 9016 RVA: 0x00126D30 File Offset: 0x00124F30
+	private void OnDrawGizmosSelected()
+	{
+	}
+
+	// Token: 0x06002339 RID: 9017 RVA: 0x00126D34 File Offset: 0x00124F34
+	private void OnDrawGizmos()
+	{
+		Gizmos.color = this.color;
+		Matrix4x4 matrix = Gizmos.matrix;
+		Gizmos.matrix = base.transform.localToWorldMatrix;
+		BoxCollider boxCollider = base.GetComponent<Collider>() as BoxCollider;
+		Gizmos.DrawWireCube(boxCollider.center, boxCollider.size);
+		Gizmos.matrix = matrix;
+		if (this.drawGizmos)
+		{
+			this.DrawPoints();
+			this.DrawCurve();
+		}
+	}
+
+	// Token: 0x0600233A RID: 9018 RVA: 0x00126D9C File Offset: 0x00124F9C
+	private void DrawCurve()
+	{
+		Gizmos.color = this.color;
+		Matrix4x4 matrix = Gizmos.matrix;
+		Gizmos.matrix = base.transform.localToWorldMatrix;
+		BoxCollider boxCollider = base.GetComponent<Collider>() as BoxCollider;
+		float num = 0f;
+		Vector3 vector;
+		vector..ctor(boxCollider.size.x, boxCollider.size.y);
+		Vector3 vector2 = boxCollider.center - vector / 2f;
+		int num2 = 100;
+		Gizmos.color = Color.white;
+		Vector3 vector3 = Vector3.zero;
+		for (int i = 0; i < num2 + 1; i++)
+		{
+			float num3 = (float)i / (float)num2 * vector.x;
+			float num4 = this.curve.Evaluate(num3) * vector.y;
+			Vector3 vector4 = vector2 + new Vector3(num3, num4, num);
+			if (i != 0)
+			{
+				Color color = Color.Lerp(Color.blue, Color.red, (num4 + 1f) / 2f);
+				Color color2 = Color.Lerp(Color.blue, color, num4);
+				Gizmos.color = color2;
+				Gizmos.DrawLine(vector3, vector4);
+			}
+			vector3 = vector4;
+		}
+		Gizmos.matrix = matrix;
+	}
+
+	// Token: 0x040041D5 RID: 16853
+	public Color color = ColorExtension.Random();
+
+	// Token: 0x040041D6 RID: 16854
+	public GameObject other;
+
+	// Token: 0x040041D7 RID: 16855
+	public bool drawGizmos;
+
+	// Token: 0x040041D8 RID: 16856
+	public AnimationCurve curve = AnimationCurve.Linear(0f, 0f, 1f, 1f);
+
+	// Token: 0x040041D9 RID: 16857
+	private float left;
+
+	// Token: 0x040041DA RID: 16858
+	private float right;
+
+	// Token: 0x040041DB RID: 16859
+	private float bottom;
+
+	// Token: 0x040041DC RID: 16860
+	private float upper;
+
+	// Token: 0x040041DD RID: 16861
+	private Vector3 A;
+
+	// Token: 0x040041DE RID: 16862
+	private Vector3 B;
+
+	// Token: 0x040041DF RID: 16863
+	private Vector3 C;
+
+	// Token: 0x040041E0 RID: 16864
+	private Vector3 D;
+
+	// Token: 0x040041E1 RID: 16865
+	private Vector2 E;
+
+	// Token: 0x040041E2 RID: 16866
+	private Vector2 F;
+
+	// Token: 0x040041E3 RID: 16867
+	private Vector2 G;
+
+	// Token: 0x040041E4 RID: 16868
+	private Vector2 H;
+
+	// Token: 0x040041E5 RID: 16869
+	private List<Vector3> intersections = new List<Vector3>();
+}

@@ -1,0 +1,258 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000053 RID: 83
+public class ChaserDudeDroppableFlashLight : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060002BF RID: 703 RVA: 0x0001F7EC File Offset: 0x0001D9EC
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, null);
+		this.audioImpact = new AudioEventSimpleLocal(this.audioPrefix + "_impact", this.akGameObj);
+	}
+
+	// Token: 0x060002C0 RID: 704 RVA: 0x0001F840 File Offset: 0x0001DA40
+	public bool PreAwake(int callcount)
+	{
+		this.dropped = SignalOut.Create("dropped", base.gameObject);
+		this.dropLight = SignalIn.Create("dropLight", base.gameObject, new Action(this.OnDropLight));
+		return true;
+	}
+
+	// Token: 0x060002C1 RID: 705 RVA: 0x0001F888 File Offset: 0x0001DA88
+	private void Awake()
+	{
+		if (this.reparentNode == null)
+		{
+			this.reparentNode = this.rootNodeForCharacter;
+		}
+	}
+
+	// Token: 0x060002C2 RID: 706 RVA: 0x0001F8A8 File Offset: 0x0001DAA8
+	private void Start()
+	{
+		this.OnPreProcess();
+		float num = Random.Range(0f, 1f);
+		this.eulerRot.x = this.eulerRotMin.x * (1f - num) + this.eulerRotMax.x * num;
+		if (Random.Range(0f, 1f) < 0.5f)
+		{
+			this.eulerRot.x = -this.eulerRot.x;
+		}
+		num = Random.Range(0f, 1f);
+		this.eulerRot.y = this.eulerRotMin.y * (1f - num) + this.eulerRotMax.y * num;
+		if (Random.Range(0f, 1f) < 0.5f)
+		{
+			this.eulerRot.y = -this.eulerRot.y;
+		}
+		num = Random.Range(0f, 1f);
+		this.eulerRot.z = this.eulerRotMin.z * (1f - num) + this.eulerRotMax.z * num;
+		if (Random.Range(0f, 1f) < 0.5f)
+		{
+			this.eulerRot.z = -this.eulerRot.z;
+		}
+	}
+
+	// Token: 0x060002C3 RID: 707 RVA: 0x0001FA00 File Offset: 0x0001DC00
+	private void OnDropLight()
+	{
+		this.curVel = this.startSpeed;
+		float num = Mathf.Clamp(this.rootNodeForCharacter.transform.forward.x, -0.5f, 0.5f) * 2f;
+		this.curVel.x = this.curVel.x * num;
+		base.transform.parent = this.reparentNode.transform.parent;
+		this.awoken = true;
+		this.offset.z = Random.Range(-8f, 4f);
+		this.offset.x = Random.Range(-2f, 2f);
+	}
+
+	// Token: 0x060002C4 RID: 708 RVA: 0x0001FAB0 File Offset: 0x0001DCB0
+	private Vector3 GetWatedLookVector(Vector3 pos)
+	{
+		Vector3 result = ScriptGlobals.boy.pos3 + this.offset - pos;
+		result.y = 0f;
+		result.Normalize();
+		if (result.z > 0.5f)
+		{
+			result.z = 0.2f;
+			result.x = Mathf.Sign(result.x);
+		}
+		result.y = 0.18f;
+		return result;
+	}
+
+	// Token: 0x060002C5 RID: 709 RVA: 0x0001FB2C File Offset: 0x0001DD2C
+	private void StartFlicker(float time)
+	{
+		this.flickerTime = time;
+		if (this.flickerLight)
+		{
+			this.flickerLight.SetActive(true);
+			ForceFlicker component = this.flickerLight.GetComponent<ForceFlicker>();
+			if (component)
+			{
+				component.OnFlicker();
+			}
+		}
+		if (this.normalLight)
+		{
+			this.normalLight.SetActive(false);
+		}
+	}
+
+	// Token: 0x060002C6 RID: 710 RVA: 0x0001FB98 File Offset: 0x0001DD98
+	private void Update()
+	{
+		if (this.hitGround && this.flickerTime > 0f)
+		{
+			this.flickerTime -= Time.deltaTime;
+			if (this.flickerTime <= 0f)
+			{
+				if (this.flickerLight)
+				{
+					this.flickerLight.SetActive(false);
+				}
+				if (this.normalLight)
+				{
+					bool active = Random.Range(0f, 1f) > this.chanceOfBreaking;
+					if (this.awoken)
+					{
+						active = true;
+					}
+					this.normalLight.SetActive(active);
+				}
+			}
+		}
+		if (this.awoken)
+		{
+			Vector3 vector = base.transform.position;
+			Quaternion quaternion = base.transform.rotation;
+			vector += this.curVel * Time.deltaTime;
+			this.curVel.y = this.curVel.y - 10f * Time.deltaTime;
+			if (!this.hitGround)
+			{
+				quaternion *= Quaternion.Euler(this.eulerRot * Time.deltaTime);
+			}
+			else
+			{
+				Vector3 watedLookVector = this.GetWatedLookVector(vector);
+				quaternion = Quaternion.Slerp(quaternion, Quaternion.LookRotation(watedLookVector, Vector3.down), Time.deltaTime * 3f);
+			}
+			if (this.curVel.y < 0f)
+			{
+				RaycastHit raycastHit = default(RaycastHit);
+				Vector3 normalized = this.curVel.normalized;
+				float num = 0.45f;
+				if (!this.hitGround)
+				{
+					num = 0.25f;
+				}
+				if (CollisionUtils.SimpleLineCheck(vector - normalized * num, normalized, 0.5f, ref raycastHit))
+				{
+					if (raycastHit.distance < 0.45f)
+					{
+						vector = raycastHit.point - normalized * (0.45f - num);
+					}
+					if (!this.hitGround)
+					{
+						this.hitGround = true;
+						this.dropped.Signal();
+						SoundEngine.RTPCs.phyImpact.SetFast(this.curVel.magnitude * 15f, this.akGameObj, 0f);
+						this.audioImpact.PostFast();
+						this.curVel *= 0.4f;
+						this.curVel.y = -this.curVel.y;
+						this.StartFlicker(0.25f);
+					}
+					else
+					{
+						this.StartFlicker(0.25f);
+						SoundEngine.RTPCs.phyImpact.SetFast(this.curVel.magnitude * 15f, this.akGameObj, 0f);
+						this.audioImpact.PostFast();
+						this.awoken = false;
+						this.extraRotTime = 0.5f;
+					}
+				}
+			}
+			base.transform.position = vector;
+			base.transform.rotation = quaternion;
+		}
+		else if (this.extraRotTime > 0f)
+		{
+			Vector3 watedLookVector2 = this.GetWatedLookVector(base.transform.position);
+			base.transform.rotation = Quaternion.Slerp(base.transform.rotation, Quaternion.LookRotation(watedLookVector2.normalized, Vector3.down), Time.deltaTime * 10f);
+		}
+	}
+
+	// Token: 0x040003EF RID: 1007
+	public GameObject rootNodeForCharacter;
+
+	// Token: 0x040003F0 RID: 1008
+	public GameObject reparentNode;
+
+	// Token: 0x040003F1 RID: 1009
+	public Vector3 startSpeed = new Vector3(0f, 1f, -2f);
+
+	// Token: 0x040003F2 RID: 1010
+	public Vector3 eulerRotMin = new Vector3(900f, 360f, 90f);
+
+	// Token: 0x040003F3 RID: 1011
+	public Vector3 eulerRotMax = new Vector3(900f, 360f, 90f);
+
+	// Token: 0x040003F4 RID: 1012
+	private Vector3 eulerRot = new Vector3(20f, -10f, 25f);
+
+	// Token: 0x040003F5 RID: 1013
+	public GameObject normalLight;
+
+	// Token: 0x040003F6 RID: 1014
+	public GameObject flickerLight;
+
+	// Token: 0x040003F7 RID: 1015
+	public float chanceOfBreaking = 0.3f;
+
+	// Token: 0x040003F8 RID: 1016
+	public string audioPrefix;
+
+	// Token: 0x040003F9 RID: 1017
+	private float flickerTime = 0.65f;
+
+	// Token: 0x040003FA RID: 1018
+	private SignalIn dropLight;
+
+	// Token: 0x040003FB RID: 1019
+	private SignalOut dropped;
+
+	// Token: 0x040003FC RID: 1020
+	private bool awoken;
+
+	// Token: 0x040003FD RID: 1021
+	private bool hitGround;
+
+	// Token: 0x040003FE RID: 1022
+	private Vector3 curVel;
+
+	// Token: 0x040003FF RID: 1023
+	private Vector3 offset = Vector3.zero;
+
+	// Token: 0x04000400 RID: 1024
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObj;
+
+	// Token: 0x04000401 RID: 1025
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioImpact;
+
+	// Token: 0x04000402 RID: 1026
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04000403 RID: 1027
+	private float extraRotTime;
+}

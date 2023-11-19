@@ -1,0 +1,272 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000389 RID: 905
+public class Button : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001875 RID: 6261 RVA: 0x000D4E2C File Offset: 0x000D302C
+	public bool PreAwake(int callcount)
+	{
+		this.lockButton = SignalIn.Create("lockButton", base.gameObject, new Action(this.OnLock));
+		this.unlockButton = SignalIn.Create("unlockButton", base.gameObject, new Action(this.OnUnlock));
+		this.buttonOnSignal = SignalOut.Create("buttonOnSignal", base.gameObject);
+		this.buttonOffSignal = SignalOut.Create("buttonOffSignal", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001876 RID: 6262 RVA: 0x000D4EAC File Offset: 0x000D30AC
+	private void Start()
+	{
+		if (this.startLocked)
+		{
+			this.OnLock();
+		}
+		if (this.startOn)
+		{
+			this.isOn = true;
+		}
+	}
+
+	// Token: 0x06001877 RID: 6263 RVA: 0x000D4ED4 File Offset: 0x000D30D4
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<HuddleProbe>() || (coll.attachedRigidbody != null && coll.attachedRigidbody.GetComponent<Boy>()))
+		{
+			this.noOfPlayerProbesInside++;
+		}
+		if (coll.attachedRigidbody && coll.attachedRigidbody.GetComponent<MindHatReceiver>())
+		{
+			this.mindControlledBoysInside.Add(coll.attachedRigidbody.GetComponent<MindHatReceiver>());
+		}
+	}
+
+	// Token: 0x06001878 RID: 6264 RVA: 0x000D4F60 File Offset: 0x000D3160
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<HuddleProbe>() || (coll.attachedRigidbody != null && coll.attachedRigidbody.GetComponent<Boy>()))
+		{
+			this.noOfPlayerProbesInside--;
+		}
+		if (coll.attachedRigidbody && coll.attachedRigidbody.GetComponent<MindHatReceiver>())
+		{
+			this.mindControlledBoysInside.Remove(coll.attachedRigidbody.GetComponent<MindHatReceiver>());
+		}
+	}
+
+	// Token: 0x06001879 RID: 6265 RVA: 0x000D4FF0 File Offset: 0x000D31F0
+	public bool GetIsOn()
+	{
+		return this.isOn;
+	}
+
+	// Token: 0x0600187A RID: 6266 RVA: 0x000D4FF8 File Offset: 0x000D31F8
+	public void TurnOn()
+	{
+		if (this.locked)
+		{
+			return;
+		}
+		if (this.lockAfterUse)
+		{
+			this.locked = true;
+			this.lockTimer = this.lockTime;
+		}
+		if (this.noOnMode)
+		{
+			this.buttonOnSignal.Signal();
+			this.buttonOnEvent.OnEvent(this);
+			return;
+		}
+		this.isOn = true;
+		this.buttonOnSignal.Signal();
+		this.buttonOnEvent.OnEvent(this);
+		if (this.invertOtherButton && this.otherButton)
+		{
+			this.otherButton.SendMessage("invertState");
+		}
+	}
+
+	// Token: 0x0600187B RID: 6267 RVA: 0x000D509C File Offset: 0x000D329C
+	public void TurnOff()
+	{
+		if (this.locked)
+		{
+			return;
+		}
+		if (this.lockAfterUse)
+		{
+			this.locked = true;
+			this.lockTimer = this.lockTime;
+		}
+		this.isOn = false;
+		this.buttonOffSignal.Signal();
+		this.buttonOffEvent.OnEvent(this);
+		if (this.invertOtherButton && this.otherButton)
+		{
+			this.otherButton.SendMessage("invertState");
+		}
+	}
+
+	// Token: 0x0600187C RID: 6268 RVA: 0x000D511C File Offset: 0x000D331C
+	private void OnLock()
+	{
+		this.locked = true;
+		this.lockTimer = this.lockTime;
+	}
+
+	// Token: 0x0600187D RID: 6269 RVA: 0x000D5134 File Offset: 0x000D3334
+	private void OnUnlock()
+	{
+		this.locked = false;
+	}
+
+	// Token: 0x0600187E RID: 6270 RVA: 0x000D5140 File Offset: 0x000D3340
+	private void DrawDebug()
+	{
+	}
+
+	// Token: 0x0600187F RID: 6271 RVA: 0x000D5144 File Offset: 0x000D3344
+	private void invertState()
+	{
+		if (this.isOn)
+		{
+			this.isOn = false;
+		}
+		else
+		{
+			this.isOn = true;
+		}
+	}
+
+	// Token: 0x06001880 RID: 6272 RVA: 0x000D5164 File Offset: 0x000D3364
+	public void externalStateInverversion()
+	{
+		if (this.isOn)
+		{
+			this.TurnOff();
+		}
+		else
+		{
+			this.TurnOn();
+		}
+	}
+
+	// Token: 0x06001881 RID: 6273 RVA: 0x000D5184 File Offset: 0x000D3384
+	private void FixedUpdate()
+	{
+		this.DrawDebug();
+		if (this.locked)
+		{
+			this.lockTimer -= Time.deltaTime;
+			if (this.lockTime > 0f && this.lockTimer <= 0f)
+			{
+				this.locked = false;
+				this.unlockEvent.OnEvent(this);
+			}
+		}
+		bool flag = false;
+		if (this.noOfPlayerProbesInside > 0)
+		{
+			flag = true;
+		}
+		else
+		{
+			int i = 0;
+			int count = this.mindControlledBoysInside.Count;
+			while (i < count)
+			{
+				MindHatReceiver mindHatReceiver = this.mindControlledBoysInside[i];
+				if (mindHatReceiver.ControlIsActive())
+				{
+					flag = true;
+					break;
+				}
+				i++;
+			}
+		}
+		if (flag)
+		{
+			bool flag2 = false;
+			if (ScriptGlobals.boy && GameInput.action)
+			{
+				flag2 = true;
+			}
+			if (ScriptGlobals.huddle && GameInput.action)
+			{
+				flag2 = true;
+			}
+			if (flag2 && !this.locked)
+			{
+				if (this.isOn)
+				{
+					this.TurnOff();
+				}
+				else
+				{
+					this.TurnOn();
+				}
+			}
+		}
+	}
+
+	// Token: 0x04002C1D RID: 11293
+	public bool startOn;
+
+	// Token: 0x04002C1E RID: 11294
+	public bool startLocked;
+
+	// Token: 0x04002C1F RID: 11295
+	public bool lockAfterUse;
+
+	// Token: 0x04002C20 RID: 11296
+	public float lockTime;
+
+	// Token: 0x04002C21 RID: 11297
+	public bool noOnMode;
+
+	// Token: 0x04002C22 RID: 11298
+	public bool invertOtherButton;
+
+	// Token: 0x04002C23 RID: 11299
+	public GameObject otherButton;
+
+	// Token: 0x04002C24 RID: 11300
+	public bool drawDebug = true;
+
+	// Token: 0x04002C25 RID: 11301
+	private SimpleEvent<Button> buttonOnEvent = new SimpleEvent<Button>("button_on");
+
+	// Token: 0x04002C26 RID: 11302
+	private SimpleEvent<Button> buttonOffEvent = new SimpleEvent<Button>("button_off");
+
+	// Token: 0x04002C27 RID: 11303
+	private SimpleEvent<Button> unlockEvent = new SimpleEvent<Button>("unlock");
+
+	// Token: 0x04002C28 RID: 11304
+	private SignalIn lockButton;
+
+	// Token: 0x04002C29 RID: 11305
+	private SignalIn unlockButton;
+
+	// Token: 0x04002C2A RID: 11306
+	private SignalOut buttonOnSignal;
+
+	// Token: 0x04002C2B RID: 11307
+	private SignalOut buttonOffSignal;
+
+	// Token: 0x04002C2C RID: 11308
+	private int noOfPlayerProbesInside;
+
+	// Token: 0x04002C2D RID: 11309
+	private bool isOn;
+
+	// Token: 0x04002C2E RID: 11310
+	private float lockTimer;
+
+	// Token: 0x04002C2F RID: 11311
+	private bool locked;
+
+	// Token: 0x04002C30 RID: 11312
+	private List<MindHatReceiver> mindControlledBoysInside = new List<MindHatReceiver>();
+}

@@ -1,0 +1,116 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000165 RID: 357
+public class CameraZoneTiltScript : MonoBehaviour
+{
+	// Token: 0x06000A92 RID: 2706 RVA: 0x000675DC File Offset: 0x000657DC
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		int i = 0;
+		int count = this.blendBoxes.Count;
+		while (i < count)
+		{
+			CameraBlendBox cameraBlendBox = this.blendBoxes[i];
+			this.startAims.Add(cameraBlendBox.positionAim);
+			i++;
+		}
+	}
+
+	// Token: 0x06000A93 RID: 2707 RVA: 0x00067638 File Offset: 0x00065838
+	private void Start()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x06000A94 RID: 2708 RVA: 0x00067640 File Offset: 0x00065840
+	private void Update()
+	{
+		float num = 0f;
+		Vector3 position = ScriptGlobals.boy.transform.position;
+		if (this.nonBoyFromTarget != null)
+		{
+			position = this.nonBoyFromTarget.position;
+		}
+		if (this.blendAxis == CameraZoneTiltScript.BlendAxis.x)
+		{
+			num = this.tiltTarget.position.x - position.x;
+		}
+		else if (this.blendAxis == CameraZoneTiltScript.BlendAxis.y)
+		{
+			num = this.tiltTarget.position.y - position.y;
+		}
+		float num2 = Mathf.InverseLerp(this.minDist, this.maxDist, Mathf.Abs(num));
+		if (this.applyTiltOnX)
+		{
+			for (int i = 0; i < this.blendBoxes.Count; i++)
+			{
+				CameraBlendBox cameraBlendBox = this.blendBoxes[i];
+				float x = Mathf.Sign(num) * Mathf.Lerp(0f, this.startAims[i].x, num2);
+				Vector3 positionAim = this.startAims[i];
+				positionAim.x = x;
+				cameraBlendBox.positionAim = positionAim;
+			}
+		}
+		if (this.applyTiltOnY)
+		{
+			for (int j = 0; j < this.blendBoxes.Count; j++)
+			{
+				CameraBlendBox cameraBlendBox2 = this.blendBoxes[j];
+				float y = Mathf.Lerp(-this.startAims[j].y, this.startAims[j].y, num2 * Mathf.Sign(num));
+				Vector3 positionAim2 = this.startAims[j];
+				positionAim2.y = y;
+				cameraBlendBox2.positionAim = positionAim2;
+			}
+		}
+	}
+
+	// Token: 0x04001232 RID: 4658
+	public Transform nonBoyFromTarget;
+
+	// Token: 0x04001233 RID: 4659
+	public Transform tiltTarget;
+
+	// Token: 0x04001234 RID: 4660
+	public float minDist = 5f;
+
+	// Token: 0x04001235 RID: 4661
+	public float maxDist = 15f;
+
+	// Token: 0x04001236 RID: 4662
+	public CameraZoneTiltScript.BlendAxis blendAxis;
+
+	// Token: 0x04001237 RID: 4663
+	public bool applyTiltOnX = true;
+
+	// Token: 0x04001238 RID: 4664
+	public bool applyTiltOnY;
+
+	// Token: 0x04001239 RID: 4665
+	public List<CameraBlendBox> blendBoxes;
+
+	// Token: 0x0400123A RID: 4666
+	[SerializeField]
+	private List<Vector3> startAims = new List<Vector3>();
+
+	// Token: 0x0400123B RID: 4667
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x02000166 RID: 358
+	public enum BlendAxis
+	{
+		// Token: 0x0400123D RID: 4669
+		x,
+		// Token: 0x0400123E RID: 4670
+		y
+	}
+}

@@ -1,0 +1,1003 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000048 RID: 72
+public class Bird : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000246 RID: 582 RVA: 0x0001B32C File Offset: 0x0001952C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.birdTransform = base.transform;
+		this.birdTransform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+		this.origin = this.birdTransform.position;
+		if (this.birdTransform.parent)
+		{
+			this.birdSiblings = this.birdTransform.parent.GetComponentsInChildren<Bird>();
+		}
+		else
+		{
+			this.birdSiblings = (Object.FindObjectsOfType(typeof(Bird)) as Bird[]);
+		}
+		this.idleAnimations = new List<string>
+		{
+			"IdleA",
+			"IdleB_jumpy",
+			"IdleC_eating"
+		};
+		this.reposeAnimations = new List<string>
+		{
+			"ReposA",
+			"ReposB"
+		};
+		this.landingAnimations = new List<string>
+		{
+			"LandingA",
+			"LandingB",
+			"LandingC"
+		};
+		this.akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioStartFlying = new AudioEventSimpleLocal("bird_startFlying", this.akGameObj);
+		this.audioStopFlying = new AudioEventSimpleLocal("bird_stopFlying", this.akGameObj);
+	}
+
+	// Token: 0x06000247 RID: 583 RVA: 0x0001B49C File Offset: 0x0001969C
+	public bool PreAwake(int callcount)
+	{
+		this.flyBackSignal = SignalIn.Create("flyBackSignal", base.gameObject, new Action(this.OnFlyBackSignal));
+		this.flyAwaySignal = SignalIn.Create("flyAwaySignal", base.gameObject, new Action(this.OnFlyAwaySignal));
+		this.activate = SignalIn.Create("activate", base.gameObject, new Action(this.OnActivate));
+		this.deactivate = SignalIn.Create("deactivate", base.gameObject, new Action(this.OnDeactivate));
+		return true;
+	}
+
+	// Token: 0x06000248 RID: 584 RVA: 0x0001B534 File Offset: 0x00019734
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.pathSeed = Random.Range(0f, 1f);
+		this.acceleration += Random.Range(-this.acceleration / 15f, this.acceleration / 15f);
+		if (this.huddleBird)
+		{
+			if (this.landOnHuddle)
+			{
+				this.SetHuddleWaitState();
+			}
+			else
+			{
+				this.SetIdleState();
+			}
+		}
+		else
+		{
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x06000249 RID: 585 RVA: 0x0001B5BC File Offset: 0x000197BC
+	private void SetIdleState()
+	{
+		this.moveGoal = this.birdTransform.position;
+		this.state = Bird.State.Idle;
+	}
+
+	// Token: 0x0600024A RID: 586 RVA: 0x0001B5D8 File Offset: 0x000197D8
+	private void IdleState()
+	{
+		if (!ScriptGlobals.mainCharacter.isCharacterActive)
+		{
+			return;
+		}
+		if (!this.birdAnim.IsPlaying(this.currentIdleAnim))
+		{
+			float num = Vector3.Distance(this.birdTransform.position, this.moveGoal);
+			if (num < 0.1f)
+			{
+				this.currentIdleAnim = this.idleAnimations[Random.Range(0, this.idleAnimations.Count)];
+				this.birdAnim[this.currentIdleAnim].speed = Random.Range(0.8f, 1.2f);
+				this.birdAnim.Play(this.currentIdleAnim);
+				this.moveGoal = this.FindIdleGoal();
+			}
+			else
+			{
+				this.birdAnim["MovingA"].speed = Random.Range(0.8f, 1.2f);
+				this.birdAnim.Play("MovingA");
+				this.birdTransform.LookAt(this.moveGoal);
+				this.birdTransform.Translate(Vector3.forward * Time.deltaTime * 0.25f);
+			}
+		}
+		Vector3 pos = ScriptGlobals.mainCharacter.pos3;
+		float num2 = Vector3.Distance(pos, this.birdTransform.position);
+		if (num2 < this.scareDist)
+		{
+			this.SetPanicState();
+		}
+		else if (num2 < this.scareDist * 3f)
+		{
+			float magnitude = ScriptGlobals.mainCharacter.velocity3.magnitude;
+			if (magnitude > 2f)
+			{
+				this.SetPanicState();
+			}
+		}
+	}
+
+	// Token: 0x0600024B RID: 587 RVA: 0x0001B76C File Offset: 0x0001996C
+	private void SetPanicState()
+	{
+		this.panicTimer = Random.Range(0.07f, 0.16f);
+		this.state = Bird.State.Panic;
+	}
+
+	// Token: 0x0600024C RID: 588 RVA: 0x0001B78C File Offset: 0x0001998C
+	private void PanicState()
+	{
+		this.panicTimer -= Time.deltaTime;
+		if (this.panicTimer <= 0f)
+		{
+			this.SetScaredState();
+		}
+	}
+
+	// Token: 0x0600024D RID: 589 RVA: 0x0001B7C4 File Offset: 0x000199C4
+	private void SetScaredState()
+	{
+		this.previousPos = this.birdTransform.position;
+		this.flyingType = Bird.FlyingType.Away;
+		int i = 0;
+		int num = this.birdSiblings.Length;
+		while (i < num)
+		{
+			Bird bird = this.birdSiblings[i];
+			if (bird)
+			{
+				float num2 = Vector3.Distance(this.birdTransform.position, bird.transform.position);
+				if (num2 < 1f)
+				{
+					bird.ScaredByBird();
+				}
+			}
+			i++;
+		}
+		this.birdAnim.Play("FlyingA");
+		AkGameObjUmbrella.UpdateTransform(this.akGameObj, true);
+		this.audioStartFlying.PostFast();
+		this.moveStart = this.birdTransform.position;
+		if (this.hideTarget != null)
+		{
+			this.moveGoal = this.hideTarget.transform.position;
+		}
+		else
+		{
+			float dir;
+			if (this.huddleBird)
+			{
+				dir = (float)((Random.value <= 0.5f) ? -1 : 1);
+				this.fleeDirection = dir;
+			}
+			else
+			{
+				dir = -1f * Mathf.Sign(ScriptGlobals.mainCharacter.pos3.x - this.birdTransform.position.x);
+			}
+			this.moveGoal = this.FindRandomTarget(dir);
+			this.moveGoal += this.birdTransform.position;
+		}
+		this.currentSpeed = this.startSpeed;
+		this.time = 0f;
+		this.state = Bird.State.Scared;
+	}
+
+	// Token: 0x0600024E RID: 590 RVA: 0x0001B960 File Offset: 0x00019B60
+	private void ScaredState()
+	{
+		if (this.birdTransform.position.y < this.previousPos.y)
+		{
+			this.previousPos = this.birdTransform.position;
+			this.FollowPath(this.deceleration);
+			if (!this.birdAnim.IsPlaying("GlidingA"))
+			{
+				this.birdAnim.CrossFade("GlidingA", 0.2f);
+			}
+		}
+		else
+		{
+			this.previousPos = this.birdTransform.position;
+			this.FollowPath(this.acceleration);
+			if (!this.birdAnim.IsPlaying("FlyingA"))
+			{
+				this.birdAnim.CrossFade("FlyingA", 0.2f);
+			}
+		}
+		if (this.hideTarget != null)
+		{
+			float num = Vector3.Distance(this.birdTransform.position, this.hideTarget.transform.position);
+			if (num < 1.5f)
+			{
+				this.SetLandingState();
+			}
+		}
+		if (this.time == 1f)
+		{
+			this.SetDisappearState();
+			this.UpdateState();
+			return;
+		}
+	}
+
+	// Token: 0x0600024F RID: 591 RVA: 0x0001BA84 File Offset: 0x00019C84
+	private void SetLandingState()
+	{
+		this.landingTime = this.time;
+		this.landingDuration = 1f - this.landingTime;
+		this.currentLandingAnim = this.landingAnimations[Random.Range(0, this.landingAnimations.Count)];
+		this.birdAnim.Play(this.currentLandingAnim);
+		AkGameObjUmbrella.UpdateTransform(this.akGameObj, true);
+		this.audioStopFlying.PostFast();
+		this.state = Bird.State.Landing;
+	}
+
+	// Token: 0x06000250 RID: 592 RVA: 0x0001BB04 File Offset: 0x00019D04
+	private void LandingState()
+	{
+		this.FollowPath(this.deceleration);
+		float num;
+		if (this.landingDuration <= 0f)
+		{
+			num = 1f;
+		}
+		else
+		{
+			num = (this.time - this.landingTime) / this.landingDuration;
+		}
+		this.birdAnim[this.currentLandingAnim].time = num * this.birdAnim[this.currentLandingAnim].length;
+		this.birdAnim[this.currentLandingAnim].enabled = true;
+		this.birdAnim.Sample();
+		this.birdAnim[this.currentLandingAnim].enabled = false;
+		if (this.time == 1f)
+		{
+			if (this.landOnHuddle)
+			{
+				this.SetOnHuddleState();
+			}
+			else if (this.flyingType == Bird.FlyingType.Back)
+			{
+				this.SetIdleState();
+			}
+			else
+			{
+				this.SetWaitState();
+			}
+		}
+	}
+
+	// Token: 0x06000251 RID: 593 RVA: 0x0001BBF8 File Offset: 0x00019DF8
+	private void SetDisappearState()
+	{
+		AkGameObjUmbrella.UpdateTransform(this.akGameObj, true);
+		this.audioStopFlying.PostFast();
+		this.birdAnim.CrossFade("FlyingA", 0.2f);
+		this.state = Bird.State.Disappear;
+	}
+
+	// Token: 0x06000252 RID: 594 RVA: 0x0001BC3C File Offset: 0x00019E3C
+	private void DisappearState()
+	{
+		this.birdTransform.Translate(Vector3.forward * Time.deltaTime * 9f);
+		float num = Vector3.Distance(ScriptGlobals.mainCharacter.pos3, this.birdTransform.position);
+		if (num > 30f)
+		{
+			if (this.landOnHuddle)
+			{
+				this.SetHuddleWaitState();
+			}
+			else
+			{
+				this.SetWaitState();
+			}
+		}
+	}
+
+	// Token: 0x06000253 RID: 595 RVA: 0x0001BCB0 File Offset: 0x00019EB0
+	private void SetWaitState()
+	{
+		if (this.hideTarget != null)
+		{
+			this.birdAnim["IdleA"].time = Random.Range(0f, 1f) * this.birdAnim["IdleA"].length;
+			this.birdAnim.CrossFade("IdleA", 0.2f);
+		}
+		else
+		{
+			this.birdAnim.gameObject.SetActive(false);
+		}
+		this.backTimer = 3f;
+		this.state = Bird.State.Wait;
+	}
+
+	// Token: 0x06000254 RID: 596 RVA: 0x0001BD48 File Offset: 0x00019F48
+	private void WaitState()
+	{
+		if (this.hideTarget != null && !this.birdAnim.IsPlaying("IdleA"))
+		{
+			this.birdAnim.Play("IdleA");
+		}
+		if (this.flyBack)
+		{
+			Vector3 pos = ScriptGlobals.mainCharacter.pos3;
+			float num = Vector3.Distance(this.origin, pos);
+			if (num > 5f)
+			{
+				this.backTimer -= Time.deltaTime;
+				if (this.backTimer <= 0f)
+				{
+					this.SetFlyBackState();
+				}
+			}
+			else
+			{
+				this.backTimer = 3f;
+			}
+		}
+	}
+
+	// Token: 0x06000255 RID: 597 RVA: 0x0001BDF4 File Offset: 0x00019FF4
+	public void SetFlyBackState()
+	{
+		if (this.hideTarget == null)
+		{
+			float dir = -1f * Mathf.Sign(ScriptGlobals.mainCharacter.pos3.x - this.origin.x);
+			this.moveStart = this.FindRandomTarget(dir);
+			this.moveStart += this.origin;
+		}
+		else
+		{
+			this.moveStart = this.hideTarget.transform.position;
+		}
+		this.moveGoal = this.origin;
+		this.currentSpeed = this.startSpeed;
+		this.time = 0f;
+		if (this.pathSeed > 0.5f)
+		{
+			this.backTimer = Random.Range(18f, 60f);
+		}
+		else if (Random.Range(0, 10) == 10)
+		{
+			this.backTimer = Random.Range(6f, 15f);
+		}
+		else
+		{
+			float num = (float)(Random.Range(0, 3) * 6);
+			this.backTimer = num + Random.Range(0f, 1.5f);
+		}
+		this.flyingType = Bird.FlyingType.Back;
+		this.state = Bird.State.FlyBack;
+	}
+
+	// Token: 0x06000256 RID: 598 RVA: 0x0001BF24 File Offset: 0x0001A124
+	private void FlyBackState()
+	{
+		if (this.backTimer > 0f)
+		{
+			this.backTimer -= Time.deltaTime;
+			if (this.backTimer <= 0f)
+			{
+				if (this.hideTarget == null)
+				{
+					this.birdTransform.position = this.moveStart;
+					this.birdAnim.gameObject.SetActive(true);
+				}
+				AkGameObjUmbrella.UpdateTransform(this.akGameObj, true);
+				this.audioStartFlying.PostFast();
+			}
+			else
+			{
+				float num = Vector3.Distance(this.origin, ScriptGlobals.mainCharacter.pos3);
+				if (num < 5f)
+				{
+					this.SetPanicState();
+				}
+			}
+		}
+		else
+		{
+			if (!this.birdAnim.IsPlaying("GlidingA"))
+			{
+				this.birdAnim.CrossFade("GlidingA", 0.2f);
+			}
+			float num2 = Vector3.Distance(this.birdTransform.position, this.moveGoal);
+			if (num2 < 2.35f)
+			{
+				this.FollowPath(this.deceleration);
+			}
+			else
+			{
+				this.FollowPath(this.acceleration);
+			}
+			if (num2 < 1.5f)
+			{
+				this.SetLandingState();
+				return;
+			}
+		}
+	}
+
+	// Token: 0x06000257 RID: 599 RVA: 0x0001C05C File Offset: 0x0001A25C
+	private void SetHuddleWaitState()
+	{
+		this.birdAnim.gameObject.SetActive(false);
+		this.huddleStillTimer = 1.5f + this.pathSeed * 1.5f;
+		this.state = Bird.State.HuddleWait;
+	}
+
+	// Token: 0x06000258 RID: 600 RVA: 0x0001C09C File Offset: 0x0001A29C
+	private void HuddleWaitState()
+	{
+		if (ScriptGlobals.huddle.isCharacterActive && this.isActive)
+		{
+			float magnitude = ScriptGlobals.huddle.velocity.magnitude;
+			if (magnitude < 1f)
+			{
+				this.huddleStillTimer -= Time.deltaTime;
+				if (this.huddleStillTimer <= 0f)
+				{
+					this.SetHuddleFlyBackState();
+				}
+			}
+			else
+			{
+				this.huddleStillTimer += Time.deltaTime * 3f;
+				this.huddleStillTimer = Mathf.Min(this.huddleStillTimer, 1.5f + this.pathSeed * 1.5f);
+			}
+		}
+	}
+
+	// Token: 0x06000259 RID: 601 RVA: 0x0001C14C File Offset: 0x0001A34C
+	public void SetHuddleFlyBackDelayState()
+	{
+		this.delayTimer = Random.Range(this.huddleStartDelayMin, this.huddleStartDelayMax);
+		this.state = Bird.State.HuddleFlyBackDelay;
+	}
+
+	// Token: 0x0600025A RID: 602 RVA: 0x0001C170 File Offset: 0x0001A370
+	private void HuddleFlyBackDelayState()
+	{
+		this.delayTimer -= Time.deltaTime;
+		if (this.delayTimer < 0f)
+		{
+			this.SetHuddleFlyBackState();
+		}
+	}
+
+	// Token: 0x0600025B RID: 603 RVA: 0x0001C1A8 File Offset: 0x0001A3A8
+	public void SetHuddleFlyBackState()
+	{
+		this.birdAnim.gameObject.SetActive(true);
+		this.currentSpeed = this.startSpeed;
+		this.time = 0f;
+		this.huddleTarget = this.FindHuddleTarget();
+		float dir;
+		if (this.fleeDirection == 0f)
+		{
+			dir = (float)((Random.value <= 0.5f) ? -1 : 1);
+		}
+		else
+		{
+			dir = this.fleeDirection;
+		}
+		this.moveStart = this.FindRandomTarget(dir);
+		this.moveStart += this.huddleTarget.position;
+		this.flyingType = Bird.FlyingType.Back;
+		AkGameObjUmbrella.UpdateTransform(this.akGameObj, true);
+		this.audioStartFlying.PostFast();
+		this.birdAnim.CrossFade("GlidingA", 0.2f);
+		this.backTimer = 0f;
+		this.birdTransform.position = this.moveStart;
+		this.state = Bird.State.FlyBack;
+	}
+
+	// Token: 0x0600025C RID: 604 RVA: 0x0001C2A4 File Offset: 0x0001A4A4
+	private void SetOnHuddleState()
+	{
+		this.state = Bird.State.OnHuddle;
+		if (this.autoScare)
+		{
+			this.autoScareTimer = Random.Range(this.autoScareMin, this.autoScareMax);
+		}
+	}
+
+	// Token: 0x0600025D RID: 605 RVA: 0x0001C2DC File Offset: 0x0001A4DC
+	private void OnHuddleState()
+	{
+		this.birdTransform.position = this.moveGoal;
+		if (this.autoScare)
+		{
+			this.autoScareTimer -= Time.deltaTime;
+		}
+		if (this.birdAnim.IsPlaying(this.currentReposeAnim))
+		{
+			return;
+		}
+		Vector3 vector;
+		if (this.huddleTarget)
+		{
+			vector = this.huddleTarget.velocity;
+		}
+		else
+		{
+			vector = Vector3.one * 5f;
+		}
+		if (vector.magnitude > 4f || !this.isActive || (this.autoScare && this.autoScareTimer < 0f))
+		{
+			this.huddleTarget = null;
+			this.huddleScared = false;
+			this.SetScaredState();
+		}
+		else
+		{
+			if (!this.birdAnim.IsPlaying("IdleA"))
+			{
+				this.birdAnim.CrossFade("IdleA", 0.2f);
+			}
+			if (Mathf.Abs(vector.y) > 0.7f)
+			{
+				this.currentReposeAnim = this.reposeAnimations[Random.Range(0, this.reposeAnimations.Count)];
+				this.birdAnim.CrossFade(this.currentReposeAnim, 0.2f);
+			}
+		}
+	}
+
+	// Token: 0x0600025E RID: 606 RVA: 0x0001C428 File Offset: 0x0001A628
+	private void Update()
+	{
+		if (this.landOnHuddle && this.huddleTarget != null)
+		{
+			this.moveGoal = this.huddleTarget.position + new Vector3(0f, this.huddleBoneRadius, 0f);
+			this.moveGoal.x = this.moveGoal.x + 0.15f;
+			this.moveGoal.z = this.moveGoal.z + -0.23f;
+		}
+		if (this.state != Bird.State.None && ScriptGlobals.mainCharacter)
+		{
+			this.UpdateState();
+		}
+		if (this.debug)
+		{
+		}
+	}
+
+	// Token: 0x0600025F RID: 607 RVA: 0x0001C4D8 File Offset: 0x0001A6D8
+	private void UpdateState()
+	{
+		switch (this.state)
+		{
+		case Bird.State.Idle:
+			this.IdleState();
+			break;
+		case Bird.State.Panic:
+			this.PanicState();
+			break;
+		case Bird.State.Scared:
+			this.ScaredState();
+			break;
+		case Bird.State.Landing:
+			this.LandingState();
+			break;
+		case Bird.State.Disappear:
+			this.DisappearState();
+			break;
+		case Bird.State.Wait:
+			this.WaitState();
+			break;
+		case Bird.State.FlyBack:
+			this.FlyBackState();
+			break;
+		case Bird.State.HuddleWait:
+			this.HuddleWaitState();
+			break;
+		case Bird.State.OnHuddle:
+			this.OnHuddleState();
+			break;
+		case Bird.State.HuddleFlyBackDelay:
+			this.HuddleFlyBackDelayState();
+			break;
+		}
+	}
+
+	// Token: 0x06000260 RID: 608 RVA: 0x0001C590 File Offset: 0x0001A790
+	public void FollowPath(float a)
+	{
+		Vector3 vector = this.moveGoal - this.moveStart;
+		this.currentSpeed += Time.deltaTime * a;
+		this.currentSpeed = Mathf.Clamp(this.currentSpeed, this.minSpeed, this.maxSpeed);
+		this.time += Time.deltaTime * this.currentSpeed;
+		this.time = Mathf.Clamp(this.time, 0f, 1f);
+		float num;
+		if (this.flyingType == Bird.FlyingType.Back)
+		{
+			num = 1f - this.liftCurve.Evaluate(1f - this.time);
+		}
+		else
+		{
+			num = this.liftCurve.Evaluate(this.time);
+			if (this.liftCurveAlternative.keys.Length > 0)
+			{
+				float num2 = this.liftCurveAlternative.Evaluate(this.time) - num;
+				num += num2 * this.pathSeed;
+			}
+		}
+		Vector3 vector2 = this.moveStart + new Vector3(vector.x * this.time, vector.y * num, vector.z * this.time);
+		this.birdTransform.LookAt(vector2);
+		this.birdTransform.position = vector2;
+	}
+
+	// Token: 0x06000261 RID: 609 RVA: 0x0001C6D8 File Offset: 0x0001A8D8
+	public void ScaredByBird()
+	{
+		if (this.state == Bird.State.Idle)
+		{
+			this.SetPanicState();
+		}
+	}
+
+	// Token: 0x06000262 RID: 610 RVA: 0x0001C6EC File Offset: 0x0001A8EC
+	public void ScareAway()
+	{
+		this.flyBack = false;
+		this.SetPanicState();
+	}
+
+	// Token: 0x06000263 RID: 611 RVA: 0x0001C6FC File Offset: 0x0001A8FC
+	private Vector3 FindIdleGoal()
+	{
+		Vector3 vector = this.origin;
+		vector.x += Random.Range(-0.5f, 0.5f);
+		vector.z += Random.Range(-0.5f, 0.5f);
+		float num = Vector3.Distance(this.birdTransform.position, vector);
+		if (num < 0.3f || num > 0.8f)
+		{
+			vector = this.FindIdleGoal();
+		}
+		return vector;
+	}
+
+	// Token: 0x06000264 RID: 612 RVA: 0x0001C77C File Offset: 0x0001A97C
+	private Vector3 FindRandomTarget(float dir)
+	{
+		Vector3 result;
+		result.x = Random.Range(this.xMin, this.xMax) * dir;
+		result.y = Random.Range(this.yMin, this.yMax);
+		result.z = Random.Range(this.zMin, this.zMax);
+		return result;
+	}
+
+	// Token: 0x06000265 RID: 613 RVA: 0x0001C7D4 File Offset: 0x0001A9D4
+	private Rigidbody FindHuddleTarget()
+	{
+		float num = float.MinValue;
+		Rigidbody result = null;
+		int i = 0;
+		int num2 = ScriptGlobals.huddle.cloth.bones.Length;
+		while (i < num2)
+		{
+			HuddleCloth.ClothBone clothBone = ScriptGlobals.huddle.cloth.bones[i];
+			bool flag = false;
+			int j = 0;
+			int num3 = this.birdSiblings.Length;
+			while (j < num3)
+			{
+				Bird bird = this.birdSiblings[j];
+				if (bird != this && bird.huddleTarget == clothBone.body)
+				{
+					flag = true;
+				}
+				j++;
+			}
+			if (!flag)
+			{
+				float y = clothBone.body.gameObject.transform.position.y;
+				if (y >= num)
+				{
+					num = y;
+					result = clothBone.body;
+				}
+			}
+			i++;
+		}
+		return result;
+	}
+
+	// Token: 0x06000266 RID: 614 RVA: 0x0001C8B8 File Offset: 0x0001AAB8
+	private void OnDrawGizmos()
+	{
+		if (this.debug)
+		{
+			Gizmos.color = new Color(0f, 0.5f, 0f, 0.5f);
+			Gizmos.DrawSphere(this.moveGoal, 0.5f);
+			Gizmos.color = new Color(0.5f, 0f, 0f, 0.5f);
+			Gizmos.DrawSphere(this.moveStart, 0.5f);
+			if (this.huddleTarget != null)
+			{
+				Gizmos.color = new Color(0f, 0f, 0.5f, 0.5f);
+				Gizmos.DrawSphere(this.huddleTarget.position, 1f);
+			}
+		}
+	}
+
+	// Token: 0x06000267 RID: 615 RVA: 0x0001C970 File Offset: 0x0001AB70
+	private void OnFlyBackSignal()
+	{
+		if (this.state == Bird.State.Wait)
+		{
+			this.SetFlyBackState();
+		}
+	}
+
+	// Token: 0x06000268 RID: 616 RVA: 0x0001C984 File Offset: 0x0001AB84
+	private void OnFlyAwaySignal()
+	{
+		if (this.state == Bird.State.Idle)
+		{
+			this.SetPanicState();
+		}
+	}
+
+	// Token: 0x06000269 RID: 617 RVA: 0x0001C998 File Offset: 0x0001AB98
+	private void OnDeactivate()
+	{
+	}
+
+	// Token: 0x0600026A RID: 618 RVA: 0x0001C99C File Offset: 0x0001AB9C
+	private void OnActivate()
+	{
+	}
+
+	// Token: 0x04000323 RID: 803
+	public Animation birdAnim;
+
+	// Token: 0x04000324 RID: 804
+	public AnimationCurve liftCurve;
+
+	// Token: 0x04000325 RID: 805
+	public AnimationCurve liftCurveAlternative;
+
+	// Token: 0x04000326 RID: 806
+	public float scareDist = 1.5f;
+
+	// Token: 0x04000327 RID: 807
+	public GameObject hideTarget;
+
+	// Token: 0x04000328 RID: 808
+	public bool flyBack = true;
+
+	// Token: 0x04000329 RID: 809
+	public float zMin = 2f;
+
+	// Token: 0x0400032A RID: 810
+	public float zMax = 2f;
+
+	// Token: 0x0400032B RID: 811
+	public float yMin = 3f;
+
+	// Token: 0x0400032C RID: 812
+	public float yMax = 2f;
+
+	// Token: 0x0400032D RID: 813
+	public float xMin = 6f;
+
+	// Token: 0x0400032E RID: 814
+	public float xMax = 7f;
+
+	// Token: 0x0400032F RID: 815
+	public float startSpeed = 0.2f;
+
+	// Token: 0x04000330 RID: 816
+	public float maxSpeed = 1f;
+
+	// Token: 0x04000331 RID: 817
+	public float minSpeed = 0.5f;
+
+	// Token: 0x04000332 RID: 818
+	public float acceleration = 0.01f;
+
+	// Token: 0x04000333 RID: 819
+	public float deceleration = 0.03f;
+
+	// Token: 0x04000334 RID: 820
+	public float currentSpeed;
+
+	// Token: 0x04000335 RID: 821
+	[Header("----- Huddle -----")]
+	public bool huddleBird;
+
+	// Token: 0x04000336 RID: 822
+	public bool landOnHuddle;
+
+	// Token: 0x04000337 RID: 823
+	public bool autoScare;
+
+	// Token: 0x04000338 RID: 824
+	public float autoScareMin = 4f;
+
+	// Token: 0x04000339 RID: 825
+	public float autoScareMax = 6f;
+
+	// Token: 0x0400033A RID: 826
+	public float huddleStartDelayMin;
+
+	// Token: 0x0400033B RID: 827
+	public float huddleStartDelayMax;
+
+	// Token: 0x0400033C RID: 828
+	[Space(10f)]
+	public bool debug = true;
+
+	// Token: 0x0400033D RID: 829
+	public bool isActive = true;
+
+	// Token: 0x0400033E RID: 830
+	private SignalIn flyBackSignal;
+
+	// Token: 0x0400033F RID: 831
+	private SignalIn flyAwaySignal;
+
+	// Token: 0x04000340 RID: 832
+	private SignalIn activate;
+
+	// Token: 0x04000341 RID: 833
+	private SignalIn deactivate;
+
+	// Token: 0x04000342 RID: 834
+	private Bird.State state;
+
+	// Token: 0x04000343 RID: 835
+	private Bird.FlyingType flyingType;
+
+	// Token: 0x04000344 RID: 836
+	private Vector3 moveGoal;
+
+	// Token: 0x04000345 RID: 837
+	private Vector3 moveStart;
+
+	// Token: 0x04000346 RID: 838
+	private string currentIdleAnim;
+
+	// Token: 0x04000347 RID: 839
+	private float landingTime;
+
+	// Token: 0x04000348 RID: 840
+	private float landingDuration;
+
+	// Token: 0x04000349 RID: 841
+	private Vector3 previousPos;
+
+	// Token: 0x0400034A RID: 842
+	private float pathSeed;
+
+	// Token: 0x0400034B RID: 843
+	private float time;
+
+	// Token: 0x0400034C RID: 844
+	private float panicTimer;
+
+	// Token: 0x0400034D RID: 845
+	private float backTimer;
+
+	// Token: 0x0400034E RID: 846
+	private float autoScareTimer;
+
+	// Token: 0x0400034F RID: 847
+	private float huddleStillTimer;
+
+	// Token: 0x04000350 RID: 848
+	private float delayTimer;
+
+	// Token: 0x04000351 RID: 849
+	private string currentLandingAnim;
+
+	// Token: 0x04000352 RID: 850
+	private Rigidbody huddleTarget;
+
+	// Token: 0x04000353 RID: 851
+	private float huddleBoneRadius = 0.47f;
+
+	// Token: 0x04000354 RID: 852
+	private float fleeDirection;
+
+	// Token: 0x04000355 RID: 853
+	private bool huddleScared;
+
+	// Token: 0x04000356 RID: 854
+	private string currentReposeAnim;
+
+	// Token: 0x04000357 RID: 855
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStartFlying;
+
+	// Token: 0x04000358 RID: 856
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStopFlying;
+
+	// Token: 0x04000359 RID: 857
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObj;
+
+	// Token: 0x0400035A RID: 858
+	[SerializeField]
+	[HideInInspector]
+	private List<string> idleAnimations;
+
+	// Token: 0x0400035B RID: 859
+	[HideInInspector]
+	[SerializeField]
+	private List<string> reposeAnimations;
+
+	// Token: 0x0400035C RID: 860
+	[HideInInspector]
+	[SerializeField]
+	private List<string> landingAnimations;
+
+	// Token: 0x0400035D RID: 861
+	[HideInInspector]
+	[SerializeField]
+	private Bird[] birdSiblings;
+
+	// Token: 0x0400035E RID: 862
+	[SerializeField]
+	[HideInInspector]
+	private Vector3 origin;
+
+	// Token: 0x0400035F RID: 863
+	[HideInInspector]
+	[SerializeField]
+	private Transform birdTransform;
+
+	// Token: 0x04000360 RID: 864
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x02000049 RID: 73
+	private enum State
+	{
+		// Token: 0x04000362 RID: 866
+		None,
+		// Token: 0x04000363 RID: 867
+		Idle,
+		// Token: 0x04000364 RID: 868
+		Panic,
+		// Token: 0x04000365 RID: 869
+		Scared,
+		// Token: 0x04000366 RID: 870
+		Landing,
+		// Token: 0x04000367 RID: 871
+		Disappear,
+		// Token: 0x04000368 RID: 872
+		Wait,
+		// Token: 0x04000369 RID: 873
+		FlyBack,
+		// Token: 0x0400036A RID: 874
+		HuddleWait,
+		// Token: 0x0400036B RID: 875
+		OnHuddle,
+		// Token: 0x0400036C RID: 876
+		HuddleFlyBackDelay
+	}
+
+	// Token: 0x0200004A RID: 74
+	private enum FlyingType
+	{
+		// Token: 0x0400036E RID: 878
+		Away,
+		// Token: 0x0400036F RID: 879
+		Back,
+		// Token: 0x04000370 RID: 880
+		Huddle
+	}
+}

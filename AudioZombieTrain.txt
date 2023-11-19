@@ -1,0 +1,157 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200051F RID: 1311
+public class AudioZombieTrain : MonoBehaviour
+{
+	// Token: 0x06002235 RID: 8757 RVA: 0x0011E28C File Offset: 0x0011C48C
+	public void EnableCap1()
+	{
+		this.cap1.GetComponent<RTPCCapsule>().WakeUp();
+	}
+
+	// Token: 0x06002236 RID: 8758 RVA: 0x0011E2A0 File Offset: 0x0011C4A0
+	public void OnTrain_1_out(Transform last)
+	{
+		if (this.state != AudioZombieTrain.State.None)
+		{
+			return;
+		}
+		this.lastWagon = last;
+		this.cap1StartPos = this.cap1.position;
+		this.cap1.GetComponent<RTPCCapsule>().WakeUp();
+		CapsuleCollider component = this.cap1.GetComponent<CapsuleCollider>();
+		Vector3 position = this.lastWagon.position;
+		position.z = 0f;
+		this.cap1.position = this.cap1StartPos;
+		float height = (this.cap1StartPos - position).magnitude * 2f + component.radius * 2f;
+		component.height = height;
+		this.state = AudioZombieTrain.State.Cap1Moving;
+	}
+
+	// Token: 0x06002237 RID: 8759 RVA: 0x0011E34C File Offset: 0x0011C54C
+	public void OnTrain_2_in(Transform first)
+	{
+		this.totalMoveDist = 0f;
+		this.firstWagon = first;
+		this.cap2StartPos = this.cap2.position;
+		this.cap2.GetComponent<RTPCCapsule>().WakeUp();
+		Vector3 position = this.firstWagon.position;
+		position.z = 0f;
+		this.locomotiveSphere.position = position;
+		this.locomotiveSphere.GetComponent<RTPCSphere>().WakeUp();
+		this.state = AudioZombieTrain.State.Cap2Moving;
+	}
+
+	// Token: 0x06002238 RID: 8760 RVA: 0x0011E3C8 File Offset: 0x0011C5C8
+	public void OnTrain_2_running()
+	{
+		this.cap2.position = ScriptGlobals.boy.pos3;
+		CapsuleCollider component = this.cap2.GetComponent<CapsuleCollider>();
+		component.height = 200f;
+		this.cap2.GetComponent<RTPCCapsule>().WakeUp();
+	}
+
+	// Token: 0x06002239 RID: 8761 RVA: 0x0011E414 File Offset: 0x0011C614
+	private void Cap1MovingState()
+	{
+		this.cap1.position += this.moveForce;
+		this.totalMoveDist += this.moveForce.x;
+		if (this.totalMoveDist >= 200f)
+		{
+			this.cap1.GetComponent<RTPCCapsule>().SleepNextUpdate();
+			this.state = AudioZombieTrain.State.None;
+		}
+	}
+
+	// Token: 0x0600223A RID: 8762 RVA: 0x0011E47C File Offset: 0x0011C67C
+	private void MoveOnlyEngineSphereState()
+	{
+		Vector3 position = this.firstWagon.position;
+		position.z = 0f;
+		this.locomotiveSphere.position = position;
+	}
+
+	// Token: 0x0600223B RID: 8763 RVA: 0x0011E4B0 File Offset: 0x0011C6B0
+	private void Cap2MovingState()
+	{
+		CapsuleCollider component = this.cap2.GetComponent<CapsuleCollider>();
+		Vector3 position = this.firstWagon.position;
+		position.z = 0f;
+		this.cap2.position = this.cap2StartPos;
+		float height = (this.cap2StartPos - position).magnitude * 2f + component.radius * 2f;
+		Vector3 position2 = this.firstWagon.position;
+		position2.z = 0f;
+		this.locomotiveSphere.position = position2;
+		component.height = height;
+		this.totalMoveDist += this.moveForce.x;
+		if (this.totalMoveDist >= 100f)
+		{
+			this.state = AudioZombieTrain.State.MoveOnlyEngineSphere;
+		}
+	}
+
+	// Token: 0x0600223C RID: 8764 RVA: 0x0011E578 File Offset: 0x0011C778
+	private void FixedUpdate()
+	{
+		this.moveForce = Vector3.right * Time.deltaTime * this.moveSpeed;
+		switch (this.state)
+		{
+		case AudioZombieTrain.State.Cap1Moving:
+			this.Cap1MovingState();
+			break;
+		case AudioZombieTrain.State.Cap2Moving:
+			this.Cap2MovingState();
+			break;
+		case AudioZombieTrain.State.MoveOnlyEngineSphere:
+			this.MoveOnlyEngineSphereState();
+			break;
+		}
+	}
+
+	// Token: 0x04003FD4 RID: 16340
+	public Transform cap1;
+
+	// Token: 0x04003FD5 RID: 16341
+	public Transform cap2;
+
+	// Token: 0x04003FD6 RID: 16342
+	public float moveSpeed;
+
+	// Token: 0x04003FD7 RID: 16343
+	public Transform locomotiveSphere;
+
+	// Token: 0x04003FD8 RID: 16344
+	private AudioZombieTrain.State state;
+
+	// Token: 0x04003FD9 RID: 16345
+	private Vector3 cap1StartPos;
+
+	// Token: 0x04003FDA RID: 16346
+	private Vector3 cap2StartPos;
+
+	// Token: 0x04003FDB RID: 16347
+	private Vector3 moveForce;
+
+	// Token: 0x04003FDC RID: 16348
+	private Transform lastWagon;
+
+	// Token: 0x04003FDD RID: 16349
+	private Transform firstWagon;
+
+	// Token: 0x04003FDE RID: 16350
+	private float totalMoveDist;
+
+	// Token: 0x02000520 RID: 1312
+	private enum State
+	{
+		// Token: 0x04003FE0 RID: 16352
+		None,
+		// Token: 0x04003FE1 RID: 16353
+		Cap1Moving,
+		// Token: 0x04003FE2 RID: 16354
+		Cap2Moving,
+		// Token: 0x04003FE3 RID: 16355
+		MoveOnlyEngineSphere
+	}
+}

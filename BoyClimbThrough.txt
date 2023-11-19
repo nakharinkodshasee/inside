@@ -1,0 +1,103 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200014E RID: 334
+public class BoyClimbThrough : MonoBehaviour, IFastEventExListener<Collider>
+{
+	// Token: 0x060009FC RID: 2556 RVA: 0x00063BC8 File Offset: 0x00061DC8
+	private void Start()
+	{
+		this.trigger.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.trigger.exitTrigger.Register(this, ref this.triggerExitHandle);
+	}
+
+	// Token: 0x060009FD RID: 2557 RVA: 0x00063C04 File Offset: 0x00061E04
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.trigger.enterTrigger)
+		{
+			this.OnTriggerEnter(collider);
+		}
+		else if (sender == this.trigger.exitTrigger)
+		{
+			this.OnTriggerExit(collider);
+		}
+	}
+
+	// Token: 0x060009FE RID: 2558 RVA: 0x00063C40 File Offset: 0x00061E40
+	private void FixedUpdate()
+	{
+		if (!this.boyInside || this.boyInside.isDead || !this.boyInside.status.groundCollider)
+		{
+			return;
+		}
+		BoyCustomAnimState boyCustomAnimState = this.boyInside.state as BoyCustomAnimState;
+		if (boyCustomAnimState != null && (boyCustomAnimState.anim == this.animClimbThrough || boyCustomAnimState.anim == this.animClimbThroughFast))
+		{
+			return;
+		}
+		float x = this.boyInside.input.stick.x;
+		if (this.boyInside.facing != (float)this.dir)
+		{
+			return;
+		}
+		float num = Mathf.Abs(x);
+		if (this.animClimbThroughFast && num >= Mathf.Abs(this.requiredInputFast))
+		{
+			BoyUtils.StartCustomAnim(this.boyInside, this.animClimbThroughFast, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			SingletonBehaviour<CameraScript>.instance.OverrideCustomAnimAdjustment(0.2f, 1f);
+		}
+		else if (this.animClimbThrough && num >= Mathf.Abs(this.requiredInput))
+		{
+			BoyUtils.StartCustomAnim(this.boyInside, this.animClimbThrough, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			SingletonBehaviour<CameraScript>.instance.OverrideCustomAnimAdjustment(0.2f, 1f);
+		}
+	}
+
+	// Token: 0x060009FF RID: 2559 RVA: 0x00063DA8 File Offset: 0x00061FA8
+	private void OnTriggerEnter(Collider collider)
+	{
+		BoyProbe component = collider.GetComponent<BoyProbe>();
+		if (component)
+		{
+			this.boyInside = component.boy;
+		}
+	}
+
+	// Token: 0x06000A00 RID: 2560 RVA: 0x00063DD4 File Offset: 0x00061FD4
+	private void OnTriggerExit(Collider collider)
+	{
+		BoyProbe component = collider.GetComponent<BoyProbe>();
+		if (component)
+		{
+			this.boyInside = null;
+		}
+	}
+
+	// Token: 0x0400112E RID: 4398
+	public CollisionEvents trigger;
+
+	// Token: 0x0400112F RID: 4399
+	public AnimClipNode animClimbThrough;
+
+	// Token: 0x04001130 RID: 4400
+	public AnimClipNode animClimbThroughFast;
+
+	// Token: 0x04001131 RID: 4401
+	public int dir = 1;
+
+	// Token: 0x04001132 RID: 4402
+	public float requiredInput = 0.4f;
+
+	// Token: 0x04001133 RID: 4403
+	public float requiredInputFast = 0.65f;
+
+	// Token: 0x04001134 RID: 4404
+	private Boy boyInside;
+
+	// Token: 0x04001135 RID: 4405
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04001136 RID: 4406
+	private int triggerExitHandle = -1;
+}

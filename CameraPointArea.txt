@@ -1,0 +1,24 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000550 RID: 1360
+public class CameraPointArea : MonoBehaviour
+{
+	// Token: 0x040041EA RID: 16874
+	public Color color = Color.white;
+
+	// Token: 0x040041EB RID: 16875
+	public float extrapolateCamera = 1f;
+
+	// Token: 0x040041EC RID: 16876
+	public float extrapolateAim = 1f;
+
+	// Token: 0x040041ED RID: 16877
+	public Vector3 cameraPosition = new Vector3(0f, 1f, -12f);
+
+	// Token: 0x040041EE RID: 16878
+	public Vector3 aim = new Vector3(0f, 1f, 0f);
+
+	// Token: 0x040041EF RID: 16879
+	public Vector3 up = Vector3.up;
+}

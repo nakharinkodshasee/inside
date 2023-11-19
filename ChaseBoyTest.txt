@@ -1,0 +1,126 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200055E RID: 1374
+public class ChaseBoyTest : DefaultBoyInput, IPreAwake
+{
+	// Token: 0x170000A3 RID: 163
+	// (get) Token: 0x060023B7 RID: 9143 RVA: 0x00129040 File Offset: 0x00127240
+	public override vector2f stick
+	{
+		get
+		{
+			if (this.currentSpeedScale < 1f)
+			{
+				vector2f vector2f = new vector2f(base.stick.x, base.stick.y);
+				vector2f *= this.currentSpeedScale;
+				if (Mathf.Abs(vector2f.x) < 0.4f)
+				{
+					vector2f.x = base.stick.x;
+				}
+				return vector2f;
+			}
+			return base.stick * this.currentSpeedScale;
+		}
+	}
+
+	// Token: 0x170000A4 RID: 164
+	// (get) Token: 0x060023B8 RID: 9144 RVA: 0x001290CC File Offset: 0x001272CC
+	public override float stickScaleX
+	{
+		get
+		{
+			return this.currentSpeedScale;
+		}
+	}
+
+	// Token: 0x060023B9 RID: 9145 RVA: 0x001290D4 File Offset: 0x001272D4
+	public bool PreAwake(int callcount)
+	{
+		this.startChaseLogic = SignalIn.Create("startChaseLogic", base.gameObject, new Action(this.StartChaseLogic));
+		this.endChaseLogic = SignalIn.Create("endChaseLogic", base.gameObject, new Action(this.EndChaseLogic));
+		return true;
+	}
+
+	// Token: 0x060023BA RID: 9146 RVA: 0x00129128 File Offset: 0x00127328
+	private void StartChaseLogic()
+	{
+		this.isActive = true;
+		ScriptGlobals.boy.input = this;
+	}
+
+	// Token: 0x060023BB RID: 9147 RVA: 0x0012913C File Offset: 0x0012733C
+	private void EndChaseLogic()
+	{
+		this.isActive = false;
+		ScriptGlobals.boy.input = null;
+	}
+
+	// Token: 0x060023BC RID: 9148 RVA: 0x00129150 File Offset: 0x00127350
+	private void UpdateSpeedScale()
+	{
+		this.timer += Time.deltaTime;
+		float num = Mathf.InverseLerp(0f, this.timeToFullSpeed, this.timer);
+		this.currentSpeedScale = Mathf.Lerp(this.minSpeedScale, this.maxSpeedScale, num);
+		if (this.lerpViaDistanceLeft != null)
+		{
+			float num2 = Mathf.Lerp(this.minSpeedScale, this.maxSpeedScale, Mathf.InverseLerp(this.lerpViaDistanceLeft.position.x, this.lerpViaDistanceRight.position.x, ScriptGlobals.boy.transform.position.x));
+			this.lerpedMax = Mathf.Max(this.lerpedMax, num2);
+			this.currentSpeedScale = Mathf.Lerp(this.minSpeedScale, this.lerpedMax, num);
+		}
+	}
+
+	// Token: 0x060023BD RID: 9149 RVA: 0x00129230 File Offset: 0x00127430
+	private void FixedUpdate()
+	{
+		if (this.isActive)
+		{
+			this.UpdateSpeedScale();
+		}
+	}
+
+	// Token: 0x04004220 RID: 16928
+	private float currentSpeedScale = 1f;
+
+	// Token: 0x04004221 RID: 16929
+	public float timeToFullSpeed = 3f;
+
+	// Token: 0x04004222 RID: 16930
+	public float minSpeedScale = 1.05f;
+
+	// Token: 0x04004223 RID: 16931
+	public float maxSpeedScale = 1.2f;
+
+	// Token: 0x04004224 RID: 16932
+	public Transform lerpViaDistanceLeft;
+
+	// Token: 0x04004225 RID: 16933
+	public Transform lerpViaDistanceRight;
+
+	// Token: 0x04004226 RID: 16934
+	private SignalIn startChaseLogic;
+
+	// Token: 0x04004227 RID: 16935
+	private SignalIn endChaseLogic;
+
+	// Token: 0x04004228 RID: 16936
+	private bool isActive;
+
+	// Token: 0x04004229 RID: 16937
+	private float runFraction;
+
+	// Token: 0x0400422A RID: 16938
+	private float runSign = 1f;
+
+	// Token: 0x0400422B RID: 16939
+	private float offGroundTime;
+
+	// Token: 0x0400422C RID: 16940
+	private float slideTime;
+
+	// Token: 0x0400422D RID: 16941
+	private float timer;
+
+	// Token: 0x0400422E RID: 16942
+	private float lerpedMax = -1f;
+}

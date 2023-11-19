@@ -1,0 +1,63 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200045C RID: 1116
+public class CameraZoomOutScript : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001D64 RID: 7524 RVA: 0x000FDFEC File Offset: 0x000FC1EC
+	public bool PreAwake(int callcount)
+	{
+		this.StartZoom = SignalIn.Create("StartZoom", base.gameObject, delegate
+		{
+			this.zoomActive = true;
+		});
+		return true;
+	}
+
+	// Token: 0x06001D65 RID: 7525 RVA: 0x000FE014 File Offset: 0x000FC214
+	private void Start()
+	{
+		this.blendBox = base.GetComponent<CameraBlendBox>();
+		this.startZoomValue = this.blendBox.positionCamera.z;
+	}
+
+	// Token: 0x06001D66 RID: 7526 RVA: 0x000FE044 File Offset: 0x000FC244
+	private void Update()
+	{
+		if (this.zoomActive)
+		{
+			this.timer += Time.deltaTime;
+			float num = Mathf.InverseLerp(0f, this.blendTime, this.timer);
+			num = this.blendCurve.Evaluate(num);
+			this.blendBox.positionCamera.z = Mathf.Lerp(this.startZoomValue, this.targetZoom, num);
+			if (num >= 1f)
+			{
+				this.zoomActive = false;
+			}
+		}
+	}
+
+	// Token: 0x04003612 RID: 13842
+	public float targetZoom;
+
+	// Token: 0x04003613 RID: 13843
+	public float blendTime;
+
+	// Token: 0x04003614 RID: 13844
+	public AnimationCurve blendCurve;
+
+	// Token: 0x04003615 RID: 13845
+	private float startZoomValue;
+
+	// Token: 0x04003616 RID: 13846
+	private SignalIn StartZoom;
+
+	// Token: 0x04003617 RID: 13847
+	private CameraBlendBox blendBox;
+
+	// Token: 0x04003618 RID: 13848
+	private bool zoomActive;
+
+	// Token: 0x04003619 RID: 13849
+	private float timer;
+}

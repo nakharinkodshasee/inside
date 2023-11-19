@@ -1,0 +1,77 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004BF RID: 1215
+public class CargoLiftCamera : MonoBehaviour
+{
+	// Token: 0x06001FC8 RID: 8136 RVA: 0x0010E648 File Offset: 0x0010C848
+	private void Start()
+	{
+		this.startYPos = this.camBlendBox.positionCamera.y;
+		this.startYAim = this.camBlendBox.positionAim.y;
+	}
+
+	// Token: 0x06001FC9 RID: 8137 RVA: 0x0010E684 File Offset: 0x0010C884
+	private void Update()
+	{
+		this.totalTime += Time.deltaTime;
+		if (this.totalTime < 1f)
+		{
+			return;
+		}
+		float currentPosY = this.cargoLift.GetCurrentPosY();
+		float targetPosY = this.cargoLift.GetTargetPosY();
+		float num = Mathf.Abs(currentPosY - targetPosY);
+		float num2;
+		if (targetPosY > currentPosY)
+		{
+			num2 = Mathf.Lerp(0.5f, 1f, Mathf.InverseLerp(0f, this.stopDist, num));
+		}
+		else
+		{
+			num2 = Mathf.Lerp(0.5f, 0f, Mathf.InverseLerp(0f, this.stopDist, num));
+		}
+		if (this.cargoLift.GetDoorsMoving())
+		{
+			num2 = 0.5f;
+		}
+		this.frac = Mathf.Min(this.frac, this.maxFrac);
+		this.frac = Mathf.MoveTowards(this.frac, num2, Time.deltaTime * this.blendSpeed);
+		Vector3 positionCamera = this.camBlendBox.positionCamera;
+		positionCamera.y = Mathf.Lerp(this.startYPos + this.amount, this.startYPos - this.amount, this.frac);
+		this.camBlendBox.positionCamera = positionCamera;
+		Vector3 positionAim = this.camBlendBox.positionAim;
+		positionAim.y = Mathf.Lerp(this.startYAim - this.amount, this.startYPos + this.amount, this.frac);
+		this.camBlendBox.positionAim = positionAim;
+	}
+
+	// Token: 0x04003AD2 RID: 15058
+	public ElevatorMines cargoLift;
+
+	// Token: 0x04003AD3 RID: 15059
+	public CameraBlendBox camBlendBox;
+
+	// Token: 0x04003AD4 RID: 15060
+	public float blendSpeed = 1.5f;
+
+	// Token: 0x04003AD5 RID: 15061
+	public float amount = 0.85f;
+
+	// Token: 0x04003AD6 RID: 15062
+	public float stopDist = 8f;
+
+	// Token: 0x04003AD7 RID: 15063
+	public float maxFrac = 0.75f;
+
+	// Token: 0x04003AD8 RID: 15064
+	private float startYPos;
+
+	// Token: 0x04003AD9 RID: 15065
+	private float startYAim;
+
+	// Token: 0x04003ADA RID: 15066
+	private float frac = 0.5f;
+
+	// Token: 0x04003ADB RID: 15067
+	private float totalTime;
+}

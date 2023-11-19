@@ -1,0 +1,242 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200064E RID: 1614
+public class BalanceCapsuleNoGravity : MonoBehaviour
+{
+	// Token: 0x060027C7 RID: 10183 RVA: 0x0013F928 File Offset: 0x0013DB28
+	private void DrawPoseArrows(string key, AnimBone[] pose)
+	{
+		DebugAnimRendering.DrawPoseArrows(pose, key, this.height * 0.5f, (DebugRendering.Flags)0);
+	}
+
+	// Token: 0x060027C8 RID: 10184 RVA: 0x0013F940 File Offset: 0x0013DB40
+	private float GetScale()
+	{
+		return Mathf.Max(new float[]
+		{
+			base.transform.lossyScale.x,
+			base.transform.lossyScale.y,
+			base.transform.lossyScale.z
+		});
+	}
+
+	// Token: 0x170000CE RID: 206
+	// (get) Token: 0x060027C9 RID: 10185 RVA: 0x0013F99C File Offset: 0x0013DB9C
+	public float radius
+	{
+		get
+		{
+			return base.GetComponent<CapsuleCollider>().radius * this.GetScale();
+		}
+	}
+
+	// Token: 0x170000CF RID: 207
+	// (get) Token: 0x060027CA RID: 10186 RVA: 0x0013F9BC File Offset: 0x0013DBBC
+	public float height
+	{
+		get
+		{
+			return base.GetComponent<CapsuleCollider>().height * this.GetScale();
+		}
+	}
+
+	// Token: 0x060027CB RID: 10187 RVA: 0x0013F9DC File Offset: 0x0013DBDC
+	private float SignedAngleBetweenVectors(Vector3 a, Vector3 b)
+	{
+		float num = MathUtils.AngleBetweenVectors(a, b);
+		return num * Mathf.Sign(b.x - a.x);
+	}
+
+	// Token: 0x060027CC RID: 10188 RVA: 0x0013FA08 File Offset: 0x0013DC08
+	private vector2f GetInputStick()
+	{
+		float num = 0.25f;
+		vector2f stick = GameInput.stick;
+		return stick * (Mathf.Max(stick.GetLength() - num, 0f) / (1f - num));
+	}
+
+	// Token: 0x060027CD RID: 10189 RVA: 0x0013FA44 File Offset: 0x0013DC44
+	private void NeutralizeGravity(ref Vector3 legImpulse)
+	{
+		Vector3 gravity = Physics.gravity;
+		Vector3 vector = base.GetComponent<Rigidbody>().position - base.transform.up * (this.height * 0.5f - this.radius) - Vector3.up * this.radius;
+		Vector3 vector2 = vector - base.GetComponent<Rigidbody>().position;
+		float num = -gravity.magnitude * Vector3.Cross(vector2, Vector3.up).z / Vector3.Cross(vector2, Vector3.right).z;
+		Vector3 vector3 = Vector3.right * num * Time.fixedDeltaTime * base.GetComponent<Rigidbody>().mass;
+		base.GetComponent<Rigidbody>().AddForceAtPosition(vector3, vector, 1);
+		base.GetComponent<Rigidbody>().AddForce(-vector3, 1);
+	}
+
+	// Token: 0x060027CE RID: 10190 RVA: 0x0013FB30 File Offset: 0x0013DD30
+	public static void AddRotAccAtPosition(Rigidbody rigidbody, Vector3 rotAcc, Vector3 center)
+	{
+		Vector3 vector = rigidbody.position - center;
+		rigidbody.AddForce(-Vector3.Cross(vector, rotAcc), 2);
+		rigidbody.AddTorque(rotAcc, 2);
+	}
+
+	// Token: 0x060027CF RID: 10191 RVA: 0x0013FB68 File Offset: 0x0013DD68
+	private void DrawCapsule()
+	{
+		vector2f vector2f = MathUtils.v2(base.GetComponent<Rigidbody>().rotation * Vector3.up);
+		Vector3 vector = base.GetComponent<Rigidbody>().position - base.transform.up * (this.height * 0.5f - this.radius) - Vector3.up * this.radius;
+		vector2f vector2f2 = new vector2f(base.GetComponent<Rigidbody>().position.x, vector.y);
+		float num = this.rotOriginFraction * (this.height - 2f * this.radius);
+		float num2 = -num * vector2f.x;
+		vector2f a = new vector2f(base.GetComponent<Rigidbody>().position.x + num2, vector.y + this.radius);
+		DebugPhysicsRendering.Draw(new CollisionUtils.Capsule(CollisionUtils.Plane.zero)
+		{
+			up = vector2f,
+			pos = a + vector2f * (this.height * 0.5f - this.radius),
+			height = this.height,
+			radius = this.radius
+		}, Color.green, "CapsuleShape", (DebugRendering.Flags)0);
+	}
+
+	// Token: 0x060027D0 RID: 10192 RVA: 0x0013FCB8 File Offset: 0x0013DEB8
+	private void OnCollisionEnter(Collision collision)
+	{
+		if (10L < PhysicsUtils.stepCount && this.mCollisionCount == 0)
+		{
+			this.mLandTime = Time.fixedTimeDbl;
+		}
+		this.mCollisionCount++;
+	}
+
+	// Token: 0x060027D1 RID: 10193 RVA: 0x0013FCEC File Offset: 0x0013DEEC
+	private void OnCollisionExit(Collision collision)
+	{
+		this.mCollisionCount--;
+	}
+
+	// Token: 0x060027D2 RID: 10194 RVA: 0x0013FCFC File Offset: 0x0013DEFC
+	private void UpdateLanding()
+	{
+		if (0.0 < this.mLandTime)
+		{
+			float num = (float)(Time.fixedTimeDbl - this.mLandTime);
+			float num2 = Mathf.Max(0f, this.landGroundFriction.Evaluate(num));
+			Vector3 vector = base.GetComponent<Rigidbody>().position - base.transform.up * (this.height * 0.5f - this.radius) - Vector3.up * this.radius;
+			Vector3 pointVelocity = base.GetComponent<Rigidbody>().GetPointVelocity(vector);
+			Vector3 vector2 = -pointVelocity * num2 * Time.fixedDeltaTime * base.GetComponent<Rigidbody>().mass;
+			base.GetComponent<Rigidbody>().AddForceAtPosition(vector2, vector, 1);
+			float num3 = this.SignedAngleBetweenVectors(Vector3.up, base.transform.up);
+			bool flag = base.GetComponent<Rigidbody>().angularVelocity.z * num3 < 0f;
+			float num4 = Mathf.Abs(num3);
+			float num5 = this.landStrength.Evaluate(num4);
+			float num6 = this.GetInputStick().x;
+			if (flag)
+			{
+				float num7 = -Mathf.Sign(num3);
+				float num8 = 0.24f;
+				float num9 = Mathf.Clamp(num6 - num7, -num8, num8);
+				num6 = num7 + num9;
+			}
+			if (base.transform.up.x * num6 < 0f)
+			{
+				Vector3 vector3 = -Vector3.right * num6 * Time.fixedDeltaTime * num5;
+				base.GetComponent<Rigidbody>().AddForceAtPosition(vector3, vector, 1);
+				base.GetComponent<Rigidbody>().AddForce(-vector3, 1);
+			}
+			if (!flag && 0.5f < num && 0f < num5)
+			{
+				this.mLandTime = -1.0;
+			}
+		}
+	}
+
+	// Token: 0x060027D3 RID: 10195 RVA: 0x0013FEFC File Offset: 0x0013E0FC
+	private void UpdateFalling()
+	{
+		float num = -this.airControllRotVelocity * this.GetInputStick().x;
+		Vector3 vector = (Vector3.forward * num - base.GetComponent<Rigidbody>().angularVelocity) * base.GetComponent<Rigidbody>().mass * Time.fixedDeltaTime * this.airControllRotDamping;
+		base.GetComponent<Rigidbody>().AddTorque(vector, 1);
+	}
+
+	// Token: 0x060027D4 RID: 10196 RVA: 0x0013FF70 File Offset: 0x0013E170
+	private void FixedUpdate()
+	{
+		this.DrawCapsule();
+		if (this.mCollisionCount == 0)
+		{
+			this.UpdateFalling();
+			return;
+		}
+		if (0.0 < this.mLandTime)
+		{
+			this.UpdateLanding();
+			return;
+		}
+		float x = this.GetInputStick().x;
+		Vector3 vector = Vector3.right * x * this.maxSpeed;
+		Vector3 velocity = base.GetComponent<Rigidbody>().velocity;
+		Vector3 vector2 = vector - velocity;
+		bool flag = vector2.x * velocity.x < 0f;
+		bool flag2 = 0f < vector2.x * velocity.x || Mathf.Abs(velocity.x) < Mathf.Abs(vector.x);
+		float num = this.SignedAngleBetweenVectors(Vector3.up, base.transform.up);
+		float num2 = (0f >= base.transform.up.x * base.GetComponent<Rigidbody>().velocity.x) ? 0f : Mathf.Clamp01(Mathf.Abs(base.GetComponent<Rigidbody>().velocity.x) / this.maxSpeed);
+		float num3 = flag2 ? (Mathf.Lerp(0.5f, 1f, num2) * this.deltaVelocityToAngle) : this.deltaVelocityToAngle;
+		float num4 = (vector.x * velocity.x >= 0f) ? ((Mathf.Abs(vector.x) >= Mathf.Abs(velocity.x)) ? velocity.x : vector.x) : 0f;
+		float num5 = vector2.x * num3 + this.angleAtMaxSpeed * num4 / this.maxSpeed;
+		num5 = Mathf.Clamp(num5, -this.maxAngle, this.maxAngle);
+		float num6 = MathUtils.SignedAngleDif(num, num5);
+		Vector3 vector3 = base.GetComponent<Rigidbody>().position - base.transform.up * (this.height * 0.5f - this.radius) - Vector3.up * this.radius;
+		float num7 = -num6 * this.rotStrength - base.GetComponent<Rigidbody>().angularVelocity.z * this.rotDamping;
+		Vector3 vector4 = Vector3.right * Mathf.Clamp(num7, -this.maxAcc, this.maxAcc) * base.GetComponent<Rigidbody>().mass * Time.fixedDeltaTime;
+		base.GetComponent<Rigidbody>().AddForceAtPosition(vector4, vector3, 1);
+		float num8 = this.maxDeacc;
+		float num9 = num / this.maxAngle * num8 * (1f - num2);
+		base.GetComponent<Rigidbody>().AddForce(Vector3.right * num9 * Time.fixedDeltaTime * base.GetComponent<Rigidbody>().mass, 1);
+		this.NeutralizeGravity(ref vector4);
+		this.mOldAngularVelocity = base.GetComponent<Rigidbody>().angularVelocity;
+	}
+
+	// Token: 0x04004745 RID: 18245
+	public float rotStrength = 10f;
+
+	// Token: 0x04004746 RID: 18246
+	public float rotDamping = 5f;
+
+	// Token: 0x04004747 RID: 18247
+	public float deltaVelocityToAngle = 0.16f;
+
+	// Token: 0x04004748 RID: 18248
+	public float angleAtMaxSpeed = 0.45f;
+
+	// Token: 0x04004749 RID: 18249
+	public float maxSpeed = 5f;
+
+	// Token: 0x0400474A RID: 18250
+	public float maxAcc = 1.4f;
+
+	// Token: 0x0400474B RID: 18251
+	public float maxDeacc = 2.8f;
+
+	// Token: 0x0400474C RID: 18252
+	public float maxAngle = 0.7f;
+
+	// Token: 0x0400474D RID: 18253
+	public float rotOriginFraction;
+
+	// Token: 0x0400474E RID: 18254
+	private Vector3 mOldAngularVelocity;
+
+	// Token: 0x0400474F RID: 18255
+	public AnimationCurve landGroundFriction;
+
+	// Token: 0x04004750 RID: 18256
+	public AnimationCurve landStrength;
+
+	// Token: 0x04004751 RID: 18257
+	public float airControllRotDamping = 1f;
+
+	// Token: 0x04004752 RID: 18258
+	public float airControllRotVelocity = 1f;
+
+	// Token: 0x04004753 RID: 18259
+	private double mLandTime = -1.0;
+
+	// Token: 0x04004754 RID: 18260
+	private int mCollisionCount;
+}

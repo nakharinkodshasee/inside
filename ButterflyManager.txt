@@ -1,0 +1,140 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200004E RID: 78
+public class ButterflyManager : MonoBehaviour
+{
+	// Token: 0x0600028F RID: 655 RVA: 0x0001D66C File Offset: 0x0001B86C
+	private void Start()
+	{
+		this.huddleApproachTimer = this.huddleApproachDelay;
+		if (this.getButterfliesInChildren)
+		{
+			this.butterflies = base.transform.GetComponentsInChildren<Butterfly>();
+		}
+		int i = 0;
+		int num = this.butterflies.Length;
+		while (i < num)
+		{
+			Butterfly butterfly = this.butterflies[i];
+			butterfly.SetManager(this);
+			i++;
+		}
+	}
+
+	// Token: 0x06000290 RID: 656 RVA: 0x0001D6CC File Offset: 0x0001B8CC
+	private void Update()
+	{
+		if (!ScriptGlobals.huddle || !ScriptGlobals.huddle.isCharacterActive)
+		{
+			return;
+		}
+		if (this.freeHuddleBones.Count == 0)
+		{
+			this.SetupHuddleBones();
+		}
+		float num = Mathf.Abs(ScriptGlobals.huddle.velocity3.x);
+		float num2 = Mathf.Abs(ScriptGlobals.huddle.pos3.x - base.transform.position.x);
+		if (num < 0.5f && num2 < 10f)
+		{
+			this.huddleApproachTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.huddleApproachTimer += Time.deltaTime * 2f;
+		}
+		this.huddleApproachTimer = Mathf.Clamp(this.huddleApproachTimer, 0f, this.huddleApproachDelay);
+		if (this.takeoffTimer > 0f)
+		{
+			this.takeoffTimer -= Time.deltaTime;
+		}
+	}
+
+	// Token: 0x06000291 RID: 657 RVA: 0x0001D7D8 File Offset: 0x0001B9D8
+	public bool GetHuddleStandingStill()
+	{
+		return this.huddleApproachTimer <= 0f;
+	}
+
+	// Token: 0x06000292 RID: 658 RVA: 0x0001D7EC File Offset: 0x0001B9EC
+	public bool GetHuddleMoving()
+	{
+		if (this.takeoffTimer > 0f)
+		{
+			return false;
+		}
+		float num = Mathf.Abs(ScriptGlobals.huddle.velocity.x);
+		float num2 = Mathf.Abs(ScriptGlobals.huddle.pos3.x - base.transform.position.x);
+		if (num > 1f || num2 > 20f)
+		{
+			this.takeoffTimer = this.takeoffDelay * Random.Range(0.8f, 1.2f);
+			return true;
+		}
+		return false;
+	}
+
+	// Token: 0x06000293 RID: 659 RVA: 0x0001D888 File Offset: 0x0001BA88
+	public Transform FindHuddleTarget()
+	{
+		float num = float.MinValue;
+		Transform transform = null;
+		foreach (KeyValuePair<Transform, bool> keyValuePair in this.freeHuddleBones)
+		{
+			if (keyValuePair.Value)
+			{
+				Transform key = keyValuePair.Key;
+				float y = key.position.y;
+				if (y >= num)
+				{
+					num = y;
+					transform = key;
+				}
+			}
+		}
+		if (transform != null)
+		{
+			this.freeHuddleBones[transform] = false;
+		}
+		return transform;
+	}
+
+	// Token: 0x06000294 RID: 660 RVA: 0x0001D944 File Offset: 0x0001BB44
+	private void SetupHuddleBones()
+	{
+		int i = 0;
+		int num = ScriptGlobals.huddle.cloth.bones.Length;
+		while (i < num)
+		{
+			this.freeHuddleBones.Add(ScriptGlobals.huddle.cloth.bones[i].body.transform, true);
+			i++;
+		}
+	}
+
+	// Token: 0x06000295 RID: 661 RVA: 0x0001D99C File Offset: 0x0001BB9C
+	public void RemoveFromHuddle(Transform huddleBone)
+	{
+		this.freeHuddleBones[huddleBone] = true;
+	}
+
+	// Token: 0x04000392 RID: 914
+	public Butterfly[] butterflies;
+
+	// Token: 0x04000393 RID: 915
+	public bool getButterfliesInChildren = true;
+
+	// Token: 0x04000394 RID: 916
+	public float huddleApproachDelay = 3.5f;
+
+	// Token: 0x04000395 RID: 917
+	public float takeoffDelay = 0.15f;
+
+	// Token: 0x04000396 RID: 918
+	private float huddleApproachTimer = 3.5f;
+
+	// Token: 0x04000397 RID: 919
+	private float takeoffTimer;
+
+	// Token: 0x04000398 RID: 920
+	private Dictionary<Transform, bool> freeHuddleBones = new Dictionary<Transform, bool>();
+}

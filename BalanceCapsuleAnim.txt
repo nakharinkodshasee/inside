@@ -1,0 +1,88 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200064D RID: 1613
+public class BalanceCapsuleAnim : MonoBehaviour
+{
+	// Token: 0x060027C0 RID: 10176 RVA: 0x0013F61C File Offset: 0x0013D81C
+	private float GetScale()
+	{
+		return Mathf.Max(new float[]
+		{
+			base.transform.lossyScale.x,
+			base.transform.lossyScale.y,
+			base.transform.lossyScale.z
+		});
+	}
+
+	// Token: 0x170000CC RID: 204
+	// (get) Token: 0x060027C1 RID: 10177 RVA: 0x0013F678 File Offset: 0x0013D878
+	public float radius
+	{
+		get
+		{
+			return base.GetComponent<CapsuleCollider>().radius * this.GetScale();
+		}
+	}
+
+	// Token: 0x170000CD RID: 205
+	// (get) Token: 0x060027C2 RID: 10178 RVA: 0x0013F698 File Offset: 0x0013D898
+	public float height
+	{
+		get
+		{
+			return base.GetComponent<CapsuleCollider>().height * this.GetScale();
+		}
+	}
+
+	// Token: 0x060027C3 RID: 10179 RVA: 0x0013F6B8 File Offset: 0x0013D8B8
+	private void UpdateBalanceInputBased()
+	{
+		float num = MathUtils.AngleBetweenVectors(base.transform.up, Vector3.up);
+		GameController.Axis2D rightStick = CheatManager.Playthrough.RightStick;
+		vector2f stick = GameInput.stick;
+		Vector3 vector = Vector3.right * stick.x * (this.strength + num * this.flatStrength);
+		Vector3 vector2 = base.GetComponent<Rigidbody>().position - base.transform.up * (this.height * 0.5f - this.radius) - Vector3.up * this.radius;
+		Vector3 pointVelocity = base.GetComponent<Rigidbody>().GetPointVelocity(vector2);
+		base.GetComponent<Rigidbody>().AddForceAtPosition(vector * Time.fixedDeltaTime, vector2, 1);
+		vector2f vector2f = new vector2f(rightStick.x, rightStick.y);
+		float length = vector2f.GetLength();
+		Vector3 vector3 = -Vector3.forward * rightStick.x * Time.fixedDeltaTime * (this.angularStrength + num * this.angularFlatStrength);
+		base.GetComponent<Rigidbody>().AddTorque(vector3, 1);
+	}
+
+	// Token: 0x060027C4 RID: 10180 RVA: 0x0013F7E4 File Offset: 0x0013D9E4
+	private void UpdateBalanceCurveBased()
+	{
+		float fixedTime = Time.fixedTime;
+		float num = this.curve.curve.Evaluate(fixedTime);
+		float num2 = MathUtils.AngleBetweenVectors(base.transform.up, Vector3.up);
+		Vector3 vector = base.GetComponent<Rigidbody>().position - base.transform.up * (this.height * 0.5f - this.radius) - Vector3.up * this.radius;
+		Vector3 vector2 = Vector3.right * num * Time.fixedDeltaTime;
+		base.GetComponent<Rigidbody>().AddForceAtPosition(vector2, vector, 1);
+	}
+
+	// Token: 0x060027C5 RID: 10181 RVA: 0x0013F890 File Offset: 0x0013DA90
+	private void FixedUpdate()
+	{
+		this.UpdateBalanceCurveBased();
+	}
+
+	// Token: 0x0400473F RID: 18239
+	public float strength = 1f;
+
+	// Token: 0x04004740 RID: 18240
+	public float flatStrength = 10f;
+
+	// Token: 0x04004741 RID: 18241
+	public float damping = 1f;
+
+	// Token: 0x04004742 RID: 18242
+	public float angularStrength = 1f;
+
+	// Token: 0x04004743 RID: 18243
+	public float angularFlatStrength = 10f;
+
+	// Token: 0x04004744 RID: 18244
+	public CurveComponent curve;
+}

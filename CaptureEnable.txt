@@ -1,0 +1,60 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using UnityEngine;
+
+// Token: 0x0200057C RID: 1404
+[ExecuteInEditMode]
+public class CaptureEnable : MonoBehaviour
+{
+	// Token: 0x0600243D RID: 9277 RVA: 0x0012B7F0 File Offset: 0x001299F0
+	private void Awake()
+	{
+		Profiler.StartCapture();
+		foreach (GameObject gameObject in this.nodes)
+		{
+			try
+			{
+				Stopwatch stopwatch = new Stopwatch();
+				stopwatch.Start();
+				gameObject.SetActive(true);
+				stopwatch.Stop();
+				Debug.Log("CAPTURE took " + stopwatch.ElapsedMilliseconds.ToString("G4") + " ms for " + gameObject.name);
+			}
+			catch (Exception ex)
+			{
+			}
+		}
+		Profiler.StopCapture();
+	}
+
+	// Token: 0x0600243E RID: 9278 RVA: 0x0012B8C4 File Offset: 0x00129AC4
+	private void Update()
+	{
+		if (this.doDisable)
+		{
+			this.doDisable = false;
+			foreach (GameObject gameObject in this.nodes)
+			{
+				gameObject.SetActive(false);
+			}
+		}
+		if (this.doEnable)
+		{
+			this.doEnable = false;
+			foreach (GameObject gameObject2 in this.nodes)
+			{
+				gameObject2.SetActive(true);
+			}
+		}
+	}
+
+	// Token: 0x04004295 RID: 17045
+	public List<GameObject> nodes = new List<GameObject>();
+
+	// Token: 0x04004296 RID: 17046
+	public bool doDisable;
+
+	// Token: 0x04004297 RID: 17047
+	public bool doEnable;
+}

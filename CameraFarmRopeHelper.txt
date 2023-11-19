@@ -1,0 +1,36 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000433 RID: 1075
+public class CameraFarmRopeHelper : MonoBehaviour
+{
+	// Token: 0x06001C33 RID: 7219 RVA: 0x000F6D00 File Offset: 0x000F4F00
+	private void Start()
+	{
+		this.camBlendBox = base.GetComponent<CameraBlendBox>();
+	}
+
+	// Token: 0x06001C34 RID: 7220 RVA: 0x000F6D10 File Offset: 0x000F4F10
+	private void Update()
+	{
+		if (ScriptGlobals.boy.state is BoyRopeState)
+		{
+			this.camBlendBox.aimLock.x = Mathf.MoveTowards(this.camBlendBox.aimLock.x, this.lockTarget, Time.deltaTime * this.blendSpeed);
+			this.camBlendBox.cameraLock.x = Mathf.MoveTowards(this.camBlendBox.cameraLock.x, this.lockTarget, Time.deltaTime * this.blendSpeed);
+		}
+		else
+		{
+			this.camBlendBox.aimLock.x = Mathf.MoveTowards(this.camBlendBox.aimLock.x, 1f, Time.deltaTime * this.blendSpeed);
+			this.camBlendBox.cameraLock.x = Mathf.MoveTowards(this.camBlendBox.cameraLock.x, 1f, Time.deltaTime * this.blendSpeed);
+		}
+	}
+
+	// Token: 0x040033AD RID: 13229
+	public float lockTarget = 0.7f;
+
+	// Token: 0x040033AE RID: 13230
+	public float blendSpeed = 0.3f;
+
+	// Token: 0x040033AF RID: 13231
+	private CameraBlendBox camBlendBox;
+}

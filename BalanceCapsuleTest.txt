@@ -1,0 +1,159 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200064F RID: 1615
+public class BalanceCapsuleTest : MonoBehaviour
+{
+	// Token: 0x060027D6 RID: 10198 RVA: 0x00140330 File Offset: 0x0013E530
+	private void DrawPoseArrows(string key, AnimBone[] pose)
+	{
+		DebugAnimRendering.DrawPoseArrows(pose, key, this.height * 0.5f, (DebugRendering.Flags)0);
+	}
+
+	// Token: 0x060027D7 RID: 10199 RVA: 0x00140348 File Offset: 0x0013E548
+	private float GetScale()
+	{
+		return Mathf.Max(new float[]
+		{
+			base.transform.lossyScale.x,
+			base.transform.lossyScale.y,
+			base.transform.lossyScale.z
+		});
+	}
+
+	// Token: 0x170000D0 RID: 208
+	// (get) Token: 0x060027D8 RID: 10200 RVA: 0x001403A4 File Offset: 0x0013E5A4
+	public float radius
+	{
+		get
+		{
+			return base.GetComponent<CapsuleCollider>().radius * this.GetScale();
+		}
+	}
+
+	// Token: 0x170000D1 RID: 209
+	// (get) Token: 0x060027D9 RID: 10201 RVA: 0x001403C4 File Offset: 0x0013E5C4
+	public float height
+	{
+		get
+		{
+			return base.GetComponent<CapsuleCollider>().height * this.GetScale();
+		}
+	}
+
+	// Token: 0x060027DA RID: 10202 RVA: 0x001403E4 File Offset: 0x0013E5E4
+	private float SignedAngleBetweenVectors(Vector3 a, Vector3 b)
+	{
+		float num = MathUtils.AngleBetweenVectors(a, b);
+		return num * Mathf.Sign(b.x - a.x);
+	}
+
+	// Token: 0x060027DB RID: 10203 RVA: 0x00140410 File Offset: 0x0013E610
+	private vector2f GetInputStick()
+	{
+		float num = 0.25f;
+		vector2f stick = GameInput.stick;
+		return stick * (Mathf.Max(stick.GetLength() - num, 0f) / (1f - num));
+	}
+
+	// Token: 0x060027DC RID: 10204 RVA: 0x0014044C File Offset: 0x0013E64C
+	private void UpdateBalance()
+	{
+		Vector3 vector = Vector3.right * this.GetInputStick().x * this.maxSpeed;
+		Vector3 velocity = base.GetComponent<Rigidbody>().velocity;
+		Vector3 vector2 = vector - velocity;
+		float a = this.SignedAngleBetweenVectors(Vector3.up, base.transform.up);
+		float num = vector2.x * this.deltaVelocityToAngle + base.GetComponent<Rigidbody>().angularVelocity.z * this.predictionTime + velocity.x * this.angleAtMaxSpeed / this.maxSpeed;
+		num = Mathf.Clamp(num, -this.maxAngle, this.maxAngle);
+		float num2 = MathUtils.SignedAngleDif(a, num);
+		Vector3 vector3 = base.GetComponent<Rigidbody>().position - base.transform.up * (this.height * 0.5f - this.radius) - Vector3.up * this.radius;
+		float num3 = -num2 * this.strength;
+		Vector3 vector4 = Vector3.right * Mathf.Clamp(num3, -this.maxAcc, this.maxAcc) * base.GetComponent<Rigidbody>().mass * Time.fixedDeltaTime;
+		base.GetComponent<Rigidbody>().AddForceAtPosition(vector4, vector3, 1);
+		base.GetComponent<Rigidbody>().AddForce(-base.GetComponent<Rigidbody>().velocity * this.posDamping * Time.fixedDeltaTime * base.GetComponent<Rigidbody>().mass, 1);
+		if (!this.useAngleAtMaxSpeed)
+		{
+			base.GetComponent<Rigidbody>().AddTorque(Vector3.forward * velocity.x * this.velocityToAngularVelocity * Time.fixedDeltaTime, 1);
+		}
+	}
+
+	// Token: 0x060027DD RID: 10205 RVA: 0x0014062C File Offset: 0x0013E82C
+	private void ApplyRunTorque()
+	{
+		if (!this.useAngleAtMaxSpeed)
+		{
+			return;
+		}
+		float num = Mathf.Clamp01(Mathf.Abs(base.GetComponent<Rigidbody>().velocity.x) / this.maxSpeed);
+		Vector3 gravity = Physics.gravity;
+		Vector3 vector;
+		vector..ctor(Mathf.Sin(this.angleAtMaxSpeed), Mathf.Cos(this.angleAtMaxSpeed), 0f);
+		Vector3 vector2 = -vector * (this.height * 0.5f - this.radius) - Vector3.up * this.radius;
+		Vector3 vector3 = base.GetComponent<Rigidbody>().position + vector2;
+		if (0f < base.transform.up.x * base.GetComponent<Rigidbody>().velocity.x)
+		{
+			float num2 = -gravity.magnitude * Vector3.Cross(vector2, Vector3.up).z / Vector3.Cross(vector2, Vector3.right).z;
+			Vector3 vector4 = Vector3.right * num2 * Time.fixedDeltaTime * base.GetComponent<Rigidbody>().mass * (base.GetComponent<Rigidbody>().velocity.x / this.maxSpeed) * this.runTorqueScale;
+			base.GetComponent<Rigidbody>().AddForceAtPosition(vector4, vector3, 1);
+			base.GetComponent<Rigidbody>().AddForce(-vector4, 1);
+		}
+	}
+
+	// Token: 0x060027DE RID: 10206 RVA: 0x001407B8 File Offset: 0x0013E9B8
+	private void NeutralizeGravity()
+	{
+		Vector3 gravity = Physics.gravity;
+		Vector3 vector = base.GetComponent<Rigidbody>().position - base.transform.up * (this.height * 0.5f - this.radius) - Vector3.up * this.radius;
+		Vector3 vector2 = vector - base.GetComponent<Rigidbody>().position;
+		float num = -gravity.magnitude * Vector3.Cross(vector2, Vector3.up).z / Vector3.Cross(vector2, Vector3.right).z;
+		Vector3 vector3 = Vector3.right * num * Time.fixedDeltaTime * base.GetComponent<Rigidbody>().mass * this.neutralizeGravityScale;
+		base.GetComponent<Rigidbody>().AddForceAtPosition(vector3, vector, 1);
+		base.GetComponent<Rigidbody>().AddForce(-vector3, 1);
+	}
+
+	// Token: 0x060027DF RID: 10207 RVA: 0x001408B0 File Offset: 0x0013EAB0
+	private void FixedUpdate()
+	{
+		this.UpdateBalance();
+		this.ApplyRunTorque();
+	}
+
+	// Token: 0x04004755 RID: 18261
+	public float strength = 10f;
+
+	// Token: 0x04004756 RID: 18262
+	public float deltaVelocityToAngle = 0.17f;
+
+	// Token: 0x04004757 RID: 18263
+	public float predictionTime = 0.35f;
+
+	// Token: 0x04004758 RID: 18264
+	public float velocityToAngularVelocity = 1f;
+
+	// Token: 0x04004759 RID: 18265
+	public float velocityToAngle = 0.15f;
+
+	// Token: 0x0400475A RID: 18266
+	public float angleAtMaxSpeed = 0.45f;
+
+	// Token: 0x0400475B RID: 18267
+	public float maxAngle = 0.7f;
+
+	// Token: 0x0400475C RID: 18268
+	public float maxSpeed = 3f;
+
+	// Token: 0x0400475D RID: 18269
+	public float maxAcc = 4f;
+
+	// Token: 0x0400475E RID: 18270
+	public float posDamping;
+
+	// Token: 0x0400475F RID: 18271
+	public float neutralizeGravityScale = 1f;
+
+	// Token: 0x04004760 RID: 18272
+	public bool useAngleAtMaxSpeed = true;
+
+	// Token: 0x04004761 RID: 18273
+	public float runTorqueScale = 1f;
+}

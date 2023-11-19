@@ -1,0 +1,159 @@
+using System;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x02000041 RID: 65
+public class BaseWaypoint : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060001FC RID: 508 RVA: 0x00019D84 File Offset: 0x00017F84
+	public bool PreAwake(int callcount)
+	{
+		this.waypointSignal = SignalIn.Create("waypointSignal", base.gameObject, new Action(this.WaypointSignalled));
+		this.waypointReached = SignalOut.Create("waypointReached", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060001FD RID: 509 RVA: 0x00019DCC File Offset: 0x00017FCC
+	public virtual void Start()
+	{
+		this.uniqueAnimDefID = -1;
+	}
+
+	// Token: 0x060001FE RID: 510 RVA: 0x00019DD8 File Offset: 0x00017FD8
+	public void SendWaypointReached()
+	{
+		this.waypointReached.Signal();
+		this.waitpointReachedEvent.OnEvent(this);
+	}
+
+	// Token: 0x060001FF RID: 511 RVA: 0x00019DF4 File Offset: 0x00017FF4
+	public bool CloseToWayPoint(Transform charTransform)
+	{
+		Vector3 vector = base.transform.position - charTransform.position;
+		vector.y = 0f;
+		if (this.arrivalLineMode)
+		{
+			return Vector3.Dot(charTransform.TransformDirection(Vector3.forward), base.transform.TransformDirection(Vector3.forward)) > 0f && Mathf.Abs(base.transform.InverseTransformDirection(vector).z) < this.arrivalDist;
+		}
+		return vector.magnitude < this.arrivalDist;
+	}
+
+	// Token: 0x06000200 RID: 512 RVA: 0x00019E8C File Offset: 0x0001808C
+	public Vector3 GetOffset(BaseWaypointFollower follower)
+	{
+		if (this.uniqueAnimDefID > -1)
+		{
+			if (!this.offsetCalculated)
+			{
+				this.waypointOffset = follower.CalculatedWaypointOffset_Callback(this.uniqueAnimDefID);
+				this.offsetCalculated = true;
+			}
+			return this.waypointOffset;
+		}
+		return Vector3.zero;
+	}
+
+	// Token: 0x06000201 RID: 513 RVA: 0x00019ED8 File Offset: 0x000180D8
+	public virtual bool DissalowAutoContinueDueToUniqueAnimation(Transform follower, int uniqueAnimationID)
+	{
+		AnimcontrolledCharacter component = follower.gameObject.GetComponent<AnimcontrolledCharacter>();
+		if (component != null)
+		{
+			AnimationBlendHelper blendHelper = component.GetBlendHelper();
+			ABHelperData latestAnimData = blendHelper.GetLatestAnimData();
+			if (latestAnimData != null && latestAnimData.topIsLooped)
+			{
+				return false;
+			}
+		}
+		return uniqueAnimationID == this.uniqueAnimDefID;
+	}
+
+	// Token: 0x06000202 RID: 514 RVA: 0x00019F28 File Offset: 0x00018128
+	public virtual bool customWaypointHandling_Callback(Transform wayPointFollower)
+	{
+		return false;
+	}
+
+	// Token: 0x06000203 RID: 515 RVA: 0x00019F2C File Offset: 0x0001812C
+	public virtual void WaypointSignalled()
+	{
+	}
+
+	// Token: 0x040002DD RID: 733
+	protected SignalIn waypointSignal;
+
+	// Token: 0x040002DE RID: 734
+	protected SignalOut waypointReached;
+
+	// Token: 0x040002DF RID: 735
+	private SimpleEvent<BaseWaypoint> waitpointReachedEvent = new SimpleEvent<BaseWaypoint>("waitpointReached");
+
+	// Token: 0x040002E0 RID: 736
+	public float speedPercentage = 1f;
+
+	// Token: 0x040002E1 RID: 737
+	public float turnFactor = 1f;
+
+	// Token: 0x040002E2 RID: 738
+	public float autoSlowDownDist;
+
+	// Token: 0x040002E3 RID: 739
+	public float arrivalDist = 2f;
+
+	// Token: 0x040002E4 RID: 740
+	public bool arrivalLineMode;
+
+	// Token: 0x040002E5 RID: 741
+	public bool lineModeNoReverse;
+
+	// Token: 0x040002E6 RID: 742
+	public BaseWaypoint.ActionMode startupMode;
+
+	// Token: 0x040002E7 RID: 743
+	public BaseWaypoint.ActionMode continueMode;
+
+	// Token: 0x040002E8 RID: 744
+	public float waitTime;
+
+	// Token: 0x040002E9 RID: 745
+	public string uniqueAnimationName = string.Empty;
+
+	// Token: 0x040002EA RID: 746
+	public float uniqueAnimCustomParameter;
+
+	// Token: 0x040002EB RID: 747
+	public float uniqueOverrideTransitTime = -1f;
+
+	// Token: 0x040002EC RID: 748
+	public float uniqueOverrideStartPlayPos = -1f;
+
+	// Token: 0x040002ED RID: 749
+	public float uniqueAnimCustomEndPos = -1f;
+
+	// Token: 0x040002EE RID: 750
+	[HideInInspector]
+	public int uniqueAnimDefID = -1;
+
+	// Token: 0x040002EF RID: 751
+	[HideInInspector]
+	public bool offsetCalculated;
+
+	// Token: 0x040002F0 RID: 752
+	[HideInInspector]
+	public Vector3 waypointOffset = Vector3.zero;
+
+	// Token: 0x040002F1 RID: 753
+	public BaseWaypoint nextWaypoint;
+
+	// Token: 0x02000042 RID: 66
+	public enum ActionMode
+	{
+		// Token: 0x040002F3 RID: 755
+		Immediately,
+		// Token: 0x040002F4 RID: 756
+		WaitTime,
+		// Token: 0x040002F5 RID: 757
+		WaitForSignal
+	}
+}

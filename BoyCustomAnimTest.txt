@@ -1,0 +1,249 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200064A RID: 1610
+public class BoyCustomAnimTest : LogicBehaviour
+{
+	// Token: 0x060027B1 RID: 10161 RVA: 0x0013EB74 File Offset: 0x0013CD74
+	private void SetTheme()
+	{
+		Boy boy = ScriptGlobals.boy;
+		VisualBoy visualBoy = boy.visualBoy;
+		Transform childComponentAE = visualBoy.transform.GetChildComponentAE("Themes");
+		visualBoy.theme = childComponentAE.GetChildComponent(this.theme);
+		this.mOldTheme = this.theme;
+	}
+
+	// Token: 0x060027B2 RID: 10162 RVA: 0x0013EBC0 File Offset: 0x0013CDC0
+	private void Start()
+	{
+		Boy boy = ScriptGlobals.boy;
+		VisualBoy visualBoy = boy.visualBoy;
+		Actor actor = visualBoy.actor;
+		Transform childComponentAE = visualBoy.transform.GetChildComponentAE("Themes");
+		Transform childComponentAE2 = childComponentAE.GetChildComponentAE("Zombie");
+		Transform childComponentAE3 = childComponentAE.GetChildComponentAE("Balance");
+		Transform childComponentAE4 = childComponentAE.GetChildComponentAE("Crawl");
+		this.SetTheme();
+		if (visualBoy.theme == childComponentAE3)
+		{
+		}
+	}
+
+	// Token: 0x060027B3 RID: 10163 RVA: 0x0013EC34 File Offset: 0x0013CE34
+	private void Update()
+	{
+		Boy boy = ScriptGlobals.boy;
+		VisualBoy visualBoy = boy.visualBoy;
+		if (Input.GetKeyUp(114))
+		{
+			boy.SpawnExternalState(new BoyRagdollState(boy), Boy.AffectMode.Default);
+			this.ragdollActor.GotFocus(visualBoy.ragdoll);
+			this.mSkipGravity = true;
+			PD_JointSpring component = this.ragdollActor.GetComponent<PD_JointSpring>();
+			component.connectedTransform = visualBoy.actor.bones[0].transform;
+		}
+		if (Input.GetKeyUp(113))
+		{
+			BoyUtils.StartCustomAnim(boy, this.stumbleAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		if (Input.GetKeyUp(99))
+		{
+			BoyUtils.ClearState(boy, -1f);
+		}
+		if (Input.GetKeyUp(101))
+		{
+			BoyUtils.StartCustomAnim(boy, this.absoluteAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		if (Input.GetKeyUp(108))
+		{
+			visualBoy.upperBodyAnim = this.lookBackAnim;
+		}
+		if (Input.GetKeyUp(115))
+		{
+			visualBoy.upperBodyAnim = null;
+		}
+		if (Input.GetKeyUp(98))
+		{
+			visualBoy.upperBodyAnim = null;
+		}
+		if (Input.GetKeyUp(116))
+		{
+			visualBoy.additiveAnim = this.additiveAnim;
+		}
+	}
+
+	// Token: 0x170000CB RID: 203
+	// (get) Token: 0x060027B4 RID: 10164 RVA: 0x0013ED58 File Offset: 0x0013CF58
+	private BoyProperties defaultProps
+	{
+		get
+		{
+			return base.GetComponent<BoyProperties>();
+		}
+	}
+
+	// Token: 0x060027B5 RID: 10165 RVA: 0x0013ED60 File Offset: 0x0013CF60
+	private void SetSpeedScale(float speedScale)
+	{
+		Boy boy = ScriptGlobals.boy;
+		VisualBoy visualBoy = boy.visualBoy;
+		boy.properties.run.maxSpeedUp = this.defaultProps.run.maxSpeedUp * speedScale;
+		boy.properties.run.maxSpeedFlat = this.defaultProps.run.maxSpeedFlat * speedScale;
+		boy.properties.run.maxSpeedDown = this.defaultProps.run.maxSpeedDown * speedScale;
+		boy.properties.jump.takeoffVelocityRun.x = this.defaultProps.jump.takeoffVelocityRun.x * speedScale;
+		boy.properties.jump.takeoffVelocityStand.x = this.defaultProps.jump.takeoffVelocityStand.x * speedScale;
+	}
+
+	// Token: 0x060027B6 RID: 10166 RVA: 0x0013EE38 File Offset: 0x0013D038
+	private float GetMaxAnimSpeed(VisualBoyRun vbr)
+	{
+		float num = 0f;
+		AnimPoolNode component = vbr.cycleBlender.GetComponent<AnimPoolNode>();
+		foreach (AnimPoolNode.Child child in component.children)
+		{
+			num = Mathf.Max(num, child.value);
+		}
+		return num;
+	}
+
+	// Token: 0x060027B7 RID: 10167 RVA: 0x0013EEB8 File Offset: 0x0013D0B8
+	private void UpdateRunCycleSelection()
+	{
+		Boy boy = ScriptGlobals.boy;
+		Transform transform = (!DebugUtils.selection) ? null : DebugUtils.selection.transform;
+		if (transform)
+		{
+			while (!(transform.parent == null))
+			{
+				if (transform.parent.GetComponent<AnimCycleBlender>() != null)
+				{
+					AnimPoolNode component = transform.parent.GetComponent<AnimPoolNode>();
+					float value = component.GetPoolChild(transform).value;
+					BoyProperties.Run run = boy.properties.run;
+					run.maxSpeedUp = value;
+					run.maxSpeedFlat = value;
+					run.maxSpeedDown = value;
+					if (DebugUtils.selection.transform != transform)
+					{
+						Transform parent = DebugUtils.selection.transform.parent;
+						foreach (object obj in parent)
+						{
+							Transform transform2 = (Transform)obj;
+							transform2.gameObject.SetActive(transform2 == DebugUtils.selection.transform);
+						}
+						return;
+					}
+					return;
+				}
+				else
+				{
+					transform = transform.parent;
+				}
+			}
+			return;
+		}
+	}
+
+	// Token: 0x060027B8 RID: 10168 RVA: 0x0013F014 File Offset: 0x0013D214
+	private void FixedUpdate()
+	{
+		Boy boy = ScriptGlobals.boy;
+		VisualBoy visualBoy = boy.visualBoy;
+		float fixedDeltaTime = Time.fixedDeltaTime;
+		if (this.theme != this.mOldTheme)
+		{
+			this.SetTheme();
+		}
+		BoyProperties boyProperties = base.GetComponent<BoyProperties>();
+		if (boyProperties)
+		{
+			Object.Destroy(boyProperties);
+		}
+		boyProperties = base.gameObject.AddComponent<BoyProperties>();
+		if (0f <= this.maxSpeed)
+		{
+			boy.properties.run.maxSpeedUp = this.maxSpeed;
+			boy.properties.run.maxSpeedFlat = this.maxSpeed;
+			boy.properties.run.maxSpeedDown = this.maxSpeed;
+		}
+		else if (0.01f < this.franticFactor)
+		{
+			VisualBoyRun childComponentAE = visualBoy.transform.GetChildComponentAE<VisualBoyRun>();
+			float maxAnimSpeed = this.GetMaxAnimSpeed(childComponentAE);
+			float num = maxAnimSpeed / this.defaultProps.run.maxSpeedFlat;
+			float speedScale = Mathf.Lerp(1f, num, this.franticFactor);
+			this.SetSpeedScale(speedScale);
+		}
+		this.UpdateRunCycleSelection();
+		float num2 = this.frequency * boy.pos.x;
+		if (this.enableSine)
+		{
+			boy.plane.posz = Mathf.Sin(num2);
+			VisualBoy visualBoy2 = visualBoy;
+			Vector3 vector;
+			vector..ctor(1f, 0f, Mathf.Cos(num2));
+			visualBoy2.right = vector.normalized;
+		}
+		VisualBoyNode state = visualBoy.state;
+		VisualBoyRun visualBoyRun = state as VisualBoyRun;
+		if (this.mSkipGravity)
+		{
+			Vector3 gravity = Physics.gravity;
+			float num3 = 1f;
+			ConstArray<Actor.Bone> bones = visualBoy.actor.bones;
+			for (int num4 = 0; num4 != bones.Length; num4++)
+			{
+				Rigidbody component = bones[num4].transform.GetComponent<Rigidbody>();
+				if (component != null)
+				{
+					PhysicsUtils.ApplyImpulse(component, -num3 * gravity * fixedDeltaTime * component.mass);
+				}
+			}
+		}
+	}
+
+	// Token: 0x060027B9 RID: 10169 RVA: 0x0013F21C File Offset: 0x0013D41C
+	public override void UpdateLogic()
+	{
+	}
+
+	// Token: 0x0400472E RID: 18222
+	public float frequency = 0.5f;
+
+	// Token: 0x0400472F RID: 18223
+	public float franticFactor;
+
+	// Token: 0x04004730 RID: 18224
+	public float maxSpeed = -1f;
+
+	// Token: 0x04004731 RID: 18225
+	public string theme = string.Empty;
+
+	// Token: 0x04004732 RID: 18226
+	public int startBlendStep = 90;
+
+	// Token: 0x04004733 RID: 18227
+	public bool enableSine;
+
+	// Token: 0x04004734 RID: 18228
+	public AnimNode lookBackAnim;
+
+	// Token: 0x04004735 RID: 18229
+	public AnimNode absoluteAnim;
+
+	// Token: 0x04004736 RID: 18230
+	public AnimNode stumbleAnim;
+
+	// Token: 0x04004737 RID: 18231
+	public AnimNode additiveAnim;
+
+	// Token: 0x04004738 RID: 18232
+	public RagdollActor ragdollActor;
+
+	// Token: 0x04004739 RID: 18233
+	private bool mSkipGravity;
+
+	// Token: 0x0400473A RID: 18234
+	private string mOldTheme;
+}

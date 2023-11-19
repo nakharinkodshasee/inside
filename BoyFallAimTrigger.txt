@@ -1,0 +1,70 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000152 RID: 338
+public class BoyFallAimTrigger : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000A20 RID: 2592 RVA: 0x00064C7C File Offset: 0x00062E7C
+	public bool PreAwake(int callcount)
+	{
+		if (this.target == null)
+		{
+			this.target = base.gameObject;
+		}
+		this.activate = SignalIn.Create("activate", base.gameObject, delegate
+		{
+			this.isActive = true;
+		});
+		this.deactivate = SignalIn.Create("deactivate", base.gameObject, delegate
+		{
+			this.isActive = false;
+		});
+		return true;
+	}
+
+	// Token: 0x06000A21 RID: 2593 RVA: 0x00064CEC File Offset: 0x00062EEC
+	private void OnTriggerEnter(Collider coll)
+	{
+	}
+
+	// Token: 0x06000A22 RID: 2594 RVA: 0x00064CF0 File Offset: 0x00062EF0
+	private void OnTriggerExit(Collider coll)
+	{
+	}
+
+	// Token: 0x06000A23 RID: 2595 RVA: 0x00064CF4 File Offset: 0x00062EF4
+	private void FixedUpdate()
+	{
+	}
+
+	// Token: 0x04001181 RID: 4481
+	public GameObject target;
+
+	// Token: 0x04001182 RID: 4482
+	public float maxCorrectionSpeed = 2f;
+
+	// Token: 0x04001183 RID: 4483
+	public float maxXCorrectionDist = 1.2f;
+
+	// Token: 0x04001184 RID: 4484
+	private List<Boy> boysInsideList = new List<Boy>();
+
+	// Token: 0x04001185 RID: 4485
+	private List<Boy> boysBeingAimed = new List<Boy>();
+
+	// Token: 0x04001186 RID: 4486
+	public bool isActive = true;
+
+	// Token: 0x04001187 RID: 4487
+	public SignalIn activate;
+
+	// Token: 0x04001188 RID: 4488
+	public SignalIn deactivate;
+
+	// Token: 0x04001189 RID: 4489
+	private float originalXSpeed;
+
+	// Token: 0x0400118A RID: 4490
+	private bool allowHelp;
+}

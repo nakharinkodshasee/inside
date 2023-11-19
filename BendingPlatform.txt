@@ -1,0 +1,359 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200018D RID: 397
+public class BendingPlatform : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000B8F RID: 2959 RVA: 0x00071C48 File Offset: 0x0006FE48
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.jumpDelay <= 0f)
+		{
+			return;
+		}
+		if (this.limitInput == null)
+		{
+			this.limitInput = base.GetComponent<BoySetInput>();
+		}
+		if (this.limitInput == null)
+		{
+			this.limitInput = base.gameObject.AddComponent<BoySetInput>();
+		}
+		this.limitInput.jumpVal = true;
+		this.limitInput.useJumpVal = true;
+	}
+
+	// Token: 0x06000B90 RID: 2960 RVA: 0x00071CD0 File Offset: 0x0006FED0
+	public bool PreAwake(int callcount)
+	{
+		this.animBendState = this.anim[this.animBend.name];
+		this.animBendState.speed = 0f;
+		this.previousBend = (this.currentBend = this.initialBend);
+		this.animBendState.normalizedTime = this.currentBend;
+		this.boardTransform = base.transform;
+		return true;
+	}
+
+	// Token: 0x06000B91 RID: 2961 RVA: 0x00071D3C File Offset: 0x0006FF3C
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.boy = ScriptGlobals.boy;
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000B92 RID: 2962 RVA: 0x00071D58 File Offset: 0x0006FF58
+	private void SetIdleState()
+	{
+		this.state = BendingPlatform.State.Idle;
+	}
+
+	// Token: 0x06000B93 RID: 2963 RVA: 0x00071D64 File Offset: 0x0006FF64
+	private void IdleState()
+	{
+		if (this.BoardCheck(this.climbFromGround))
+		{
+			this.SetOnBoardState();
+		}
+	}
+
+	// Token: 0x06000B94 RID: 2964 RVA: 0x00071D80 File Offset: 0x0006FF80
+	private void SetOnBoardState()
+	{
+		if (!this.anim.IsPlaying(this.animBendState.name))
+		{
+			this.anim.CrossFade(this.animBendState.name);
+		}
+		BoyJumpState boyJumpState = this.boy.state as BoyJumpState;
+		if (boyJumpState != null && boyJumpState.state != BoyJumpState.State.JumpDown)
+		{
+			this.previousJumpState = true;
+		}
+		this.state = BendingPlatform.State.OnBoard;
+	}
+
+	// Token: 0x06000B95 RID: 2965 RVA: 0x00071DF0 File Offset: 0x0006FFF0
+	private void OnBoardState()
+	{
+		vector2f pos = this.boy.pos;
+		Vector3 position = this.maxBend.position;
+		float num = Mathf.Abs(position.x - pos.x);
+		float num2 = this.distMaxInput * this.boardTransform.localScale.x;
+		float num3 = 1f - Mathf.Clamp(num / num2, 0f, 1f);
+		float num4 = num3;
+		num4 = this.bendCurve.Evaluate(num4) + this.initialBend;
+		this.currentBend += (num4 - this.currentBend) * Time.deltaTime * this.pushForce * Mathf.Clamp(0.2f + num3, 0f, 1f);
+		this.vel = this.currentBend - this.previousBend;
+		if (Mathf.Abs(this.vel) > this.maxPushVelocity)
+		{
+			this.vel = Mathf.Sign(this.vel) * this.maxPushVelocity;
+		}
+		if (this.hangOffset != 0f)
+		{
+			bool flag = pos.y < position.y + this.hangOffset;
+			if (flag && !this.previousHangState)
+			{
+				this.vel += this.hangForce * 0.01f;
+			}
+			if (!flag && this.previousHangState)
+			{
+				this.vel += this.climbUpForce * 0.01f;
+			}
+			this.previousHangState = flag;
+		}
+		BoyJumpState boyJumpState = this.boy.state as BoyJumpState;
+		bool flag2 = false;
+		if (boyJumpState != null && boyJumpState.state != BoyJumpState.State.JumpDown)
+		{
+			flag2 = true;
+		}
+		if (flag2 && !this.previousJumpState && !this.jumpLock)
+		{
+			this.vel += this.jumpForce * 0.01f * num3;
+			if (this.jumpDelay > 0f)
+			{
+				this.jumpTimer = this.jumpDelay;
+				this.jumpLock = true;
+				this.limitInput.activateScript();
+			}
+			if (this.boyJumpBoost != 0f && num < this.boyJumpBoostDist)
+			{
+				vector2f force;
+				force.x = 0f;
+				force.y = this.boyJumpBoost;
+				this.boy.AddForce(force, null);
+			}
+		}
+		this.previousJumpState = flag2;
+		if (!this.BoardCheck(true))
+		{
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x06000B96 RID: 2966 RVA: 0x00072070 File Offset: 0x00070270
+	private void FixedUpdate()
+	{
+		if (this.state != BendingPlatform.State.None)
+		{
+			this.Bending();
+			this.JumpCheck();
+			if (this.state == BendingPlatform.State.Idle)
+			{
+				this.IdleState();
+			}
+			else if (this.state == BendingPlatform.State.OnBoard)
+			{
+				this.OnBoardState();
+			}
+		}
+	}
+
+	// Token: 0x06000B97 RID: 2967 RVA: 0x000720C0 File Offset: 0x000702C0
+	private void JumpCheck()
+	{
+		if (!this.jumpLock)
+		{
+			return;
+		}
+		this.jumpTimer -= Time.deltaTime;
+		float num = Mathf.Abs(this.maxBend.position.x - this.boy.pos.x);
+		if (num > this.boyJumpBoostDist || (this.jumpTimer <= 0f && this.boy.velocity.y < -0.1f))
+		{
+			this.limitInput.deactivateScript();
+			this.jumpLock = false;
+		}
+	}
+
+	// Token: 0x06000B98 RID: 2968 RVA: 0x00072164 File Offset: 0x00070364
+	private bool BoardCheck(bool includeReach = false)
+	{
+		Collider collider = this.boy.status.groundCollider;
+		BoyGrabPlateauState boyGrabPlateauState = this.boy.state as BoyGrabPlateauState;
+		if (boyGrabPlateauState)
+		{
+			collider = boyGrabPlateauState.plateau.collider;
+		}
+		if (includeReach)
+		{
+			BoyReachPlateauState boyReachPlateauState = this.boy.state as BoyReachPlateauState;
+			if (boyReachPlateauState)
+			{
+				collider = boyReachPlateauState.plateau.collider;
+			}
+		}
+		if (collider != null)
+		{
+			int i = 0;
+			int num = this.colliders.Length;
+			while (i < num)
+			{
+				if (collider == this.colliders[i])
+				{
+					return true;
+				}
+				i++;
+			}
+		}
+		return false;
+	}
+
+	// Token: 0x06000B99 RID: 2969 RVA: 0x00072218 File Offset: 0x00070418
+	private void Bending()
+	{
+		this.previousBend = this.currentBend;
+		this.vel += (this.initialBend - this.currentBend) * Time.deltaTime * this.acceleration;
+		this.vel -= this.vel * Time.deltaTime * this.friction;
+		this.vel = Mathf.Clamp(this.vel, -this.maxVelocity, this.maxVelocity);
+		if (this.currentBend == 0f && this.vel < 0f)
+		{
+			this.vel = Mathf.Abs(this.vel);
+		}
+		this.currentBend += this.vel;
+		this.currentBend = Mathf.Clamp(this.currentBend, 0f, 1f);
+		this.animBendState.normalizedTime = this.currentBend;
+	}
+
+	// Token: 0x06000B9A RID: 2970 RVA: 0x00072308 File Offset: 0x00070508
+	private void OnDrawGizmos()
+	{
+		if (this.debug && EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay) && this.maxBend)
+		{
+			float num = this.distMaxInput * base.transform.localScale.x;
+			Vector3 position = this.maxBend.position;
+			Gizmos.color = Color.green;
+			Gizmos.DrawLine(position - this.maxBend.up, position + this.maxBend.up);
+			Gizmos.color = Color.red;
+			Gizmos.DrawLine(position - this.maxBend.up + this.maxBend.right * num, position + this.maxBend.up + this.maxBend.right * num);
+			Gizmos.DrawLine(position - this.maxBend.up - this.maxBend.right * num, position + this.maxBend.up - this.maxBend.right * num);
+			if (this.hangOffset != 0f)
+			{
+				Gizmos.color = Color.blue;
+				Gizmos.DrawLine(position + this.maxBend.up * this.hangOffset + this.maxBend.right * 2f, position + this.maxBend.up * this.hangOffset + this.maxBend.right * -2f);
+			}
+		}
+	}
+
+	// Token: 0x0400140A RID: 5130
+	public Animation anim;
+
+	// Token: 0x0400140B RID: 5131
+	public AnimationClip animBend;
+
+	// Token: 0x0400140C RID: 5132
+	public float initialBend = 0.35f;
+
+	// Token: 0x0400140D RID: 5133
+	public float acceleration = 3f;
+
+	// Token: 0x0400140E RID: 5134
+	public float friction = 6f;
+
+	// Token: 0x0400140F RID: 5135
+	public float maxVelocity = 0.2f;
+
+	// Token: 0x04001410 RID: 5136
+	public float maxPushVelocity = 0.2f;
+
+	// Token: 0x04001411 RID: 5137
+	public float pushForce = 1f;
+
+	// Token: 0x04001412 RID: 5138
+	public float jumpForce = 6f;
+
+	// Token: 0x04001413 RID: 5139
+	public float boyJumpBoost;
+
+	// Token: 0x04001414 RID: 5140
+	public float boyJumpBoostDist = 1f;
+
+	// Token: 0x04001415 RID: 5141
+	public float jumpDelay = 0.5f;
+
+	// Token: 0x04001416 RID: 5142
+	public float hangForce = 1.5f;
+
+	// Token: 0x04001417 RID: 5143
+	public float climbUpForce = 3f;
+
+	// Token: 0x04001418 RID: 5144
+	public float hangOffset = -0.65f;
+
+	// Token: 0x04001419 RID: 5145
+	public float distMaxInput = 2.5f;
+
+	// Token: 0x0400141A RID: 5146
+	public bool climbFromGround;
+
+	// Token: 0x0400141B RID: 5147
+	public Transform maxBend;
+
+	// Token: 0x0400141C RID: 5148
+	public AnimationCurve bendCurve;
+
+	// Token: 0x0400141D RID: 5149
+	public Collider[] colliders;
+
+	// Token: 0x0400141E RID: 5150
+	public bool debug;
+
+	// Token: 0x0400141F RID: 5151
+	private float currentBend;
+
+	// Token: 0x04001420 RID: 5152
+	private float previousBend;
+
+	// Token: 0x04001421 RID: 5153
+	private float jumpTimer;
+
+	// Token: 0x04001422 RID: 5154
+	private float vel;
+
+	// Token: 0x04001423 RID: 5155
+	private bool jumpLock;
+
+	// Token: 0x04001424 RID: 5156
+	private bool previousHangState;
+
+	// Token: 0x04001425 RID: 5157
+	private bool previousJumpState;
+
+	// Token: 0x04001426 RID: 5158
+	private Transform boardTransform;
+
+	// Token: 0x04001427 RID: 5159
+	private AnimationState animBendState;
+
+	// Token: 0x04001428 RID: 5160
+	private Boy boy;
+
+	// Token: 0x04001429 RID: 5161
+	private BendingPlatform.State state;
+
+	// Token: 0x0400142A RID: 5162
+	[SerializeField]
+	[HideInInspector]
+	private BoySetInput limitInput;
+
+	// Token: 0x0400142B RID: 5163
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x0200018E RID: 398
+	private enum State
+	{
+		// Token: 0x0400142D RID: 5165
+		None,
+		// Token: 0x0400142E RID: 5166
+		Idle,
+		// Token: 0x0400142F RID: 5167
+		OnBoard
+	}
+}

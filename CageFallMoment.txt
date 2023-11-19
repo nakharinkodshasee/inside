@@ -1,0 +1,28 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004BE RID: 1214
+public class CageFallMoment : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001FC5 RID: 8133 RVA: 0x0010E588 File Offset: 0x0010C788
+	public bool PreAwake(int callcount)
+	{
+		this.TestAndFireStumbleAnim = SignalIn.Create("TestAndFireStumbleAnim", base.gameObject, new Action(this.OnTestAndFireStumbleAnim));
+		return true;
+	}
+
+	// Token: 0x06001FC6 RID: 8134 RVA: 0x0010E5B0 File Offset: 0x0010C7B0
+	private void OnTestAndFireStumbleAnim()
+	{
+		if (ScriptGlobals.boy.velocity.x < -0.5f || ScriptGlobals.boy.state is BoyGrabState)
+		{
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.stumbleAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+	}
+
+	// Token: 0x04003AD0 RID: 15056
+	public AnimClipNode stumbleAnim;
+
+	// Token: 0x04003AD1 RID: 15057
+	private SignalIn TestAndFireStumbleAnim;
+}

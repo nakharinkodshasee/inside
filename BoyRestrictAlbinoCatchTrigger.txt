@@ -1,0 +1,26 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000159 RID: 345
+public class BoyRestrictAlbinoCatchTrigger : MonoBehaviour
+{
+	// Token: 0x06000A53 RID: 2643 RVA: 0x0006646C File Offset: 0x0006466C
+	private void OnTriggerEnter(Collider coll)
+	{
+		BoyProbe component = coll.GetComponent<BoyProbe>();
+		if (component)
+		{
+			AlbinoGroupManager.mInstance.allowAlbinoCatchRepositioning = false;
+		}
+	}
+
+	// Token: 0x06000A54 RID: 2644 RVA: 0x00066498 File Offset: 0x00064698
+	private void OnTriggerExit(Collider coll)
+	{
+		BoyProbe component = coll.GetComponent<BoyProbe>();
+		if (component)
+		{
+			AlbinoGroupManager.mInstance.allowAlbinoCatchRepositioning = true;
+		}
+	}
+}

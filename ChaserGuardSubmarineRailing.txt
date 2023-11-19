@@ -1,0 +1,232 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200005B RID: 91
+public class ChaserGuardSubmarineRailing : ChaserBase, IPreAwake
+{
+	// Token: 0x060002ED RID: 749 RVA: 0x000224D4 File Offset: 0x000206D4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		base.InitPreProcessBuild();
+		this.preProcessed = true;
+	}
+
+	// Token: 0x060002EE RID: 750 RVA: 0x000224F0 File Offset: 0x000206F0
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		base.PreAwakeBase();
+		return true;
+	}
+
+	// Token: 0x060002EF RID: 751 RVA: 0x00022500 File Offset: 0x00020700
+	public ChaserBase.GuardMode GetGuardMode()
+	{
+		return this.guardMode;
+	}
+
+	// Token: 0x060002F0 RID: 752 RVA: 0x00022508 File Offset: 0x00020708
+	protected override void OnChargeToKill()
+	{
+		if (this.guardMode == ChaserBase.GuardMode.None)
+		{
+			this.guardMode = ChaserBase.GuardMode.ChasingBoy;
+			this.preChasing = true;
+			this.preChaseTimer = 0f;
+			if (base.GetComponent<Animation>() != null)
+			{
+				AnimationState animationState = base.GetComponent<Animation>()[this.startChargeAnim];
+				if (this.setHighAnimLayer)
+				{
+					animationState.layer = 1000;
+				}
+				base.GetComponent<Animation>().CrossFade(this.startChargeAnim, 0.3f);
+			}
+		}
+	}
+
+	// Token: 0x060002F1 RID: 753 RVA: 0x00022588 File Offset: 0x00020788
+	protected override void GotoStrangling()
+	{
+		base.GotoStrangling();
+		ScriptGlobals.boy.Kill(false);
+		RumbleManager.instance.RemoveAllRumbleEffects();
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.4f, 0.07f, 0, 0f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.4f, 0.3f, 0, 0.15f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.07f, 0, 0.15f);
+		if (base.transform.forward.z < -0.5f)
+		{
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftSpike, 0.4f, 0.1f, 0, 0.32f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightFadeOut, 0.4f, 0.13f, 0, 0.37f);
+			this.railKill = true;
+			base.GetComponent<Animation>().CrossFade(this.attackFenceAnim, 0.3f);
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledFence, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+			this.wantedStranglingRot = Quaternion.LookRotation(Vector3.back);
+		}
+		else
+		{
+			if (this.wallAlignPoint != null)
+			{
+				float num = base.transform.position.x - this.wallAlignPoint.transform.position.x;
+				if (num < 2.6f)
+				{
+					RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftSpike, 0.8f, 0.1f, 0, 0.32f);
+					RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightFadeOut, 0.7f, 0.13f, 0, 0.37f);
+					RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.3f, 0.4f, 0, 0.65f);
+					this.initDist = num;
+					this.initSpeed = this.chargeAnimSpeed;
+					base.GetComponent<Animation>().CrossFade(this.attackBoyAtWallAnim, 0.2f);
+					Vector3 position = base.transform.position;
+					position.x = this.wallAlignPoint.transform.position.x + Mathf.Max(num - 0.5f, 0f);
+					this.boyKilledWall.transform.parent = base.transform.parent;
+					this.boyKilledWall.transform.position = position;
+					this.boyKilledWall.transform.rotation = this.wallAlignPoint.transform.rotation;
+					BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledWall, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+					ScriptGlobals.boy.Kill(false);
+					this.wallKill = true;
+					return;
+				}
+			}
+			if (ScriptGlobals.boy.facing * base.transform.forward.x < 0f)
+			{
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.8f, 0.1f, 0, 0.72f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.7f, 0.25f, 0, 0.82f);
+				base.GetComponent<Animation>().CrossFade(this.attackHugAnim, 0.3f);
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledByHug, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+			}
+			else
+			{
+				base.GetComponent<Animation>().CrossFade(this.attackNormalAnim, 0.3f);
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledNormal, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+			}
+		}
+	}
+
+	// Token: 0x060002F2 RID: 754 RVA: 0x000228DC File Offset: 0x00020ADC
+	private void Update()
+	{
+		if (this.guardMode == ChaserBase.GuardMode.None)
+		{
+			base.UpdateVelocity(true, 1f);
+			return;
+		}
+		if (this.guardMode == ChaserBase.GuardMode.ChasingBoy)
+		{
+			if (this.preChasing)
+			{
+				base.UpdateVelocity(true, 1f);
+				this.preChaseTimer += Time.deltaTime;
+				if (this.preChaseTimer > this.preChaseDelay)
+				{
+					this.guardMode = ChaserBase.GuardMode.None;
+					base.OnChargeToKill();
+					this.preChasing = false;
+				}
+			}
+			else
+			{
+				base.UpdateChase(true);
+			}
+		}
+		else if (this.guardMode == ChaserBase.GuardMode.StranglingBoy)
+		{
+			if (this.wallKill)
+			{
+				if (this.chargeAnimSpeed > 0f && this.initDist > 0f)
+				{
+					float num = 0.4f * Mathf.Min((base.transform.position.x - this.wallAlignPoint.transform.position.x) / (this.initDist * 0.7f), 1f);
+					this.chargeAnimSpeed = 1f + num * (this.initSpeed - 1f);
+					Vector3 position = base.transform.position;
+					position.x -= this.chargeAnimSpeed * Time.deltaTime;
+					position.z += (this.wallAlignPoint.transform.position.z - position.z) * Time.deltaTime * 4f;
+					base.transform.position = position;
+				}
+				Vector3 position2 = base.transform.position;
+				Vector3 position3 = base.transform.position;
+				position3.x = Mathf.Min(this.boyKilledWall.transform.position.x, base.transform.position.x);
+				this.boyKilledWall.transform.position = position3;
+				if (position2.x < this.wallAlignPoint.transform.position.x)
+				{
+					position2.x = this.wallAlignPoint.transform.position.x;
+					base.transform.position = position2;
+					base.transform.rotation = Quaternion.Slerp(base.transform.rotation, this.wallAlignPoint.transform.rotation, Time.deltaTime * 2f);
+				}
+			}
+			else
+			{
+				base.UpdateStrangling(5f);
+				if (this.railKill && this.railZAlign != null)
+				{
+					Vector3 vector = this.railZAlign.transform.InverseTransformPoint(base.transform.position);
+					vector.z *= 1f - Time.deltaTime;
+					base.transform.position = this.railZAlign.transform.TransformPoint(vector);
+					base.transform.rotation = Quaternion.Slerp(base.transform.rotation, this.railZAlign.transform.rotation, Time.deltaTime);
+				}
+			}
+		}
+	}
+
+	// Token: 0x04000498 RID: 1176
+	public string attackNormalAnim = "BoyChase_AttackA";
+
+	// Token: 0x04000499 RID: 1177
+	public AnimClipNode boyKilledNormal;
+
+	// Token: 0x0400049A RID: 1178
+	public string attackHugAnim = "BoyChase_AttackHugBoy";
+
+	// Token: 0x0400049B RID: 1179
+	public AnimClipNode boyKilledByHug;
+
+	// Token: 0x0400049C RID: 1180
+	public string attackFenceAnim = "BoyChase_AttackBoyFence";
+
+	// Token: 0x0400049D RID: 1181
+	public AnimClipNode boyKilledFence;
+
+	// Token: 0x0400049E RID: 1182
+	public string attackBoyAtWallAnim = "BoyChase_AttackBoyAtAngledWall";
+
+	// Token: 0x0400049F RID: 1183
+	public AnimClipNode boyKilledWall;
+
+	// Token: 0x040004A0 RID: 1184
+	public GameObject wallAlignPoint;
+
+	// Token: 0x040004A1 RID: 1185
+	public string startChargeAnim = "SubPatrol_AlertRun";
+
+	// Token: 0x040004A2 RID: 1186
+	public GameObject railZAlign;
+
+	// Token: 0x040004A3 RID: 1187
+	private bool preChasing;
+
+	// Token: 0x040004A4 RID: 1188
+	private float preChaseTimer;
+
+	// Token: 0x040004A5 RID: 1189
+	public float preChaseDelay = 0.5f;
+
+	// Token: 0x040004A6 RID: 1190
+	private bool wallKill;
+
+	// Token: 0x040004A7 RID: 1191
+	private float initDist;
+
+	// Token: 0x040004A8 RID: 1192
+	private float initSpeed;
+
+	// Token: 0x040004A9 RID: 1193
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x040004AA RID: 1194
+	private bool railKill;
+}

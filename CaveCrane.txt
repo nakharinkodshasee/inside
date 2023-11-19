@@ -1,0 +1,50 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000430 RID: 1072
+public class CaveCrane : MonoBehaviour
+{
+	// Token: 0x06001C24 RID: 7204 RVA: 0x000F6730 File Offset: 0x000F4930
+	private void Start()
+	{
+		this.startPushForce = this.switchCircle.pushForce;
+		this.startWindUpForce = this.switchCircle.windupForce;
+	}
+
+	// Token: 0x06001C25 RID: 7205 RVA: 0x000F6760 File Offset: 0x000F4960
+	private void OnCollisionStay(Collision collision)
+	{
+		foreach (ContactPoint contactPoint in collision.contacts)
+		{
+			if (contactPoint.otherCollider.GetComponent<Rigidbody>() != null && !contactPoint.otherCollider.isTrigger && contactPoint.otherCollider.gameObject.layer != LayerMask.NameToLayer("Player") && !this.bodiesOnCrane.Contains(contactPoint.otherCollider.GetComponent<Rigidbody>()))
+			{
+				this.bodiesOnCrane.Add(contactPoint.otherCollider.GetComponent<Rigidbody>());
+			}
+		}
+	}
+
+	// Token: 0x06001C26 RID: 7206 RVA: 0x000F6810 File Offset: 0x000F4A10
+	private void FixedUpdate()
+	{
+		float rotationPercentage = this.switchCircle.GetRotationPercentage();
+		this.switchCircle.pushForce = Mathf.Lerp(this.startPushForce, 0f, rotationPercentage * 4f * (float)this.bodiesOnCrane.Count);
+		this.switchCircle.windupForce = Mathf.Lerp(this.NoWeightOnWindBackForce, this.startWindUpForce, 0.5f * (float)this.bodiesOnCrane.Count);
+		this.bodiesOnCrane.Clear();
+	}
+
+	// Token: 0x04003393 RID: 13203
+	public SwitchCircle switchCircle;
+
+	// Token: 0x04003394 RID: 13204
+	public float NoWeightOnWindBackForce = 0.1337f;
+
+	// Token: 0x04003395 RID: 13205
+	private float startPushForce;
+
+	// Token: 0x04003396 RID: 13206
+	private float startWindUpForce;
+
+	// Token: 0x04003397 RID: 13207
+	private List<Rigidbody> bodiesOnCrane = new List<Rigidbody>();
+}

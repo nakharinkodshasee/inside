@@ -1,0 +1,102 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000480 RID: 1152
+public class CargoHallCoverTriggerResize : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001E3A RID: 7738 RVA: 0x00103A68 File Offset: 0x00101C68
+	public bool PreAwake(int callcount)
+	{
+		this.doActivate = SignalIn.Create("doActivate", base.gameObject, delegate
+		{
+			this.scriptActivated = true;
+		});
+		this.doDeactivate = SignalIn.Create("doDeactivate", base.gameObject, delegate
+		{
+			this.scriptActivated = false;
+		});
+		return true;
+	}
+
+	// Token: 0x06001E3B RID: 7739 RVA: 0x00103ABC File Offset: 0x00101CBC
+	private void Awake()
+	{
+		this.boxWidth = base.transform.parent.GetComponent<Collider>().bounds.extents.x * 2f;
+		this.parentScaleX = base.transform.parent.localScale.x;
+	}
+
+	// Token: 0x06001E3C RID: 7740 RVA: 0x00103B18 File Offset: 0x00101D18
+	private void SetNewPosition()
+	{
+		float num = base.GetComponent<Collider>().bounds.extents.x * 2f;
+		float x = -((num - this.boxWidth) / 2f) / this.parentScaleX;
+		Vector3 localPosition = base.transform.localPosition;
+		localPosition.x = x;
+		base.transform.localPosition = localPosition;
+	}
+
+	// Token: 0x06001E3D RID: 7741 RVA: 0x00103B88 File Offset: 0x00101D88
+	private void SetNewWidth()
+	{
+		Vector3 position = base.transform.position;
+		position.x -= this.boxWidth / 2f;
+		position.y += this.boxWidth / 2f;
+		position.z += this.boxWidth / 2f;
+		Vector3 normalized = (position - this.dudeOnTruck.position).normalized;
+		this.lineToPlayGround = this.dudeOnTruck.position + normalized * 100f;
+		Vector2 vector;
+		vector..ctor(this.dudeOnTruck.position.x, this.dudeOnTruck.position.z);
+		Vector2 vector2;
+		vector2..ctor(this.lineToPlayGround.x, this.lineToPlayGround.z);
+		Vector2 vector3;
+		vector3..ctor(base.transform.position.x + 10f, -1.2f);
+		Vector2 vector4;
+		vector4..ctor(base.transform.position.x - 10f, -1.2f);
+		this.intersectionFound = MathUtils.LineLine(ref vector, ref vector2, ref vector3, ref vector4, ref this.cornerAtPlayground);
+		float num = Mathf.Abs((this.cornerAtPlayground.x - (base.transform.parent.position.x + this.boxWidth / 2f)) / this.parentScaleX);
+		if (num > 1f)
+		{
+			Vector3 localScale = base.transform.localScale;
+			localScale.x = num;
+			base.transform.localScale = localScale;
+		}
+	}
+
+	// Token: 0x06001E3E RID: 7742 RVA: 0x00103D50 File Offset: 0x00101F50
+	private void Update()
+	{
+		if (!this.scriptActivated)
+		{
+			return;
+		}
+		this.SetNewWidth();
+		this.SetNewPosition();
+	}
+
+	// Token: 0x040037C0 RID: 14272
+	public Transform dudeOnTruck;
+
+	// Token: 0x040037C1 RID: 14273
+	private float boxWidth = 1.4f;
+
+	// Token: 0x040037C2 RID: 14274
+	private float parentScaleX = 1f;
+
+	// Token: 0x040037C3 RID: 14275
+	private Vector2 cornerAtPlayground;
+
+	// Token: 0x040037C4 RID: 14276
+	private Vector3 lineToPlayGround;
+
+	// Token: 0x040037C5 RID: 14277
+	private bool intersectionFound;
+
+	// Token: 0x040037C6 RID: 14278
+	private bool scriptActivated;
+
+	// Token: 0x040037C7 RID: 14279
+	private SignalIn doActivate;
+
+	// Token: 0x040037C8 RID: 14280
+	private SignalIn doDeactivate;
+}

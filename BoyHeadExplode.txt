@@ -1,0 +1,327 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000154 RID: 340
+public class BoyHeadExplode : DefaultBoyInput, IPreAwake
+{
+	// Token: 0x1700002D RID: 45
+	// (get) Token: 0x06000A2B RID: 2603 RVA: 0x00064E64 File Offset: 0x00063064
+	public override bool rawAction
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x1700002E RID: 46
+	// (get) Token: 0x06000A2C RID: 2604 RVA: 0x00064E68 File Offset: 0x00063068
+	public override bool grab
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x06000A2D RID: 2605 RVA: 0x00064E6C File Offset: 0x0006306C
+	public bool PreAwake(int callcount)
+	{
+		this.startBulge = SignalIn.Create("startBulge", base.gameObject, new Action(this.DoStartBulge));
+		this.instantExplode = SignalIn.Create("instantExplode", base.gameObject, new Action(this.DoInstantExplode));
+		this.stopBulge = SignalIn.Create("stopBulge", base.gameObject, new Action(this.DoStopBulge));
+		this.achievementPulledOff = SignalIn.Create("achievementPulledOff", base.gameObject, new Action(this.AchievementPulledOff));
+		this.achievementExploded = SignalIn.Create("achievementExploded", base.gameObject, new Action(this.AchievementExploded));
+		return true;
+	}
+
+	// Token: 0x06000A2E RID: 2606 RVA: 0x00064F24 File Offset: 0x00063124
+	private void Start()
+	{
+		this.bulgeStartSize = this.boyHeadBulge.transform.localScale;
+		this.bobbleHeadStartSize = this.bobbleHead.transform.localScale;
+		this.oldParent = base.transform.parent;
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x06000A2F RID: 2607 RVA: 0x00064F7C File Offset: 0x0006317C
+	private void init()
+	{
+		this.timer = 0f;
+		VisualBoy visualBoy = this.boy.visualBoy;
+		Transform childComponentAE = visualBoy.transform.GetChildComponentAE("Themes");
+		Transform childComponentAE2 = childComponentAE.GetChildComponentAE("HeadBulge");
+		visualBoy.SetTheme(childComponentAE2, VisualBoy.ThemePriority.High);
+		base.transform.parent = this.boy.visualBoy.actor.bones[ScriptGlobals.boy.visualBoy.actor.specificBones.head].transform;
+		base.transform.localPosition = Vector3.zero;
+		base.transform.localRotation = Quaternion.identity;
+		this.boyHeadBulge.SetActive(true);
+	}
+
+	// Token: 0x06000A30 RID: 2608 RVA: 0x00065038 File Offset: 0x00063238
+	private void DoInstantExplode()
+	{
+		if (!this.instaBlowUp)
+		{
+			this.init();
+			this.instaBlowUp = true;
+			this.hasStopped = false;
+		}
+	}
+
+	// Token: 0x06000A31 RID: 2609 RVA: 0x0006505C File Offset: 0x0006325C
+	private void DoStartBulge()
+	{
+		if (!this.hasStartedGrow)
+		{
+			this.init();
+			this.hasStartedGrow = true;
+			this.hasStopped = false;
+		}
+	}
+
+	// Token: 0x06000A32 RID: 2610 RVA: 0x00065080 File Offset: 0x00063280
+	private void DoStopBulge()
+	{
+		if (!this.hasStopped && !this.isProne)
+		{
+			this.timer = 0f;
+			this.hasStartedGrow = false;
+			this.isProne = false;
+			this.instaBlowUp = false;
+			this.hasStopped = true;
+		}
+	}
+
+	// Token: 0x06000A33 RID: 2611 RVA: 0x000650C0 File Offset: 0x000632C0
+	private void AdoptChildren(Transform currentParent, Transform newParent)
+	{
+		List<Transform> list = new List<Transform>();
+		foreach (object obj in currentParent)
+		{
+			Transform item = (Transform)obj;
+			list.Add(item);
+		}
+		foreach (Transform transform in list)
+		{
+			transform.parent = newParent;
+		}
+	}
+
+	// Token: 0x06000A34 RID: 2612 RVA: 0x00065188 File Offset: 0x00063388
+	private void doExplodeHeadFX()
+	{
+		VisualBoy visualBoy = this.boy.visualBoy;
+		this.boyHeadBulge.SetActive(false);
+		SkinnedMeshRenderer componentInChildren = visualBoy.GetComponentInChildren<SkinnedMeshRenderer>();
+		componentInChildren.sharedMesh = this.noHeadMesh;
+		this.ragdollBoyHeadSplit.SetActive(true);
+		this.fX_HeadExplode.SetActive(true);
+		this.AdoptChildren(this.ragdollBoyHeadSplit.transform, this.localFxParent);
+		this.boy.Kill();
+		this.headRootCollider.GetComponent<FixedJoint>().connectedBody = visualBoy.ragdoll[visualBoy.actor.specificBones.spineB];
+	}
+
+	// Token: 0x06000A35 RID: 2613 RVA: 0x00065228 File Offset: 0x00063428
+	private void AchievementPulledOff()
+	{
+		this.achievementIsPulledOff = true;
+	}
+
+	// Token: 0x06000A36 RID: 2614 RVA: 0x00065234 File Offset: 0x00063434
+	private void AchievementExploded()
+	{
+		this.achievementHasExploded = true;
+		this.timer = 0f;
+	}
+
+	// Token: 0x06000A37 RID: 2615 RVA: 0x00065248 File Offset: 0x00063448
+	private void FixedUpdate()
+	{
+		if (this.isDisabled)
+		{
+			return;
+		}
+		if (this.boy == null)
+		{
+			Debug.Log("BoyIsNull");
+		}
+		if (this.startKillNextFrame)
+		{
+			BoyUtils.StartCustomAnim(this.boy, this.dieAnimation, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.isProne = true;
+			this.startKillNextFrame = false;
+		}
+		VisualBoy visualBoy = this.boy.visualBoy;
+		if (this.achievementHasExploded)
+		{
+			this.timer += Time.deltaTime;
+			this.boyHeadBulge.transform.localScale = Vector3.MoveTowards(this.boyHeadBulge.transform.localScale, Vector3.zero, Time.deltaTime * 0.2f);
+			if (this.timer > 3f)
+			{
+				VisualBoy visualBoy2 = this.boy.visualBoy;
+				this.headRootCollider.GetComponent<FixedJoint>().connectedBody = null;
+				visualBoy2.SetTheme(null, VisualBoy.ThemePriority.High);
+				this.isDisabled = true;
+				base.transform.parent = this.oldParent;
+				this.boyHeadBulge.SetActive(false);
+			}
+		}
+		else if (this.hasStartedGrow && !this.isProne)
+		{
+			this.timer += Time.deltaTime;
+			if (this.timer <= this.moveTimeBeforeExplosion)
+			{
+				float num = Mathf.InverseLerp(0f, this.moveTimeBeforeExplosion, this.timer);
+				float num2 = Mathf.Lerp(this.smallBulgeSize, this.mediumBulgeSize, num);
+				this.currentSize = num2;
+				this.boyHeadBulge.transform.localScale = this.bulgeStartSize * num2;
+			}
+			else if (this.timer > this.moveTimeBeforeExplosion && this.timer < this.moveTimeBeforeExplosion + this.timeToBeProne)
+			{
+				float num = Mathf.InverseLerp(this.moveTimeBeforeExplosion, this.moveTimeBeforeExplosion + this.timeToBeProne, this.timer);
+				float num2 = Mathf.Lerp(this.mediumBulgeSize, this.largeBulgeSize, num);
+				this.currentSize = num2;
+				this.boyHeadBulge.transform.localScale = this.bulgeStartSize * num2;
+			}
+			else if (this.timer > this.moveTimeBeforeExplosion + this.timeToBeProne && ScriptGlobals.boy.status.groundCollider != null && !this.startKillNextFrame && !this.achievementIsPulledOff)
+			{
+				this.boy.input = this;
+				this.startKillNextFrame = true;
+			}
+		}
+		else if (this.isProne)
+		{
+			this.bobbleHeadTimer += Time.deltaTime;
+			this.bobbleHead.localScale = this.bobbleHeadStartSize * (1f + Mathf.InverseLerp(1f, 3f, this.bobbleHeadTimer) * 0.5f);
+			if (this.dieAnimation.animFinished)
+			{
+				this.doExplodeHeadFX();
+			}
+		}
+		else if (this.instaBlowUp)
+		{
+			this.timer += Time.deltaTime;
+			float num = Mathf.InverseLerp(0f, 1f, this.timer);
+			float num2 = Mathf.Lerp(this.smallBulgeSize, this.largeBulgeSize, num);
+			this.currentSize = num2;
+			this.boyHeadBulge.transform.localScale = this.bulgeStartSize * num2;
+			if (this.timer >= 1f)
+			{
+				this.doExplodeHeadFX();
+			}
+		}
+		else if (this.hasStopped)
+		{
+			this.timer += Time.deltaTime;
+			float num = Mathf.InverseLerp(4f, 0f, this.timer);
+			float num2 = Mathf.Lerp(this.smallBulgeSize, this.currentSize, num);
+			if (num <= 0.05f)
+			{
+				visualBoy.SetTheme(null, VisualBoy.ThemePriority.High);
+				this.boyHeadBulge.transform.localScale = this.bulgeStartSize;
+				this.hasStopped = false;
+			}
+		}
+	}
+
+	// Token: 0x0400118F RID: 4495
+	public float moveTimeBeforeExplosion;
+
+	// Token: 0x04001190 RID: 4496
+	public float timeToBeProne;
+
+	// Token: 0x04001191 RID: 4497
+	public GameObject boyHeadBulge;
+
+	// Token: 0x04001192 RID: 4498
+	public GameObject ragdollBoyHeadSplit;
+
+	// Token: 0x04001193 RID: 4499
+	public GameObject fX_HeadExplode;
+
+	// Token: 0x04001194 RID: 4500
+	public GameObject headRootCollider;
+
+	// Token: 0x04001195 RID: 4501
+	public AnimClipNode dieAnimation;
+
+	// Token: 0x04001196 RID: 4502
+	public Mesh noHeadMesh;
+
+	// Token: 0x04001197 RID: 4503
+	public float smallBulgeSize;
+
+	// Token: 0x04001198 RID: 4504
+	public float mediumBulgeSize;
+
+	// Token: 0x04001199 RID: 4505
+	public float largeBulgeSize;
+
+	// Token: 0x0400119A RID: 4506
+	public Transform bobbleHead;
+
+	// Token: 0x0400119B RID: 4507
+	public Transform localFxParent;
+
+	// Token: 0x0400119C RID: 4508
+	private SignalIn startBulge;
+
+	// Token: 0x0400119D RID: 4509
+	private SignalIn instantExplode;
+
+	// Token: 0x0400119E RID: 4510
+	private SignalIn stopBulge;
+
+	// Token: 0x0400119F RID: 4511
+	private SignalIn achievementPulledOff;
+
+	// Token: 0x040011A0 RID: 4512
+	private SignalIn achievementExploded;
+
+	// Token: 0x040011A1 RID: 4513
+	private Vector3 bulgeStartSize;
+
+	// Token: 0x040011A2 RID: 4514
+	private Vector3 bobbleHeadStartSize;
+
+	// Token: 0x040011A3 RID: 4515
+	private Boy boy;
+
+	// Token: 0x040011A4 RID: 4516
+	private float currentSize;
+
+	// Token: 0x040011A5 RID: 4517
+	private float timer;
+
+	// Token: 0x040011A6 RID: 4518
+	private float bobbleHeadTimer;
+
+	// Token: 0x040011A7 RID: 4519
+	private bool hasStartedGrow;
+
+	// Token: 0x040011A8 RID: 4520
+	private bool isProne;
+
+	// Token: 0x040011A9 RID: 4521
+	private bool instaBlowUp;
+
+	// Token: 0x040011AA RID: 4522
+	private bool hasStopped;
+
+	// Token: 0x040011AB RID: 4523
+	private bool startKillNextFrame;
+
+	// Token: 0x040011AC RID: 4524
+	private bool isDisabled;
+
+	// Token: 0x040011AD RID: 4525
+	private bool achievementIsPulledOff;
+
+	// Token: 0x040011AE RID: 4526
+	private bool achievementHasExploded;
+
+	// Token: 0x040011AF RID: 4527
+	private Transform oldParent;
+}

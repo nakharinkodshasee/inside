@@ -1,0 +1,121 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200015F RID: 351
+public class BoyStealthFSMEvents : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06000A75 RID: 2677 RVA: 0x00066C18 File Offset: 0x00064E18
+	public void OnActivate()
+	{
+		this.isActive = true;
+	}
+
+	// Token: 0x06000A76 RID: 2678 RVA: 0x00066C24 File Offset: 0x00064E24
+	public void OnDectivate()
+	{
+		this.isActive = false;
+	}
+
+	// Token: 0x06000A77 RID: 2679 RVA: 0x00066C30 File Offset: 0x00064E30
+	public bool PreAwake(int callcount)
+	{
+		this.ActivateScript = SignalIn.Create("ActivateScript", base.gameObject, new Action(this.OnActivate));
+		this.DeactivateScript = SignalIn.Create("DeactivateScript", base.gameObject, new Action(this.OnDectivate));
+		return true;
+	}
+
+	// Token: 0x06000A78 RID: 2680 RVA: 0x00066C84 File Offset: 0x00064E84
+	private void Start()
+	{
+		if (!this.startDeactivated)
+		{
+			this.isActive = true;
+		}
+		else
+		{
+			this.isActive = false;
+		}
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x06000A79 RID: 2681 RVA: 0x00066CB0 File Offset: 0x00064EB0
+	private void UpdateNoiseEvents()
+	{
+		BoyJumpState boyJumpState = this.boy.state as BoyJumpState;
+		BoyState boyState = this.lastFrameState as BoyJumpState;
+		if (boyJumpState == null && boyState != null && this.registerJumpNoise)
+		{
+			this.noiseThreshold.OnEvent(this);
+			this.makingNoise = true;
+		}
+		float num = this.specificSpeed * this.specificSpeed;
+		float sqrLength = (this.boy.velocity - this.boy.status.groundVelocity).GetSqrLength();
+		if (sqrLength >= num && boyJumpState == null && !this.makingNoise)
+		{
+			if (this.wait == 10)
+			{
+				this.makingNoise = true;
+				this.wait = 0;
+				this.noiseThreshold.OnEvent(this);
+			}
+			else
+			{
+				this.wait++;
+			}
+		}
+		else if (this.makingNoise && sqrLength <= num && boyJumpState == null)
+		{
+			this.makingNoise = false;
+			this.belowThreshold.OnEvent(this);
+		}
+	}
+
+	// Token: 0x06000A7A RID: 2682 RVA: 0x00066DC0 File Offset: 0x00064FC0
+	private void FixedUpdate()
+	{
+		if (this.isActive)
+		{
+			this.UpdateNoiseEvents();
+			this.lastFrameState = this.boy.state;
+		}
+	}
+
+	// Token: 0x040011FA RID: 4602
+	public float specificSpeed;
+
+	// Token: 0x040011FB RID: 4603
+	public bool registerJumpNoise;
+
+	// Token: 0x040011FC RID: 4604
+	public bool startDeactivated;
+
+	// Token: 0x040011FD RID: 4605
+	public SimpleEvent<BoyStealthFSMEvents> noiseThreshold = new SimpleEvent<BoyStealthFSMEvents>("noiseThreshold");
+
+	// Token: 0x040011FE RID: 4606
+	public SimpleEvent<BoyStealthFSMEvents> belowThreshold = new SimpleEvent<BoyStealthFSMEvents>("belowThreshold");
+
+	// Token: 0x040011FF RID: 4607
+	private Boy boy;
+
+	// Token: 0x04001200 RID: 4608
+	private SignalIn ActivateScript;
+
+	// Token: 0x04001201 RID: 4609
+	private SignalIn DeactivateScript;
+
+	// Token: 0x04001202 RID: 4610
+	private bool isActive;
+
+	// Token: 0x04001203 RID: 4611
+	private bool isAboveThreshold;
+
+	// Token: 0x04001204 RID: 4612
+	private BoyState lastFrameState;
+
+	// Token: 0x04001205 RID: 4613
+	private bool makingNoise;
+
+	// Token: 0x04001206 RID: 4614
+	private int wait;
+}

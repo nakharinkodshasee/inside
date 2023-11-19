@@ -1,0 +1,399 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200004C RID: 76
+public class Butterfly : MonoBehaviour
+{
+	// Token: 0x06000274 RID: 628 RVA: 0x0001CB8C File Offset: 0x0001AD8C
+	private void Start()
+	{
+		this.anim = this.visuals.GetComponent<Animation>();
+		this.target = this.idleSpots[Random.Range(0, this.idleSpots.Count)];
+		this.visuals.transform.position = this.target.position;
+		Vector3 position = this.target.position;
+		position.y = this.visuals.position.y;
+		this.visuals.transform.LookAt(position);
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000275 RID: 629 RVA: 0x0001CC24 File Offset: 0x0001AE24
+	private void SetIdleState()
+	{
+		if (this.target != null)
+		{
+			this.visuals.rotation = this.target.rotation;
+		}
+		this.anim.CrossFade(this.animIdle.name);
+		this.idleTimer = Random.Range(1.5f, 5f);
+		this.state = Butterfly.State.Idle;
+	}
+
+	// Token: 0x06000276 RID: 630 RVA: 0x0001CC8C File Offset: 0x0001AE8C
+	private void IdleState()
+	{
+		this.idleTimer -= Time.deltaTime;
+		if (this.idleTimer <= 0f)
+		{
+			if (this.manager.GetHuddleStandingStill())
+			{
+				this.SetHuddleTakeoffState();
+			}
+			else
+			{
+				this.SetTakeoffState();
+			}
+		}
+	}
+
+	// Token: 0x06000277 RID: 631 RVA: 0x0001CCDC File Offset: 0x0001AEDC
+	private void SetTakeoffFromHuddle()
+	{
+		this.manager.RemoveFromHuddle(this.huddleTarget);
+		this.SetTakeoffState();
+	}
+
+	// Token: 0x06000278 RID: 632 RVA: 0x0001CCF8 File Offset: 0x0001AEF8
+	private void SetTakeoffState()
+	{
+		this.anim.CrossFade(this.animTakeoff.name);
+		List<Transform> list = this.idleSpots.FindAll((Transform x) => x != this.target);
+		this.target = list[Random.Range(0, list.Count)];
+		Vector3 position = this.target.position;
+		position.y = this.visuals.position.y;
+		this.visuals.transform.LookAt(position);
+		Vector3 normalized = (this.target.position - this.visuals.position).normalized;
+		Vector3 vector = this.visuals.position + normalized.normalized * Random.Range(1.5f, 2.5f);
+		vector.y = this.visuals.position.y + Random.Range(1.5f, 2f);
+		this.fromPosition = this.visuals.position;
+		this.targetPosition = vector;
+		this.transitionTimer = 0f;
+		this.totalTransitionTime = this.animTakeoff.length;
+		this.state = Butterfly.State.Takeoff;
+	}
+
+	// Token: 0x06000279 RID: 633 RVA: 0x0001CE3C File Offset: 0x0001B03C
+	private void TakeoffState()
+	{
+		this.Movement();
+		if (this.transitionTimer >= this.totalTransitionTime)
+		{
+			this.SetFlyState();
+		}
+	}
+
+	// Token: 0x0600027A RID: 634 RVA: 0x0001CE5C File Offset: 0x0001B05C
+	private void SetFlyState()
+	{
+		this.anim.CrossFade(this.animFly.name);
+		Vector3 vector = this.target.position - this.visuals.position;
+		vector.y = 0f;
+		this.fromPosition = this.visuals.position;
+		this.targetPosition = this.fromPosition + vector;
+		this.transitionTimer = 0f;
+		this.totalTransitionTime = Vector3.Distance(this.fromPosition, this.targetPosition) / this.flySpeed * Random.Range(0.9f, 1.1f);
+		this.totalTransitionTime -= this.animLanding.length;
+		this.state = Butterfly.State.Fly;
+	}
+
+	// Token: 0x0600027B RID: 635 RVA: 0x0001CF24 File Offset: 0x0001B124
+	private void FlyState()
+	{
+		this.Movement();
+		if (this.transitionTimer >= this.totalTransitionTime)
+		{
+			this.SetLandingState();
+		}
+	}
+
+	// Token: 0x0600027C RID: 636 RVA: 0x0001CF44 File Offset: 0x0001B144
+	private void SetLandingState()
+	{
+		this.anim.CrossFade(this.animLanding.name, 1f);
+		this.fromPosition = this.visuals.position;
+		this.targetPosition = this.target.position;
+		this.transitionTimer = 0f;
+		this.totalTransitionTime = this.animLanding.length;
+		this.state = Butterfly.State.Landing;
+	}
+
+	// Token: 0x0600027D RID: 637 RVA: 0x0001CFB4 File Offset: 0x0001B1B4
+	private void LandingState()
+	{
+		this.Movement();
+		if (this.transitionTimer >= this.totalTransitionTime)
+		{
+			this.SetIdleState();
+		}
+	}
+
+	// Token: 0x0600027E RID: 638 RVA: 0x0001CFD4 File Offset: 0x0001B1D4
+	private void SetHuddleTakeoffState()
+	{
+		this.anim.CrossFade(this.animTakeoff.name, 1f);
+		this.huddleTarget = this.manager.FindHuddleTarget();
+		this.target.position.y = this.visuals.position.y;
+		this.visuals.transform.LookAt(this.huddleTarget);
+		Vector3 normalized = (this.huddleTarget.position - this.visuals.position).normalized;
+		Vector3 vector = this.visuals.position + normalized.normalized;
+		vector.y = this.visuals.position.y + Random.Range(2.5f, 3.5f);
+		this.fromPosition = this.visuals.position;
+		this.targetPosition = vector;
+		this.transitionTimer = 0f;
+		this.totalTransitionTime = this.animTakeoff.length;
+		this.state = Butterfly.State.HuddleTakeoff;
+	}
+
+	// Token: 0x0600027F RID: 639 RVA: 0x0001D0EC File Offset: 0x0001B2EC
+	private void HuddleTakeoffState()
+	{
+		this.LookAtTarget(this.huddleTarget);
+		this.Movement();
+		if (this.transitionTimer >= this.totalTransitionTime)
+		{
+			this.SetHuddleFlyState();
+		}
+		else
+		{
+			this.CheckHuddleMove();
+		}
+	}
+
+	// Token: 0x06000280 RID: 640 RVA: 0x0001D130 File Offset: 0x0001B330
+	private void SetHuddleFlyState()
+	{
+		this.anim.CrossFade(this.animFly.name);
+		this.fromPosition = this.visuals.position;
+		this.targetPosition = this.GetPositionAboveHuddle();
+		this.transitionTimer = 0f;
+		this.totalTransitionTime = Vector3.Distance(this.fromPosition, this.targetPosition) / this.flySpeed * Random.Range(0.9f, 1.1f);
+		this.totalTransitionTime -= this.animLanding.length;
+		this.state = Butterfly.State.HuddleFly;
+	}
+
+	// Token: 0x06000281 RID: 641 RVA: 0x0001D1C8 File Offset: 0x0001B3C8
+	private void HuddleFlyState()
+	{
+		this.targetPosition = this.GetPositionAboveHuddle();
+		this.LookAtTarget(this.huddleTarget);
+		this.Movement();
+		if (this.transitionTimer >= this.totalTransitionTime)
+		{
+			this.SetHuddleLandState();
+		}
+		else
+		{
+			this.CheckHuddleMove();
+		}
+	}
+
+	// Token: 0x06000282 RID: 642 RVA: 0x0001D218 File Offset: 0x0001B418
+	private void SetHuddleLandState()
+	{
+		this.anim.CrossFade(this.animLanding.name, 1f);
+		this.fromPosition = this.visuals.position;
+		this.targetPosition = this.huddleTarget.position + Vector3.up * 0.5f;
+		this.transitionTimer = 0f;
+		this.totalTransitionTime = this.animLanding.length;
+		this.state = Butterfly.State.HuddleLand;
+	}
+
+	// Token: 0x06000283 RID: 643 RVA: 0x0001D29C File Offset: 0x0001B49C
+	private void HuddleLandState()
+	{
+		this.targetPosition = this.huddleTarget.position + Vector3.up * 0.5f;
+		this.LookAtTarget(this.huddleTarget);
+		this.Movement();
+		if (this.transitionTimer >= this.totalTransitionTime)
+		{
+			this.SetHuddleSitState();
+		}
+		else
+		{
+			this.CheckHuddleMove();
+		}
+	}
+
+	// Token: 0x06000284 RID: 644 RVA: 0x0001D304 File Offset: 0x0001B504
+	private void SetHuddleSitState()
+	{
+		this.anim.CrossFade(this.animIdle.name);
+		this.state = Butterfly.State.HuddleSit;
+	}
+
+	// Token: 0x06000285 RID: 645 RVA: 0x0001D324 File Offset: 0x0001B524
+	private void HuddleSitState()
+	{
+		this.visuals.position = this.huddleTarget.position + Vector3.up * 0.5f;
+		this.CheckHuddleMove();
+	}
+
+	// Token: 0x06000286 RID: 646 RVA: 0x0001D364 File Offset: 0x0001B564
+	private void Update()
+	{
+		switch (this.state)
+		{
+		case Butterfly.State.Idle:
+			this.IdleState();
+			break;
+		case Butterfly.State.Fly:
+			this.FlyState();
+			break;
+		case Butterfly.State.Takeoff:
+			this.TakeoffState();
+			break;
+		case Butterfly.State.Landing:
+			this.LandingState();
+			break;
+		case Butterfly.State.HuddleTakeoff:
+			this.HuddleTakeoffState();
+			break;
+		case Butterfly.State.HuddleFly:
+			this.HuddleFlyState();
+			break;
+		case Butterfly.State.HuddleLand:
+			this.HuddleLandState();
+			break;
+		case Butterfly.State.HuddleSit:
+			this.HuddleSitState();
+			break;
+		}
+	}
+
+	// Token: 0x06000287 RID: 647 RVA: 0x0001D400 File Offset: 0x0001B600
+	private void CheckHuddleMove()
+	{
+		if (this.manager.GetHuddleMoving())
+		{
+			this.SetTakeoffFromHuddle();
+		}
+	}
+
+	// Token: 0x06000288 RID: 648 RVA: 0x0001D418 File Offset: 0x0001B618
+	private void LookAtTarget(Transform lookTarget)
+	{
+		Vector3 position = lookTarget.position;
+		position.y = this.visuals.position.y;
+		this.visuals.transform.LookAt(position);
+	}
+
+	// Token: 0x06000289 RID: 649 RVA: 0x0001D458 File Offset: 0x0001B658
+	private void Movement()
+	{
+		this.transitionTimer += Time.deltaTime;
+		float num = this.transitionTimer / this.totalTransitionTime;
+		Vector3 position = this.fromPosition + (this.targetPosition - this.fromPosition) * num;
+		position.y = this.fromPosition.y + (this.targetPosition.y - this.fromPosition.y) * MathUtils.SmoothFraction(num);
+		this.visuals.position = position;
+	}
+
+	// Token: 0x0600028A RID: 650 RVA: 0x0001D4E8 File Offset: 0x0001B6E8
+	private Vector3 GetPositionAboveHuddle()
+	{
+		Vector3 vector = this.huddleTarget.position - this.visuals.position;
+		vector.y += 2.5f;
+		Vector3 vector2 = this.visuals.position + vector;
+		Debug.DrawLine(this.visuals.position, vector2);
+		return vector2;
+	}
+
+	// Token: 0x0600028B RID: 651 RVA: 0x0001D548 File Offset: 0x0001B748
+	public void SetManager(ButterflyManager manager)
+	{
+		this.manager = manager;
+	}
+
+	// Token: 0x0600028C RID: 652 RVA: 0x0001D554 File Offset: 0x0001B754
+	private void OnDrawGizmos()
+	{
+		if (!EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Gameplay))
+		{
+			return;
+		}
+		int i = 0;
+		int count = this.idleSpots.Count;
+		while (i < count)
+		{
+			Transform transform = this.idleSpots[i];
+			Gizmos.color = Color.green;
+			Gizmos.DrawSphere(transform.position, 0.075f);
+			Debug.DrawLine(transform.position, transform.position + transform.forward * 0.3f, Color.blue);
+			Debug.DrawLine(transform.position + transform.right * 0.3f, transform.position - transform.right * 0.3f, Color.green);
+			i++;
+		}
+	}
+
+	// Token: 0x04000377 RID: 887
+	public Transform visuals;
+
+	// Token: 0x04000378 RID: 888
+	public List<Transform> idleSpots;
+
+	// Token: 0x04000379 RID: 889
+	public float flySpeed = 3f;
+
+	// Token: 0x0400037A RID: 890
+	public AnimationClip animIdle;
+
+	// Token: 0x0400037B RID: 891
+	public AnimationClip animFly;
+
+	// Token: 0x0400037C RID: 892
+	public AnimationClip animTakeoff;
+
+	// Token: 0x0400037D RID: 893
+	public AnimationClip animLanding;
+
+	// Token: 0x0400037E RID: 894
+	private Animation anim;
+
+	// Token: 0x0400037F RID: 895
+	private Transform target;
+
+	// Token: 0x04000380 RID: 896
+	private Transform huddleTarget;
+
+	// Token: 0x04000381 RID: 897
+	private Vector3 fromPosition;
+
+	// Token: 0x04000382 RID: 898
+	private Vector3 targetPosition;
+
+	// Token: 0x04000383 RID: 899
+	private Butterfly.State state;
+
+	// Token: 0x04000384 RID: 900
+	private float idleTimer;
+
+	// Token: 0x04000385 RID: 901
+	private float transitionTimer;
+
+	// Token: 0x04000386 RID: 902
+	private float totalTransitionTime;
+
+	// Token: 0x04000387 RID: 903
+	private ButterflyManager manager;
+
+	// Token: 0x0200004D RID: 77
+	private enum State
+	{
+		// Token: 0x04000389 RID: 905
+		None,
+		// Token: 0x0400038A RID: 906
+		Idle,
+		// Token: 0x0400038B RID: 907
+		Fly,
+		// Token: 0x0400038C RID: 908
+		Takeoff,
+		// Token: 0x0400038D RID: 909
+		Landing,
+		// Token: 0x0400038E RID: 910
+		HuddleTakeoff,
+		// Token: 0x0400038F RID: 911
+		HuddleFly,
+		// Token: 0x04000390 RID: 912
+		HuddleLand,
+		// Token: 0x04000391 RID: 913
+		HuddleSit
+	}
+}

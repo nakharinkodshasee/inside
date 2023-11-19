@@ -1,0 +1,28 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200015A RID: 346
+public class BoyRestrictAlbinoClutterTrigger : MonoBehaviour
+{
+	// Token: 0x06000A56 RID: 2646 RVA: 0x000664CC File Offset: 0x000646CC
+	private void OnTriggerEnter(Collider coll)
+	{
+		BoyProbe component = coll.GetComponent<BoyProbe>();
+		if (component)
+		{
+			AlbinoGroupManager.mInstance.allowAlbinoClutterAround = false;
+			AlbinoGroupManager.mInstance.noClutterTrans = base.transform;
+		}
+	}
+
+	// Token: 0x06000A57 RID: 2647 RVA: 0x00066508 File Offset: 0x00064708
+	private void OnTriggerExit(Collider coll)
+	{
+		BoyProbe component = coll.GetComponent<BoyProbe>();
+		if (component && AlbinoGroupManager.mInstance.noClutterTrans == base.transform)
+		{
+			AlbinoGroupManager.mInstance.allowAlbinoClutterAround = true;
+			AlbinoGroupManager.mInstance.noClutterTrans = null;
+		}
+	}
+}

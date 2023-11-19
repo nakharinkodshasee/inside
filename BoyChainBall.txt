@@ -1,0 +1,245 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005A8 RID: 1448
+public class BoyChainBall : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060024F6 RID: 9462 RVA: 0x0012F944 File Offset: 0x0012DB44
+	public bool PreAwake(int callcount)
+	{
+		this.dropBall = SignalIn.Create("dropBall", base.gameObject, new Action(this.DropBall));
+		return true;
+	}
+
+	// Token: 0x060024F7 RID: 9463 RVA: 0x0012F96C File Offset: 0x0012DB6C
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy;
+		this.leftAnkle = this.boy.visualBoy.actor.bones[this.boy.visualBoy.actor.GetBone("LeftAnkle")];
+		this.attachTarget = this.boy.visualBoy.ragdoll.gameObject.transform.Find("LeftKnee").gameObject;
+		this.chain = base.GetComponent<LineRenderer>();
+	}
+
+	// Token: 0x060024F8 RID: 9464 RVA: 0x0012F9FC File Offset: 0x0012DBFC
+	private void FixedUpdate()
+	{
+		if (this.state != this.currentState)
+		{
+			if (this.currentState == BoyChainBall.SwimTypes.strong)
+			{
+				this.SetStrongState();
+			}
+			else if (this.currentState == BoyChainBall.SwimTypes.drowning)
+			{
+				this.SetDrowningState();
+			}
+			else if (this.currentState == BoyChainBall.SwimTypes.lift)
+			{
+				this.SetLiftingState();
+			}
+			this.state = this.currentState;
+		}
+		if (this.attached)
+		{
+			this.chain.SetPosition(0, this.leftAnkle.transform.position);
+			this.chain.SetPosition(1, this.chainAttach.transform.position);
+		}
+		if (!this.inWater)
+		{
+			return;
+		}
+		if (this.grounded)
+		{
+			this.swimTime += Time.deltaTime * 6f;
+		}
+		float y = this.boy.input.stick.y;
+		float length = this.boy.input.stick.GetLength();
+		if (length > 0.6f && this.swimTime > 0f)
+		{
+			this.swimTime -= Time.deltaTime;
+			this.SetLiftingState();
+		}
+		else
+		{
+			this.SetDrowningState();
+		}
+		this.swimTime = Mathf.Clamp(this.swimTime, 0f, 3.2f);
+		Vector3 vector = this.chainAttach.transform.position - this.attachTarget.transform.position;
+		float num = Vector3.Distance(this.chainAttach.transform.position, this.attachTarget.transform.position);
+		if (num > this.chainLength)
+		{
+			Vector3 vector2 = -vector.normalized * (this.ballForceScale + num * this.ballDistFalloff);
+			base.GetComponent<Rigidbody>().AddForceAtPosition(vector2, this.chainAttach.transform.position);
+			Vector3 vector3 = vector.normalized * this.boyForceScale;
+			vector3 += Vector3.up * -this.boyGravity;
+			this.boy.AddForce(new vector2f(vector3.x, vector3.y), null);
+		}
+		Vector3 vector4 = -Vector3.up * this.ballGravity;
+		base.GetComponent<Rigidbody>().AddForce(vector4);
+		this.grounded = false;
+	}
+
+	// Token: 0x060024F9 RID: 9465 RVA: 0x0012FC74 File Offset: 0x0012DE74
+	private void DropBall()
+	{
+		this.ballHolder.SetActive(false);
+		this.attached = true;
+		base.GetComponent<Rigidbody>().isKinematic = false;
+		this.ExitWater();
+	}
+
+	// Token: 0x060024FA RID: 9466 RVA: 0x0012FC9C File Offset: 0x0012DE9C
+	private void SetStrongState()
+	{
+		this.ballForceScale = 2f;
+		this.ballGravity = 2.5f;
+		this.boyForceScale = 0.18f;
+		this.boyGravity = 0.1f;
+	}
+
+	// Token: 0x060024FB RID: 9467 RVA: 0x0012FCD8 File Offset: 0x0012DED8
+	private void SetDrowningState()
+	{
+		this.ballForceScale = 0.07f;
+		this.ballGravity = 8f;
+		this.boyForceScale = 0.6f;
+		this.boyGravity = 0.25f;
+	}
+
+	// Token: 0x060024FC RID: 9468 RVA: 0x0012FD14 File Offset: 0x0012DF14
+	private void SetLiftingState()
+	{
+		this.ballForceScale = 1.5f;
+		this.ballGravity = 2f;
+		this.boyForceScale = 0.18f;
+		this.boyGravity = 0.1f;
+	}
+
+	// Token: 0x060024FD RID: 9469 RVA: 0x0012FD50 File Offset: 0x0012DF50
+	private void EnterWater()
+	{
+		if (this.waterCount > 0)
+		{
+			this.inWater = true;
+			base.GetComponent<Rigidbody>().useGravity = false;
+			base.GetComponent<Rigidbody>().drag = 1f;
+		}
+	}
+
+	// Token: 0x060024FE RID: 9470 RVA: 0x0012FD8C File Offset: 0x0012DF8C
+	private void ExitWater()
+	{
+		if (this.waterCount == 0)
+		{
+			this.inWater = false;
+			base.GetComponent<Rigidbody>().useGravity = true;
+			base.GetComponent<Rigidbody>().drag = 0.1f;
+		}
+	}
+
+	// Token: 0x060024FF RID: 9471 RVA: 0x0012FDC8 File Offset: 0x0012DFC8
+	private void OnCollisionStay(Collision col)
+	{
+		foreach (ContactPoint contactPoint in col.contacts)
+		{
+			float num = Vector3.Dot(contactPoint.normal, Vector3.up);
+			if (num > 0.5f)
+			{
+				this.grounded = true;
+			}
+		}
+	}
+
+	// Token: 0x06002500 RID: 9472 RVA: 0x0012FE24 File Offset: 0x0012E024
+	private void OnTriggerEnter(Collider c)
+	{
+		BoyWater component = c.GetComponent<BoyWater>();
+		if (component != null)
+		{
+			this.waterCount++;
+			this.EnterWater();
+		}
+	}
+
+	// Token: 0x06002501 RID: 9473 RVA: 0x0012FE58 File Offset: 0x0012E058
+	private void OnTriggerExit(Collider c)
+	{
+		BoyWater component = c.GetComponent<BoyWater>();
+		if (component != null)
+		{
+			this.waterCount--;
+			this.ExitWater();
+		}
+	}
+
+	// Token: 0x040043B9 RID: 17337
+	public Transform chainAttach;
+
+	// Token: 0x040043BA RID: 17338
+	public float ballForceScale = 2f;
+
+	// Token: 0x040043BB RID: 17339
+	public float ballGravity = 2f;
+
+	// Token: 0x040043BC RID: 17340
+	public float boyForceScale = 0.2f;
+
+	// Token: 0x040043BD RID: 17341
+	public float boyGravity = 0.07f;
+
+	// Token: 0x040043BE RID: 17342
+	public bool inWater;
+
+	// Token: 0x040043BF RID: 17343
+	public int waterCount;
+
+	// Token: 0x040043C0 RID: 17344
+	public bool attached;
+
+	// Token: 0x040043C1 RID: 17345
+	public float chainLength = 2f;
+
+	// Token: 0x040043C2 RID: 17346
+	public float ballDistFalloff = 3f;
+
+	// Token: 0x040043C3 RID: 17347
+	public GameObject ballHolder;
+
+	// Token: 0x040043C4 RID: 17348
+	private SignalIn dropBall;
+
+	// Token: 0x040043C5 RID: 17349
+	private LineRenderer chain;
+
+	// Token: 0x040043C6 RID: 17350
+	private Boy boy;
+
+	// Token: 0x040043C7 RID: 17351
+	private Actor.Bone leftAnkle;
+
+	// Token: 0x040043C8 RID: 17352
+	private GameObject attachTarget;
+
+	// Token: 0x040043C9 RID: 17353
+	public BoyChainBall.SwimTypes currentState;
+
+	// Token: 0x040043CA RID: 17354
+	private BoyChainBall.SwimTypes state;
+
+	// Token: 0x040043CB RID: 17355
+	public bool grounded;
+
+	// Token: 0x040043CC RID: 17356
+	public float swimTime;
+
+	// Token: 0x020005A9 RID: 1449
+	public enum SwimTypes
+	{
+		// Token: 0x040043CE RID: 17358
+		strong,
+		// Token: 0x040043CF RID: 17359
+		lift,
+		// Token: 0x040043D0 RID: 17360
+		drowning
+	}
+}

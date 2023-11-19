@@ -1,0 +1,109 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200014C RID: 332
+public class BoyAimStickTrigger : DefaultBoyInput
+{
+	// Token: 0x1700002B RID: 43
+	// (get) Token: 0x060009F3 RID: 2547 RVA: 0x00063528 File Offset: 0x00061728
+	public override vector2f stick
+	{
+		get
+		{
+			if (this.boy.visualBoy.state.typeIndex != this.requiredState)
+			{
+				return base.stick;
+			}
+			return MathUtils.Rot(base.stick, this.aim);
+		}
+	}
+
+	// Token: 0x060009F4 RID: 2548 RVA: 0x00063570 File Offset: 0x00061770
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy;
+		this.boyInside = false;
+	}
+
+	// Token: 0x060009F5 RID: 2549 RVA: 0x00063584 File Offset: 0x00061784
+	private void OnTriggerEnter(Collider c)
+	{
+		BoyProbe component = c.GetComponent<BoyProbe>();
+		if (component != null && component.boy == this.boy)
+		{
+			this.boy.input = this;
+			this.boyInside = true;
+			this.aim = 0f;
+		}
+	}
+
+	// Token: 0x060009F6 RID: 2550 RVA: 0x000635D8 File Offset: 0x000617D8
+	private void OnTriggerExit(Collider c)
+	{
+		BoyProbe component = c.GetComponent<BoyProbe>();
+		if (component != null && component.boy == this.boy)
+		{
+			this.boy.input = null;
+			this.boyInside = false;
+		}
+	}
+
+	// Token: 0x060009F7 RID: 2551 RVA: 0x00063624 File Offset: 0x00061824
+	private void FixedUpdate()
+	{
+		if (!this.boyInside)
+		{
+			return;
+		}
+		if (this.boy.visualBoy.state.typeIndex != this.requiredState)
+		{
+			return;
+		}
+		Vector3 pos = this.boy.pos3;
+		vector2f stick = base.stick;
+		vector2f v = MathUtils.v2(this.target.position - pos);
+		float num = MathUtils.SignedAngleBetweenVectors(stick, v);
+		float num2 = Mathf.Abs(num) * 57.29578f;
+		float magnitude = v.magnitude;
+		float fixedDeltaTime = Time.fixedDeltaTime;
+		float num3 = 57.29578f * Mathf.Atan(this.minHalfWidth / magnitude);
+		if (num3 < this.maxHalfAngle)
+		{
+			num3 = this.maxHalfAngle;
+		}
+		if (stick.sqrMagnitude == 0f || num2 > num3)
+		{
+			this.aim = 0f;
+		}
+		else
+		{
+			num -= this.aim;
+			num2 = Mathf.Abs(num) * 57.29578f;
+			this.aim += Mathf.Sign(num) * (0.017453292f * Mathf.Min(num2, fixedDeltaTime * this.speed));
+		}
+	}
+
+	// Token: 0x04001116 RID: 4374
+	public VisualBoyNode.TypeIndex requiredState = VisualBoyNode.TypeIndex.VisualBoySwim;
+
+	// Token: 0x04001117 RID: 4375
+	public Transform target;
+
+	// Token: 0x04001118 RID: 4376
+	public float maxHalfAngle = 10f;
+
+	// Token: 0x04001119 RID: 4377
+	public float minHalfWidth = 1f;
+
+	// Token: 0x0400111A RID: 4378
+	public float speed = 30f;
+
+	// Token: 0x0400111B RID: 4379
+	private Boy boy;
+
+	// Token: 0x0400111C RID: 4380
+	private bool boyInside;
+
+	// Token: 0x0400111D RID: 4381
+	private float aim;
+}

@@ -1,0 +1,117 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000484 RID: 1156
+public class CeilingWaterHatchStream : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001E52 RID: 7762 RVA: 0x00104240 File Offset: 0x00102440
+	public bool PreAwake(int callcount)
+	{
+		this.StartStream = SignalIn.Create("StartStream", base.gameObject, new Action(this.DoStartStream));
+		return true;
+	}
+
+	// Token: 0x06001E53 RID: 7763 RVA: 0x00104268 File Offset: 0x00102468
+	private void Awake()
+	{
+		this.streamTrigger = base.GetComponent<WaterStream>();
+		this.streamTrigger.strength = Vector3.zero;
+	}
+
+	// Token: 0x06001E54 RID: 7764 RVA: 0x00104288 File Offset: 0x00102488
+	private void SetClosestPoint()
+	{
+		float magnitude = (ScriptGlobals.boy.pos3 - this.rightHatchPoint.position).magnitude;
+		float magnitude2 = (ScriptGlobals.boy.pos3 - this.leftHatchPoint.position).magnitude;
+		if (magnitude < magnitude2)
+		{
+			this.closestPoint = this.rightHatchPoint;
+			this.direction.x = Mathf.Abs(this.direction.x);
+		}
+		else
+		{
+			this.closestPoint = this.leftHatchPoint;
+			this.direction.x = Mathf.Abs(this.direction.x) * -1f;
+		}
+	}
+
+	// Token: 0x06001E55 RID: 7765 RVA: 0x0010433C File Offset: 0x0010253C
+	private void DoStartStream()
+	{
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.5f, 0.2f, 0, 0f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.FadeOut, 0.3f, 7f, 0, 0f);
+		this.isActive = true;
+		this.SetClosestPoint();
+	}
+
+	// Token: 0x06001E56 RID: 7766 RVA: 0x0010438C File Offset: 0x0010258C
+	private void Update()
+	{
+		if (!this.isActive)
+		{
+			return;
+		}
+		if (!this.ignoreCollDone)
+		{
+			foreach (Collider collider in this.hatchColliders)
+			{
+				collider.enabled = true;
+			}
+			this.ignoreCollDone = true;
+		}
+		this.timer += Time.deltaTime;
+		float num = Mathf.InverseLerp(this.streamTime / 2f, this.streamTime, this.timer);
+		float num2 = Mathf.Lerp(1f, 0f, num);
+		float magnitude = (ScriptGlobals.boy.pos3 - this.closestPoint.position).magnitude;
+		float num3 = Mathf.InverseLerp(7f, 0f, magnitude);
+		float num4 = Mathf.Lerp(this.minStrength, this.maxStrength, num3) * num2;
+		this.streamTrigger.strength = this.direction * num4;
+		if (this.timer > this.streamTime)
+		{
+			this.isActive = false;
+		}
+	}
+
+	// Token: 0x040037F1 RID: 14321
+	public Transform center;
+
+	// Token: 0x040037F2 RID: 14322
+	public Vector3 direction = new Vector3(0.7f, -1f, 0f);
+
+	// Token: 0x040037F3 RID: 14323
+	public float maxStrength = 3f;
+
+	// Token: 0x040037F4 RID: 14324
+	public float minStrength = 1f;
+
+	// Token: 0x040037F5 RID: 14325
+	public Transform leftHatchPoint;
+
+	// Token: 0x040037F6 RID: 14326
+	public Transform rightHatchPoint;
+
+	// Token: 0x040037F7 RID: 14327
+	public float streamTime = 4f;
+
+	// Token: 0x040037F8 RID: 14328
+	public List<Collider> hatchColliders;
+
+	// Token: 0x040037F9 RID: 14329
+	private SignalIn StartStream;
+
+	// Token: 0x040037FA RID: 14330
+	private WaterStream streamTrigger;
+
+	// Token: 0x040037FB RID: 14331
+	private float timer;
+
+	// Token: 0x040037FC RID: 14332
+	private Transform closestPoint;
+
+	// Token: 0x040037FD RID: 14333
+	private bool isActive;
+
+	// Token: 0x040037FE RID: 14334
+	private bool ignoreCollDone;
+}

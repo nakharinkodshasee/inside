@@ -1,0 +1,101 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000162 RID: 354
+public class CameraAndSubmarineWaterState : MonoBehaviour
+{
+	// Token: 0x06000A85 RID: 2693 RVA: 0x0006727C File Offset: 0x0006547C
+	private void Start()
+	{
+		this.SetState(CameraAndSubmarineWaterState.CamSub.AboveSurface);
+	}
+
+	// Token: 0x06000A86 RID: 2694 RVA: 0x00067288 File Offset: 0x00065488
+	private void Update()
+	{
+		if (ScriptGlobals.boy && ScriptGlobals.boy.specialBoyMode != Boy.SpecialBoyMode.InsideSub)
+		{
+			return;
+		}
+		if (AudioKeyObject.audioCameraProbe != null)
+		{
+			this.probe = AudioKeyObject.audioCameraProbe.GetComponent<WaterProbe>();
+		}
+		if (this.probe == null || this.sub == null)
+		{
+			return;
+		}
+		bool isInWater = this.probe.IsInWater;
+		this.subSituation = this.sub.GetSurfaceSituation();
+		if (!isInWater && this.subSituation == 1)
+		{
+			this.surfaceSituation = CameraAndSubmarineWaterState.CamSub.AboveAbove;
+		}
+		else if (!isInWater && this.subSituation == 0)
+		{
+			this.surfaceSituation = CameraAndSubmarineWaterState.CamSub.AboveSurface;
+		}
+		else if (!isInWater && this.subSituation == -1)
+		{
+			this.surfaceSituation = CameraAndSubmarineWaterState.CamSub.AboveBelow;
+		}
+		else if (isInWater)
+		{
+			this.surfaceSituation = CameraAndSubmarineWaterState.CamSub.BelowBelow;
+		}
+		if (this.surfaceSituation != this.surfaceSituationLastFrame)
+		{
+			this.SetState(this.surfaceSituation);
+		}
+		this.surfaceSituationLastFrame = this.surfaceSituation;
+	}
+
+	// Token: 0x06000A87 RID: 2695 RVA: 0x000673A4 File Offset: 0x000655A4
+	private void SetState(CameraAndSubmarineWaterState.CamSub camSub)
+	{
+		if (camSub == CameraAndSubmarineWaterState.CamSub.AboveAbove)
+		{
+			SoundEngine.States.submarineAndCameraWater.Set(SoundEngine.States.SubmarineAndCameraWater.cameraAboveSubmarineAbove);
+		}
+		else if (camSub == CameraAndSubmarineWaterState.CamSub.AboveSurface)
+		{
+			SoundEngine.States.submarineAndCameraWater.Set(SoundEngine.States.SubmarineAndCameraWater.cameraAboveSubmarineSurface);
+		}
+		else if (camSub == CameraAndSubmarineWaterState.CamSub.AboveBelow)
+		{
+			SoundEngine.States.submarineAndCameraWater.Set(SoundEngine.States.SubmarineAndCameraWater.cameraAboveSubmarineBelow);
+		}
+		else if (camSub == CameraAndSubmarineWaterState.CamSub.BelowBelow)
+		{
+			SoundEngine.States.submarineAndCameraWater.Set(SoundEngine.States.SubmarineAndCameraWater.cameraBelowSubmarineBelow);
+		}
+	}
+
+	// Token: 0x04001220 RID: 4640
+	public Submarine sub;
+
+	// Token: 0x04001221 RID: 4641
+	private WaterProbe probe;
+
+	// Token: 0x04001222 RID: 4642
+	private CameraAndSubmarineWaterState.CamSub surfaceSituation = CameraAndSubmarineWaterState.CamSub.AboveSurface;
+
+	// Token: 0x04001223 RID: 4643
+	private CameraAndSubmarineWaterState.CamSub surfaceSituationLastFrame = CameraAndSubmarineWaterState.CamSub.AboveSurface;
+
+	// Token: 0x04001224 RID: 4644
+	private int subSituation;
+
+	// Token: 0x02000163 RID: 355
+	private enum CamSub
+	{
+		// Token: 0x04001226 RID: 4646
+		AboveAbove,
+		// Token: 0x04001227 RID: 4647
+		AboveSurface,
+		// Token: 0x04001228 RID: 4648
+		AboveBelow,
+		// Token: 0x04001229 RID: 4649
+		BelowBelow
+	}
+}

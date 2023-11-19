@@ -1,0 +1,18 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000598 RID: 1432
+public class BarrelFall : MonoBehaviour
+{
+	// Token: 0x060024B8 RID: 9400 RVA: 0x0012E6B0 File Offset: 0x0012C8B0
+	private void Start()
+	{
+		Boy boy = ScriptGlobals.boy;
+		BoyUtils.ClearState(boy, -1f);
+	}
+
+	// Token: 0x060024B9 RID: 9401 RVA: 0x0012E6D0 File Offset: 0x0012C8D0
+	private void Update()
+	{
+	}
+}

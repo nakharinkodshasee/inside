@@ -1,0 +1,55 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000157 RID: 343
+public class BoyNoAirTrigger : MonoBehaviour
+{
+	// Token: 0x06000A4C RID: 2636 RVA: 0x00066200 File Offset: 0x00064400
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x06000A4D RID: 2637 RVA: 0x00066210 File Offset: 0x00064410
+	private void OnTriggerEnter(Collider c)
+	{
+		BoyProbe component = c.GetComponent<BoyProbe>();
+		if (component != null && component.boy == this.boy)
+		{
+			if (this.ignoreSurfaceAir)
+			{
+				this.boy.ignoreWaterSurfaceAir++;
+			}
+			if (this.ignoreGoingTowardsSurfaceAir)
+			{
+				this.boy.ignoreWaterGoingTowardsSurfaceAir++;
+			}
+		}
+	}
+
+	// Token: 0x06000A4E RID: 2638 RVA: 0x00066284 File Offset: 0x00064484
+	private void OnTriggerExit(Collider c)
+	{
+		BoyProbe component = c.GetComponent<BoyProbe>();
+		if (component != null && component.boy == this.boy)
+		{
+			if (this.ignoreSurfaceAir)
+			{
+				this.boy.ignoreWaterSurfaceAir--;
+			}
+			if (this.ignoreGoingTowardsSurfaceAir)
+			{
+				this.boy.ignoreWaterGoingTowardsSurfaceAir--;
+			}
+		}
+	}
+
+	// Token: 0x040011D0 RID: 4560
+	public bool ignoreSurfaceAir = true;
+
+	// Token: 0x040011D1 RID: 4561
+	public bool ignoreGoingTowardsSurfaceAir;
+
+	// Token: 0x040011D2 RID: 4562
+	private Boy boy;
+}

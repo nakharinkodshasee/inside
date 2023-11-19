@@ -1,0 +1,417 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000F0 RID: 240
+public class BoyExplosion : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600076B RID: 1899 RVA: 0x000524AC File Offset: 0x000506AC
+	[EarlyProcessBuild(0)]
+	[ContextMenu("PreProcessTest")]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.pieces = this.bodyPieces.GetComponentsInChildren<BoyExplosionPiece>(true);
+		this.piecesHeadless = this.bodyPiecesHeadless.GetComponentsInChildren<BoyExplosionPiece>(true);
+		int i = 0;
+		int num = this.pieces.Length;
+		while (i < num)
+		{
+			this.pieces[i].Init();
+			i++;
+		}
+		int j = 0;
+		int num2 = this.piecesHeadless.Length;
+		while (j < num2)
+		{
+			this.piecesHeadless[j].Init();
+			j++;
+		}
+	}
+
+	// Token: 0x0600076C RID: 1900 RVA: 0x00052540 File Offset: 0x00050740
+	public bool PreAwake(int callcount)
+	{
+		this.explode = SignalIn.Create("explode", base.gameObject, new Action(this.OnExplode));
+		this.explodeHead = SignalIn.Create("explodeHead", base.gameObject, new Action(this.OnHeadExplode));
+		if (this.decal)
+		{
+			this.decalTileProp = this.decal.GetFloatProperty("_Tile");
+		}
+		return true;
+	}
+
+	// Token: 0x0600076D RID: 1901 RVA: 0x000525B8 File Offset: 0x000507B8
+	private void Awake()
+	{
+		this.OnPreProcess();
+		this.boy = ScriptGlobals.boy;
+		this.cameraProbe = ScriptGlobals.camera.cameraBlendProbe.gameObject;
+		int i = 0;
+		int num = this.pieces.Length;
+		while (i < num)
+		{
+			this.pieces[i].Setup(this.boy);
+			i++;
+		}
+		int j = 0;
+		int num2 = this.piecesHeadless.Length;
+		while (j < num2)
+		{
+			this.piecesHeadless[j].Setup(this.boy);
+			j++;
+		}
+	}
+
+	// Token: 0x0600076E RID: 1902 RVA: 0x00052648 File Offset: 0x00050848
+	private void Start()
+	{
+		this.SetIdleState();
+	}
+
+	// Token: 0x0600076F RID: 1903 RVA: 0x00052650 File Offset: 0x00050850
+	private void SetIdleState()
+	{
+		this.state = BoyExplosion.State.Idle;
+	}
+
+	// Token: 0x06000770 RID: 1904 RVA: 0x0005265C File Offset: 0x0005085C
+	private void IdleState()
+	{
+	}
+
+	// Token: 0x06000771 RID: 1905 RVA: 0x00052660 File Offset: 0x00050860
+	private void SetWarmUpState()
+	{
+		this.stepsDelay = 2;
+		this.state = BoyExplosion.State.WarmUp;
+	}
+
+	// Token: 0x06000772 RID: 1906 RVA: 0x00052670 File Offset: 0x00050870
+	private void WarmUpState()
+	{
+		this.stepsDelay--;
+		if (this.stepsDelay <= 0)
+		{
+			this.SetExplodeState(false);
+		}
+	}
+
+	// Token: 0x06000773 RID: 1907 RVA: 0x00052694 File Offset: 0x00050894
+	private void SetWarmUpHeadlessState()
+	{
+		this.stepsDelay = 2;
+		this.state = BoyExplosion.State.WarmUpHeadless;
+	}
+
+	// Token: 0x06000774 RID: 1908 RVA: 0x000526A4 File Offset: 0x000508A4
+	private void WarmUpHeadlessState()
+	{
+		this.stepsDelay--;
+		if (this.stepsDelay <= 0)
+		{
+			this.SetExplodeState(true);
+		}
+	}
+
+	// Token: 0x06000775 RID: 1909 RVA: 0x000526C8 File Offset: 0x000508C8
+	private void SetExplodeState(bool headless)
+	{
+		if (headless)
+		{
+			this.AddBoyHeadlessExplosionForce();
+		}
+		else
+		{
+			this.AddBoyExplosionForce();
+		}
+		this.state = BoyExplosion.State.Explode;
+	}
+
+	// Token: 0x06000776 RID: 1910 RVA: 0x000526E8 File Offset: 0x000508E8
+	private void ExplodeState()
+	{
+		if (LevelGlobals.forcePushManager != null && ForcePushManager.getActiveZoneCount() == 0)
+		{
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.animStop, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+			this.state = BoyExplosion.State.None;
+		}
+	}
+
+	// Token: 0x06000777 RID: 1911 RVA: 0x00052730 File Offset: 0x00050930
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case BoyExplosion.State.Idle:
+			this.IdleState();
+			break;
+		case BoyExplosion.State.WarmUp:
+			this.WarmUpState();
+			break;
+		case BoyExplosion.State.Explode:
+			this.ExplodeState();
+			break;
+		case BoyExplosion.State.WarmUpHeadless:
+			this.WarmUpHeadlessState();
+			break;
+		}
+	}
+
+	// Token: 0x06000778 RID: 1912 RVA: 0x00052790 File Offset: 0x00050990
+	private void OnHeadExplode()
+	{
+		if (this.state != BoyExplosion.State.Idle)
+		{
+			return;
+		}
+		if (!this.boy.isDead)
+		{
+			SingletonBehaviour<BoyAudio>.instance.KillBoyWithEmotion(VoiceConfigProbe.Emotion.DoNotSet, 0f, false, true);
+		}
+		this.boy.KillEnsureRagdoll();
+		SingletonBehaviour<BoyAudio>.instance.KillBoy(0f, true, true);
+		this.explosionPos = ((!(this.explosionOrigin == null)) ? (this.explosionPos = this.explosionOrigin.transform.position) : ScriptGlobals.boy.pos3);
+		this.explosionPos += this.explosionOffset;
+		SkinnedMeshRenderer skinnedMeshRenderer = this.boy.visualBoy.gameObject.GetComponent<Actor>().skinnedMeshRenderer;
+		skinnedMeshRenderer.sharedMesh = this.boyHeadlessMesh;
+		foreach (BoyExplosionPiece boyExplosionPiece in this.piecesHeadless)
+		{
+			boyExplosionPiece.Explode();
+			if (this.explosionForceHeadless != 0f && boyExplosionPiece.type != BoyExplosionPiece.Type.Parent)
+			{
+				boyExplosionPiece.ExplosionForce(this.explosionForceHeadless / 3f, this.explosionPos, this.explosionRadius);
+			}
+		}
+		if (this.cameraProbe != null)
+		{
+			this.cameraProbe.transform.parent = base.transform;
+		}
+		if (this.particlesHeadless != null)
+		{
+			this.particlesHeadless.transform.position = ScriptGlobals.boy.pos3;
+			this.particlesHeadless.Play(true);
+		}
+		this.SetWarmUpHeadlessState();
+	}
+
+	// Token: 0x06000779 RID: 1913 RVA: 0x00052930 File Offset: 0x00050B30
+	public void OnExplode()
+	{
+		if (this.state != BoyExplosion.State.Idle)
+		{
+			return;
+		}
+		if (!this.boy.isDead)
+		{
+			SingletonBehaviour<BoyAudio>.instance.KillBoyWithEmotion(VoiceConfigProbe.Emotion.DoNotSet, 0f, false, true);
+		}
+		if (this.boy.state is BoyLadderState)
+		{
+			this.killedOnLadder = true;
+		}
+		this.boy.KillEnsureRagdoll();
+		SingletonBehaviour<BoyAudio>.instance.KillBoy(0f, true, true);
+		this.explosionPos = ((!(this.explosionOrigin == null)) ? (this.explosionPos = this.explosionOrigin.transform.position) : ScriptGlobals.boy.pos3);
+		this.explosionPos += this.explosionOffset;
+		SkinnedMeshRenderer skinnedMeshRenderer = this.boy.visualBoy.gameObject.GetComponent<Actor>().skinnedMeshRenderer;
+		skinnedMeshRenderer.sharedMesh = this.boyMesh;
+		foreach (BoyExplosionPiece boyExplosionPiece in this.pieces)
+		{
+			boyExplosionPiece.Explode();
+			if (this.explosionForce != 0f && boyExplosionPiece.type != BoyExplosionPiece.Type.Parent)
+			{
+				boyExplosionPiece.ExplosionForce(this.explosionForce, this.explosionPos, this.explosionRadius);
+			}
+		}
+		if (this.cameraProbe != null)
+		{
+			this.cameraProbe.transform.parent = base.transform;
+		}
+		if (this.particles != null)
+		{
+			this.particles.transform.position = ScriptGlobals.boy.pos3;
+			this.particles.Play(true);
+		}
+		if (this.decal != null)
+		{
+			this.decal.transform.position = ScriptGlobals.boy.pos3 + this.decalOffset;
+			this.decal.SetFloatProperty(this.decalTileProp, Random.value);
+		}
+		this.SetWarmUpState();
+	}
+
+	// Token: 0x0600077A RID: 1914 RVA: 0x00052B30 File Offset: 0x00050D30
+	private void AddBoyHeadlessExplosionForce()
+	{
+		RagdollSkeleton ragdoll = this.boy.visualBoy.ragdoll;
+		RagdollSkeleton.BodyIndex bodyIndex = ragdoll.begin;
+		while (bodyIndex != ragdoll.end)
+		{
+			Rigidbody rigidbody = ragdoll[bodyIndex];
+			if (rigidbody != null && rigidbody.gameObject.name == "Head")
+			{
+				rigidbody.AddExplosionForce(this.explosionForceHeadless * rigidbody.mass, this.explosionPos, this.explosionRadius, this.upwardsModifier, 1);
+			}
+			bodyIndex = ++bodyIndex;
+		}
+	}
+
+	// Token: 0x0600077B RID: 1915 RVA: 0x00052BC8 File Offset: 0x00050DC8
+	private void AddBoyExplosionForce()
+	{
+		RagdollSkeleton ragdoll = this.boy.visualBoy.ragdoll;
+		RagdollSkeleton.BodyIndex bodyIndex = ragdoll.begin;
+		while (bodyIndex != ragdoll.end)
+		{
+			Rigidbody rigidbody = ragdoll[bodyIndex];
+			if (this.killedOnLadder)
+			{
+				rigidbody.velocity = Vector3.zero;
+			}
+			if (rigidbody != null)
+			{
+				rigidbody.AddExplosionForce(this.explosionForce * rigidbody.mass, this.explosionPos, this.explosionRadius, this.upwardsModifier, 1);
+			}
+			bodyIndex = ++bodyIndex;
+		}
+	}
+
+	// Token: 0x0600077C RID: 1916 RVA: 0x00052C5C File Offset: 0x00050E5C
+	private void SetOrigin(GameObject origin)
+	{
+		this.explosionOrigin = origin;
+		this.explosionOffset = Vector3.zero;
+	}
+
+	// Token: 0x0600077D RID: 1917 RVA: 0x00052C70 File Offset: 0x00050E70
+	private void OnDrawGizmos()
+	{
+		if (this.debug)
+		{
+			Vector3 vector = Vector3.zero;
+			if (this.explosionOrigin == null)
+			{
+				vector = ScriptGlobals.boy.pos3;
+			}
+			else
+			{
+				vector = this.explosionOrigin.transform.position;
+			}
+			vector += this.explosionOffset;
+			Gizmos.color = new Color(100f, 0f, 0f, 0.1f);
+			Gizmos.DrawSphere(vector, this.explosionRadius);
+		}
+	}
+
+	// Token: 0x04000CDA RID: 3290
+	public Mesh boyMesh;
+
+	// Token: 0x04000CDB RID: 3291
+	public Mesh boyHeadlessMesh;
+
+	// Token: 0x04000CDC RID: 3292
+	public GameObject bodyPieces;
+
+	// Token: 0x04000CDD RID: 3293
+	public GameObject bodyPiecesHeadless;
+
+	// Token: 0x04000CDE RID: 3294
+	public float explosionRadius;
+
+	// Token: 0x04000CDF RID: 3295
+	public float explosionForce;
+
+	// Token: 0x04000CE0 RID: 3296
+	public float explosionForceHeadless;
+
+	// Token: 0x04000CE1 RID: 3297
+	public GameObject explosionOrigin;
+
+	// Token: 0x04000CE2 RID: 3298
+	public Vector3 explosionOffset;
+
+	// Token: 0x04000CE3 RID: 3299
+	public Vector3 decalOffset;
+
+	// Token: 0x04000CE4 RID: 3300
+	public float upwardsModifier;
+
+	// Token: 0x04000CE5 RID: 3301
+	public ParticleSystem particles;
+
+	// Token: 0x04000CE6 RID: 3302
+	public ParticleSystem particlesHeadless;
+
+	// Token: 0x04000CE7 RID: 3303
+	public MaterialInstance decal;
+
+	// Token: 0x04000CE8 RID: 3304
+	public AnimClipNode animStop;
+
+	// Token: 0x04000CE9 RID: 3305
+	public AnimClipNode animHeadOff;
+
+	// Token: 0x04000CEA RID: 3306
+	public bool debug;
+
+	// Token: 0x04000CEB RID: 3307
+	private SignalIn explode;
+
+	// Token: 0x04000CEC RID: 3308
+	private SignalIn explodeHead;
+
+	// Token: 0x04000CED RID: 3309
+	private BoyExplosion.State state;
+
+	// Token: 0x04000CEE RID: 3310
+	private Boy boy;
+
+	// Token: 0x04000CEF RID: 3311
+	private int stepsDelay;
+
+	// Token: 0x04000CF0 RID: 3312
+	private Vector3 explosionPos;
+
+	// Token: 0x04000CF1 RID: 3313
+	private GameObject cameraProbe;
+
+	// Token: 0x04000CF2 RID: 3314
+	[HideInInspector]
+	[SerializeField]
+	private BoyExplosionPiece[] pieces;
+
+	// Token: 0x04000CF3 RID: 3315
+	[SerializeField]
+	[HideInInspector]
+	private BoyExplosionPiece[] piecesHeadless;
+
+	// Token: 0x04000CF4 RID: 3316
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04000CF5 RID: 3317
+	private MaterialInstance.FloatProperty decalTileProp;
+
+	// Token: 0x04000CF6 RID: 3318
+	private bool killedOnLadder;
+
+	// Token: 0x020000F1 RID: 241
+	private enum State
+	{
+		// Token: 0x04000CF8 RID: 3320
+		None,
+		// Token: 0x04000CF9 RID: 3321
+		Idle,
+		// Token: 0x04000CFA RID: 3322
+		WarmUp,
+		// Token: 0x04000CFB RID: 3323
+		Explode,
+		// Token: 0x04000CFC RID: 3324
+		WarmUpHeadless
+	}
+}

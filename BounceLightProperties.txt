@@ -1,0 +1,9 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000315 RID: 789
+public class BounceLightProperties : MonoBehaviour
+{
+	// Token: 0x040027C6 RID: 10182
+	public Color bounceColor = Color.white;
+}

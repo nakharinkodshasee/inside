@@ -1,0 +1,64 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000483 RID: 1155
+public class CargoRoomDynamicCam : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001E4D RID: 7757 RVA: 0x0010410C File Offset: 0x0010230C
+	public bool PreAwake(int callcount)
+	{
+		this.boyDetectedByGuard = SignalIn.Create("boyDetectedByGuard", base.gameObject, new Action(this.BoyDetectedByGuard));
+		return true;
+	}
+
+	// Token: 0x06001E4E RID: 7758 RVA: 0x00104134 File Offset: 0x00102334
+	private void Start()
+	{
+		this.cameraBox = base.GetComponent<CameraBlendBox>();
+	}
+
+	// Token: 0x06001E4F RID: 7759 RVA: 0x00104144 File Offset: 0x00102344
+	private void BoyDetectedByGuard()
+	{
+		this.boyIsDetected = true;
+	}
+
+	// Token: 0x06001E50 RID: 7760 RVA: 0x00104150 File Offset: 0x00102350
+	private void Update()
+	{
+		if (this.boyIsDetected)
+		{
+			return;
+		}
+		float num = Mathf.InverseLerp(this.leftMostPos.position.x, this.rightMostPos.position.x, ScriptGlobals.boy.transform.position.x);
+		this.cameraBox.positionCamera.x = Mathf.Lerp(this.leftPosCamPos, this.rightPosCamPos, num);
+		this.cameraBox.positionAim.x = Mathf.Lerp(this.leftPosCamAim, this.rightPosCamAim, num);
+	}
+
+	// Token: 0x040037E8 RID: 14312
+	public Transform leftMostPos;
+
+	// Token: 0x040037E9 RID: 14313
+	public Transform rightMostPos;
+
+	// Token: 0x040037EA RID: 14314
+	public float leftPosCamPos = -0.5f;
+
+	// Token: 0x040037EB RID: 14315
+	public float leftPosCamAim = -1f;
+
+	// Token: 0x040037EC RID: 14316
+	public float rightPosCamPos = -1.5f;
+
+	// Token: 0x040037ED RID: 14317
+	public float rightPosCamAim = -3f;
+
+	// Token: 0x040037EE RID: 14318
+	private CameraBlendBox cameraBox;
+
+	// Token: 0x040037EF RID: 14319
+	private SignalIn boyDetectedByGuard;
+
+	// Token: 0x040037F0 RID: 14320
+	private bool boyIsDetected;
+}

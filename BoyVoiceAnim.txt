@@ -1,0 +1,196 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000160 RID: 352
+public class BoyVoiceAnim : MonoBehaviour, IBreathDurationCallbackReceiver
+{
+	// Token: 0x06000A7C RID: 2684 RVA: 0x00066E48 File Offset: 0x00065048
+	private void Start()
+	{
+		this.boy = ScriptGlobals.boy;
+		this.voice = this.boy.GetComponentInChildren<BoyVoice>();
+		this.breath = this.boy.visualBoy.breath;
+		if (this.voice)
+		{
+			this.currentBlendPos = (this.targetBlendPos = 0.5f);
+		}
+	}
+
+	// Token: 0x06000A7D RID: 2685 RVA: 0x00066EB0 File Offset: 0x000650B0
+	private void SetExhaleState(float duration)
+	{
+		if (this.currentBlendPos == 0f)
+		{
+			this.breathSpeed = 0f;
+		}
+		else
+		{
+			this.breathSpeed = 1f / duration * this.targetBlendPos;
+		}
+		this.breathDirection = 0f;
+		if (this.exhaleParticles != null && this.exhaleVisible)
+		{
+			this.exhaleParticles.Play();
+		}
+		this.state = BoyVoiceAnim.State.Exhale;
+	}
+
+	// Token: 0x06000A7E RID: 2686 RVA: 0x00066F2C File Offset: 0x0006512C
+	private void ExhaleState()
+	{
+		this.targetBlendPos -= Time.deltaTime * this.breathSpeed * this.breathSpeedModifier;
+		this.targetBlendPos = Mathf.Clamp(this.targetBlendPos, 0f, 1f);
+		this.currentBlendPos = 1f - this.exhaleCurve.Evaluate(this.targetBlendPos);
+	}
+
+	// Token: 0x06000A7F RID: 2687 RVA: 0x00066F94 File Offset: 0x00065194
+	private void SetInhaleState(float duration)
+	{
+		if (this.currentBlendPos == 1f)
+		{
+			this.breathSpeed = 0f;
+		}
+		else
+		{
+			this.breathSpeed = 1f / (duration * (1f - this.targetBlendPos));
+		}
+		this.breathDirection = 1f;
+		this.state = BoyVoiceAnim.State.Inhale;
+	}
+
+	// Token: 0x06000A80 RID: 2688 RVA: 0x00066FF0 File Offset: 0x000651F0
+	private void InhaleState()
+	{
+		this.targetBlendPos += Time.deltaTime * this.breathSpeed * this.breathSpeedModifier;
+		this.targetBlendPos = Mathf.Clamp(this.targetBlendPos, 0f, 1f);
+		this.currentBlendPos = this.inhaleCurve.Evaluate(this.targetBlendPos);
+	}
+
+	// Token: 0x06000A81 RID: 2689 RVA: 0x00067050 File Offset: 0x00065250
+	private void Update()
+	{
+		if (this.state == BoyVoiceAnim.State.None)
+		{
+			return;
+		}
+		this.busy = this.BusyCheck();
+		BoyVoiceAnim.State state = this.state;
+		if (state != BoyVoiceAnim.State.Exhale)
+		{
+			if (state == BoyVoiceAnim.State.Inhale)
+			{
+				this.InhaleState();
+			}
+		}
+		else
+		{
+			this.ExhaleState();
+		}
+		this.breath.posExhale = 1f - this.currentBlendPos;
+		if (this.busy)
+		{
+			this.breath.posStrength = 0f;
+		}
+		else
+		{
+			this.breath.posStrength += (this.targetIntensity - this.breath.posStrength) * Time.deltaTime * this.intensityBlendSpeed;
+		}
+		this.breath.posFrantic += (this.targetStyle - this.breath.posFrantic) * Time.deltaTime * this.styleBlendSpeed;
+	}
+
+	// Token: 0x06000A82 RID: 2690 RVA: 0x00067140 File Offset: 0x00065340
+	private bool BusyCheck()
+	{
+		return this.boy.state is BoyCustomAnimState || this.boy.state is BoyRopeState || this.boy.state is BoyGrabPlateauState || this.boy.state is BoyLadderState || this.boy.visualBoy.upperBodyAnim != null || this.boy.state is BoySwimState;
+	}
+
+	// Token: 0x06000A83 RID: 2691 RVA: 0x000671D4 File Offset: 0x000653D4
+	public void HandleDurationCallback(float intensity, int breathCycle, float duration, VoiceConfigProbe.Emotion emotion, VoiceConfigProbe.Theme voiceTheme)
+	{
+		this.targetIntensity = this.lowIntensitySize + (this.highIntensitySize - this.lowIntensitySize) * (intensity / 100f);
+		this.targetStyle += ((duration <= 0.65f) ? this.styleIncrement : (-this.styleIncrement));
+		this.targetStyle = Mathf.Clamp(this.targetStyle, 0f, 1f);
+		if (breathCycle == 1)
+		{
+			this.SetExhaleState(duration);
+		}
+		else
+		{
+			this.SetInhaleState(duration);
+		}
+	}
+
+	// Token: 0x04001207 RID: 4615
+	private Boy boy;
+
+	// Token: 0x04001208 RID: 4616
+	private BoyVoice voice;
+
+	// Token: 0x04001209 RID: 4617
+	private VisualBoyBreath breath;
+
+	// Token: 0x0400120A RID: 4618
+	public AnimationCurve inhaleCurve;
+
+	// Token: 0x0400120B RID: 4619
+	public AnimationCurve exhaleCurve;
+
+	// Token: 0x0400120C RID: 4620
+	public ParticleSystem exhaleParticles;
+
+	// Token: 0x0400120D RID: 4621
+	public bool exhaleVisible;
+
+	// Token: 0x0400120E RID: 4622
+	public float breathSpeedModifier = 1.2f;
+
+	// Token: 0x0400120F RID: 4623
+	public float lowIntensitySize = 1f;
+
+	// Token: 0x04001210 RID: 4624
+	public float highIntensitySize = 0.25f;
+
+	// Token: 0x04001211 RID: 4625
+	public float intensityBlendSpeed;
+
+	// Token: 0x04001212 RID: 4626
+	public float styleIncrement = 0.2f;
+
+	// Token: 0x04001213 RID: 4627
+	public float styleBlendSpeed = 0.25f;
+
+	// Token: 0x04001214 RID: 4628
+	private float breathSpeed;
+
+	// Token: 0x04001215 RID: 4629
+	private float targetIntensity = 1f;
+
+	// Token: 0x04001216 RID: 4630
+	private float targetStyle;
+
+	// Token: 0x04001217 RID: 4631
+	private bool busy;
+
+	// Token: 0x04001218 RID: 4632
+	private float breathDirection;
+
+	// Token: 0x04001219 RID: 4633
+	private float targetBlendPos;
+
+	// Token: 0x0400121A RID: 4634
+	private float currentBlendPos;
+
+	// Token: 0x0400121B RID: 4635
+	private BoyVoiceAnim.State state;
+
+	// Token: 0x02000161 RID: 353
+	private enum State
+	{
+		// Token: 0x0400121D RID: 4637
+		None,
+		// Token: 0x0400121E RID: 4638
+		Exhale,
+		// Token: 0x0400121F RID: 4639
+		Inhale
+	}
+}

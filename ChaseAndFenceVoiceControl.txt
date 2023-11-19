@@ -1,0 +1,84 @@
+using System;
+using AudioCommands;
+using UnityEngine;
+
+// Token: 0x02000528 RID: 1320
+public class ChaseAndFenceVoiceControl : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002266 RID: 8806 RVA: 0x0011F58C File Offset: 0x0011D78C
+	public bool PreAwake(int callcount)
+	{
+		this.startControl = SignalIn.Create("startControl", base.gameObject, new Action(this.OnStartSettingIntensity));
+		this.stopControl = SignalIn.Create("stopControl", base.gameObject, new Action(this.OnStopSettingIntensity));
+		this.hulvesClose = SignalOut.Create("hulvesClose", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06002267 RID: 8807 RVA: 0x0011F5F4 File Offset: 0x0011D7F4
+	private void Start()
+	{
+		this.config.setIntensity = true;
+		this.config.intensityConfig = new VoiceConfigProbe.ConfigIntensityTimed();
+	}
+
+	// Token: 0x06002268 RID: 8808 RVA: 0x0011F614 File Offset: 0x0011D814
+	private void OnStartSettingIntensity()
+	{
+		this.setIntensity = true;
+	}
+
+	// Token: 0x06002269 RID: 8809 RVA: 0x0011F620 File Offset: 0x0011D820
+	private void OnStopSettingIntensity()
+	{
+		this.setIntensity = false;
+	}
+
+	// Token: 0x0600226A RID: 8810 RVA: 0x0011F62C File Offset: 0x0011D82C
+	private void Update()
+	{
+		if (this.setIntensity && this.chaseManager != null)
+		{
+			float rtpc = this.chaseManager.GetRTPC();
+			this.config.intensityConfig.rangeA.Set(rtpc, rtpc);
+			ThemeUtils.SetVoiceConfig(ScriptGlobals.boy.gameObject, this.config);
+			if (!this.hulvesIsClose && rtpc < 15f && rtpc > 10f)
+			{
+				this.hulvesClose.Signal();
+				this.hulvesIsClose = true;
+			}
+			else if (this.hulvesIsClose && rtpc > 15f)
+			{
+				this.hulvesIsClose = false;
+			}
+		}
+	}
+
+	// Token: 0x0600226B RID: 8811 RVA: 0x0011F6E4 File Offset: 0x0011D8E4
+	private void OnDisable()
+	{
+		this.config.intensityConfig.rangeA.min = 0f;
+		this.config.intensityConfig.rangeA.max = 100f;
+		ThemeUtils.SetVoiceConfig(ScriptGlobals.boy.gameObject, this.config);
+	}
+
+	// Token: 0x0400402F RID: 16431
+	public HulvFenceChaseManager chaseManager;
+
+	// Token: 0x04004030 RID: 16432
+	private bool setIntensity;
+
+	// Token: 0x04004031 RID: 16433
+	private SignalOut hulvesClose;
+
+	// Token: 0x04004032 RID: 16434
+	private SignalIn startControl;
+
+	// Token: 0x04004033 RID: 16435
+	private SignalIn stopControl;
+
+	// Token: 0x04004034 RID: 16436
+	private bool hulvesIsClose;
+
+	// Token: 0x04004035 RID: 16437
+	private BoyVoiceConfig config = new BoyVoiceConfig();
+}

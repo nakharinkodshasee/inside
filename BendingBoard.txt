@@ -1,0 +1,227 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003D0 RID: 976
+public class BendingBoard : MonoBehaviour, IFastEventExListener<Collider>, IPreAwake
+{
+	// Token: 0x06001A2F RID: 6703 RVA: 0x000E469C File Offset: 0x000E289C
+	public bool PreAwake(int callcount)
+	{
+		this.breakBoard = SignalIn.Create("breakBoard", base.gameObject, new Action(this.Snap));
+		this.anim = this.visuals.GetComponent<Animation>();
+		this.animBend = this.anim["Take 001"];
+		this.animBend.speed = 0f;
+		this.animBend.normalizedTime = 0.35f;
+		this.distMax = this.distMaxInput * base.transform.localScale.x;
+		this.boardTransform = base.transform;
+		this.debris.SetActive(false);
+		this.previousBend = (this.currentBend = this.initialBend);
+		this.animBend.normalizedTime = this.currentBend;
+		return true;
+	}
+
+	// Token: 0x06001A30 RID: 6704 RVA: 0x000E4774 File Offset: 0x000E2974
+	private void Start()
+	{
+		Transform childComponent = ScriptGlobals.boy.visualBoy.transform.GetChildComponent("Themes");
+		this.balanceTheme = childComponent.GetChildComponent("Balance");
+		this.trigger.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.trigger.exitTrigger.Register(this, ref this.triggerExitHandle);
+	}
+
+	// Token: 0x06001A31 RID: 6705 RVA: 0x000E47DC File Offset: 0x000E29DC
+	private void FixedUpdate()
+	{
+		if (ScriptGlobals.boy == null || this.boardTransform == null)
+		{
+			return;
+		}
+		float num = Mathf.Abs(ScriptGlobals.boy.pos3.x - this.boardTransform.position.x);
+		if (num > this.distMax)
+		{
+			return;
+		}
+		this.currentJumpState = (ScriptGlobals.boy.state is BoyJumpState);
+		Collider groundCollider = ScriptGlobals.boy.status.groundCollider;
+		this.currentBoyOnBoard = (groundCollider != null && groundCollider.transform.GetComponentInParents<BendingBoard>() == this);
+		this.Bending();
+		if (this.currentBoyOnBoard)
+		{
+			float num2 = 1f - Mathf.Clamp(num / this.distMax, 0f, 1f);
+			float num3 = num2;
+			num3 = this.visualsOffsetCurve.Evaluate(num3) + this.initialBend;
+			this.currentBend += (num3 - this.currentBend) * Time.deltaTime * this.pushForce * Mathf.Clamp(0.2f + num2, 0f, 1f);
+			this.vel = this.currentBend - this.previousBend;
+			if (this.breaking && this.vel <= 0.01f)
+			{
+				this.Snap();
+			}
+			this.animBend.normalizedTime = this.currentBend;
+			if (this.currentJumpState && !this.previousJumpState)
+			{
+				this.vel = this.jumpForce * num2;
+			}
+			if (!this.previousBoyOnBoard && !this.breaking && this.health > 0 && num < 2f)
+			{
+				this.health--;
+				if (this.health <= 0)
+				{
+					this.breaking = true;
+				}
+			}
+		}
+		this.previousJumpState = this.currentJumpState;
+		this.previousBoyOnBoard = this.currentBoyOnBoard;
+	}
+
+	// Token: 0x06001A32 RID: 6706 RVA: 0x000E49E4 File Offset: 0x000E2BE4
+	private void Bending()
+	{
+		this.previousBend = this.currentBend;
+		this.vel += (this.initialBend - this.currentBend) * Time.deltaTime * this.acceleration;
+		this.vel -= this.vel * Time.deltaTime * this.friction;
+		this.vel = Mathf.Clamp(this.vel, -this.maxVelocity, this.maxVelocity);
+		if (this.currentBend == 0f && this.vel < 0f)
+		{
+			this.vel = Mathf.Abs(this.vel);
+		}
+		this.currentBend += this.vel;
+		this.currentBend = Mathf.Clamp(this.currentBend, 0f, 1f);
+		this.animBend.normalizedTime = this.currentBend;
+	}
+
+	// Token: 0x06001A33 RID: 6707 RVA: 0x000E4AD4 File Offset: 0x000E2CD4
+	private void Snap()
+	{
+		this.visuals.SetActive(false);
+		this.debris.SetActive(true);
+		foreach (object obj in this.debris.transform)
+		{
+			Transform transform = (Transform)obj;
+			if (transform.GetComponent<Rigidbody>())
+			{
+				Vector3 vector = base.transform.position + new Vector3(0f, 2f, Random.Range(-0.015f, 0.015f));
+				transform.GetComponent<Rigidbody>().AddExplosionForce(2.5f, vector, 5f, 0f, 1);
+			}
+		}
+		ScriptGlobals.boy.AddForce(new vector2f(0f, -5f), null);
+	}
+
+	// Token: 0x06001A34 RID: 6708 RVA: 0x000E4BD0 File Offset: 0x000E2DD0
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.trigger.enterTrigger)
+		{
+			this.TriggerEnter(collider);
+		}
+		else if (sender == this.trigger.exitTrigger)
+		{
+			this.TriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06001A35 RID: 6709 RVA: 0x000E4C0C File Offset: 0x000E2E0C
+	private void TriggerEnter(Collider c)
+	{
+		if (c.GetComponent<BoyProbe>() != null)
+		{
+			ScriptGlobals.boy.visualBoy.SetTheme(this.balanceTheme, VisualBoy.ThemePriority.Low);
+		}
+	}
+
+	// Token: 0x06001A36 RID: 6710 RVA: 0x000E4C40 File Offset: 0x000E2E40
+	private void TriggerExit(Collider c)
+	{
+		if (c.GetComponent<BoyProbe>() != null)
+		{
+			ScriptGlobals.boy.visualBoy.SetTheme(null, VisualBoy.ThemePriority.Low);
+		}
+	}
+
+	// Token: 0x04002F0E RID: 12046
+	public CollisionEvents trigger;
+
+	// Token: 0x04002F0F RID: 12047
+	public GameObject visuals;
+
+	// Token: 0x04002F10 RID: 12048
+	public GameObject debris;
+
+	// Token: 0x04002F11 RID: 12049
+	public AnimationCurve visualsOffsetCurve;
+
+	// Token: 0x04002F12 RID: 12050
+	public float initialBend = 0.1f;
+
+	// Token: 0x04002F13 RID: 12051
+	public float acceleration = 0.2f;
+
+	// Token: 0x04002F14 RID: 12052
+	public float friction = 1.2f;
+
+	// Token: 0x04002F15 RID: 12053
+	public float maxVelocity = 0.02f;
+
+	// Token: 0x04002F16 RID: 12054
+	public float pushForce = 1f;
+
+	// Token: 0x04002F17 RID: 12055
+	public float jumpForce = 0.25f;
+
+	// Token: 0x04002F18 RID: 12056
+	private SignalIn breakBoard;
+
+	// Token: 0x04002F19 RID: 12057
+	private Animation anim;
+
+	// Token: 0x04002F1A RID: 12058
+	private AnimationState animBend;
+
+	// Token: 0x04002F1B RID: 12059
+	private Vector3 start;
+
+	// Token: 0x04002F1C RID: 12060
+	private Transform balanceTheme;
+
+	// Token: 0x04002F1D RID: 12061
+	private float currentBend = 0.2f;
+
+	// Token: 0x04002F1E RID: 12062
+	private float previousBend;
+
+	// Token: 0x04002F1F RID: 12063
+	private bool currentBoyOnBoard;
+
+	// Token: 0x04002F20 RID: 12064
+	private bool previousBoyOnBoard;
+
+	// Token: 0x04002F21 RID: 12065
+	private bool currentJumpState;
+
+	// Token: 0x04002F22 RID: 12066
+	private bool previousJumpState;
+
+	// Token: 0x04002F23 RID: 12067
+	public float distMaxInput = 3f;
+
+	// Token: 0x04002F24 RID: 12068
+	private float distMax = 3.3f;
+
+	// Token: 0x04002F25 RID: 12069
+	private float vel;
+
+	// Token: 0x04002F26 RID: 12070
+	private bool breaking;
+
+	// Token: 0x04002F27 RID: 12071
+	public int health = 3;
+
+	// Token: 0x04002F28 RID: 12072
+	private Transform boardTransform;
+
+	// Token: 0x04002F29 RID: 12073
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04002F2A RID: 12074
+	private int triggerExitHandle = -1;
+}

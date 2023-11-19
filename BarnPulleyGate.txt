@@ -1,0 +1,126 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000432 RID: 1074
+public class BarnPulleyGate : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001C2E RID: 7214 RVA: 0x000F69E0 File Offset: 0x000F4BE0
+	public bool PreAwake(int callcount)
+	{
+		this.canBeSolved = SignalOut.Create("canBeSolved", base.gameObject);
+		this.cannotBeSolved = SignalOut.Create("cannotBeSolved", base.gameObject);
+		this.closedShut = SignalOut.Create("closedShut", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001C2F RID: 7215 RVA: 0x000F6A30 File Offset: 0x000F4C30
+	private void Start()
+	{
+		this.gateStartPos = this.gate.transform.position;
+	}
+
+	// Token: 0x06001C30 RID: 7216 RVA: 0x000F6A48 File Offset: 0x000F4C48
+	private void UpdateGatePos(float frac)
+	{
+		this.gate.MovePosition(this.gateStartPos + Vector3.up * 3.5f * frac);
+	}
+
+	// Token: 0x06001C31 RID: 7217 RVA: 0x000F6A78 File Offset: 0x000F4C78
+	private void FixedUpdate()
+	{
+		int num = 0;
+		if (BoyUtils.GetCurrentGrabBody(this.pullBoy1) == base.GetComponent<Rigidbody>())
+		{
+			num++;
+		}
+		if (BoyUtils.GetCurrentGrabBody(this.pullBoy2) == base.GetComponent<Rigidbody>())
+		{
+			num++;
+		}
+		if (num >= 2)
+		{
+			this.twoGuysHavePulled = true;
+		}
+		if (num < 2 && !this.oneGuyPullBlocker.activeSelf)
+		{
+			this.oneGuyPullBlocker.SetActive(true);
+		}
+		else if (num >= 2 && this.oneGuyPullBlocker.activeSelf)
+		{
+			this.oneGuyPullBlocker.SetActive(false);
+		}
+		if (this.twoGuysHavePulled && this.oneGuyPullBlocker.activeSelf)
+		{
+			this.oneGuyPullBlocker.SetActive(false);
+		}
+		float num2 = Mathf.InverseLerp(this.pulleyRight.position.x, this.pulleyLeft.position.x, base.transform.position.x);
+		this.UpdateGatePos(num2);
+		float num3 = Mathf.InverseLerp(this.pulleyRight.position.x, this.pulleyRight.position.x - 0.5f, base.transform.position.x);
+		base.GetComponent<Rigidbody>().mass = Mathf.Lerp(this.lowMass, this.highMass, num3);
+		if (num < 2)
+		{
+			base.GetComponent<Rigidbody>().mass *= 2f;
+		}
+		if (num <= 0 || GameInput.stick.x > 0.25f)
+		{
+			base.GetComponent<Rigidbody>().AddForce(Vector3.right * 245f * Time.deltaTime * base.GetComponent<Rigidbody>().mass);
+		}
+		if (num2 <= 0f && this.twoGuysHavePulled)
+		{
+			this.twoGuysHavePulled = false;
+			this.closedShut.Signal();
+		}
+		if (!this.solvable && num2 >= 0.9f)
+		{
+			this.canBeSolved.Signal();
+			this.solvable = true;
+		}
+		else if (this.solvable && num2 <= 0.8f)
+		{
+			this.cannotBeSolved.Signal();
+			this.solvable = false;
+		}
+	}
+
+	// Token: 0x0400339F RID: 13215
+	public Boy pullBoy1;
+
+	// Token: 0x040033A0 RID: 13216
+	public Boy pullBoy2;
+
+	// Token: 0x040033A1 RID: 13217
+	public GameObject oneGuyPullBlocker;
+
+	// Token: 0x040033A2 RID: 13218
+	public Rigidbody gate;
+
+	// Token: 0x040033A3 RID: 13219
+	public Transform pulleyLeft;
+
+	// Token: 0x040033A4 RID: 13220
+	public Transform pulleyRight;
+
+	// Token: 0x040033A5 RID: 13221
+	private float lowMass = 1.5f;
+
+	// Token: 0x040033A6 RID: 13222
+	private float highMass = 2.6f;
+
+	// Token: 0x040033A7 RID: 13223
+	private SignalOut canBeSolved;
+
+	// Token: 0x040033A8 RID: 13224
+	private SignalOut cannotBeSolved;
+
+	// Token: 0x040033A9 RID: 13225
+	private SignalOut closedShut;
+
+	// Token: 0x040033AA RID: 13226
+	private bool solvable;
+
+	// Token: 0x040033AB RID: 13227
+	private Vector3 gateStartPos;
+
+	// Token: 0x040033AC RID: 13228
+	private bool twoGuysHavePulled;
+}

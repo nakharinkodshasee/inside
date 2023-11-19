@@ -1,0 +1,44 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004BD RID: 1213
+public class BoxDepthClimbControl : MonoBehaviour
+{
+	// Token: 0x06001FC3 RID: 8131 RVA: 0x0010E4AC File Offset: 0x0010C6AC
+	private void Update()
+	{
+		Rigidbody rigidBody = this.jetCrate.GetRigidBody();
+		Vector3 position = rigidBody.position;
+		float val = position.x - ScriptGlobals.boy.pos.x;
+		if (FastMath.Abs(val) > 1f)
+		{
+			this.box.depthClimbup = true;
+			return;
+		}
+		Vector3 position2 = this.box.transform.position;
+		float num = position.y - position2.y;
+		if (num > this.yThreshold || num < 0f)
+		{
+			this.box.depthClimbup = true;
+			return;
+		}
+		if (rigidBody.velocity.y >= -1f)
+		{
+			this.box.depthClimbup = true;
+			return;
+		}
+		this.box.depthClimbup = false;
+	}
+
+	// Token: 0x04003ACC RID: 15052
+	public BoyDepthObstruction box;
+
+	// Token: 0x04003ACD RID: 15053
+	public JetCrate jetCrate;
+
+	// Token: 0x04003ACE RID: 15054
+	public float yThreshold;
+
+	// Token: 0x04003ACF RID: 15055
+	private bool boxIsClimbable = true;
+}

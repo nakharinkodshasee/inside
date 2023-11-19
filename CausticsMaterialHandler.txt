@@ -1,0 +1,192 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200031B RID: 795
+[ExecuteInEditMode]
+public class CausticsMaterialHandler : MonoBehaviour
+{
+	// Token: 0x0600168C RID: 5772 RVA: 0x000C5E48 File Offset: 0x000C4048
+	private void OnEnable()
+	{
+		this.matinstance = base.GetComponent<MaterialInstance>();
+		this.colorProperty = this.matinstance.GetOrAddColorProperty("_Color");
+		this.timeOfProperty = this.matinstance.GetOrAddFloatProperty("_TimeOfs");
+		this.intensityAProperty = this.matinstance.GetOrAddFloatProperty("_IntensityA");
+		this.intensityBProperty = this.matinstance.GetOrAddFloatProperty("_IntensityB");
+		this.intensityCProperty = this.matinstance.GetOrAddFloatProperty("_IntensityC");
+		this.boy = ScriptGlobals.boy;
+		if (this.useExternalWaveEnergy && this.externalWaveEnergy == null)
+		{
+			this.useExternalWaveEnergy = false;
+		}
+	}
+
+	// Token: 0x0600168D RID: 5773 RVA: 0x000C5F00 File Offset: 0x000C4100
+	private void Start()
+	{
+		this.debugPower = 0f;
+	}
+
+	// Token: 0x0600168E RID: 5774 RVA: 0x000C5F10 File Offset: 0x000C4110
+	private void Update()
+	{
+		if (Application.isPlaying)
+		{
+			if (this.matinstance == null || this.boy == null)
+			{
+				return;
+			}
+			Vector3 vector = base.gameObject.transform.position + this.falloffPositionOffset;
+			if (this.useExternalWaveEnergy)
+			{
+				this.power = this.externalWaveEnergy.waveEnergy;
+			}
+			else
+			{
+				this.dist = Vector3.Distance(vector, this.boy.pos3);
+				float num = 1f;
+				float num2 = 1f;
+				BoyWater water = this.boy.status.water;
+				if (water != null)
+				{
+					num = Mathf.Abs(water.GetSurfaceHeight(this.boy) - this.boy.pos3.y);
+				}
+				num2 = Mathf.Clamp01(num2 - num * 0.5f);
+				float num3 = Mathf.Abs(this.boy.velocity3.x + this.boy.velocity3.y) * this.velocityMultiplier * num2;
+				this.waveEnergy += num3 * Time.deltaTime;
+				this.waveEnergy -= Time.deltaTime * this.velocityFalloff;
+				this.waveEnergy = Mathf.Clamp01(this.waveEnergy);
+				this.falloff = MathUtils.SmoothStep(this.MinBoyDistance, this.MaxBoyDistance, this.dist) * -1f + 1f;
+				this.power = this.waveEnergy * this.falloff;
+				if (!this.debug || EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Rendering))
+				{
+				}
+			}
+		}
+		float deltaTime = Time.deltaTime;
+		this.TimeOffSet += deltaTime * Mathf.Lerp(this.CausSpeedMin, this.CausSpeedMax, this.power);
+		this.matinstance.SetColorProperty(this.colorProperty, Color.Lerp(this.CausColorMin, this.CausColorMax, this.power));
+		this.matinstance.SetFloatProperty(this.intensityAProperty, Mathf.Lerp(this.CausIntensityAMin, this.CausIntensityAMax, this.power));
+		this.matinstance.SetFloatProperty(this.intensityBProperty, Mathf.Lerp(this.CausIntensityBMin, this.CausIntensityBMax, this.power));
+		this.matinstance.SetFloatProperty(this.intensityCProperty, Mathf.Lerp(this.CausIntensityCMin, this.CausIntensityCMax, this.power));
+		this.matinstance.SetFloatProperty(this.timeOfProperty, this.TimeOffSet);
+	}
+
+	// Token: 0x0600168F RID: 5775 RVA: 0x000C61B0 File Offset: 0x000C43B0
+	private void OnDrawGizmos()
+	{
+		if (this.debug && !this.useExternalWaveEnergy)
+		{
+			Vector3 vector = base.gameObject.transform.position + this.falloffPositionOffset;
+			Color color = Gizmos.color;
+			Gizmos.color = Color.green.Alpha(0.5f);
+			Gizmos.DrawWireSphere(vector, this.MinBoyDistance);
+			Gizmos.color = Color.red.Alpha(0.5f);
+			Gizmos.DrawWireSphere(vector, this.MaxBoyDistance);
+			Gizmos.color = color;
+		}
+	}
+
+	// Token: 0x040027E1 RID: 10209
+	public bool useExternalWaveEnergy;
+
+	// Token: 0x040027E2 RID: 10210
+	public CausticsMaterialWaveEnergy externalWaveEnergy;
+
+	// Token: 0x040027E3 RID: 10211
+	[Range(0f, 1f)]
+	public float CausIntensityAMin;
+
+	// Token: 0x040027E4 RID: 10212
+	[Range(0f, 1f)]
+	public float CausIntensityAMax = 1f;
+
+	// Token: 0x040027E5 RID: 10213
+	[Range(0f, 1f)]
+	public float CausIntensityBMin = 1f;
+
+	// Token: 0x040027E6 RID: 10214
+	[Range(0f, 1f)]
+	public float CausIntensityBMax;
+
+	// Token: 0x040027E7 RID: 10215
+	[Range(0f, 1f)]
+	public float CausIntensityCMin;
+
+	// Token: 0x040027E8 RID: 10216
+	[Range(0f, 1f)]
+	public float CausIntensityCMax;
+
+	// Token: 0x040027E9 RID: 10217
+	public Color CausColorMin = Color.black;
+
+	// Token: 0x040027EA RID: 10218
+	public Color CausColorMax = Color.white;
+
+	// Token: 0x040027EB RID: 10219
+	public float CausSpeedMin = 0.5f;
+
+	// Token: 0x040027EC RID: 10220
+	public float CausSpeedMax = 1.5f;
+
+	// Token: 0x040027ED RID: 10221
+	public float MinBoyDistance = 2f;
+
+	// Token: 0x040027EE RID: 10222
+	public float MaxBoyDistance = 5f;
+
+	// Token: 0x040027EF RID: 10223
+	public Vector3 falloffPositionOffset = Vector3.zero;
+
+	// Token: 0x040027F0 RID: 10224
+	public float velocityFalloff = 0.25f;
+
+	// Token: 0x040027F1 RID: 10225
+	public float velocityMultiplier = 0.8f;
+
+	// Token: 0x040027F2 RID: 10226
+	public bool debug;
+
+	// Token: 0x040027F3 RID: 10227
+	[Range(0f, 1f)]
+	public float debugPower;
+
+	// Token: 0x040027F4 RID: 10228
+	private MaterialInstance matinstance;
+
+	// Token: 0x040027F5 RID: 10229
+	private float TimeOffSet;
+
+	// Token: 0x040027F6 RID: 10230
+	private float power;
+
+	// Token: 0x040027F7 RID: 10231
+	private float dist;
+
+	// Token: 0x040027F8 RID: 10232
+	private float falloff;
+
+	// Token: 0x040027F9 RID: 10233
+	private Vector3 customLastPos;
+
+	// Token: 0x040027FA RID: 10234
+	private MaterialInstance.ColorProperty colorProperty;
+
+	// Token: 0x040027FB RID: 10235
+	private MaterialInstance.FloatProperty timeOfProperty;
+
+	// Token: 0x040027FC RID: 10236
+	private MaterialInstance.FloatProperty intensityAProperty;
+
+	// Token: 0x040027FD RID: 10237
+	private MaterialInstance.FloatProperty intensityBProperty;
+
+	// Token: 0x040027FE RID: 10238
+	private MaterialInstance.FloatProperty intensityCProperty;
+
+	// Token: 0x040027FF RID: 10239
+	private Boy boy;
+
+	// Token: 0x04002800 RID: 10240
+	private float waveEnergy;
+}

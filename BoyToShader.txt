@@ -1,0 +1,128 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000316 RID: 790
+[ExecuteInEditMode]
+public class BoyToShader : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001682 RID: 5762 RVA: 0x000C583C File Offset: 0x000C3A3C
+	public bool PreAwake(int callCount)
+	{
+		this.mi = base.GetComponent<MaterialInstance>();
+		this.miVP = this.mi.GetOrAddVectorProperty(this.shaderPropertyName);
+		this.ssrA = this.mi.GetOrAddVectorProperty("_SSRA");
+		this.ssrB = this.mi.GetOrAddVectorProperty("_SSRB");
+		return true;
+	}
+
+	// Token: 0x06001683 RID: 5763 RVA: 0x000C589C File Offset: 0x000C3A9C
+	private void OnWillRenderObject()
+	{
+		if (!this.mi || !ScriptGlobals.mainCharacterActive)
+		{
+			return;
+		}
+		if (!this.characterTrans)
+		{
+			this.characterTrans = ScriptGlobals.mainCharacter.transform;
+		}
+		Vector4 zero;
+		zero.w = Vector3.Distance(this.characterTrans.position, Camera.current.transform.position);
+		switch (this.boyTransform)
+		{
+		case BoyToShader.transformType.ObjectSpace:
+		{
+			Vector3 vector = base.transform.InverseTransformPoint(this.characterTrans.position);
+			zero.x = vector.x;
+			zero.y = vector.y;
+			zero.z = vector.z;
+			break;
+		}
+		case BoyToShader.transformType.WorldSpace:
+		{
+			Vector3 position = this.characterTrans.position;
+			zero.x = position.x;
+			zero.y = position.y;
+			zero.z = position.z;
+			break;
+		}
+		case BoyToShader.transformType.ViewSpace:
+		{
+			Vector3 vector2 = Camera.current.transform.InverseTransformPoint(this.characterTrans.position);
+			zero.x = vector2.x;
+			zero.y = vector2.y;
+			zero.z = vector2.z;
+			break;
+		}
+		case BoyToShader.transformType.ScreenSpace:
+		{
+			Matrix4x4 matrix4x = GL.GetGPUProjectionMatrix(Camera.current.projectionMatrix, false) * Camera.current.worldToCameraMatrix;
+			Vector3 vector3 = Vector3.one;
+			Vector3 vector4 = -Vector3.one;
+			zero = Vector4.zero;
+			if (Application.isPlaying && ScriptGlobals.boyActive)
+			{
+				ConstArray<Actor.Bone> bones = ScriptGlobals.boy.visualBoy.actor.bones;
+				int i = 0;
+				int length = bones.Length;
+				while (i < length)
+				{
+					Vector3 vector5 = Vector3.one * ((i != 20) ? 0.1f : 0.3f);
+					vector3 = Vector3.Min(vector3, matrix4x.MultiplyPoint(bones[i].transform.position - vector5));
+					vector4 = Vector3.Max(vector4, matrix4x.MultiplyPoint(bones[i].transform.position + vector5));
+					i++;
+				}
+			}
+			else
+			{
+				vector3 = matrix4x.MultiplyPoint(ScriptGlobals.mainCharacter.transform.position - Vector3.one);
+				vector4 = matrix4x.MultiplyPoint(ScriptGlobals.mainCharacter.transform.position + Vector3.one);
+			}
+			vector3.x = (vector3.x * 0.25f + 0.25f) * (float)Camera.current.pixelWidth;
+			vector3.y = (vector3.y * 0.25f + 0.25f) * (float)Camera.current.pixelHeight;
+			vector4.x = (vector4.x * 0.25f + 0.25f) * (float)Camera.current.pixelWidth;
+			vector4.y = (vector4.y * 0.25f + 0.25f) * (float)Camera.current.pixelHeight;
+			this.mi.SetVectorProperty(this.ssrA, vector3);
+			this.mi.SetVectorProperty(this.ssrB, vector4);
+			break;
+		}
+		default:
+			return;
+		}
+		this.mi.SetVectorProperty(this.miVP, zero);
+	}
+
+	// Token: 0x040027C7 RID: 10183
+	public BoyToShader.transformType boyTransform;
+
+	// Token: 0x040027C8 RID: 10184
+	public string shaderPropertyName = "_BoyPos";
+
+	// Token: 0x040027C9 RID: 10185
+	private MaterialInstance mi;
+
+	// Token: 0x040027CA RID: 10186
+	private MaterialInstance.VectorProperty miVP;
+
+	// Token: 0x040027CB RID: 10187
+	private MaterialInstance.VectorProperty ssrA;
+
+	// Token: 0x040027CC RID: 10188
+	private MaterialInstance.VectorProperty ssrB;
+
+	// Token: 0x040027CD RID: 10189
+	private Transform characterTrans;
+
+	// Token: 0x02000317 RID: 791
+	public enum transformType
+	{
+		// Token: 0x040027CF RID: 10191
+		ObjectSpace,
+		// Token: 0x040027D0 RID: 10192
+		WorldSpace,
+		// Token: 0x040027D1 RID: 10193
+		ViewSpace,
+		// Token: 0x040027D2 RID: 10194
+		ScreenSpace
+	}
+}

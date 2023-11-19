@@ -1,0 +1,62 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200031C RID: 796
+public class CausticsMaterialWaveEnergy : MonoBehaviour
+{
+	// Token: 0x06001691 RID: 5777 RVA: 0x000C6278 File Offset: 0x000C4478
+	private void OnEnable()
+	{
+		if (this.update)
+		{
+			if (this.velocityTransform == null)
+			{
+				this.update = false;
+			}
+			else
+			{
+				this.lastPos = this.velocityTransform.position;
+			}
+		}
+	}
+
+	// Token: 0x06001692 RID: 5778 RVA: 0x000C62B4 File Offset: 0x000C44B4
+	private void Update()
+	{
+		if (this.update)
+		{
+			float num = Vector3.Distance(this.velocityTransform.position, this.lastPos) * this.velocityMultiplier;
+			this.waveEnergy += num * Time.deltaTime;
+			if (num < 0.1f)
+			{
+				this.waveEnergy -= Time.deltaTime * this.velocityFalloff;
+			}
+			this.waveEnergy = Mathf.Clamp01(this.waveEnergy);
+			if (!this.debug || EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Rendering))
+			{
+			}
+			this.lastPos = this.velocityTransform.position;
+		}
+	}
+
+	// Token: 0x04002801 RID: 10241
+	public Transform velocityTransform;
+
+	// Token: 0x04002802 RID: 10242
+	public float velocityFalloff = 0.25f;
+
+	// Token: 0x04002803 RID: 10243
+	public float velocityMultiplier = 1f;
+
+	// Token: 0x04002804 RID: 10244
+	public bool update = true;
+
+	// Token: 0x04002805 RID: 10245
+	public float waveEnergy;
+
+	// Token: 0x04002806 RID: 10246
+	public bool debug;
+
+	// Token: 0x04002807 RID: 10247
+	private Vector3 lastPos = Vector3.zero;
+}

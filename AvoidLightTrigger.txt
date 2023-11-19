@@ -1,0 +1,16 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000024 RID: 36
+public class AvoidLightTrigger : MonoBehaviour
+{
+	// Token: 0x06000156 RID: 342 RVA: 0x00014BE4 File Offset: 0x00012DE4
+	private void Start()
+	{
+	}
+
+	// Token: 0x06000157 RID: 343 RVA: 0x00014BE8 File Offset: 0x00012DE8
+	private void Update()
+	{
+	}
+}

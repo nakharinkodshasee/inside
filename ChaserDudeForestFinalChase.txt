@@ -1,0 +1,573 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000054 RID: 84
+public class ChaserDudeForestFinalChase : ChaserBase, IPreAwake
+{
+	// Token: 0x060002C8 RID: 712 RVA: 0x0001FFF0 File Offset: 0x0001E1F0
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		base.InitPreProcessBuild();
+		this.preProcessed = true;
+	}
+
+	// Token: 0x060002C9 RID: 713 RVA: 0x0002000C File Offset: 0x0001E20C
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		base.PreAwakeBase();
+		this.hearNoise = SignalIn.Create("hearNoise", base.gameObject, new Action(this.OnHearNoise));
+		this.reactToBoyKilled = SignalIn.Create("reactToBoyKilled", base.gameObject, new Action(this.OnReactToBoyKilled));
+		this.allowFastCatchup = SignalIn.Create("allowFastCatchup", base.gameObject, new Action(this.OnAllowFastCatchup));
+		this.afterOffscreenPretending = SignalIn.Create("afterOffscreenPretending", base.gameObject, new Action(this.OnAfterOffscreenPretending));
+		this.reactState = this.anim[this.reactAnim];
+		this.jumpLogAnimState = this.anim[this.jumpLogAnim];
+		this.stumbleInSwampState = this.anim[this.stumbleInSwampAnim];
+		this.anim[this.offScreenPretendAnim].speed = 1.3f;
+		return true;
+	}
+
+	// Token: 0x060002CA RID: 714 RVA: 0x00020110 File Offset: 0x0001E310
+	private void Awake()
+	{
+		this.anim.Play(this.initialAnim);
+		this.guardState = ChaserDudeForestFinalChase.GuardState.Initial;
+	}
+
+	// Token: 0x060002CB RID: 715 RVA: 0x0002012C File Offset: 0x0001E32C
+	private void OnHearNoise()
+	{
+		if (this.guardState == ChaserDudeForestFinalChase.GuardState.Initial)
+		{
+			this.anim.CrossFade(this.reactAnim, 0.4f);
+			this.guardState = ChaserDudeForestFinalChase.GuardState.React;
+		}
+	}
+
+	// Token: 0x060002CC RID: 716 RVA: 0x00020164 File Offset: 0x0001E364
+	private void OnAllowFastCatchup()
+	{
+		this.fastCatchUp = true;
+		if (this.guardState == ChaserDudeForestFinalChase.GuardState.stumbleInSwampState || (this.guardState == ChaserDudeForestFinalChase.GuardState.offScreenPretending && !this.wantsToStop && !this.walkingTowardsShotBoy))
+		{
+			this.guardMode = ChaserBase.GuardMode.ChasingBoy;
+			this.anim.CrossFade(this.chargeAnim, 0.3f);
+		}
+	}
+
+	// Token: 0x060002CD RID: 717 RVA: 0x000201C4 File Offset: 0x0001E3C4
+	private void OnAfterOffscreenPretending()
+	{
+		if (this.guardState == ChaserDudeForestFinalChase.GuardState.offScreenPretending && !this.wantsToStop && !this.walkingTowardsShotBoy)
+		{
+			this.guardMode = ChaserBase.GuardMode.ChasingBoy;
+			this.anim.CrossFade(this.chargeAnim, 0.3f);
+		}
+	}
+
+	// Token: 0x060002CE RID: 718 RVA: 0x00020210 File Offset: 0x0001E410
+	private void OnReactToBoyKilled()
+	{
+		this.wantsToStop = true;
+	}
+
+	// Token: 0x060002CF RID: 719 RVA: 0x0002021C File Offset: 0x0001E41C
+	protected override void OnStopChasing()
+	{
+		if (this.guardMode != ChaserBase.GuardMode.StranglingBoy && !this.stoppedByHimself)
+		{
+			if (this.edgeStopPivot != null)
+			{
+				this.wantsToStopChasing = true;
+			}
+			else
+			{
+				this.StopChasing();
+			}
+		}
+	}
+
+	// Token: 0x060002D0 RID: 720 RVA: 0x00020264 File Offset: 0x0001E464
+	private void StopChasing()
+	{
+		if (Time.deltaTime > 0.1f)
+		{
+			base.transform.position = this.edgeStopPivot.position;
+		}
+		base.OnStopChasing();
+		this.guardState = ChaserDudeForestFinalChase.GuardState.Stopping;
+	}
+
+	// Token: 0x060002D1 RID: 721 RVA: 0x000202A4 File Offset: 0x0001E4A4
+	protected override void GotoStrangling()
+	{
+		if (ScriptGlobals.boy.isDead || this.walkingTowardsShotBoy)
+		{
+			return;
+		}
+		if (this.walkingTowardsShotBoy || this.stoppedByHimself)
+		{
+			float num = ScriptGlobals.boy.pos.x - base.transform.position.x;
+			num -= Mathf.Abs(ScriptGlobals.boy.velocity.x) * 0.5f;
+			if (num > 0.8f)
+			{
+				return;
+			}
+		}
+		bool flag = false;
+		Transform theme = ScriptGlobals.boy.visualBoy.theme;
+		if (theme != null && theme.name == "Swamp")
+		{
+			flag = true;
+			float num2 = ScriptGlobals.boy.pos.x - base.transform.position.x;
+			if (num2 > 0.8f)
+			{
+				return;
+			}
+		}
+		base.GotoStrangling();
+		this.guardState = ChaserDudeForestFinalChase.GuardState.StranglingBoy;
+		ScriptGlobals.boy.Kill(false);
+		RumbleManager.instance.RemoveAllRumbleEffects();
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.7f, 0.07f, 0, 0f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.5f, 0.3f, 0, 0.15f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.6f, 0.07f, 0, 0.15f);
+		if (flag)
+		{
+			base.GetComponent<Animation>().CrossFade(this.attackBoyInSwampAnim, 0.3f);
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledInSwamp, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.5f, 0.25f, 0, 0.32f);
+		}
+		else
+		{
+			float num3 = this.EdgePivot.position.x - base.transform.position.x;
+			if (num3 < 1.5f)
+			{
+				this.anim.CrossFade(this.attackBoyAtEdgeAnim, 0.4f);
+				this.anim[this.attackBoyAtEdgeAnim].time = 0.04f;
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledAtEdge, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+			}
+			else if (ScriptGlobals.boy.facing * base.transform.forward.x < 0f)
+			{
+				this.anim.CrossFade(this.attackHugAnim, 0.3f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.8f, 0.1f, 0, 0.72f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.7f, 0.25f, 0, 0.82f);
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledByHug, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+			}
+			else
+			{
+				this.anim.CrossFade(this.attackNormalAnim, 0.3f);
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledNormal, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+				this.anim[this.attackNormalAnim].time = 0.04f;
+			}
+		}
+	}
+
+	// Token: 0x060002D2 RID: 722 RVA: 0x000205CC File Offset: 0x0001E7CC
+	private void Update()
+	{
+		if (this.flashLightRoot != null && (this.pointFlashLightDown || this.flashLightDownTimer > 0f))
+		{
+			if (this.pointFlashLightDown)
+			{
+				this.flashLightDownTimer = Mathf.Min(this.flashLightDownTimer + 2f * Time.deltaTime, 1f);
+			}
+			else if (this.guardState == ChaserDudeForestFinalChase.GuardState.offScreenPretending)
+			{
+				this.flashLightDownTimer = Mathf.Max(this.flashLightDownTimer - Time.deltaTime, 0f);
+			}
+			else
+			{
+				this.flashLightDownTimer = Mathf.Max(this.flashLightDownTimer - 6f * Time.deltaTime, 0f);
+			}
+			Vector3 localEulerAngles = this.flashLightInitialEuler;
+			localEulerAngles.x -= MathUtils.SmoothFraction(this.flashLightDownTimer) * 90f;
+			this.flashLightRoot.transform.localEulerAngles = localEulerAngles;
+			if (this.PretendingRaiseLightPos.transform.position.x < base.transform.position.x)
+			{
+				this.pointFlashLightDown = false;
+			}
+		}
+		if (this.alignToBoy && this.guardMode != ChaserBase.GuardMode.StranglingBoy)
+		{
+			base.UpdateChase(true);
+			if (this.walkingTowardsShotBoy)
+			{
+				Vector3 position = base.transform.position;
+				float num = ScriptGlobals.boy.pos3.z - 1f;
+				float num2 = Mathf.Min(Time.deltaTime * 3f, 1f);
+				position.z += (num - position.z) * num2;
+				base.transform.position = position;
+			}
+			Vector3 vector = ScriptGlobals.boy.pos3 - base.transform.position;
+			vector.y = 0f;
+			vector.Normalize();
+			Quaternion quaternion = Quaternion.LookRotation(vector);
+			if (vector.x > 0.5f)
+			{
+				base.transform.rotation = Quaternion.Slerp(base.transform.rotation, quaternion, Time.deltaTime * 4f);
+			}
+			else
+			{
+				base.transform.rotation = Quaternion.Slerp(base.transform.rotation, quaternion, Time.deltaTime * (4f + (0.5f - vector.x) * 2f));
+			}
+		}
+		else if (this.guardMode == ChaserBase.GuardMode.ChasingBoy)
+		{
+			this.slomoCounter += Time.deltaTime;
+			if (base.transform.position.x >= this.mudStart.position.x)
+			{
+				if (this.lastWasLeftOf)
+				{
+					base.GetComponent<Animation>().CrossFade(this.jumpLogAnim, 0.2f);
+					this.guardState = ChaserDudeForestFinalChase.GuardState.JumpingLog;
+					this.guardMode = ChaserBase.GuardMode.None;
+				}
+				this.lastWasLeftOf = false;
+			}
+			Vector3 vector2 = ScriptGlobals.boy.pos3 - base.transform.position;
+			if (vector2.x < 0f)
+			{
+				if (this.slomoCounter < 3.5f)
+				{
+					this.chargeAnimState.speed = 1.25f + (3.5f - this.slomoCounter) * 0.1f;
+				}
+				else
+				{
+					this.chargeAnimState.speed = 1.25f;
+				}
+			}
+			else
+			{
+				if (base.transform.position.x > this.edgeStopPivot.position.x && !this.stoppedByHimself)
+				{
+					this.StopChasing();
+					if (!this.wantsToStopChasing)
+					{
+						this.guardMode = ChaserBase.GuardMode.ChasingBoy;
+						this.stoppedByHimself = true;
+					}
+					base.UpdateVelocity(true, 1f);
+					return;
+				}
+				if (this.wantsToStop && vector2.x <= this.boyShotStopDist)
+				{
+					this.wantsToStop = false;
+					this.anim.CrossFade(this.BoyDartedAnim, 0.4f);
+					this.walkingTowardsShotBoy = true;
+					this.guardState = ChaserDudeForestFinalChase.GuardState.React;
+					this.alignToBoy = true;
+				}
+				vector2.y = 0f;
+				float magnitude = vector2.magnitude;
+				float num3 = (magnitude - this.wantedDistToBoy) * this.distScale;
+				float num4 = Mathf.Clamp(1f + num3, this.minSpeedFactor, this.maxSpeedFactor);
+				if (this.fastCatchUp)
+				{
+					num3 = (magnitude - this.wantedDistToBoy) * this.distScale * 1.5f;
+					num4 = Mathf.Clamp(1f + num3, this.minSpeedFactor, this.fastCatchupMaxSpeedFactor);
+				}
+				if (this.lastSprintStart != null && base.transform.position.x >= this.lastSprintStart.position.x)
+				{
+					num4 = this.lastSprintSpeed;
+				}
+				if (magnitude < this.sureKillDist)
+				{
+					num4 = this.sureKillSpeed;
+				}
+				if (this.slomoCounter < this.initialSlomoTime)
+				{
+					float num5 = 1f - this.slomoCounter / this.initialSlomoTime;
+					float num6 = this.initialSlomoScale * num5 + (1f - num5);
+					num4 *= num6;
+				}
+				this.chargeAnimState.speed = num4;
+			}
+			base.UpdateChase(true);
+		}
+		else if (this.guardMode == ChaserBase.GuardMode.StranglingBoy)
+		{
+			base.UpdateStrangling(5f);
+		}
+		else
+		{
+			switch (this.guardState)
+			{
+			case ChaserDudeForestFinalChase.GuardState.React:
+				if (this.lightFlare != null && !this.lightFlare.activeSelf && this.reactState.normalizedTime > 0.04f)
+				{
+					this.lightFlare.SetActive(true);
+				}
+				if (this.reactState.normalizedTime >= 0.13f)
+				{
+					this.slomoCounter = 0f;
+					this.OnChargeToKill();
+				}
+				base.UpdateVelocity(true, 1f);
+				break;
+			case ChaserDudeForestFinalChase.GuardState.stumbleInSwampState:
+				if (this.stumbleInSwampState.normalizedTime > 0.9f)
+				{
+					if (ScriptGlobals.boy.pos.x - base.transform.position.x < this.stopPretendingMinDist)
+					{
+						this.guardMode = ChaserBase.GuardMode.ChasingBoy;
+						this.anim.CrossFade(this.chargeAnim, 0.3f);
+					}
+					else
+					{
+						this.flashLightInitialEuler = this.flashLightRoot.transform.localEulerAngles;
+						this.guardState = ChaserDudeForestFinalChase.GuardState.offScreenPretending;
+						this.pointFlashLightDown = true;
+						this.flashLightDownTimer = 0f;
+						this.anim.CrossFade(this.offScreenPretendAnim, 0.3f);
+					}
+				}
+				base.UpdateChase(true);
+				break;
+			case ChaserDudeForestFinalChase.GuardState.offScreenPretending:
+			{
+				base.transform.position = base.transform.position + Vector3.right * (this.pretendingMoveSpeed * Time.deltaTime);
+				float num7 = ScriptGlobals.boy.pos.x - base.transform.position.x;
+				if (num7 < this.stopPretendingMinDist)
+				{
+					this.pointFlashLightDown = false;
+					this.guardMode = ChaserBase.GuardMode.ChasingBoy;
+					this.anim.CrossFade(this.chargeAnim, 0.3f);
+				}
+				else if (num7 > this.pretendingMaxDist)
+				{
+					Vector3 position2 = base.transform.position;
+					position2.x = ScriptGlobals.boy.pos.x - this.pretendingMaxDist;
+					float num8 = Mathf.Min(9f * Time.deltaTime, 1f);
+					base.transform.position = base.transform.position * (1f - num8) + position2 * num8;
+				}
+				else if (num7 < this.stopPretendingMinDist + 1.5f && this.flashLightDownTimer > 0.9f)
+				{
+					this.pointFlashLightDown = false;
+				}
+				break;
+			}
+			case ChaserDudeForestFinalChase.GuardState.JumpingLog:
+				if (this.guardState == ChaserDudeForestFinalChase.GuardState.JumpingLog)
+				{
+					if (this.jumpLogAnimState.normalizedTime > 0.9f)
+					{
+						Transform theme = ScriptGlobals.boy.visualBoy.theme;
+						if (theme == null || theme.name != "Swamp")
+						{
+							this.guardState = ChaserDudeForestFinalChase.GuardState.stumbleInSwampState;
+							this.anim.CrossFade(this.stumbleInSwampAnim, 0.3f);
+							this.stumbleInSwampState.speed = 0.9f;
+						}
+						else
+						{
+							this.guardMode = ChaserBase.GuardMode.ChasingBoy;
+							this.anim.CrossFade(this.chargeAnim, 0.3f);
+						}
+					}
+					base.UpdateChase(true);
+				}
+				break;
+			case ChaserDudeForestFinalChase.GuardState.Stopping:
+				base.UpdateVelocity(true, 1f);
+				break;
+			}
+		}
+	}
+
+	// Token: 0x04000404 RID: 1028
+	public string initialAnim = "ForestGuard_IdleA";
+
+	// Token: 0x04000405 RID: 1029
+	public string reactAnim = "ForestGuard_React";
+
+	// Token: 0x04000406 RID: 1030
+	private AnimationState reactState;
+
+	// Token: 0x04000407 RID: 1031
+	public string jumpLogAnim = "BoyChase_JumpOverLog";
+
+	// Token: 0x04000408 RID: 1032
+	private AnimationState jumpLogAnimState;
+
+	// Token: 0x04000409 RID: 1033
+	public string stumbleInSwampAnim = "BoyChase_RunStumbleInSwamp";
+
+	// Token: 0x0400040A RID: 1034
+	private AnimationState stumbleInSwampState;
+
+	// Token: 0x0400040B RID: 1035
+	public string attackNormalAnim = "BoyChase_AttackA";
+
+	// Token: 0x0400040C RID: 1036
+	public AnimClipNode boyKilledNormal;
+
+	// Token: 0x0400040D RID: 1037
+	public string attackHugAnim = "BoyChase_AttackHugBoy";
+
+	// Token: 0x0400040E RID: 1038
+	public AnimClipNode boyKilledByHug;
+
+	// Token: 0x0400040F RID: 1039
+	public string attackBoyInSwampAnim = "BoyChase_AttackBoyInSwamp";
+
+	// Token: 0x04000410 RID: 1040
+	public AnimClipNode boyKilledInSwamp;
+
+	// Token: 0x04000411 RID: 1041
+	public string attackBoyAtEdgeAnim = "BoyChase_AttackBoyAtEdge";
+
+	// Token: 0x04000412 RID: 1042
+	public AnimClipNode boyKilledAtEdge;
+
+	// Token: 0x04000413 RID: 1043
+	public Transform EdgePivot;
+
+	// Token: 0x04000414 RID: 1044
+	public string offScreenPretendAnim = "BoyChase_OffScreenPretending";
+
+	// Token: 0x04000415 RID: 1045
+	public string BoyDartedAnim = "BoyChase_RunStopWhenBoyDarted";
+
+	// Token: 0x04000416 RID: 1046
+	public GameObject lightFlare;
+
+	// Token: 0x04000417 RID: 1047
+	public GameObject flashLightRoot;
+
+	// Token: 0x04000418 RID: 1048
+	public float wantedDistToBoy = 7.75f;
+
+	// Token: 0x04000419 RID: 1049
+	public float sureKillDist = 6f;
+
+	// Token: 0x0400041A RID: 1050
+	public float sureKillSpeed = 1.15f;
+
+	// Token: 0x0400041B RID: 1051
+	public float maxSpeedFactor = 1.3f;
+
+	// Token: 0x0400041C RID: 1052
+	public float fastCatchupMaxSpeedFactor = 1.6f;
+
+	// Token: 0x0400041D RID: 1053
+	public float minSpeedFactor = 0.8f;
+
+	// Token: 0x0400041E RID: 1054
+	public float distScale = 0.2f;
+
+	// Token: 0x0400041F RID: 1055
+	public Transform mudStart;
+
+	// Token: 0x04000420 RID: 1056
+	public Transform lastSprintStart;
+
+	// Token: 0x04000421 RID: 1057
+	public float lastSprintSpeed;
+
+	// Token: 0x04000422 RID: 1058
+	public Transform edgeStopPivot;
+
+	// Token: 0x04000423 RID: 1059
+	public float boyShotStopDist = 6f;
+
+	// Token: 0x04000424 RID: 1060
+	public float stopPretendingMinDist = 8f;
+
+	// Token: 0x04000425 RID: 1061
+	public float pretendingMaxDist = 10f;
+
+	// Token: 0x04000426 RID: 1062
+	public Transform PretendingRaiseLightPos;
+
+	// Token: 0x04000427 RID: 1063
+	public float pretendingMoveSpeed = 2f;
+
+	// Token: 0x04000428 RID: 1064
+	public float initialSlomoScale = 0.7f;
+
+	// Token: 0x04000429 RID: 1065
+	public float initialSlomoTime = 2f;
+
+	// Token: 0x0400042A RID: 1066
+	public float slomoCounter;
+
+	// Token: 0x0400042B RID: 1067
+	private SignalIn hearNoise;
+
+	// Token: 0x0400042C RID: 1068
+	private SignalIn reactToBoyKilled;
+
+	// Token: 0x0400042D RID: 1069
+	private SignalIn allowFastCatchup;
+
+	// Token: 0x0400042E RID: 1070
+	private SignalIn afterOffscreenPretending;
+
+	// Token: 0x0400042F RID: 1071
+	private bool alignToBoy;
+
+	// Token: 0x04000430 RID: 1072
+	private bool wantsToStop;
+
+	// Token: 0x04000431 RID: 1073
+	private bool fastCatchUp;
+
+	// Token: 0x04000432 RID: 1074
+	private ChaserDudeForestFinalChase.GuardState guardState;
+
+	// Token: 0x04000433 RID: 1075
+	private Vector3 curVel;
+
+	// Token: 0x04000434 RID: 1076
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x04000435 RID: 1077
+	private bool wantsToStopChasing;
+
+	// Token: 0x04000436 RID: 1078
+	private bool stoppedByHimself;
+
+	// Token: 0x04000437 RID: 1079
+	private bool lastWasLeftOf = true;
+
+	// Token: 0x04000438 RID: 1080
+	private bool walkingTowardsShotBoy;
+
+	// Token: 0x04000439 RID: 1081
+	private Vector3 flashLightInitialEuler = Vector3.zero;
+
+	// Token: 0x0400043A RID: 1082
+	private bool pointFlashLightDown;
+
+	// Token: 0x0400043B RID: 1083
+	private float flashLightDownTimer;
+
+	// Token: 0x02000055 RID: 85
+	private enum GuardState
+	{
+		// Token: 0x0400043D RID: 1085
+		Initial,
+		// Token: 0x0400043E RID: 1086
+		React,
+		// Token: 0x0400043F RID: 1087
+		ChargeToKill,
+		// Token: 0x04000440 RID: 1088
+		stumbleInSwampState,
+		// Token: 0x04000441 RID: 1089
+		offScreenPretending,
+		// Token: 0x04000442 RID: 1090
+		JumpingLog,
+		// Token: 0x04000443 RID: 1091
+		Stopping,
+		// Token: 0x04000444 RID: 1092
+		StranglingBoy
+	}
+}

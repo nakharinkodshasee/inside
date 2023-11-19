@@ -1,0 +1,7 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000660 RID: 1632
+public class AudioTest : MonoBehaviour
+{
+}

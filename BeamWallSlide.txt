@@ -1,0 +1,164 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000459 RID: 1113
+public class BeamWallSlide : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001D51 RID: 7505 RVA: 0x000FD4CC File Offset: 0x000FB6CC
+	public bool PreAwake(int callcount)
+	{
+		this.activate = SignalIn.Create("activate", base.gameObject, new Action(this.OnActivate));
+		this.deactivate = SignalIn.Create("deactivate", base.gameObject, new Action(this.OnDeactivate));
+		return true;
+	}
+
+	// Token: 0x06001D52 RID: 7506 RVA: 0x000FD520 File Offset: 0x000FB720
+	private void Start()
+	{
+		this.beamRigidbody = base.GetComponent<Rigidbody>();
+		this.beamTransform = base.transform;
+		this.halfSize = this.beamTransform.lossyScale.x / 2f;
+		this.slideForce = Vector3Fast.left;
+		this.huddle = ScriptGlobals.huddle;
+	}
+
+	// Token: 0x06001D53 RID: 7507 RVA: 0x000FD57C File Offset: 0x000FB77C
+	private void FixedUpdate()
+	{
+		if (!this.beamRigidbody)
+		{
+			return;
+		}
+		if (!this.touchingWall)
+		{
+			if (this.touchTimer > 0f)
+			{
+				this.touchTimer -= Time.deltaTime;
+			}
+		}
+		else
+		{
+			float num = Vector3.Dot(this.beamTransform.right, Vector3Fast.down);
+			if (Mathf.Abs(num) > 0.998f)
+			{
+				return;
+			}
+			Vector3 vector = this.beamTransform.position + this.beamTransform.right * Mathf.Sign(num) * this.halfSize;
+			float num2 = Mathf.Abs(this.huddle.pos.x - this.beamTransform.position.x);
+			float num3 = this.huddle.pos.y - vector.y;
+			if (num3 > 2.5f && num2 < 2f)
+			{
+				this.beamRigidbody.AddForceAtPosition(this.slideForce * this.huddleStandForce, vector);
+			}
+			if (this.isActive)
+			{
+				if (this.touchTimer < this.easeInTime)
+				{
+					this.touchTimer += Time.deltaTime;
+				}
+				float sqrMagnitude = this.beamRigidbody.angularVelocity.sqrMagnitude;
+				float num4 = 1f;
+				if (sqrMagnitude > this.maxSpeed)
+				{
+					num4 -= (sqrMagnitude - this.maxSpeed) * (1f / this.maxSpeedEaseOut);
+					num4 = Mathf.Max(num4, 0f);
+				}
+				float num5 = this.forceStrength * Mathf.Abs(num) * (this.touchTimer / this.easeInTime) * num4;
+				this.beamRigidbody.AddForceAtPosition(this.slideForce * num5, vector);
+				if (this.debug)
+				{
+					Debug.DrawLine(vector, vector + this.slideForce * num5 / 3f, Color.green);
+				}
+			}
+		}
+	}
+
+	// Token: 0x06001D54 RID: 7508 RVA: 0x000FD794 File Offset: 0x000FB994
+	private void OnCollisionEnter(Collision col)
+	{
+		if (col.collider == this.walll)
+		{
+			this.touchingWall = true;
+		}
+	}
+
+	// Token: 0x06001D55 RID: 7509 RVA: 0x000FD7B4 File Offset: 0x000FB9B4
+	private void OnCollisionExit(Collision col)
+	{
+		if (col.collider == this.walll)
+		{
+			this.touchingWall = false;
+		}
+	}
+
+	// Token: 0x06001D56 RID: 7510 RVA: 0x000FD7D4 File Offset: 0x000FB9D4
+	private void OnDeactivate()
+	{
+		this.isActive = false;
+	}
+
+	// Token: 0x06001D57 RID: 7511 RVA: 0x000FD7E0 File Offset: 0x000FB9E0
+	private void OnActivate()
+	{
+		this.isActive = true;
+	}
+
+	// Token: 0x06001D58 RID: 7512 RVA: 0x000FD7EC File Offset: 0x000FB9EC
+	private void OnDrawGizmos()
+	{
+		float num = Vector3.Dot(base.transform.right, Vector3Fast.down);
+		float num2 = base.transform.lossyScale.x / 2f;
+		Vector3 vector = base.transform.position + base.transform.right * Mathf.Sign(num) * num2;
+	}
+
+	// Token: 0x040035CC RID: 13772
+	public Collider walll;
+
+	// Token: 0x040035CD RID: 13773
+	public float forceStrength = 25f;
+
+	// Token: 0x040035CE RID: 13774
+	public float huddleStandForce = 25f;
+
+	// Token: 0x040035CF RID: 13775
+	public float maxSpeed = 0.1f;
+
+	// Token: 0x040035D0 RID: 13776
+	public float maxSpeedEaseOut = 0.05f;
+
+	// Token: 0x040035D1 RID: 13777
+	public float easeInTime = 2f;
+
+	// Token: 0x040035D2 RID: 13778
+	public bool debug;
+
+	// Token: 0x040035D3 RID: 13779
+	private SignalIn activate;
+
+	// Token: 0x040035D4 RID: 13780
+	private SignalIn deactivate;
+
+	// Token: 0x040035D5 RID: 13781
+	private bool touchingWall;
+
+	// Token: 0x040035D6 RID: 13782
+	private Rigidbody beamRigidbody;
+
+	// Token: 0x040035D7 RID: 13783
+	private Transform beamTransform;
+
+	// Token: 0x040035D8 RID: 13784
+	private Vector3 slideForce;
+
+	// Token: 0x040035D9 RID: 13785
+	private float halfSize;
+
+	// Token: 0x040035DA RID: 13786
+	private float touchTimer;
+
+	// Token: 0x040035DB RID: 13787
+	private bool isActive;
+
+	// Token: 0x040035DC RID: 13788
+	private Huddle huddle;
+}

@@ -1,0 +1,27 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000521 RID: 1313
+public class BoyKilledRumble : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600223E RID: 8766 RVA: 0x0011E5F0 File Offset: 0x0011C7F0
+	public bool PreAwake(int callcount)
+	{
+		this.boyKilledRumble = SignalIn.Create("boyKilledRumble", base.gameObject, new Action(this.OnBoyKilledRumble));
+		return true;
+	}
+
+	// Token: 0x0600223F RID: 8767 RVA: 0x0011E618 File Offset: 0x0011C818
+	private void OnBoyKilledRumble()
+	{
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightThenLeft, Random.Range(0.3f, 0.4f), 0.2f, 0, 0f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightFadeOut, 0.2f, 0.2f, 0, 0.2f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightFadeOut, 0.5f, 0.1f, 0, 0.85f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.8f, 0.15f, 0, 1.6f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.5f, 0.6f, 0, 1.7f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightFadeOut, 0.2f, 0.7f, 0, 2.4f);
+	}
+
+	// Token: 0x04003FE4 RID: 16356
+	private SignalIn boyKilledRumble;
+}

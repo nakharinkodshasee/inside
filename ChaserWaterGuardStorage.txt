@@ -1,0 +1,202 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200005D RID: 93
+public class ChaserWaterGuardStorage : ChaserBase, IPreAwake
+{
+	// Token: 0x060002FA RID: 762 RVA: 0x0002313C File Offset: 0x0002133C
+	[LateProcessBuild(0)]
+	[ContextMenu("PreProcessTest")]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		base.InitPreProcessBuild();
+		this.animator = base.gameObject.GetComponent<Animator>();
+		this.preProcessed = true;
+	}
+
+	// Token: 0x060002FB RID: 763 RVA: 0x00023174 File Offset: 0x00021374
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		base.PreAwakeBase();
+		return true;
+	}
+
+	// Token: 0x060002FC RID: 764 RVA: 0x00023184 File Offset: 0x00021384
+	protected override void GotoStrangling()
+	{
+		base.GotoStrangling();
+		ScriptGlobals.boy.Kill(false);
+		RumbleManager.instance.RemoveAllRumbleEffects();
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.4f, 0.07f, 0, 0f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.4f, 0.3f, 0, 0.15f);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.3f, 0.07f, 0, 0.15f);
+		float x = base.transform.forward.x;
+		if (this.wallAlignPoint != null && x < 0f)
+		{
+			float num = base.transform.position.x - this.wallAlignPoint.transform.position.x;
+			if ((num < 2.8f && x < -0.6f) || num < 0.6f)
+			{
+				this.initDist = num;
+				this.initSpeed = this.chargeAnimSpeed;
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftSpike, 0.8f, 0.1f, 0, 0.22f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightFadeOut, 0.7f, 0.13f, 0, 0.27f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.1f, 0.13f, 0, 1.3f);
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.1f, 0.13f, 0, 2f);
+				if (num < 1.4f)
+				{
+					AnimatorUtils.CrossFade(this.animator, this.attackBoyAtWallCloseAnim, 0.2f, 0, float.NegativeInfinity);
+					this.currentWallAnim = this.boyKilledWallClose;
+				}
+				else
+				{
+					AnimatorUtils.CrossFade(this.animator, this.attackBoyAtWallAnim, 0.2f, 0, float.NegativeInfinity);
+					this.currentWallAnim = this.boyKilledWall;
+				}
+				Vector3 position = base.transform.position;
+				position.x = this.wallAlignPoint.transform.position.x + Mathf.Max(num - 1.4f, 0f);
+				this.currentWallAnim.transform.parent = base.transform.parent;
+				this.currentWallAnim.transform.position = position;
+				this.currentWallAnim.transform.rotation = this.wallAlignPoint.transform.rotation;
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.currentWallAnim, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+				this.wallKill = true;
+				return;
+			}
+		}
+		if (ScriptGlobals.boy.facing * x < 0f)
+		{
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.RightSpike, 0.8f, 0.1f, 0, 0.72f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.LeftFadeOut, 0.7f, 0.25f, 0, 0.82f);
+			AnimatorUtils.CrossFade(this.animator, this.attackHugAnim, 0.2f, 0, float.NegativeInfinity);
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledByHug, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+		}
+		else
+		{
+			AnimatorUtils.CrossFade(this.animator, this.attackNormalAnim, 0.2f, 0, float.NegativeInfinity);
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledNormal, null, 0f, Boy.AffectMode.AffectDeadBoy, EffectMaterial.Material.None);
+		}
+	}
+
+	// Token: 0x060002FD RID: 765 RVA: 0x000234C4 File Offset: 0x000216C4
+	private void Update()
+	{
+		if (this.guardMode == ChaserBase.GuardMode.None)
+		{
+			return;
+		}
+		if (this.guardMode == ChaserBase.GuardMode.ChasingBoy)
+		{
+			base.UpdateChase(true);
+			float num = 1.3f;
+			Vector3 vector = base.transform.position;
+			bool flag = false;
+			float num2 = FastMath.Min(3f * Time.deltaTime, 1f);
+			int i = 0;
+			int count = this.objectsToAvoid.Count;
+			while (i < count)
+			{
+				Vector3 position = this.objectsToAvoid[i].transform.position;
+				position.z += 0.1f;
+				Vector3 vector2 = vector - position;
+				vector2.y = 0f;
+				float magnitude = vector2.magnitude;
+				if (magnitude < num)
+				{
+					vector += vector2 * (3f * num2 / magnitude);
+					flag = true;
+				}
+				i++;
+			}
+			if (flag)
+			{
+				base.transform.position = vector;
+			}
+		}
+		else if (this.guardMode == ChaserBase.GuardMode.StranglingBoy && this.wallKill)
+		{
+			this.wallKillTime += Time.deltaTime;
+			if (this.chargeAnimSpeed > 0f && this.initDist > 0f)
+			{
+				float num3 = 0.4f * Mathf.Min((base.transform.position.x - this.wallAlignPoint.transform.position.x) / (this.initDist * 0.7f), 1f);
+				this.chargeAnimSpeed = 1f + num3 * (this.initSpeed - 1f);
+				Vector3 position2 = base.transform.position;
+				position2.x -= this.chargeAnimSpeed * Time.deltaTime;
+				position2.z += (this.wallAlignPoint.transform.position.z - position2.z) * Time.deltaTime * 4f;
+				base.transform.position = position2;
+			}
+			Vector3 position3 = base.transform.position;
+			Vector3 position4 = base.transform.position;
+			if (this.wallKillTime >= 0.16f)
+			{
+				position4.x = Mathf.Max(this.currentWallAnim.transform.position.x - Time.deltaTime * 6f, this.wallAlignPoint.transform.position.x);
+			}
+			else
+			{
+				position4.x = Mathf.Max(this.currentWallAnim.transform.position.x - Time.deltaTime * 0.5f, this.wallAlignPoint.transform.position.x);
+			}
+			this.currentWallAnim.transform.position = position4;
+			if (position3.x < this.wallAlignPoint.transform.position.x)
+			{
+				position3.x = this.wallAlignPoint.transform.position.x;
+				base.transform.position = position3;
+				base.transform.rotation = Quaternion.Slerp(base.transform.rotation, this.wallAlignPoint.transform.rotation, Time.deltaTime * 2f);
+			}
+		}
+	}
+
+	// Token: 0x040004BF RID: 1215
+	public string attackNormalAnim = "BoyChase_AttackA";
+
+	// Token: 0x040004C0 RID: 1216
+	public AnimClipNode boyKilledNormal;
+
+	// Token: 0x040004C1 RID: 1217
+	public string attackHugAnim = "BoyChase_AttackHugBoy";
+
+	// Token: 0x040004C2 RID: 1218
+	public AnimClipNode boyKilledByHug;
+
+	// Token: 0x040004C3 RID: 1219
+	public string attackBoyAtWallAnim = "BoyChase_AttackBoyAtWall";
+
+	// Token: 0x040004C4 RID: 1220
+	public AnimClipNode boyKilledWall;
+
+	// Token: 0x040004C5 RID: 1221
+	public string attackBoyAtWallCloseAnim = "BoyChase_AttackBoyAtWallClose";
+
+	// Token: 0x040004C6 RID: 1222
+	public AnimClipNode boyKilledWallClose;
+
+	// Token: 0x040004C7 RID: 1223
+	public GameObject wallAlignPoint;
+
+	// Token: 0x040004C8 RID: 1224
+	[HideInInspector]
+	[SerializeField]
+	private Animator animator;
+
+	// Token: 0x040004C9 RID: 1225
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x040004CA RID: 1226
+	private bool wallKill;
+
+	// Token: 0x040004CB RID: 1227
+	private float initDist;
+
+	// Token: 0x040004CC RID: 1228
+	private float initSpeed;
+
+	// Token: 0x040004CD RID: 1229
+	private AnimClipNode currentWallAnim;
+
+	// Token: 0x040004CE RID: 1230
+	private float wallKillTime;
+}

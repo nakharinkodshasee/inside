@@ -1,0 +1,293 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000056 RID: 86
+public class ChaserDudeForestGuard : ChaserBase, IPreAwake
+{
+	// Token: 0x060002D4 RID: 724 RVA: 0x00020F28 File Offset: 0x0001F128
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		base.InitPreProcessBuild();
+	}
+
+	// Token: 0x060002D5 RID: 725 RVA: 0x00020F44 File Offset: 0x0001F144
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		base.PreAwakeBase();
+		this.hearNoise = SignalIn.Create("hearNoise", base.gameObject, new Action(this.OnHearNoise));
+		this.reactToBoyKilled = SignalIn.Create("reactToBoyKilled", base.gameObject, new Action(this.OnReactToBoyKilled));
+		this.doneReacting = SignalOut.Create("doneReacting", base.gameObject);
+		this.reactState = this.anim[this.reactAnim];
+		this.walkawayState = this.anim[this.walkawayAnim];
+		this.useSecondWalk = (this.secondWalkAwayAnim != string.Empty);
+		this.doingSecondWalk = false;
+		return true;
+	}
+
+	// Token: 0x060002D6 RID: 726 RVA: 0x00021004 File Offset: 0x0001F204
+	private void Awake()
+	{
+		this.anim.Play(this.initialAnim);
+		this.guardState = ChaserDudeForestGuard.GuardState.Initial;
+	}
+
+	// Token: 0x060002D7 RID: 727 RVA: 0x00021020 File Offset: 0x0001F220
+	private void OnHearNoise()
+	{
+		if (this.guardState == ChaserDudeForestGuard.GuardState.Initial)
+		{
+			this.anim.CrossFade(this.reactAnim, 0.4f);
+			this.guardState = ChaserDudeForestGuard.GuardState.React;
+		}
+	}
+
+	// Token: 0x060002D8 RID: 728 RVA: 0x00021058 File Offset: 0x0001F258
+	private void OnReactToBoyKilled()
+	{
+		this.anim.CrossFade(this.reactToBoyKilledByGuard, 0.4f);
+		this.alignToBoy = true;
+	}
+
+	// Token: 0x060002D9 RID: 729 RVA: 0x00021078 File Offset: 0x0001F278
+	protected override void GotoStrangling()
+	{
+		base.GotoStrangling();
+		if (this.wallAlignPoint != null)
+		{
+			float num = base.transform.position.x - this.wallAlignPoint.transform.position.x;
+			if (num < 2.8f)
+			{
+				if (num < 1.4f)
+				{
+					base.GetComponent<Animation>().CrossFade(this.attackBoyAtWallCloseAnim, 0.3f);
+					this.currentWallAnim = this.boyKilledWallClose;
+					BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.currentWallAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				}
+				else
+				{
+					base.GetComponent<Animation>().CrossFade(this.attackBoyAtWallAnim, 0.3f);
+					this.currentWallAnim = this.boyKilledWall;
+					BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.currentWallAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				}
+				ScriptGlobals.boy.Kill(false);
+				this.wallKill = true;
+				this.guardMode = ChaserBase.GuardMode.StranglingBoy;
+				return;
+			}
+		}
+		Animation component = base.GetComponent<Animation>();
+		if (ScriptGlobals.boy.facing * base.transform.forward.x < 0f)
+		{
+			component.CrossFade(this.attackHugAnim, 0.3f);
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledByHug, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		else
+		{
+			component.CrossFade(this.attackNormalAnim, 0.3f);
+			component[this.attackNormalAnim].speed *= 1.01f;
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledNormal, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		ScriptGlobals.boy.Kill(false);
+	}
+
+	// Token: 0x060002DA RID: 730 RVA: 0x00021224 File Offset: 0x0001F424
+	private void Update()
+	{
+		if (this.alignToBoy)
+		{
+			Vector3 vector = ScriptGlobals.boy.pos3 - base.transform.position;
+			vector.x -= 15f;
+			vector.y = 0f;
+			vector.Normalize();
+			Quaternion quaternion = Quaternion.LookRotation(vector);
+			base.transform.rotation = Quaternion.Slerp(base.transform.rotation, quaternion, Time.deltaTime * 4f);
+		}
+		else if (this.guardMode == ChaserBase.GuardMode.ChasingBoy)
+		{
+			base.UpdateChase(true);
+		}
+		else if (this.guardMode == ChaserBase.GuardMode.StranglingBoy)
+		{
+			if (this.wallKill)
+			{
+				this.wallKillTime += Time.deltaTime;
+				if (this.chargeAnimSpeed > 0f)
+				{
+					Vector3 position = base.transform.position;
+					position.x -= this.chargeAnimSpeed * Time.deltaTime;
+					position.z += (this.wallAlignPoint.transform.position.z - position.z) * Time.deltaTime * 4f;
+					base.transform.position = position;
+				}
+				Vector3 position2 = base.transform.position;
+				if (position2.x < this.wallAlignPoint.transform.position.x)
+				{
+					position2.x = this.wallAlignPoint.transform.position.x;
+					base.transform.position = position2;
+					base.transform.rotation = Quaternion.Slerp(base.transform.rotation, this.wallAlignPoint.transform.rotation, Time.deltaTime * 2f);
+				}
+			}
+			else
+			{
+				base.UpdateStrangling(5f);
+			}
+		}
+		else
+		{
+			if (this.guardState == ChaserDudeForestGuard.GuardState.React && this.reactState.normalizedTime >= 0.99f)
+			{
+				this.anim.CrossFade(this.walkawayAnim, 0.4f);
+				this.guardState = ChaserDudeForestGuard.GuardState.WalkAway;
+				this.doneReacting.Signal();
+			}
+			if (this.guardState == ChaserDudeForestGuard.GuardState.WalkAway && this.walkAwayPathRoot != null)
+			{
+				if (this.useSecondWalk && !this.doingSecondWalk && this.walkawayState.normalizedTime >= 0.97f)
+				{
+					this.anim.CrossFade(this.secondWalkAwayAnim, 0.4f);
+					this.doingSecondWalk = true;
+				}
+				if (this.pathIndex < this.walkAwayPathRoot.childCount)
+				{
+					Transform child = this.walkAwayPathRoot.GetChild(this.pathIndex);
+					Vector3 vector2 = child.position - base.transform.position;
+					vector2.y = 0f;
+					float magnitude = vector2.magnitude;
+					vector2 /= magnitude;
+					Quaternion quaternion2 = Quaternion.LookRotation(vector2, Vector3.up);
+					float num = Mathf.Min(1f, this.walkAwayPathTurnFactor * Time.deltaTime);
+					base.transform.rotation = Quaternion.Slerp(base.transform.rotation, quaternion2, num);
+					if (magnitude <= this.walkAwayPathPointDistance)
+					{
+						this.pathIndex++;
+					}
+				}
+				else
+				{
+					base.gameObject.SetActive(false);
+				}
+			}
+			base.UpdateVelocity(true, 1f);
+		}
+	}
+
+	// Token: 0x04000445 RID: 1093
+	public string initialAnim = "ForestGuard_IdleA";
+
+	// Token: 0x04000446 RID: 1094
+	public string reactAnim = "ForestGuard_React";
+
+	// Token: 0x04000447 RID: 1095
+	private AnimationState reactState;
+
+	// Token: 0x04000448 RID: 1096
+	public string walkawayAnim = "ForestGuard_WalkSpecial";
+
+	// Token: 0x04000449 RID: 1097
+	private AnimationState walkawayState;
+
+	// Token: 0x0400044A RID: 1098
+	public string secondWalkAwayAnim = string.Empty;
+
+	// Token: 0x0400044B RID: 1099
+	public Transform walkAwayPathRoot;
+
+	// Token: 0x0400044C RID: 1100
+	public float walkAwayPathPointDistance = 0.5f;
+
+	// Token: 0x0400044D RID: 1101
+	public float walkAwayPathTurnFactor = 2f;
+
+	// Token: 0x0400044E RID: 1102
+	public string attackNormalAnim = "BoyChase_AttackA";
+
+	// Token: 0x0400044F RID: 1103
+	public AnimClipNode boyKilledNormal;
+
+	// Token: 0x04000450 RID: 1104
+	public string attackHugAnim = "BoyChase_AttackHugBoy";
+
+	// Token: 0x04000451 RID: 1105
+	public AnimClipNode boyKilledByHug;
+
+	// Token: 0x04000452 RID: 1106
+	public string reactToBoyKilledByGuard;
+
+	// Token: 0x04000453 RID: 1107
+	public string attackBoyAtWallAnim = "BoyChase_AttackBoyAtWall";
+
+	// Token: 0x04000454 RID: 1108
+	public AnimClipNode boyKilledWall;
+
+	// Token: 0x04000455 RID: 1109
+	public string attackBoyAtWallCloseAnim = "BoyChase_AttackBoyAtWallClose";
+
+	// Token: 0x04000456 RID: 1110
+	public AnimClipNode boyKilledWallClose;
+
+	// Token: 0x04000457 RID: 1111
+	public GameObject wallAlignPoint;
+
+	// Token: 0x04000458 RID: 1112
+	private SignalIn hearNoise;
+
+	// Token: 0x04000459 RID: 1113
+	private SignalIn reactToBoyKilled;
+
+	// Token: 0x0400045A RID: 1114
+	private SignalOut doneReacting;
+
+	// Token: 0x0400045B RID: 1115
+	private Transform[] walkPath;
+
+	// Token: 0x0400045C RID: 1116
+	private int pathIndex;
+
+	// Token: 0x0400045D RID: 1117
+	private bool alignToBoy;
+
+	// Token: 0x0400045E RID: 1118
+	private ChaserDudeForestGuard.GuardState guardState;
+
+	// Token: 0x0400045F RID: 1119
+	private bool useSecondWalk;
+
+	// Token: 0x04000460 RID: 1120
+	private bool doingSecondWalk;
+
+	// Token: 0x04000461 RID: 1121
+	private Vector3 curVel;
+
+	// Token: 0x04000462 RID: 1122
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04000463 RID: 1123
+	private bool wallKill;
+
+	// Token: 0x04000464 RID: 1124
+	private AnimClipNode currentWallAnim;
+
+	// Token: 0x04000465 RID: 1125
+	private float wallKillTime;
+
+	// Token: 0x02000057 RID: 87
+	private enum GuardState
+	{
+		// Token: 0x04000467 RID: 1127
+		Initial,
+		// Token: 0x04000468 RID: 1128
+		React,
+		// Token: 0x04000469 RID: 1129
+		WalkAway,
+		// Token: 0x0400046A RID: 1130
+		ChargeToKill
+	}
+}

@@ -1,0 +1,169 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000481 RID: 1153
+public class CargoHallForkliftAudio : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001E42 RID: 7746 RVA: 0x00103DB0 File Offset: 0x00101FB0
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, null);
+		this.audioStart = new AudioEventSimpleLocal("env_lab_cargoHall_forklift_start", this.akGameObj);
+		this.audioStop = new AudioEventSimpleLocal("env_lab_cargoHall_forklift_stop", this.akGameObj);
+	}
+
+	// Token: 0x06001E43 RID: 7747 RVA: 0x00103E10 File Offset: 0x00102010
+	public bool PreAwake(int callcount)
+	{
+		this.startDrive = SignalIn.Create("startDrive", base.gameObject, new Action(this.DoStartDrive));
+		this.stopBoyKilled = SignalIn.Create("stopBoyKilled", base.gameObject, new Action(this.DoStopDrive));
+		return true;
+	}
+
+	// Token: 0x06001E44 RID: 7748 RVA: 0x00103E64 File Offset: 0x00102064
+	private void Start()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x06001E45 RID: 7749 RVA: 0x00103E6C File Offset: 0x0010206C
+	private void DoStartDrive()
+	{
+		this.isDriving = true;
+		this.audioStart.PostFast();
+	}
+
+	// Token: 0x06001E46 RID: 7750 RVA: 0x00103E84 File Offset: 0x00102084
+	private void DoStopDrive()
+	{
+		this.isDriving = false;
+		this.audioStop.PostFast();
+	}
+
+	// Token: 0x06001E47 RID: 7751 RVA: 0x00103E9C File Offset: 0x0010209C
+	private void NewTake()
+	{
+		if (this.doInput)
+		{
+			float num = this.input.Evaluate(this.timer);
+			SoundEngine.RTPCs.forkLiftGas.SetFast(num * 100f, this.akGameObj);
+		}
+		if (this.doGas)
+		{
+			float num2 = this.gasPedal.Evaluate(this.timer);
+			float num3 = Mathf.InverseLerp(this.minimumSpeed, this.maximumSpeed, num2);
+			SoundEngine.RTPCs.forkLiftSpeed.SetFast(num3 * 100f, this.akGameObj);
+		}
+		if (this.doLoad)
+		{
+			float num4 = this.gasPedal.Evaluate(this.timer);
+			float num5 = this.gasPedal.Evaluate(this.timer + 1f);
+			float num6 = Mathf.Abs(num4 - num5);
+			float num7 = Mathf.InverseLerp(0f, 6f, num6);
+			float value;
+			if (num5 > num4)
+			{
+				value = Mathf.Lerp(15f, 80f, num7);
+			}
+			else
+			{
+				value = Mathf.Lerp(5f, 80f, num7);
+			}
+			SoundEngine.RTPCs.forkLiftLoad.SetFast(value, this.akGameObj, 0f);
+		}
+	}
+
+	// Token: 0x06001E48 RID: 7752 RVA: 0x00103FC4 File Offset: 0x001021C4
+	private void Update()
+	{
+		if (this.isDriving)
+		{
+			this.timer += Time.deltaTime;
+			this.NewTake();
+			if (this.timer >= this.driveAnimLength)
+			{
+				this.DoStopDrive();
+			}
+		}
+	}
+
+	// Token: 0x040037C9 RID: 14281
+	public bool doGas;
+
+	// Token: 0x040037CA RID: 14282
+	public AnimationCurve gasPedal;
+
+	// Token: 0x040037CB RID: 14283
+	public bool doInput;
+
+	// Token: 0x040037CC RID: 14284
+	public AnimationCurve input;
+
+	// Token: 0x040037CD RID: 14285
+	public bool doLoad;
+
+	// Token: 0x040037CE RID: 14286
+	public float driveAnimLength = 43.3f;
+
+	// Token: 0x040037CF RID: 14287
+	private SignalIn startDrive;
+
+	// Token: 0x040037D0 RID: 14288
+	private SignalIn stopBoyKilled;
+
+	// Token: 0x040037D1 RID: 14289
+	private bool isDriving;
+
+	// Token: 0x040037D2 RID: 14290
+	private float gasRTPC;
+
+	// Token: 0x040037D3 RID: 14291
+	private float speedRTPC;
+
+	// Token: 0x040037D4 RID: 14292
+	private float timer;
+
+	// Token: 0x040037D5 RID: 14293
+	private float secIntoFuture = 3f;
+
+	// Token: 0x040037D6 RID: 14294
+	private float maximumSpeed = 5f;
+
+	// Token: 0x040037D7 RID: 14295
+	private float minimumSpeed;
+
+	// Token: 0x040037D8 RID: 14296
+	private float oldSpeed;
+
+	// Token: 0x040037D9 RID: 14297
+	private Vector3 oldPos;
+
+	// Token: 0x040037DA RID: 14298
+	[SerializeField]
+	[HideInInspector]
+	private AkGameObj akGameObj;
+
+	// Token: 0x040037DB RID: 14299
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStart;
+
+	// Token: 0x040037DC RID: 14300
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStop;
+
+	// Token: 0x040037DD RID: 14301
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x040037DE RID: 14302
+	private float lastSoundLoad;
+}

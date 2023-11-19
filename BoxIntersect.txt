@@ -1,0 +1,61 @@
+using System;
+using System.Diagnostics;
+using UnityEngine;
+
+// Token: 0x0200057B RID: 1403
+[ExecuteInEditMode]
+public class BoxIntersect : MonoBehaviour
+{
+	// Token: 0x0600243A RID: 9274 RVA: 0x0012B6C0 File Offset: 0x001298C0
+	private void Update()
+	{
+		if (this.benchmark)
+		{
+			this.benchmark = false;
+			this.Benchmark();
+		}
+	}
+
+	// Token: 0x0600243B RID: 9275 RVA: 0x0012B6DC File Offset: 0x001298DC
+	private void Benchmark()
+	{
+		BoxCollider component = base.GetComponent<BoxCollider>();
+		CollisionUtils.Plane plane = new CollisionUtils.Plane(this.planeZ);
+		CollisionUtils.Box2dShape box2dShape = new CollisionUtils.Box2dShape();
+		Stopwatch stopwatch = new Stopwatch();
+		stopwatch.Start();
+		for (int i = 0; i < this.iterations; i++)
+		{
+			CollisionUtils.GetBox2dShapeOLD(plane, component, box2dShape);
+		}
+		long elapsedMilliseconds = stopwatch.ElapsedMilliseconds;
+		stopwatch.Stop();
+		stopwatch.Reset();
+		stopwatch.Start();
+		for (int j = 0; j < this.iterations; j++)
+		{
+			ZDecomposition.Box(plane.posz, component, box2dShape);
+		}
+		long elapsedMilliseconds2 = stopwatch.ElapsedMilliseconds;
+		stopwatch.Stop();
+		Debug.Log(string.Concat(new object[]
+		{
+			this.iterations,
+			" iterations: old method used ",
+			elapsedMilliseconds,
+			" ms, new method used ",
+			elapsedMilliseconds2,
+			" ms, speedup ",
+			(float)elapsedMilliseconds / (float)elapsedMilliseconds2
+		}));
+	}
+
+	// Token: 0x04004292 RID: 17042
+	public float planeZ;
+
+	// Token: 0x04004293 RID: 17043
+	public int iterations = 10000;
+
+	// Token: 0x04004294 RID: 17044
+	public bool benchmark;
+}

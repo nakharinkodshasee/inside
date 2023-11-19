@@ -1,0 +1,172 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000058 RID: 88
+public class ChaserDudeSubmarineControl : DefaultBoyInput, IPreAwake
+{
+	// Token: 0x17000008 RID: 8
+	// (get) Token: 0x060002DC RID: 732 RVA: 0x000215D0 File Offset: 0x0001F7D0
+	public override vector2f stick
+	{
+		get
+		{
+			return new vector2f(-1f, 1f);
+		}
+	}
+
+	// Token: 0x17000009 RID: 9
+	// (get) Token: 0x060002DD RID: 733 RVA: 0x000215E4 File Offset: 0x0001F7E4
+	public override bool jump
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x1700000A RID: 10
+	// (get) Token: 0x060002DE RID: 734 RVA: 0x000215E8 File Offset: 0x0001F7E8
+	public override bool rawJump
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x1700000B RID: 11
+	// (get) Token: 0x060002DF RID: 735 RVA: 0x000215EC File Offset: 0x0001F7EC
+	public override bool action
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x1700000C RID: 12
+	// (get) Token: 0x060002E0 RID: 736 RVA: 0x000215F0 File Offset: 0x0001F7F0
+	public override bool rawAction
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x1700000D RID: 13
+	// (get) Token: 0x060002E1 RID: 737 RVA: 0x000215F4 File Offset: 0x0001F7F4
+	public override bool grab
+	{
+		get
+		{
+			return false;
+		}
+	}
+
+	// Token: 0x060002E2 RID: 738 RVA: 0x000215F8 File Offset: 0x0001F7F8
+	public bool PreAwake(int callcount)
+	{
+		this.releaseSubmarine = SignalIn.Create("releaseSubmarine", base.gameObject, new Action(this.OnReleaseSubmarine));
+		return true;
+	}
+
+	// Token: 0x060002E3 RID: 739 RVA: 0x00021620 File Offset: 0x0001F820
+	private void Start()
+	{
+		this.startit = true;
+		this.intro = base.GetComponent<Animation>()["Intro"];
+	}
+
+	// Token: 0x060002E4 RID: 740 RVA: 0x00021640 File Offset: 0x0001F840
+	private void OnReleaseSubmarine()
+	{
+		Rigidbody component = this.theSub.GetComponent<Rigidbody>();
+		component.isKinematic = false;
+		component.constraints = 8;
+		this.theSub.Input = null;
+		this.theSub.TurnOffThrusters();
+		this.theSub.CloseHatch();
+		this.startit = false;
+		this.started = false;
+	}
+
+	// Token: 0x060002E5 RID: 741 RVA: 0x00021698 File Offset: 0x0001F898
+	private void FixedUpdate()
+	{
+		if (this.startit && !this.started)
+		{
+			Companion companion = SingletonBehaviour<CompanionManager>.instance.GetCompanion(CompanionType.sewerSubmarine);
+			if (companion != null)
+			{
+				this.theSub = companion.GetComponent<Submarine>();
+				Rigidbody component = this.theSub.GetComponent<Rigidbody>();
+				component.isKinematic = true;
+				component.constraints = 0;
+				this.theSub.Teleport(this.reparentRoot.transform.position, Vector3.zero);
+				this.theSub.Input = this;
+				this.theSub.transform.rotation = this.reparentRoot.transform.rotation;
+				this.started = true;
+			}
+		}
+		if (this.started)
+		{
+			Rigidbody component2 = this.theSub.GetComponent<Rigidbody>();
+			component2.isKinematic = true;
+			component2.constraints = 0;
+			this.theSub.Teleport(this.reparentRoot.transform.position, Vector3.zero);
+			this.theSub.transform.rotation = this.reparentRoot.transform.rotation;
+			if (this.intro.time > this.openHatchTime && !this.hatchOpened)
+			{
+				this.theSub.OpenHatch();
+				this.hatchOpened = true;
+			}
+			if (this.intro.time > this.engineStopTime && !this.engineStopped)
+			{
+				this.theSub.Input = null;
+				this.theSub.TurnOffThrusters();
+				this.engineStopped = true;
+			}
+			if (this.intro.time > this.releaseTime)
+			{
+				this.OnReleaseSubmarine();
+			}
+		}
+	}
+
+	// Token: 0x0400046B RID: 1131
+	public Transform reparentRoot;
+
+	// Token: 0x0400046C RID: 1132
+	public float openHatchTime = 5.4f;
+
+	// Token: 0x0400046D RID: 1133
+	public float engineStopTime = 7f;
+
+	// Token: 0x0400046E RID: 1134
+	public float releaseTime = 8f;
+
+	// Token: 0x0400046F RID: 1135
+	private SignalIn releaseSubmarine;
+
+	// Token: 0x04000470 RID: 1136
+	private Submarine theSub;
+
+	// Token: 0x04000471 RID: 1137
+	private bool started;
+
+	// Token: 0x04000472 RID: 1138
+	private bool startit;
+
+	// Token: 0x04000473 RID: 1139
+	private bool hatchOpened;
+
+	// Token: 0x04000474 RID: 1140
+	private bool engineStopped;
+
+	// Token: 0x04000475 RID: 1141
+	private bool released;
+
+	// Token: 0x04000476 RID: 1142
+	private AnimationState intro;
+}

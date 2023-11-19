@@ -1,0 +1,198 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200005C RID: 92
+public class ChaserSubmarineScientist : ChaserBase, IPreAwake
+{
+	// Token: 0x060002F4 RID: 756 RVA: 0x00022C50 File Offset: 0x00020E50
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		base.InitPreProcessBuild();
+		this.preProcessed = true;
+	}
+
+	// Token: 0x060002F5 RID: 757 RVA: 0x00022C6C File Offset: 0x00020E6C
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		base.PreAwakeBase();
+		this.initAnimPlayed = SignalOut.Create("initAnimPlayed", base.gameObject);
+		this.alertingGuard = SignalOut.Create("alertingGuard", base.gameObject);
+		this.initState = this.anim["Gen_SubDocking_IntroSail"];
+		return true;
+	}
+
+	// Token: 0x060002F6 RID: 758 RVA: 0x00022CC8 File Offset: 0x00020EC8
+	protected override void GotoStrangling()
+	{
+		base.GotoStrangling();
+		if (this.wallAlignPoint != null)
+		{
+			float num = base.transform.position.x - this.wallAlignPoint.transform.position.x;
+			if (num < 2.2f)
+			{
+				this.initDist = num;
+				this.initSpeed = this.chargeAnimSpeed;
+				if (this.setHighAnimLayer)
+				{
+					base.GetComponent<Animation>()[this.attackNormalAnim].layer = 1000;
+				}
+				base.GetComponent<Animation>().CrossFade(this.attackBoyAtWallAnim, 0.4f);
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledWall, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				ScriptGlobals.boy.Kill(false);
+				this.wallKill = true;
+				return;
+			}
+		}
+		if (ScriptGlobals.boy.facing * base.transform.forward.x < 0f)
+		{
+			if (this.setHighAnimLayer)
+			{
+				base.GetComponent<Animation>()[this.attackHugAnim].layer = 1000;
+				base.GetComponent<Animation>()["GuardingForestFlashLightA"].weight = 0.999f;
+			}
+			base.GetComponent<Animation>().CrossFade(this.attackHugAnim, 0.3f);
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledByHug, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		else
+		{
+			if (this.setHighAnimLayer)
+			{
+				base.GetComponent<Animation>()[this.attackNormalAnim].layer = 1000;
+				base.GetComponent<Animation>()["GuardingForestFlashLightA"].weight = 0.999f;
+			}
+			base.GetComponent<Animation>().CrossFade(this.attackNormalAnim, 0.3f);
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.boyKilledNormal, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		ScriptGlobals.boy.Kill(false);
+	}
+
+	// Token: 0x060002F7 RID: 759 RVA: 0x00022EB4 File Offset: 0x000210B4
+	protected override void OnStopChasing()
+	{
+		base.OnStopChasing();
+		this.alignToBoy = true;
+	}
+
+	// Token: 0x060002F8 RID: 760 RVA: 0x00022EC4 File Offset: 0x000210C4
+	private void Update()
+	{
+		if (this.initSignalFired)
+		{
+			this.counter += Time.deltaTime;
+		}
+		if (this.guardMode == ChaserBase.GuardMode.None)
+		{
+			if (!this.alignToBoy)
+			{
+				if (this.chaserGuard && this.chaserGuard.GetGuardMode() != ChaserBase.GuardMode.None && this.initSignalFired)
+				{
+					this.alertingGuard.Signal();
+					this.OnStopChasing();
+					base.GetComponent<Animation>().CrossFade(this.reactToBoyKilledByGuard, 0.4f);
+				}
+			}
+			base.UpdateVelocity(this.counter > 2f, 1f);
+			if (this.initState != null && (double)this.initState.normalizedTime > 0.999 && !this.initSignalFired)
+			{
+				this.initSignalFired = true;
+				this.initAnimPlayed.Signal();
+			}
+			return;
+		}
+		if (this.guardMode == ChaserBase.GuardMode.ChasingBoy)
+		{
+			base.UpdateChase(this.counter > this.delayBeforeGroundChecks);
+		}
+		else if (this.guardMode == ChaserBase.GuardMode.StranglingBoy)
+		{
+			if (this.wallKill)
+			{
+				base.UpdateStrangling(0f);
+				if (this.chargeAnimSpeed > 0f && this.initDist > 0f)
+				{
+					float num = Mathf.Min((base.transform.position.x - this.wallAlignPoint.transform.position.x) / (this.initDist * 0.7f), 1f);
+					this.chargeAnimSpeed = 1f + num * (this.initSpeed - 1f);
+				}
+				Vector3 position = base.transform.position;
+				if (position.x < this.wallAlignPoint.transform.position.x)
+				{
+					position.x = this.wallAlignPoint.transform.position.x;
+					this.chargeAnimSpeed = 0f;
+					base.transform.position = position;
+				}
+			}
+			else
+			{
+				base.UpdateStrangling(5f);
+			}
+		}
+	}
+
+	// Token: 0x040004AB RID: 1195
+	public string attackNormalAnim = "BoyChase_AttackA";
+
+	// Token: 0x040004AC RID: 1196
+	public AnimClipNode boyKilledNormal;
+
+	// Token: 0x040004AD RID: 1197
+	public string attackHugAnim = "BoyChase_AttackHugBoy";
+
+	// Token: 0x040004AE RID: 1198
+	public AnimClipNode boyKilledByHug;
+
+	// Token: 0x040004AF RID: 1199
+	public string attackBoyAtWallAnim = "BoyChase_AttackBoyAtWall";
+
+	// Token: 0x040004B0 RID: 1200
+	public AnimClipNode boyKilledWall;
+
+	// Token: 0x040004B1 RID: 1201
+	public GameObject wallAlignPoint;
+
+	// Token: 0x040004B2 RID: 1202
+	public float delayBeforeGroundChecks = 1f;
+
+	// Token: 0x040004B3 RID: 1203
+	public ChaserGuardSubmarineRailing chaserGuard;
+
+	// Token: 0x040004B4 RID: 1204
+	public string reactToBoyKilledByGuard;
+
+	// Token: 0x040004B5 RID: 1205
+	private SignalOut initAnimPlayed;
+
+	// Token: 0x040004B6 RID: 1206
+	private SignalOut alertingGuard;
+
+	// Token: 0x040004B7 RID: 1207
+	private bool initSignalFired;
+
+	// Token: 0x040004B8 RID: 1208
+	private AnimationState initState;
+
+	// Token: 0x040004B9 RID: 1209
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x040004BA RID: 1210
+	private bool wallKill;
+
+	// Token: 0x040004BB RID: 1211
+	private float initDist;
+
+	// Token: 0x040004BC RID: 1212
+	private float initSpeed;
+
+	// Token: 0x040004BD RID: 1213
+	private float counter;
+
+	// Token: 0x040004BE RID: 1214
+	private bool alignToBoy;
+}

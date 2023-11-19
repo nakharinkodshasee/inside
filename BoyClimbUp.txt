@@ -1,0 +1,221 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200014F RID: 335
+public class BoyClimbUp : MonoBehaviour, IFastEventExListener<Collider>
+{
+	// Token: 0x06000A02 RID: 2562 RVA: 0x00063E34 File Offset: 0x00062034
+	private void Start()
+	{
+		this.triggerGrab.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.triggerGrab.exitTrigger.Register(this, ref this.triggerExitHandle);
+		this.platformPos = base.transform.position;
+		this.SetIdleState();
+	}
+
+	// Token: 0x06000A03 RID: 2563 RVA: 0x00063E88 File Offset: 0x00062088
+	private void SetIdleState()
+	{
+		this.state = BoyClimbUp.State.Idle;
+	}
+
+	// Token: 0x06000A04 RID: 2564 RVA: 0x00063E94 File Offset: 0x00062094
+	private void IdleState()
+	{
+		if (!this.boyInside)
+		{
+			return;
+		}
+		vector2f stick = this.boyInside.input.stick;
+		if (this.isAbove())
+		{
+			if (stick.y < -0.5f)
+			{
+				this.SetClimbState(-1);
+			}
+		}
+		else if (stick.y > 0.5f)
+		{
+			this.SetClimbState(1);
+		}
+	}
+
+	// Token: 0x06000A05 RID: 2565 RVA: 0x00063F04 File Offset: 0x00062104
+	private void SetClimbState(int dir)
+	{
+		this.climbDir = dir;
+		if (this.climbDir == 1)
+		{
+			float x = this.boyInside.input.stick.x;
+			float num = this.defaultFacing;
+			if (Mathf.Abs(x) > 0.3f)
+			{
+				num = Mathf.Sign(this.boyInside.input.stick.x);
+			}
+			this.currentAnim = ((num != 1f) ? this.animClimbUpLeft : this.animClimbUpRight);
+		}
+		else
+		{
+			this.currentAnim = this.animClimbDown;
+		}
+		if (this.state == BoyClimbUp.State.Climb)
+		{
+			float num2 = this.previousAnim.frame / this.previousAnim.numFrames;
+			float num3 = (this.climbDir != 1) ? this.downCurve.Evaluate(num2) : this.upCurve.Evaluate(num2);
+			AnimClipNode.GotFocusArg gotFocusArg = new AnimClipNode.GotFocusArg(AnimClipNode.LoopingMode.None, num3 * this.currentAnim.numFrames);
+			BoyUtils.StartCustomAnim(this.boyInside, this.currentAnim, gotFocusArg, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		else
+		{
+			BoyUtils.StartCustomAnim(this.boyInside, this.currentAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		}
+		this.previousAnim = this.currentAnim;
+		this.state = BoyClimbUp.State.Climb;
+	}
+
+	// Token: 0x06000A06 RID: 2566 RVA: 0x00064058 File Offset: 0x00062258
+	private void ClimbState()
+	{
+		if (!this.boyInside)
+		{
+			this.SetIdleState();
+			return;
+		}
+		BoyCustomAnimState boyCustomAnimState = this.boyInside.state as BoyCustomAnimState;
+		if (!boyCustomAnimState)
+		{
+			this.SetIdleState();
+			return;
+		}
+		float y = this.boyInside.input.stick.y;
+		if (Mathf.Abs(y) > 0.5f)
+		{
+			int num = (int)Mathf.Sign(y);
+			if (num != this.climbDir)
+			{
+				if (num == 1 && this.currentAnim.frame > this.climbUpAllowed)
+				{
+					this.SetClimbState(num);
+				}
+				else if (num == -1 && this.currentAnim.frame > this.climbDownAllowed)
+				{
+					this.SetClimbState(num);
+				}
+			}
+		}
+	}
+
+	// Token: 0x06000A07 RID: 2567 RVA: 0x0006412C File Offset: 0x0006232C
+	private void FixedUpdate()
+	{
+		if (this.state == BoyClimbUp.State.Climb)
+		{
+			this.ClimbState();
+		}
+		else if (this.state == BoyClimbUp.State.Idle)
+		{
+			this.IdleState();
+		}
+	}
+
+	// Token: 0x06000A08 RID: 2568 RVA: 0x00064158 File Offset: 0x00062358
+	private bool isAbove()
+	{
+		return this.boyInside && this.boyInside.pos3.y > this.platformPos.y;
+	}
+
+	// Token: 0x06000A09 RID: 2569 RVA: 0x00064198 File Offset: 0x00062398
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.triggerGrab.enterTrigger)
+		{
+			this.TriggerEnter(collider);
+		}
+		else if (sender == this.triggerGrab.exitTrigger)
+		{
+			this.TriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06000A0A RID: 2570 RVA: 0x000641D4 File Offset: 0x000623D4
+	private void TriggerEnter(Collider c)
+	{
+		BoyProbe component = c.GetComponent<BoyProbe>();
+		if (component)
+		{
+			this.boyInside = component.boy;
+		}
+	}
+
+	// Token: 0x06000A0B RID: 2571 RVA: 0x00064200 File Offset: 0x00062400
+	private void TriggerExit(Collider c)
+	{
+		BoyProbe component = c.GetComponent<BoyProbe>();
+		if (component)
+		{
+			this.boyInside = null;
+		}
+	}
+
+	// Token: 0x04001137 RID: 4407
+	public CollisionEvents triggerGrab;
+
+	// Token: 0x04001138 RID: 4408
+	public AnimClipNode animClimbUpLeft;
+
+	// Token: 0x04001139 RID: 4409
+	public AnimClipNode animClimbUpRight;
+
+	// Token: 0x0400113A RID: 4410
+	public AnimClipNode animClimbDown;
+
+	// Token: 0x0400113B RID: 4411
+	public float climbUpAllowed = 18f;
+
+	// Token: 0x0400113C RID: 4412
+	public float climbDownAllowed = 40f;
+
+	// Token: 0x0400113D RID: 4413
+	public float defaultFacing = 1f;
+
+	// Token: 0x0400113E RID: 4414
+	public AnimationCurve downCurve;
+
+	// Token: 0x0400113F RID: 4415
+	public AnimationCurve upCurve;
+
+	// Token: 0x04001140 RID: 4416
+	private BoyClimbUp.State state;
+
+	// Token: 0x04001141 RID: 4417
+	private Boy boyInside;
+
+	// Token: 0x04001142 RID: 4418
+	private Vector3 platformPos;
+
+	// Token: 0x04001143 RID: 4419
+	private int climbDir;
+
+	// Token: 0x04001144 RID: 4420
+	private AnimClipNode currentAnim;
+
+	// Token: 0x04001145 RID: 4421
+	private AnimClipNode previousAnim;
+
+	// Token: 0x04001146 RID: 4422
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04001147 RID: 4423
+	private int triggerExitHandle = -1;
+
+	// Token: 0x02000150 RID: 336
+	private enum State
+	{
+		// Token: 0x04001149 RID: 4425
+		None,
+		// Token: 0x0400114A RID: 4426
+		Idle,
+		// Token: 0x0400114B RID: 4427
+		Climb
+	}
+}

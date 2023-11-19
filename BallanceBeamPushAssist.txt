@@ -1,0 +1,79 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000458 RID: 1112
+public class BallanceBeamPushAssist : MonoBehaviour
+{
+	// Token: 0x06001D4D RID: 7501 RVA: 0x000FD2D4 File Offset: 0x000FB4D4
+	private void FixedUpdate()
+	{
+		if (!ScriptGlobals.huddle.isCharacterActive)
+		{
+			return;
+		}
+		if (!this.beamInside)
+		{
+			return;
+		}
+		HuddleGrabState grabState = ScriptGlobals.huddle.grabState;
+		if (grabState == null || grabState.collider != this.beamObject.GetComponent<Collider>())
+		{
+			return;
+		}
+		if (this.beamObject.transform.position.y > this.disableWhenAboveThis.position.y)
+		{
+			float y = this.beamObject.GetComponent<Rigidbody>().velocity.y;
+			if (y > 0f)
+			{
+				this.beamObject.GetComponent<Rigidbody>().AddForce(-Vector3.up * y * y * this.breakFactor, 1);
+			}
+			return;
+		}
+		if (GameInput.stick.y < 0.65f || !GameInput.rawAction)
+		{
+			return;
+		}
+		float num = Vector3.Dot((this.beamTopPoint.position - this.beamObject.transform.position).normalized, Vector3.right);
+		float num2 = Mathf.InverseLerp(0.6f, 0f, Mathf.Abs(num));
+		this.beamObject.GetComponent<Rigidbody>().AddForce(Vector3.up * this.forceAmount * num2, 1);
+	}
+
+	// Token: 0x06001D4E RID: 7502 RVA: 0x000FD44C File Offset: 0x000FB64C
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.gameObject == this.beamObject)
+		{
+			this.beamInside = true;
+		}
+	}
+
+	// Token: 0x06001D4F RID: 7503 RVA: 0x000FD46C File Offset: 0x000FB66C
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.gameObject == this.beamObject)
+		{
+			this.beamInside = false;
+		}
+	}
+
+	// Token: 0x040035C5 RID: 13765
+	public GameObject beamObject;
+
+	// Token: 0x040035C6 RID: 13766
+	public Transform beamTopPoint;
+
+	// Token: 0x040035C7 RID: 13767
+	public Transform disableWhenAboveThis;
+
+	// Token: 0x040035C8 RID: 13768
+	public CollisionEvents missTrigger;
+
+	// Token: 0x040035C9 RID: 13769
+	public float forceAmount = 0.2f;
+
+	// Token: 0x040035CA RID: 13770
+	public float breakFactor;
+
+	// Token: 0x040035CB RID: 13771
+	private bool beamInside;
+}
