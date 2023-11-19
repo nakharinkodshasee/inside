@@ -1,0 +1,160 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003E7 RID: 999
+public class PlantRotation : MonoBehaviour, IFastEventExListener<Collider>
+{
+	// Token: 0x06001A9D RID: 6813 RVA: 0x000E8E78 File Offset: 0x000E7078
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.visuals == null || this.trigger == null || Mathf.Abs(base.transform.position.z) > 0.3f)
+		{
+			if (this.trigger != null)
+			{
+				PDUtilities.Destroy(this.trigger.gameObject);
+			}
+			PDUtilities.Destroy(this);
+		}
+		else
+		{
+			this.initialLocalRot = this.visuals.localRotation;
+		}
+	}
+
+	// Token: 0x06001A9E RID: 6814 RVA: 0x000E8F08 File Offset: 0x000E7108
+	private void Start()
+	{
+		this.OnPreProcess();
+		if (this.trigger != null)
+		{
+			this.trigger.enterTrigger.Register(this, ref this.triggerEnterHandle);
+			this.trigger.exitTrigger.Register(this, ref this.triggerExitHandle);
+		}
+	}
+
+	// Token: 0x06001A9F RID: 6815 RVA: 0x000E8F5C File Offset: 0x000E715C
+	private void Update()
+	{
+		float deltaTime = Time.deltaTime;
+		this.xVel += -this.xRot * deltaTime * this.acceleration;
+		this.xVel += this.xVel * deltaTime * -this.friction;
+		this.xVel = Mathf.Clamp(this.xVel, -this.velMax, this.velMax);
+		this.xRot += this.xVel;
+		if (this.xRot > 0.001f || this.xRot < -0.001f)
+		{
+			Quaternion localRotation = this.initialLocalRot;
+			QuaternionFast.RotateInZ(ref localRotation, 0.017453292f * this.xRot * this.angles);
+			this.visuals.localRotation = localRotation;
+		}
+	}
+
+	// Token: 0x06001AA0 RID: 6816 RVA: 0x000E9028 File Offset: 0x000E7228
+	private void Shake(Vector3 vel)
+	{
+		float num = -vel.x / 3f;
+		if (Mathf.Abs(num) < 0.4f)
+		{
+			num = Mathf.Sign(num) * 0.4f;
+		}
+		if (Mathf.Abs(vel.y) > 0f)
+		{
+			num = (float)((Random.value >= 0.5f) ? -1 : 1);
+		}
+		float value = Random.value;
+		float num2 = 1f;
+		if (value < 0.1f)
+		{
+			num2 += 0.1f;
+		}
+		else if (value > 0.9f)
+		{
+			num2 += 1.2f;
+		}
+		else
+		{
+			num2 += Random.Range(-0.3f, 0.3f);
+		}
+		this.xVel += num * this.pushForce * num2;
+	}
+
+	// Token: 0x06001AA1 RID: 6817 RVA: 0x000E90F4 File Offset: 0x000E72F4
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.trigger.enterTrigger)
+		{
+			this.TriggerEnter(collider);
+		}
+		else if (sender == this.trigger.exitTrigger)
+		{
+			this.TriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06001AA2 RID: 6818 RVA: 0x000E9130 File Offset: 0x000E7330
+	private void TriggerEnter(Collider c)
+	{
+		if (c.GetComponent<BoyProbe>() != null)
+		{
+			this.Shake(ScriptGlobals.boy.velocity3);
+		}
+	}
+
+	// Token: 0x06001AA3 RID: 6819 RVA: 0x000E9154 File Offset: 0x000E7354
+	private void TriggerExit(Collider c)
+	{
+		if (this.rotateOnExit && c.GetComponent<BoyProbe>() != null)
+		{
+			this.Shake(ScriptGlobals.boy.velocity3);
+		}
+	}
+
+	// Token: 0x04003020 RID: 12320
+	public Transform visuals;
+
+	// Token: 0x04003021 RID: 12321
+	public CollisionEvents trigger;
+
+	// Token: 0x04003022 RID: 12322
+	public bool rotateOnExit = true;
+
+	// Token: 0x04003023 RID: 12323
+	public float acceleration = 0.5f;
+
+	// Token: 0x04003024 RID: 12324
+	public float friction = 2.5f;
+
+	// Token: 0x04003025 RID: 12325
+	public float velMax = 0.1f;
+
+	// Token: 0x04003026 RID: 12326
+	public float pushForce = 0.072f;
+
+	// Token: 0x04003027 RID: 12327
+	public float angles = 22f;
+
+	// Token: 0x04003028 RID: 12328
+	public bool debug;
+
+	// Token: 0x04003029 RID: 12329
+	private float xRot;
+
+	// Token: 0x0400302A RID: 12330
+	private float xVel;
+
+	// Token: 0x0400302B RID: 12331
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x0400302C RID: 12332
+	private int triggerExitHandle = -1;
+
+	// Token: 0x0400302D RID: 12333
+	[HideInInspector]
+	[SerializeField]
+	private Quaternion initialLocalRot;
+
+	// Token: 0x0400302E RID: 12334
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

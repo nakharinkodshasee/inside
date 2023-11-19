@@ -1,0 +1,24 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005E3 RID: 1507
+public class newParentHack : MonoBehaviour
+{
+	// Token: 0x06002616 RID: 9750 RVA: 0x00136250 File Offset: 0x00134450
+	private void Start()
+	{
+	}
+
+	// Token: 0x06002617 RID: 9751 RVA: 0x00136254 File Offset: 0x00134454
+	private void Update()
+	{
+		if (!base.GetComponent<Rigidbody>().isKinematic && !this.newParentSet)
+		{
+			this.newParentSet = true;
+			base.transform.parent = base.transform.root;
+		}
+	}
+
+	// Token: 0x04004561 RID: 17761
+	private bool newParentSet;
+}

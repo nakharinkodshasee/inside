@@ -1,0 +1,164 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000C7 RID: 199
+public class Pig : MonoBehaviour
+{
+	// Token: 0x06000642 RID: 1602 RVA: 0x00047C84 File Offset: 0x00045E84
+	private void Start()
+	{
+		this.myState = Pig.MyState.idleEating;
+		this.killer.SetActive(false);
+	}
+
+	// Token: 0x06000643 RID: 1603 RVA: 0x00047C9C File Offset: 0x00045E9C
+	private void Update()
+	{
+	}
+
+	// Token: 0x06000644 RID: 1604 RVA: 0x00047CA0 File Offset: 0x00045EA0
+	private void MakeAggressive()
+	{
+		if (this.myState == Pig.MyState.idleEating)
+		{
+			this.myState = Pig.MyState.aggressiveTurn;
+			if (this.chargeSign == 1f)
+			{
+				this.lookRight.OnEvent(this);
+			}
+			else
+			{
+				this.lookLeft.OnEvent(this);
+			}
+		}
+	}
+
+	// Token: 0x06000645 RID: 1605 RVA: 0x00047CEC File Offset: 0x00045EEC
+	private void HitLeftTrigger()
+	{
+		if (this.myState == Pig.MyState.aggressiveChargeForward && this.chargeSign == -1f)
+		{
+			this.myState = Pig.MyState.idleEating;
+			this.chargeSign = 1f;
+			this.killer.SetActive(false);
+		}
+	}
+
+	// Token: 0x06000646 RID: 1606 RVA: 0x00047D34 File Offset: 0x00045F34
+	private void HitRightTrigger()
+	{
+		if (this.myState == Pig.MyState.aggressiveChargeForward && this.chargeSign == 1f)
+		{
+			this.myState = Pig.MyState.idleEating;
+			this.chargeSign = -1f;
+			this.killer.SetActive(false);
+		}
+	}
+
+	// Token: 0x06000647 RID: 1607 RVA: 0x00047D7C File Offset: 0x00045F7C
+	private void GrabTailStart()
+	{
+		this.grabbingTail = true;
+	}
+
+	// Token: 0x06000648 RID: 1608 RVA: 0x00047D88 File Offset: 0x00045F88
+	private void GrabTailEnd()
+	{
+		this.grabbingTail = false;
+	}
+
+	// Token: 0x06000649 RID: 1609 RVA: 0x00047D94 File Offset: 0x00045F94
+	private void UpdateAggressiveTurn()
+	{
+		Vector3 forward = base.transform.forward;
+		Vector3 vector = Vector3.right * this.chargeSign;
+		vector.Normalize();
+		vector.y = forward.y;
+		float num = Vector3.Angle(forward, vector);
+		if ((double)num <= 5.0)
+		{
+			this.myState = Pig.MyState.aggressiveChargeForward;
+			this.killer.SetActive(true);
+		}
+	}
+
+	// Token: 0x0600064A RID: 1610 RVA: 0x00047E00 File Offset: 0x00046000
+	private void UpdateAggressiveChargeForward()
+	{
+		Vector3 vector = Vector3.right * this.chargeSign * this.chargeSpeed;
+		base.GetComponent<Rigidbody>().MovePosition(base.transform.position + vector * Time.deltaTime);
+	}
+
+	// Token: 0x0600064B RID: 1611 RVA: 0x00047E50 File Offset: 0x00046050
+	private void UpdateIdleEating()
+	{
+		if (this.grabbingTail)
+		{
+			if ((this.chargeSign > 0f && ScriptGlobals.boy.input.stick.x > 0.5f) || (this.chargeSign < 0f && ScriptGlobals.boy.input.stick.x < 0.5f))
+			{
+				this.pullTimer += Time.deltaTime;
+				if (this.pullTimer > 1f)
+				{
+					this.MakeAggressive();
+					this.pullTimer = 0f;
+				}
+			}
+		}
+		else
+		{
+			this.pullTimer = Mathf.Max(0f, this.pullTimer - Time.deltaTime);
+		}
+	}
+
+	// Token: 0x0600064C RID: 1612 RVA: 0x00047F20 File Offset: 0x00046120
+	private void FixedUpdate()
+	{
+		if (this.myState == Pig.MyState.idleEating)
+		{
+			this.UpdateIdleEating();
+		}
+		else if (this.myState == Pig.MyState.aggressiveTurn)
+		{
+			this.UpdateAggressiveTurn();
+		}
+		else if (this.myState == Pig.MyState.aggressiveChargeForward)
+		{
+			this.UpdateAggressiveChargeForward();
+		}
+	}
+
+	// Token: 0x04000AB0 RID: 2736
+	public float chargeSpeed = 6f;
+
+	// Token: 0x04000AB1 RID: 2737
+	public GameObject killer;
+
+	// Token: 0x04000AB2 RID: 2738
+	private Pig.MyState myState;
+
+	// Token: 0x04000AB3 RID: 2739
+	private SimpleEvent<Pig> lookLeft = new SimpleEvent<Pig>("lookLeft");
+
+	// Token: 0x04000AB4 RID: 2740
+	private SimpleEvent<Pig> lookRight = new SimpleEvent<Pig>("lookRight");
+
+	// Token: 0x04000AB5 RID: 2741
+	private float chargeSign = 1f;
+
+	// Token: 0x04000AB6 RID: 2742
+	private bool grabbingTail;
+
+	// Token: 0x04000AB7 RID: 2743
+	private float pullTimer;
+
+	// Token: 0x020000C8 RID: 200
+	private enum MyState
+	{
+		// Token: 0x04000AB9 RID: 2745
+		idleEating,
+		// Token: 0x04000ABA RID: 2746
+		aggressiveTurn,
+		// Token: 0x04000ABB RID: 2747
+		aggressiveChargeForward
+	}
+}

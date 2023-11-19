@@ -1,0 +1,36 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200043F RID: 1087
+public class PigFightCamAverageTarget : MonoBehaviour
+{
+	// Token: 0x06001C6F RID: 7279 RVA: 0x000F88EC File Offset: 0x000F6AEC
+	private void Start()
+	{
+		this.startPos = base.transform.position;
+	}
+
+	// Token: 0x06001C70 RID: 7280 RVA: 0x000F8900 File Offset: 0x000F6B00
+	private void Update()
+	{
+		Vector3 position = this.startPos;
+		position.x = 0f;
+		for (int i = 0; i < this.dudeProbes.Count; i++)
+		{
+			position.x += this.dudeProbes[i].transform.position.x;
+		}
+		position.x /= (float)this.dudeProbes.Count;
+		position.x = Mathf.Clamp(position.x, this.max.position.x, float.MaxValue);
+		base.transform.position = position;
+	}
+
+	// Token: 0x0400342B RID: 13355
+	public List<Transform> dudeProbes;
+
+	// Token: 0x0400342C RID: 13356
+	public Transform max;
+
+	// Token: 0x0400342D RID: 13357
+	private Vector3 startPos;
+}

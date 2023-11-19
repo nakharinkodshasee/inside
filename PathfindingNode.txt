@@ -1,0 +1,55 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020000C5 RID: 197
+public class PathfindingNode
+{
+	// Token: 0x17000021 RID: 33
+	// (get) Token: 0x0600063C RID: 1596 RVA: 0x00047BEC File Offset: 0x00045DEC
+	public List<PathfindingNode.PathfindingConnection> connections
+	{
+		get
+		{
+			return this.mConnections;
+		}
+	}
+
+	// Token: 0x17000022 RID: 34
+	// (get) Token: 0x0600063D RID: 1597 RVA: 0x00047BF4 File Offset: 0x00045DF4
+	// (set) Token: 0x0600063E RID: 1598 RVA: 0x00047BFC File Offset: 0x00045DFC
+	public Vector3 position
+	{
+		get
+		{
+			return this.mPosition;
+		}
+		set
+		{
+			this.mPosition = value;
+		}
+	}
+
+	// Token: 0x0600063F RID: 1599 RVA: 0x00047C08 File Offset: 0x00045E08
+	public void AddConnection(PathfindingNode node)
+	{
+		PathfindingNode.PathfindingConnection item = new PathfindingNode.PathfindingConnection
+		{
+			node = node
+		};
+		this.connections.Add(item);
+	}
+
+	// Token: 0x04000AAD RID: 2733
+	public List<PathfindingNode.PathfindingConnection> mConnections = new List<PathfindingNode.PathfindingConnection>();
+
+	// Token: 0x04000AAE RID: 2734
+	private Vector3 mPosition;
+
+	// Token: 0x020000C6 RID: 198
+	public class PathfindingConnection
+	{
+		// Token: 0x04000AAF RID: 2735
+		public PathfindingNode node;
+	}
+}

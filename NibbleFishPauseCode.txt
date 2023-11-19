@@ -1,0 +1,30 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000511 RID: 1297
+public class NibbleFishPauseCode : MonoBehaviour
+{
+	// Token: 0x060021D2 RID: 8658 RVA: 0x0011B5E8 File Offset: 0x001197E8
+	private void Awake()
+	{
+		this.behaviour.enabled = this.startEnabled;
+	}
+
+	// Token: 0x060021D3 RID: 8659 RVA: 0x0011B5FC File Offset: 0x001197FC
+	private void OnBecameVisible()
+	{
+		this.behaviour.enabled = true;
+	}
+
+	// Token: 0x060021D4 RID: 8660 RVA: 0x0011B60C File Offset: 0x0011980C
+	private void OnBecameInvisible()
+	{
+		this.behaviour.enabled = false;
+	}
+
+	// Token: 0x04003F02 RID: 16130
+	public Behaviour behaviour;
+
+	// Token: 0x04003F03 RID: 16131
+	public bool startEnabled;
+}

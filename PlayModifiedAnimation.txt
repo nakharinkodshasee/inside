@@ -1,0 +1,115 @@
+using System;
+using ABHelper;
+using UnityEngine;
+
+// Token: 0x0200011D RID: 285
+public class PlayModifiedAnimation : MonoBehaviour
+{
+	// Token: 0x060008A5 RID: 2213 RVA: 0x0005B904 File Offset: 0x00059B04
+	private void CreateSingleAnimTransitionState()
+	{
+		ABDefinition.ABLevel ablevel = new ABDefinition.ABLevel(0f, string.Empty);
+		Animation component = base.GetComponent<Animation>();
+		ablevel.CreateAndAddNode(this.blendHelper, base.GetComponent<Animation>()[base.GetComponent<Animation>().clip.name], 0f, 1f, this.animDB);
+		ABDefinition abdefinition = new ABDefinition(ablevel, 0, false, string.Empty);
+		abdefinition.isStatic = this.staticAnim;
+		this.blendHelper.AddBlendDefinition(abdefinition);
+	}
+
+	// Token: 0x060008A6 RID: 2214 RVA: 0x0005B988 File Offset: 0x00059B88
+	private void Start()
+	{
+		string[] array = base.name.Split(new char[]
+		{
+			'@'
+		});
+		if (array.Length <= 1)
+		{
+			return;
+		}
+		string str = array[0];
+		this.startPos = base.transform.position;
+		this.startRot = base.transform.rotation;
+		this.startRotAngles = base.transform.rotation.eulerAngles;
+		this.blendHelper = AnimationBlendHelper.CreateAnimationBlendHelper(base.gameObject, 0);
+		this.animDB = (Resources.Load("movementinfo/" + str, typeof(AnimationMovementInfo)) as AnimationMovementInfo);
+		if (this.animDB == null)
+		{
+			return;
+		}
+		this.CreateSingleAnimTransitionState();
+		this.blendHelper.SetBlendDefinition(0);
+		this.running = true;
+	}
+
+	// Token: 0x060008A7 RID: 2215 RVA: 0x0005BA5C File Offset: 0x00059C5C
+	private void Update()
+	{
+		if (!this.running)
+		{
+			return;
+		}
+		ABHelperData abhelperData = this.blendHelper.UpdateAnimationBlends(Time.deltaTime);
+		if (abhelperData != null)
+		{
+			if (!this.staticAnim)
+			{
+				base.transform.position += base.transform.TransformDirection(abhelperData.localMoveSpeed) * Time.deltaTime;
+				Vector3 localRotationSpeed = abhelperData.localRotationSpeed;
+				Vector3 localEulerAngles = base.transform.localEulerAngles;
+				base.transform.localEulerAngles = localEulerAngles + localRotationSpeed * Time.deltaTime;
+			}
+			else if (this.alignPoint == null)
+			{
+				base.transform.position = this.startPos + abhelperData.localPosition;
+				base.transform.eulerAngles = this.startRotAngles + abhelperData.localRotation;
+			}
+			else
+			{
+				Vector3 position = this.alignPoint.position;
+				Quaternion rotation = this.alignPoint.rotation;
+				Vector3 eulerAngles = this.alignPoint.rotation.eulerAngles;
+				base.transform.position = position + rotation * abhelperData.localPosition;
+				base.transform.rotation = Quaternion.Euler(eulerAngles + abhelperData.localRotation);
+			}
+			if (!this.forceSetPlayPos)
+			{
+				this.playpos = abhelperData.normalizedAnimPos;
+			}
+			else
+			{
+				this.blendHelper.SetNormalizedPlayPos(this.playpos);
+			}
+		}
+	}
+
+	// Token: 0x04000EA0 RID: 3744
+	public bool staticAnim;
+
+	// Token: 0x04000EA1 RID: 3745
+	private AnimationBlendHelper blendHelper;
+
+	// Token: 0x04000EA2 RID: 3746
+	private AnimationMovementInfo animDB;
+
+	// Token: 0x04000EA3 RID: 3747
+	private Vector3 startPos;
+
+	// Token: 0x04000EA4 RID: 3748
+	private Quaternion startRot;
+
+	// Token: 0x04000EA5 RID: 3749
+	private Vector3 startRotAngles;
+
+	// Token: 0x04000EA6 RID: 3750
+	public bool forceSetPlayPos;
+
+	// Token: 0x04000EA7 RID: 3751
+	public float playpos;
+
+	// Token: 0x04000EA8 RID: 3752
+	public Transform alignPoint;
+
+	// Token: 0x04000EA9 RID: 3753
+	private bool running;
+}

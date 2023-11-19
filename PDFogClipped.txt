@@ -1,0 +1,241 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000342 RID: 834
+[ExecuteInEditMode]
+[AddComponentMenu("PLAYDEAD Image Effects/Fog Clipped")]
+internal class PDFogClipped : PDPostEffectsBase
+{
+	// Token: 0x06001734 RID: 5940 RVA: 0x000CAE78 File Offset: 0x000C9078
+	public override void Start()
+	{
+		base.Start();
+	}
+
+	// Token: 0x06001735 RID: 5941 RVA: 0x000CAE80 File Offset: 0x000C9080
+	public override bool CheckResources()
+	{
+		this.CheckSupport(true);
+		if (this.fogShader)
+		{
+			this.fogMaterial = base.CheckShaderAndCreateMaterial(this.fogShader, this.fogMaterial);
+		}
+		if (!this.isSupported)
+		{
+			base.ReportAutoDisable();
+		}
+		return this.isSupported && this.fogMaterial;
+	}
+
+	// Token: 0x06001736 RID: 5942 RVA: 0x000CAEE8 File Offset: 0x000C90E8
+	public void GetCamComponents()
+	{
+		if (Camera.main == null)
+		{
+			return;
+		}
+		this.pdReflectCuller = Camera.main.GetComponent<PDReflectionCuller>();
+		if (!this.pdReflectCuller)
+		{
+		}
+		if (this.parentCamera)
+		{
+			this.waterCameraRendering = this.parentCamera.gameObject.GetComponent<WaterCameraRendering>();
+		}
+	}
+
+	// Token: 0x06001737 RID: 5943 RVA: 0x000CAF4C File Offset: 0x000C914C
+	private int depthlinID()
+	{
+		if (this.m_depthlin_id < 0)
+		{
+			this.m_depthlin_id = Shader.PropertyToID("_DepthLinearize");
+		}
+		return this.m_depthlin_id;
+	}
+
+	// Token: 0x06001738 RID: 5944 RVA: 0x000CAF7C File Offset: 0x000C917C
+	private int planeID()
+	{
+		if (this.m_plane_id < 0)
+		{
+			this.m_plane_id = Shader.PropertyToID("_Plane");
+		}
+		return this.m_plane_id;
+	}
+
+	// Token: 0x06001739 RID: 5945 RVA: 0x000CAFAC File Offset: 0x000C91AC
+	private int fogcolID()
+	{
+		if (this.m_fogcol_id < 0)
+		{
+			this.m_fogcol_id = Shader.PropertyToID("PD_fogColor");
+		}
+		return this.m_fogcol_id;
+	}
+
+	// Token: 0x0600173A RID: 5946 RVA: 0x000CAFDC File Offset: 0x000C91DC
+	private int waterfogcolID()
+	{
+		if (this.m_waterfogcol_id < 0)
+		{
+			this.m_waterfogcol_id = Shader.PropertyToID("PD_fogWaterColor");
+		}
+		return this.m_waterfogcol_id;
+	}
+
+	// Token: 0x0600173B RID: 5947 RVA: 0x000CB00C File Offset: 0x000C920C
+	private int fogoverrideID()
+	{
+		if (this.m_fogoverride_id < 0)
+		{
+			this.m_fogoverride_id = Shader.PropertyToID("PD_fogOverride");
+		}
+		return this.m_fogoverride_id;
+	}
+
+	// Token: 0x0600173C RID: 5948 RVA: 0x000CB03C File Offset: 0x000C923C
+	private int fogfactsID()
+	{
+		if (this.m_fogfacts_id < 0)
+		{
+			this.m_fogfacts_id = Shader.PropertyToID("PD_fogFacts");
+		}
+		return this.m_fogfacts_id;
+	}
+
+	// Token: 0x0600173D RID: 5949 RVA: 0x000CB06C File Offset: 0x000C926C
+	private int invProjSubID()
+	{
+		if (this.m_invproj_sub_id < 0)
+		{
+			this.m_invproj_sub_id = Shader.PropertyToID("PD_CameraInvProjection__m00_m11_m03_m13");
+		}
+		return this.m_invproj_sub_id;
+	}
+
+	// Token: 0x0600173E RID: 5950 RVA: 0x000CB09C File Offset: 0x000C929C
+	private int clearColID()
+	{
+		if (this.m_clearcol_id < 0)
+		{
+			this.m_clearcol_id = Shader.PropertyToID("_PD_ClearCol");
+		}
+		return this.m_clearcol_id;
+	}
+
+	// Token: 0x0600173F RID: 5951 RVA: 0x000CB0CC File Offset: 0x000C92CC
+	private void OnRenderImage(RenderTexture source, RenderTexture destination)
+	{
+		if (!this.fogShader)
+		{
+			this.fogShader = Shader.Find("Playdead/Post/Fog plane-clipped");
+		}
+		if (!this.CheckResources())
+		{
+			Graphics.Blit(source, destination);
+			return;
+		}
+		Camera component = base.GetComponent<Camera>();
+		Matrix4x4 inverse = component.projectionMatrix.inverse;
+		this.fogMaterial.SetVector(this.invProjSubID(), new Vector4(inverse.m00, inverse.m11, inverse.m03, inverse.m13));
+		this.fogMaterial.SetVector(this.depthlinID(), GL.GetGPUProjectionMatrix(component.projectionMatrix, true).inverse.GetRow(3));
+		this.fogMaterial.SetVector(this.planeID(), component.cameraToWorldMatrix.GetRow(1) / this.PlaneDist);
+		this.fogMaterial.SetColor(this.fogcolID(), this.fogColor);
+		this.fogMaterial.SetColor(this.clearColID(), component.backgroundColor);
+		float num = 1f / (RenderSettings.fogEndDistance - RenderSettings.fogStartDistance);
+		Vector4 zero = Vector4.zero;
+		zero.x = num;
+		zero.y = RenderSettings.fogStartDistance * -num;
+		if (!this.waterCameraRendering || !this.pdReflectCuller)
+		{
+			this.GetCamComponents();
+		}
+		if (this.waterCameraRendering && this.pdReflectCuller)
+		{
+			Color waterFogColor = this.pdReflectCuller.WaterFogColor;
+			waterFogColor.a *= Mathf.Clamp01(-this.PlaneDist);
+			this.fogMaterial.SetColor(this.waterfogcolID(), waterFogColor);
+			this.fogMaterial.SetFloat(this.fogoverrideID(), this.pdReflectCuller.WaterFogOverride);
+			float num2 = 1f / (this.pdReflectCuller.WaterFogEnd - this.pdReflectCuller.WaterFogStart);
+			zero.z = num2;
+			zero.w = this.pdReflectCuller.WaterFogStart * -num2;
+		}
+		this.fogMaterial.SetVector(this.fogfactsID(), zero);
+		Graphics.Blit(source, destination, this.fogMaterial);
+	}
+
+	// Token: 0x06001740 RID: 5952 RVA: 0x000CB308 File Offset: 0x000C9508
+	private void Awake()
+	{
+		if (!Application.isPlaying)
+		{
+			return;
+		}
+		if (base.GetComponent<D11PDFogClipped>() != null)
+		{
+			return;
+		}
+		if (this.fogShader == null)
+		{
+			this.fogShader = Shader.Find("Playdead/Post/Fog plane-clipped");
+		}
+		if (this.fogShader == null)
+		{
+			return;
+		}
+		D11PDFogClipped d11PDFogClipped = base.gameObject.AddComponent<D11PDFogClipped>();
+		d11PDFogClipped.MoveAfter(this);
+		d11PDFogClipped.parentCamera = this.parentCamera;
+		d11PDFogClipped.fogShader = this.fogShader;
+		d11PDFogClipped.PlaneDist = this.PlaneDist;
+		d11PDFogClipped.fogColor = this.fogColor;
+		d11PDFogClipped.AddImageFilter();
+		Object.Destroy(this);
+	}
+
+	// Token: 0x04002984 RID: 10628
+	public Camera parentCamera;
+
+	// Token: 0x04002985 RID: 10629
+	public Shader fogShader;
+
+	// Token: 0x04002986 RID: 10630
+	private Material fogMaterial;
+
+	// Token: 0x04002987 RID: 10631
+	public float PlaneDist;
+
+	// Token: 0x04002988 RID: 10632
+	public Color fogColor = Color.black;
+
+	// Token: 0x04002989 RID: 10633
+	private PDReflectionCuller pdReflectCuller;
+
+	// Token: 0x0400298A RID: 10634
+	private WaterCameraRendering waterCameraRendering;
+
+	// Token: 0x0400298B RID: 10635
+	private int m_depthlin_id = -1;
+
+	// Token: 0x0400298C RID: 10636
+	private int m_plane_id = -1;
+
+	// Token: 0x0400298D RID: 10637
+	private int m_fogcol_id = -1;
+
+	// Token: 0x0400298E RID: 10638
+	private int m_waterfogcol_id = -1;
+
+	// Token: 0x0400298F RID: 10639
+	private int m_fogoverride_id = -1;
+
+	// Token: 0x04002990 RID: 10640
+	private int m_fogfacts_id = -1;
+
+	// Token: 0x04002991 RID: 10641
+	private int m_invproj_sub_id = -1;
+
+	// Token: 0x04002992 RID: 10642
+	private int m_clearcol_id = -1;
+}

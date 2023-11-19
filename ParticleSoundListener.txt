@@ -1,0 +1,87 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000132 RID: 306
+public class ParticleSoundListener : MonoBehaviour
+{
+	// Token: 0x0600093F RID: 2367 RVA: 0x0005ECA4 File Offset: 0x0005CEA4
+	private void Awake()
+	{
+		if (this.particleSound != null)
+		{
+			this.soundController = this.particleSound;
+		}
+	}
+
+	// Token: 0x06000940 RID: 2368 RVA: 0x0005ECC4 File Offset: 0x0005CEC4
+	public void Initialize(ParticleSound sound, ParticleSystem sys)
+	{
+		if (!this.isInitialized)
+		{
+			this.soundController = sound;
+			this.system = sys;
+			this.isInitialized = true;
+		}
+	}
+
+	// Token: 0x06000941 RID: 2369 RVA: 0x0005ECF4 File Offset: 0x0005CEF4
+	private bool IsSystemInList(ParticleSystem system)
+	{
+		bool result = false;
+		if (this.particleSound == null || this.particlesToHitCollision.Count == 0)
+		{
+			result = false;
+		}
+		else if (this.particlesToHitCollision.Contains(system))
+		{
+			result = true;
+		}
+		return result;
+	}
+
+	// Token: 0x06000942 RID: 2370 RVA: 0x0005ED40 File Offset: 0x0005CF40
+	private void OnParticleCollision(GameObject other)
+	{
+		if (!this.isInitialized && this.particleSound == null)
+		{
+			return;
+		}
+		ParticleSystem component = other.GetComponent<ParticleSystem>();
+		if (this.system == component || this.IsSystemInList(component))
+		{
+			int safeCollisionEventSize = ParticlePhysicsExtensions.GetSafeCollisionEventSize(component);
+			if (this.collisionEvents.Length < ParticleSoundListener.particlesPerFrame)
+			{
+				this.collisionEvents = new ParticleCollisionEvent[ParticleSoundListener.particlesPerFrame];
+			}
+			int num = ParticlePhysicsExtensions.GetCollisionEvents(component, base.gameObject, this.collisionEvents);
+			for (int i = 0; i < num; i++)
+			{
+				Vector3 intersection = this.collisionEvents[i].intersection;
+				this.soundController.SchedulePlaySoundHere(intersection);
+			}
+		}
+	}
+
+	// Token: 0x04000F8A RID: 3978
+	public ParticleSound particleSound;
+
+	// Token: 0x04000F8B RID: 3979
+	public List<ParticleSystem> particlesToHitCollision;
+
+	// Token: 0x04000F8C RID: 3980
+	private ParticleSound soundController;
+
+	// Token: 0x04000F8D RID: 3981
+	private ParticleSystem system;
+
+	// Token: 0x04000F8E RID: 3982
+	private static int particlesPerFrame = 1;
+
+	// Token: 0x04000F8F RID: 3983
+	private bool isInitialized;
+
+	// Token: 0x04000F90 RID: 3984
+	private ParticleCollisionEvent[] collisionEvents = new ParticleCollisionEvent[ParticleSoundListener.particlesPerFrame];
+}

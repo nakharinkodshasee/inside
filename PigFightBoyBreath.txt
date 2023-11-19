@@ -1,0 +1,68 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200043E RID: 1086
+public class PigFightBoyBreath : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001C6B RID: 7275 RVA: 0x000F8790 File Offset: 0x000F6990
+	public bool PreAwake(int callcount)
+	{
+		this.boySafe = SignalOut.Create("boySafe", base.gameObject);
+		this.boyStressed = SignalOut.Create("boyStressed", base.gameObject);
+		this.pigCharge = SignalIn.Create("pigCharge", base.gameObject, new Action(this.DoPigCharge));
+		return true;
+	}
+
+	// Token: 0x06001C6C RID: 7276 RVA: 0x000F87EC File Offset: 0x000F69EC
+	private void DoPigCharge()
+	{
+		this.pigIsCharging = true;
+		this.timeSinceCharge = 0f;
+	}
+
+	// Token: 0x06001C6D RID: 7277 RVA: 0x000F8800 File Offset: 0x000F6A00
+	private void FixedUpdate()
+	{
+		float num = ScriptGlobals.boy.pos3.x - this.pig.position.x;
+		bool flag = num >= 0f;
+		float magnitude = (this.pig.position - ScriptGlobals.boy.pos3).magnitude;
+		if (this.pigIsCharging)
+		{
+			this.timeSinceCharge += Time.deltaTime;
+		}
+		if (this.pigIsCharging && flag != this.boyRightOfPigLastFrame)
+		{
+			this.boySafe.Signal();
+			this.pigIsCharging = false;
+		}
+		if (this.pigIsCharging && magnitude <= this.stressDistance && this.timeSinceCharge >= 1.5f)
+		{
+			this.boyStressed.Signal();
+		}
+		this.boyRightOfPigLastFrame = flag;
+	}
+
+	// Token: 0x04003423 RID: 13347
+	public Transform pig;
+
+	// Token: 0x04003424 RID: 13348
+	public float stressDistance = 3f;
+
+	// Token: 0x04003425 RID: 13349
+	private bool boyRightOfPigLastFrame;
+
+	// Token: 0x04003426 RID: 13350
+	private bool pigIsCharging;
+
+	// Token: 0x04003427 RID: 13351
+	private float timeSinceCharge;
+
+	// Token: 0x04003428 RID: 13352
+	private SignalOut boySafe;
+
+	// Token: 0x04003429 RID: 13353
+	private SignalOut boyStressed;
+
+	// Token: 0x0400342A RID: 13354
+	private SignalIn pigCharge;
+}

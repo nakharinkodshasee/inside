@@ -1,0 +1,131 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005C8 RID: 1480
+public class MoveFromRotation : MonoBehaviour
+{
+	// Token: 0x060025A6 RID: 9638 RVA: 0x001337A8 File Offset: 0x001319A8
+	private float getRotation()
+	{
+		float result = 0f;
+		if (this.rotationAxis == MoveFromRotation.Axis.X)
+		{
+			result = this.objectToRotate.transform.localRotation.eulerAngles.x;
+		}
+		else if (this.rotationAxis == MoveFromRotation.Axis.Y)
+		{
+			result = this.objectToRotate.transform.localRotation.eulerAngles.y;
+		}
+		else if (this.rotationAxis == MoveFromRotation.Axis.Z)
+		{
+			result = this.objectToRotate.transform.localRotation.eulerAngles.z;
+		}
+		return result;
+	}
+
+	// Token: 0x060025A7 RID: 9639 RVA: 0x00133850 File Offset: 0x00131A50
+	private void Start()
+	{
+		if (this.moveAxis == MoveFromRotation.Axis.X)
+		{
+			this.orgPos = this.objectToMove.transform.position.x;
+		}
+		else if (this.moveAxis == MoveFromRotation.Axis.Y)
+		{
+			this.orgPos = this.objectToMove.transform.position.y;
+		}
+		else if (this.moveAxis == MoveFromRotation.Axis.Z)
+		{
+			this.orgPos = this.objectToMove.transform.position.z;
+		}
+		if (this.rotationAxis == MoveFromRotation.Axis.X)
+		{
+			this.orgRot = this.objectToRotate.transform.localRotation.eulerAngles.x;
+		}
+		else if (this.rotationAxis == MoveFromRotation.Axis.Y)
+		{
+			this.orgRot = this.objectToRotate.transform.localRotation.eulerAngles.y;
+		}
+		else if (this.rotationAxis == MoveFromRotation.Axis.Z)
+		{
+			this.orgRot = this.objectToRotate.transform.localRotation.eulerAngles.z;
+		}
+		this.objToMove = this.objectToMove;
+		if (!this.objToMove)
+		{
+			this.objectToMove = base.gameObject;
+		}
+		this.oldRotation = this.getRotation();
+	}
+
+	// Token: 0x060025A8 RID: 9640 RVA: 0x001339BC File Offset: 0x00131BBC
+	private void FixedUpdate()
+	{
+		float num = Mathf.Atan2(Mathf.Sin(this.getRotation() - this.oldRotation), Mathf.Cos(this.getRotation() - this.oldRotation));
+		this.totalRotation += num;
+		float num2 = Mathf.InverseLerp(0f, this.degrees, this.objectToRotate.transform.localRotation.eulerAngles.z);
+		float num3 = Mathf.Lerp(this.orgPos, this.orgPos + this.meters, num2);
+		Vector3 position = this.objectToMove.transform.position;
+		if (this.moveAxis == MoveFromRotation.Axis.X)
+		{
+			position.x = num3;
+		}
+		else if (this.moveAxis == MoveFromRotation.Axis.Y)
+		{
+			position.y = num3;
+		}
+		else if (this.moveAxis == MoveFromRotation.Axis.Z)
+		{
+			position.z = num3;
+		}
+		this.objectToMove.transform.position = position;
+		this.oldRotation = this.getRotation();
+	}
+
+	// Token: 0x040044C0 RID: 17600
+	public GameObject objectToRotate;
+
+	// Token: 0x040044C1 RID: 17601
+	public float degrees;
+
+	// Token: 0x040044C2 RID: 17602
+	public GameObject objectToMove;
+
+	// Token: 0x040044C3 RID: 17603
+	public float meters;
+
+	// Token: 0x040044C4 RID: 17604
+	public float multiplier;
+
+	// Token: 0x040044C5 RID: 17605
+	public MoveFromRotation.Axis rotationAxis;
+
+	// Token: 0x040044C6 RID: 17606
+	public MoveFromRotation.Axis moveAxis;
+
+	// Token: 0x040044C7 RID: 17607
+	private float oldRotation;
+
+	// Token: 0x040044C8 RID: 17608
+	private float orgPos;
+
+	// Token: 0x040044C9 RID: 17609
+	private float orgRot;
+
+	// Token: 0x040044CA RID: 17610
+	private float totalRotation;
+
+	// Token: 0x040044CB RID: 17611
+	private GameObject objToMove;
+
+	// Token: 0x020005C9 RID: 1481
+	public enum Axis
+	{
+		// Token: 0x040044CD RID: 17613
+		X,
+		// Token: 0x040044CE RID: 17614
+		Y,
+		// Token: 0x040044CF RID: 17615
+		Z
+	}
+}

@@ -1,0 +1,289 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+// Token: 0x0200020C RID: 524
+public class PhysicsLift : MonoBehaviour, IFastEventExListener<Collider>
+{
+	// Token: 0x0600102D RID: 4141 RVA: 0x00098CAC File Offset: 0x00096EAC
+	public void Start()
+	{
+		this.bottomCollisionTrigger.enterTrigger.Register(this, ref this.triggerEnterHandle);
+		this.bottomCollisionTrigger.exitTrigger.Register(this, ref this.triggerExitHandle);
+		if (base.GetComponent<ConfigurableJoint>() == null)
+		{
+			this.SetupLiftJoint();
+		}
+		this.topPos.position = base.transform.position + base.transform.up * base.transform.InverseTransformPoint(this.topPos.position).y;
+		this.bottomPos.position = base.transform.position + base.transform.up * base.transform.InverseTransformPoint(this.bottomPos.position).y;
+		this.mTopPos = Vector3.Distance(this.topPos.position, this.bottomPos.position);
+		ConfigurableJoint component = base.GetComponent<ConfigurableJoint>();
+		this.mOriginalYAnchor = ((!(component.connectedBody == null)) ? component.connectedBody.transform.InverseTransformPoint(base.transform.position).y : base.transform.position.y);
+	}
+
+	// Token: 0x0600102E RID: 4142 RVA: 0x00098E0C File Offset: 0x0009700C
+	private void SetupLiftJoint()
+	{
+		ConfigurableJoint configurableJoint = base.gameObject.AddComponent<ConfigurableJoint>();
+		configurableJoint.xMotion = 0;
+		configurableJoint.yMotion = 2;
+		configurableJoint.zMotion = 0;
+		configurableJoint.angularXMotion = 0;
+		configurableJoint.angularYMotion = 0;
+		configurableJoint.angularZMotion = 0;
+		JointDrive yDrive = configurableJoint.yDrive;
+		yDrive.maximumForce = float.PositiveInfinity;
+		yDrive.mode = 2;
+		configurableJoint.yDrive = yDrive;
+		Vector3 targetVelocity = configurableJoint.targetVelocity;
+		targetVelocity = Vector3.zero;
+		configurableJoint.targetVelocity = targetVelocity;
+		configurableJoint.connectedBody = this.connectedBody;
+		configurableJoint.anchor = base.transform.localPosition;
+	}
+
+	// Token: 0x0600102F RID: 4143 RVA: 0x00098EA4 File Offset: 0x000970A4
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.bottomCollisionTrigger.enterTrigger)
+		{
+			this.HandleBottomTriggerEnter(collider);
+		}
+		else if (sender == this.bottomCollisionTrigger.exitTrigger)
+		{
+			this.HandleBottomTriggerExit(collider);
+		}
+	}
+
+	// Token: 0x06001030 RID: 4144 RVA: 0x00098EE0 File Offset: 0x000970E0
+	private void HandleBottomTriggerEnter(Collider aCollider)
+	{
+		bool flag = aCollider.attachedRigidbody && this.mGrabbedObjects.Any((PhysicsLift.GrabbedObject o) => o.rigidbody == aCollider.attachedRigidbody);
+		if (!aCollider.isTrigger && !flag)
+		{
+			this.mObstructions.Add(aCollider);
+		}
+	}
+
+	// Token: 0x06001031 RID: 4145 RVA: 0x00098F54 File Offset: 0x00097154
+	private void HandleBottomTriggerExit(Collider aCollider)
+	{
+		if (this.mObstructions.Contains(aCollider))
+		{
+			this.mObstructions.Remove(aCollider);
+		}
+	}
+
+	// Token: 0x06001032 RID: 4146 RVA: 0x00098F74 File Offset: 0x00097174
+	private void OnCollisionEnter(Collision collision)
+	{
+		if (collision.rigidbody && this.mGrabbedObjects.All((PhysicsLift.GrabbedObject o) => o.rigidbody != collision.rigidbody))
+		{
+			this.mGrabbedObjects.Add(new PhysicsLift.GrabbedObject
+			{
+				prevCenterOfMass = collision.rigidbody.centerOfMass,
+				rigidbody = collision.rigidbody
+			});
+		}
+	}
+
+	// Token: 0x06001033 RID: 4147 RVA: 0x00098FF8 File Offset: 0x000971F8
+	private void OnCollisionExit(Collision collision)
+	{
+		PhysicsLift.GrabbedObject grabbedObject = this.mGrabbedObjects.FirstOrDefault((PhysicsLift.GrabbedObject o) => o.rigidbody == collision.rigidbody);
+		if (grabbedObject != null && grabbedObject.rigidbody)
+		{
+			collision.rigidbody.centerOfMass = grabbedObject.prevCenterOfMass;
+			this.mGrabbedObjects.Remove(grabbedObject);
+		}
+	}
+
+	// Token: 0x06001034 RID: 4148 RVA: 0x00099064 File Offset: 0x00097264
+	private void FixedUpdate()
+	{
+		this.MoveLift();
+		this.UpdateGrabbing();
+	}
+
+	// Token: 0x06001035 RID: 4149 RVA: 0x00099074 File Offset: 0x00097274
+	private void UpdateGrabbing()
+	{
+		foreach (PhysicsLift.GrabbedObject grabbedObject in this.mGrabbedObjects)
+		{
+			bool flag = this.IsInGrabBounds(grabbedObject);
+			if (flag)
+			{
+				Vector3 vector;
+				vector.x = Mathf.Abs(Vector3.Dot(this.grabBounds.transform.up, grabbedObject.rigidbody.transform.right));
+				vector.y = Mathf.Abs(Vector3.Dot(this.grabBounds.transform.up, grabbedObject.rigidbody.transform.up));
+				vector.z = Mathf.Abs(Vector3.Dot(this.grabBounds.transform.up, grabbedObject.rigidbody.transform.forward));
+				float num = -1f;
+				int maxAxis = 0;
+				for (int i = 0; i < 3; i++)
+				{
+					if (vector[i] > num)
+					{
+						num = vector[i];
+						maxAxis = i;
+					}
+				}
+				if (num < 0.85f)
+				{
+					PhysicsLift.ReleaseObject(grabbedObject);
+				}
+				else
+				{
+					this.AttractObject(maxAxis, grabbedObject);
+				}
+			}
+			else
+			{
+				PhysicsLift.ReleaseObject(grabbedObject);
+			}
+		}
+	}
+
+	// Token: 0x06001036 RID: 4150 RVA: 0x000991E0 File Offset: 0x000973E0
+	private bool IsInGrabBounds(PhysicsLift.GrabbedObject grabbedObject)
+	{
+		float x = (grabbedObject.rigidbody.position + grabbedObject.prevCenterOfMass).x;
+		float x2 = this.grabBounds.TransformPoint(Vector3.left * 0.5f).x;
+		float x3 = this.grabBounds.TransformPoint(Vector3.right * 0.5f).x;
+		if (x2 > x3)
+		{
+			MathUtils.Swap<float>(ref x2, ref x3);
+		}
+		float y = this.grabBounds.InverseTransformPoint(grabbedObject.rigidbody.position + grabbedObject.prevCenterOfMass).y;
+		return y > 0f && x > x2 && x < x3;
+	}
+
+	// Token: 0x06001037 RID: 4151 RVA: 0x000992B0 File Offset: 0x000974B0
+	private void AttractObject(int maxAxis, PhysicsLift.GrabbedObject grabbedObject)
+	{
+		if (!grabbedObject.centerOfMassIsAdjusted)
+		{
+			Vector3 vector = grabbedObject.rigidbody.transform.InverseTransformDirection(this.grabBounds.position - grabbedObject.rigidbody.transform.position);
+			float num = (vector * 0.75f)[maxAxis];
+			Vector3 centerOfMass = grabbedObject.rigidbody.centerOfMass;
+			centerOfMass[maxAxis] = num;
+			grabbedObject.rigidbody.centerOfMass = centerOfMass;
+			grabbedObject.centerOfMassIsAdjusted = true;
+		}
+	}
+
+	// Token: 0x06001038 RID: 4152 RVA: 0x00099338 File Offset: 0x00097538
+	private static void ReleaseObject(PhysicsLift.GrabbedObject grabbedObject)
+	{
+		if (grabbedObject.centerOfMassIsAdjusted)
+		{
+			grabbedObject.rigidbody.centerOfMass = grabbedObject.prevCenterOfMass;
+			grabbedObject.centerOfMassIsAdjusted = false;
+		}
+	}
+
+	// Token: 0x06001039 RID: 4153 RVA: 0x00099360 File Offset: 0x00097560
+	public void SetLiftInput(float aInput)
+	{
+		this.mLiftInput = aInput;
+	}
+
+	// Token: 0x0600103A RID: 4154 RVA: 0x0009936C File Offset: 0x0009756C
+	private void HandleJointLock()
+	{
+		ConfigurableJoint component = base.GetComponent<ConfigurableJoint>();
+		Vector3 vector = this.bottomPos.position - base.transform.position;
+		float magnitude = vector.magnitude;
+		bool flag = magnitude < this.mTopPos && Vector3.Dot((this.topPos.position - base.transform.position).normalized, vector.normalized) > 0f;
+		bool flag2 = this.mLiftInput == 0f || (this.mLiftInput > 0f && magnitude >= this.mTopPos) || (this.mLiftInput < 0f && (this.mObstructions.Count > 0 || flag));
+		if (flag2 && !this.mIsLocked)
+		{
+			float num = (!(component.connectedBody == null)) ? component.connectedBody.transform.InverseTransformPoint(base.transform.position).y : base.transform.position.y;
+			float num2 = num - this.mOriginalYAnchor;
+			Vector3 anchor = component.anchor;
+			anchor.y = num;
+			component.anchor = anchor;
+			component.yMotion = 0;
+			this.mIsLocked = true;
+		}
+		else if (!flag2 && this.mIsLocked)
+		{
+			component.yMotion = 2;
+			this.mIsLocked = false;
+		}
+	}
+
+	// Token: 0x0600103B RID: 4155 RVA: 0x00099500 File Offset: 0x00097700
+	private void MoveLift()
+	{
+		this.HandleJointLock();
+		ConfigurableJoint component = base.GetComponent<ConfigurableJoint>();
+		JointDrive yDrive = component.yDrive;
+		yDrive.maximumForce = this.liftStrength;
+		component.yDrive = yDrive;
+		Vector3 targetVelocity = component.targetVelocity;
+		targetVelocity = Vector3.down * this.mLiftInput * this.liftSpeed;
+		component.targetVelocity = targetVelocity;
+	}
+
+	// Token: 0x04001D38 RID: 7480
+	public Rigidbody connectedBody;
+
+	// Token: 0x04001D39 RID: 7481
+	public Transform grabBounds;
+
+	// Token: 0x04001D3A RID: 7482
+	public CollisionEvents bottomCollisionTrigger;
+
+	// Token: 0x04001D3B RID: 7483
+	public float liftStrength = 40f;
+
+	// Token: 0x04001D3C RID: 7484
+	public float liftSpeed = 1f;
+
+	// Token: 0x04001D3D RID: 7485
+	public Transform topPos;
+
+	// Token: 0x04001D3E RID: 7486
+	public Transform bottomPos;
+
+	// Token: 0x04001D3F RID: 7487
+	private List<PhysicsLift.GrabbedObject> mGrabbedObjects = new List<PhysicsLift.GrabbedObject>();
+
+	// Token: 0x04001D40 RID: 7488
+	private List<Collider> mObstructions = new List<Collider>();
+
+	// Token: 0x04001D41 RID: 7489
+	private float mDirectionChangeDamping;
+
+	// Token: 0x04001D42 RID: 7490
+	private float mLiftInput;
+
+	// Token: 0x04001D43 RID: 7491
+	private float mTopPos;
+
+	// Token: 0x04001D44 RID: 7492
+	private float mOriginalYAnchor;
+
+	// Token: 0x04001D45 RID: 7493
+	private int triggerEnterHandle = -1;
+
+	// Token: 0x04001D46 RID: 7494
+	private int triggerExitHandle = -1;
+
+	// Token: 0x04001D47 RID: 7495
+	private bool mIsLocked;
+
+	// Token: 0x0200020D RID: 525
+	private class GrabbedObject
+	{
+		// Token: 0x04001D48 RID: 7496
+		public Rigidbody rigidbody;
+
+		// Token: 0x04001D49 RID: 7497
+		public Vector3 prevCenterOfMass;
+
+		// Token: 0x04001D4A RID: 7498
+		public bool centerOfMassIsAdjusted;
+	}
+}

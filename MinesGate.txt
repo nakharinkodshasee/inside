@@ -1,0 +1,488 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004DC RID: 1244
+public class MinesGate : Device, IPreAwake
+{
+	// Token: 0x0600209A RID: 8346 RVA: 0x00113154 File Offset: 0x00111354
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioGrab = new AudioEventSimpleLocal(this.audioPrefix + "_hatchGrab", akGameObj);
+		this.audioRelease = new AudioEventSimpleLocal(this.audioPrefix + "_hatchLetGo", akGameObj);
+		this.audioOpen = new AudioEventSimpleLocal(this.audioPrefix + "_hatchOpen", akGameObj);
+		this.audioClose = new AudioEventSimpleLocal(this.audioPrefix + "_hatchClose", akGameObj);
+		this.audioClosed = new AudioEventSimpleLocal(this.audioPrefix + "_hatchClosed", akGameObj);
+		this.audioOpenSuccess = new AudioEventSimpleLocal(this.audioPrefix + "_hatchOpenSuccess", akGameObj);
+		this.audioOpenedFully = new AudioEventSimpleLocal(this.audioPrefix + "_hatchOpenedFully", akGameObj);
+	}
+
+	// Token: 0x0600209B RID: 8347 RVA: 0x00113248 File Offset: 0x00111448
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		this.open = SignalOut.Create("open", base.gameObject);
+		this.loadOpen = SignalIn.Create("loadOpen", base.gameObject, new Action(this.OnLoadOpen));
+		this.pushing = SignalOut.Create("pushing", base.gameObject);
+		this.letGo = SignalOut.Create("letGo", base.gameObject);
+		this.firstTouch = SignalOut.Create("firstTouch", base.gameObject);
+		this.openFull = SignalOut.Create("openFull", base.gameObject);
+		this.animDeviceCloseState = this.animDevice[this.animGateIdle.name];
+		this.animDeviceOpenState = this.animDevice[this.animGatePush.name];
+		this.animDeviceSuccessState = this.animDevice[this.animGatePopOpen.name];
+		return true;
+	}
+
+	// Token: 0x0600209C RID: 8348 RVA: 0x00113340 File Offset: 0x00111540
+	protected override void Start()
+	{
+		base.Start();
+		this.SetIdleState();
+		this.closedEventSent = true;
+	}
+
+	// Token: 0x0600209D RID: 8349 RVA: 0x00113358 File Offset: 0x00111558
+	private void SetIdleState()
+	{
+		this.boyGrabbing = null;
+		this.currentPushState = this.animDevice.CrossFadeQueued(this.animDeviceOpenState.name, this.blendSpeed, 2);
+		this.currentPushState.time = this.currentStuckTime;
+		this.currentPushState.speed = 0f;
+		this.closedEventSent = false;
+		this.closedTimer = 0f;
+		this.state = MinesGate.State.Idle;
+	}
+
+	// Token: 0x0600209E RID: 8350 RVA: 0x001133CC File Offset: 0x001115CC
+	private void IdleState()
+	{
+		if (this.releaseTimer > 0f)
+		{
+			this.releaseTimer -= Time.deltaTime;
+		}
+		if (this.closedTimer < 0.2f && !this.closedEventSent)
+		{
+			this.closedTimer += Time.fixedDeltaTime;
+		}
+		else if (this.closedTimer > 0.2f && !this.closedEventSent)
+		{
+			float num = Mathf.Clamp01(this.rumbleCloseFraction - this.currentStuckTime / this.currentPushState.length);
+			if (num > 0.15f)
+			{
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.4f * num, 0.2f, 0, 0f);
+				this.rumbleCloseFraction = 0f;
+			}
+			this.audioClosed.PostFast();
+			this.closedEventSent = true;
+		}
+		if (this.boyGrabbing != null)
+		{
+			return;
+		}
+		if (this.releaseTimer > 0f)
+		{
+			return;
+		}
+		int i = 0;
+		int count = this.boysInside.Count;
+		while (i < count)
+		{
+			Boy boy = this.boysInside[i];
+			float x = boy.input.stick.x;
+			float x2 = base.transform.right.x;
+			if (!boy.isDead && boy.facing == x2 && boy.visualBoy.IsPoseFacing(x2, this.grabAngle) && Mathf.Sign(x) == base.transform.right.x && Mathf.Abs(x) > 0.3f && !(boy.state is BoyGrabState) && !(boy.state is BoyJumpState))
+			{
+				this.grabTimer = this.delayGrab;
+				this.SetGrabState(boy);
+				break;
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x0600209F RID: 8351 RVA: 0x001135C0 File Offset: 0x001117C0
+	private void SetGrabState(Boy boy)
+	{
+		if (!this.boyTouchedThis)
+		{
+			this.firstTouch.Signal();
+			this.boyTouchedThis = true;
+		}
+		this.boyGrabbing = boy;
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animPush, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.animPush.frame = this.currentStuckTime * this.animPush.defaultfps;
+		this.currentPushState = this.animDevice.CrossFadeQueued(this.animDeviceOpenState.name, this.blendSpeed, 2);
+		this.currentPushState.time = this.currentStuckTime;
+		this.currentPushState.speed = 0f;
+		this.grabStunTimer = this.grabStunDelay;
+		Device.SetVoicePassive();
+		this.state = MinesGate.State.Grab;
+	}
+
+	// Token: 0x060020A0 RID: 8352 RVA: 0x00113684 File Offset: 0x00111884
+	private void SetGrabStateNoTransition()
+	{
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animPush, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.animPush.frame = this.currentStuckTime * this.animPush.defaultfps;
+		this.currentPushState = this.animDevice.CrossFadeQueued(this.animDeviceOpenState.name, this.blendSpeed, 2);
+		this.currentPushState.time = this.currentStuckTime;
+		this.currentPushState.speed = 0f;
+		Device.SetVoicePassive();
+		this.state = MinesGate.State.Grab;
+	}
+
+	// Token: 0x060020A1 RID: 8353 RVA: 0x00113718 File Offset: 0x00111918
+	private void GrabState()
+	{
+		if (this.grabStunTimer > 0f)
+		{
+			this.grabStunTimer -= Time.deltaTime;
+			if (this.boyGrabbing.input.jump)
+			{
+				this.grabStunTimer = 0f;
+			}
+		}
+		float x = this.boyGrabbing.input.stick.x;
+		this.animPush.frame = this.currentStuckTime * this.animPush.defaultfps;
+		if (this.boyGrabbing.isDead || (this.grabStunTimer <= 0f && (Mathf.Abs(x) < 0.3f || Mathf.Sign(x) != base.transform.right.x)))
+		{
+			this.Release();
+			return;
+		}
+		if (this.grabTimer > 0f)
+		{
+			this.grabTimer -= Time.deltaTime;
+			if (this.grabTimer <= 0f)
+			{
+				this.audioGrab.PostFast();
+			}
+			return;
+		}
+		if (Mathf.Abs(x) > 0.4f && Mathf.Sign(x) == base.transform.right.x)
+		{
+			this.SetPushState();
+			return;
+		}
+	}
+
+	// Token: 0x060020A2 RID: 8354 RVA: 0x00113868 File Offset: 0x00111A68
+	private void SetPushState()
+	{
+		this.pushing.Signal();
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animPush, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.animPush.frame = this.currentStuckTime * this.animPush.defaultfps;
+		this.currentPushState = this.animDevice.CrossFadeQueued(this.animDeviceOpenState.name, this.blendSpeedPush, 2);
+		this.currentPushState.time = this.currentStuckTime;
+		this.currentPushState.speed = 1f;
+		this.rumbleCloseFraction = this.currentPushState.normalizedTime;
+		Device.SetVoiceActive();
+		this.audioOpen.PostFast();
+		this.state = MinesGate.State.Push;
+	}
+
+	// Token: 0x060020A3 RID: 8355 RVA: 0x00113924 File Offset: 0x00111B24
+	private void PushState()
+	{
+		float x = this.boyGrabbing.input.stick.x;
+		if (Mathf.Abs(x) < 0.3f || Mathf.Sign(x) != base.transform.right.x)
+		{
+			this.audioClose.PostFast();
+			this.SetGrabStateNoTransition();
+			return;
+		}
+		this.rumbleCloseFraction = this.currentPushState.normalizedTime;
+		if (this.stuckTime > 0f && this.currentStuckTime == 0f && this.currentPushState.time > this.stuckTime)
+		{
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, this.rumblePowerStuckReached, 0.2f, 0, 0f);
+			this.currentStuckTime = this.stuckTime;
+		}
+		if (this.currentPushState.normalizedTime >= 1f)
+		{
+			this.SetSuccessState();
+			return;
+		}
+	}
+
+	// Token: 0x060020A4 RID: 8356 RVA: 0x00113A18 File Offset: 0x00111C18
+	private void SetSuccessState()
+	{
+		BoyUtils.StartCustomAnim(this.boyGrabbing, this.animSuccess, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.animDevice.Play(this.animDeviceSuccessState.name);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.6f, 0.25f, 0, 0f);
+		this.open.Signal();
+		if (this.doorCollider)
+		{
+			this.doorCollider.GetComponent<Collider>().isTrigger = true;
+		}
+		Device.SetVoiceNone();
+		this.audioOpenSuccess.PostFast();
+		this.state = MinesGate.State.Success;
+	}
+
+	// Token: 0x060020A5 RID: 8357 RVA: 0x00113AB4 File Offset: 0x00111CB4
+	private void SuccessState()
+	{
+		float normalizedTime = this.animDeviceSuccessState.normalizedTime;
+		if (normalizedTime >= 0.2f)
+		{
+			this.openFull.Signal();
+			this.audioOpenedFully.PostFast();
+			this.state = MinesGate.State.FullyOpened;
+			if (this.audioRotate)
+			{
+				this.audioRotate.enabled = false;
+			}
+		}
+	}
+
+	// Token: 0x060020A6 RID: 8358 RVA: 0x00113B14 File Offset: 0x00111D14
+	private void FullyOpenedState()
+	{
+		float time = this.animDeviceSuccessState.time;
+		if (time > 3.31f)
+		{
+			if (this.vfxDoorSparks != null)
+			{
+				this.vfxDoorSparks.Play(true);
+			}
+			this.state = MinesGate.State.None;
+		}
+	}
+
+	// Token: 0x060020A7 RID: 8359 RVA: 0x00113B5C File Offset: 0x00111D5C
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case MinesGate.State.Idle:
+			this.IdleState();
+			break;
+		case MinesGate.State.Grab:
+			this.GrabState();
+			break;
+		case MinesGate.State.Push:
+			this.PushState();
+			break;
+		case MinesGate.State.Success:
+			this.SuccessState();
+			break;
+		case MinesGate.State.FullyOpened:
+			this.FullyOpenedState();
+			break;
+		}
+	}
+
+	// Token: 0x060020A8 RID: 8360 RVA: 0x00113BC8 File Offset: 0x00111DC8
+	private void Release()
+	{
+		Device.SetVoiceNone();
+		this.letGo.Signal();
+		BoyUtils.ClearState(this.boyGrabbing, -1f);
+		this.releaseTimer = this.releaseDelay;
+		if (this.grabTimer <= 0f)
+		{
+			this.audioRelease.PostFast();
+		}
+		this.SetIdleState();
+	}
+
+	// Token: 0x060020A9 RID: 8361 RVA: 0x00113C24 File Offset: 0x00111E24
+	private void OnEnable()
+	{
+		if (this.state == MinesGate.State.Success)
+		{
+			this.OnLoadOpen();
+		}
+	}
+
+	// Token: 0x060020AA RID: 8362 RVA: 0x00113C38 File Offset: 0x00111E38
+	private void OnLoadOpen()
+	{
+		UnityAnimEventPlayer component = this.animDevice.gameObject.GetComponent<UnityAnimEventPlayer>();
+		if (component != null)
+		{
+			component.enabled = false;
+		}
+		this.animDevice.Play(this.animDeviceSuccessState.name);
+		this.animDeviceSuccessState.normalizedTime = 1f;
+		if (this.doorCollider)
+		{
+			this.doorCollider.GetComponent<Collider>().isTrigger = true;
+		}
+		this.state = MinesGate.State.FullyOpened;
+	}
+
+	// Token: 0x04003C71 RID: 15473
+	public AnimClipNode animSuccess;
+
+	// Token: 0x04003C72 RID: 15474
+	public AnimClipNode animPush;
+
+	// Token: 0x04003C73 RID: 15475
+	public Animation animDevice;
+
+	// Token: 0x04003C74 RID: 15476
+	public AnimationClip animGateIdle;
+
+	// Token: 0x04003C75 RID: 15477
+	public AnimationClip animGatePush;
+
+	// Token: 0x04003C76 RID: 15478
+	public AnimationClip animGatePopOpen;
+
+	// Token: 0x04003C77 RID: 15479
+	private AnimationState animDeviceCloseState;
+
+	// Token: 0x04003C78 RID: 15480
+	private AnimationState animDeviceOpenState;
+
+	// Token: 0x04003C79 RID: 15481
+	private AnimationState animDeviceSuccessState;
+
+	// Token: 0x04003C7A RID: 15482
+	private AnimationState currentPushState;
+
+	// Token: 0x04003C7B RID: 15483
+	public GameObject doorCollider;
+
+	// Token: 0x04003C7C RID: 15484
+	public float delayGrab = 0.2f;
+
+	// Token: 0x04003C7D RID: 15485
+	public float blendSpeed = 0.23f;
+
+	// Token: 0x04003C7E RID: 15486
+	public float blendSpeedPush = 0.025f;
+
+	// Token: 0x04003C7F RID: 15487
+	public float stuckTime = 1.5f;
+
+	// Token: 0x04003C80 RID: 15488
+	public float rumblePowerStuckReached = 0.4f;
+
+	// Token: 0x04003C81 RID: 15489
+	public float grabAngle = 100f;
+
+	// Token: 0x04003C82 RID: 15490
+	public AudioRotate audioRotate;
+
+	// Token: 0x04003C83 RID: 15491
+	public string audioPrefix = string.Empty;
+
+	// Token: 0x04003C84 RID: 15492
+	public ParticleSystem vfxDoorSparks;
+
+	// Token: 0x04003C85 RID: 15493
+	private MinesGate.State state;
+
+	// Token: 0x04003C86 RID: 15494
+	private SignalOut open;
+
+	// Token: 0x04003C87 RID: 15495
+	private SignalOut firstTouch;
+
+	// Token: 0x04003C88 RID: 15496
+	private SignalOut pushing;
+
+	// Token: 0x04003C89 RID: 15497
+	private SignalOut letGo;
+
+	// Token: 0x04003C8A RID: 15498
+	private SignalOut openFull;
+
+	// Token: 0x04003C8B RID: 15499
+	private SignalIn loadOpen;
+
+	// Token: 0x04003C8C RID: 15500
+	private float grabTimer;
+
+	// Token: 0x04003C8D RID: 15501
+	private float releaseTimer;
+
+	// Token: 0x04003C8E RID: 15502
+	private float releaseDelay = 0.2f;
+
+	// Token: 0x04003C8F RID: 15503
+	private float grabStunTimer;
+
+	// Token: 0x04003C90 RID: 15504
+	private float grabStunDelay = 0.12f;
+
+	// Token: 0x04003C91 RID: 15505
+	private bool boyTouchedThis;
+
+	// Token: 0x04003C92 RID: 15506
+	private float currentStuckTime;
+
+	// Token: 0x04003C93 RID: 15507
+	private float closedTimer;
+
+	// Token: 0x04003C94 RID: 15508
+	private bool closedEventSent;
+
+	// Token: 0x04003C95 RID: 15509
+	private float rumbleCloseFraction;
+
+	// Token: 0x04003C96 RID: 15510
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04003C97 RID: 15511
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioGrab;
+
+	// Token: 0x04003C98 RID: 15512
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioRelease;
+
+	// Token: 0x04003C99 RID: 15513
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioOpen;
+
+	// Token: 0x04003C9A RID: 15514
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioClose;
+
+	// Token: 0x04003C9B RID: 15515
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioClosed;
+
+	// Token: 0x04003C9C RID: 15516
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioOpenSuccess;
+
+	// Token: 0x04003C9D RID: 15517
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioOpenedFully;
+
+	// Token: 0x020004DD RID: 1245
+	private enum State
+	{
+		// Token: 0x04003C9F RID: 15519
+		None,
+		// Token: 0x04003CA0 RID: 15520
+		Idle,
+		// Token: 0x04003CA1 RID: 15521
+		Grab,
+		// Token: 0x04003CA2 RID: 15522
+		Push,
+		// Token: 0x04003CA3 RID: 15523
+		Success,
+		// Token: 0x04003CA4 RID: 15524
+		FullyOpened
+	}
+}

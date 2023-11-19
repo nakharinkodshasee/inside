@@ -1,0 +1,380 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000344 RID: 836
+[ExecuteInEditMode]
+public class PDPlanarReflection : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001747 RID: 5959 RVA: 0x000CB5E8 File Offset: 0x000C97E8
+	public Vector2 resolutionFraction()
+	{
+		return new Vector2(1f / (float)this.ResolutionFractionHorz, 1f / (float)this.ResolutionFractionVert);
+	}
+
+	// Token: 0x06001748 RID: 5960 RVA: 0x000CB60C File Offset: 0x000C980C
+	private static bool isCamActive(PDPlanarReflection.ReflectionCam refcam)
+	{
+		return Time.frameCount == refcam.lastrendered;
+	}
+
+	// Token: 0x06001749 RID: 5961 RVA: 0x000CB61C File Offset: 0x000C981C
+	private PDPlanarReflection.ReflectionCam GetReflectionCam(Camera currentCamera)
+	{
+		PDPlanarReflection.ReflectionCam reflectionCam = null;
+		foreach (PDPlanarReflection.ReflectionCam reflectionCam2 in PDPlanarReflection.reflCameraPool[currentCamera])
+		{
+			if (!PDPlanarReflection.isCamActive(reflectionCam2))
+			{
+				reflectionCam = reflectionCam2;
+				break;
+			}
+		}
+		if (reflectionCam == null)
+		{
+			reflectionCam = PDPlanarReflection.reflCameraPool[currentCamera][2];
+		}
+		reflectionCam.sourceGameObject = base.gameObject;
+		return reflectionCam;
+	}
+
+	// Token: 0x0600174A RID: 5962 RVA: 0x000CB688 File Offset: 0x000C9888
+	public static bool EnsureValid(Camera currentCamera)
+	{
+		bool result = true;
+		if (PDPlanarReflection.reflCameraPool == null)
+		{
+			PDPlanarReflection.reflCameraPool = new Dictionary<Camera, PDPlanarReflection.ReflectionCam[]>(1);
+		}
+		if (!PDPlanarReflection.reflCameraPool.ContainsKey(currentCamera))
+		{
+			PDPlanarReflection.reflCameraPool.Add(currentCamera, new PDPlanarReflection.ReflectionCam[3]);
+		}
+		if (PDPlanarReflection.reflCameraPool[currentCamera].Length < 3)
+		{
+			PDPlanarReflection.reflCameraPool[currentCamera] = new PDPlanarReflection.ReflectionCam[3];
+		}
+		PDPlanarReflection.EnsureRefCamPoolFull(currentCamera, PDPlanarReflection.reflCameraPool[currentCamera]);
+		return result;
+	}
+
+	// Token: 0x0600174B RID: 5963 RVA: 0x000CB704 File Offset: 0x000C9904
+	private static void EnsureRefCamPoolFull(Camera currentCamera, PDPlanarReflection.ReflectionCam[] refpool)
+	{
+		int i = 0;
+		int num = refpool.Length;
+		while (i < num)
+		{
+			if (refpool[i] == null)
+			{
+				refpool[i] = new PDPlanarReflection.ReflectionCam();
+			}
+			if (refpool[i].camera == null)
+			{
+				refpool[i].camera = PDPlanarReflection.CreateReflectionCameraFor(currentCamera, i);
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x0600174C RID: 5964 RVA: 0x000CB75C File Offset: 0x000C995C
+	private static Camera CreateReflectionCameraFor(Camera currentCamera, int poolindex)
+	{
+		string text = "ReflectionCamera_" + poolindex.ToString() + "_" + currentCamera.name;
+		Camera[] array = Resources.FindObjectsOfTypeAll<Camera>();
+		GameObject gameObject = null;
+		int i = 0;
+		int num = array.Length;
+		while (i < num)
+		{
+			if (array[i].name == text)
+			{
+				gameObject = array[i].gameObject;
+				break;
+			}
+			i++;
+		}
+		if (gameObject == null)
+		{
+			gameObject = new GameObject(text, new Type[]
+			{
+				typeof(Camera)
+			});
+		}
+		if (gameObject.GetComponent<Camera>() == null)
+		{
+			gameObject.AddComponent<Camera>();
+		}
+		Camera component = gameObject.GetComponent<Camera>();
+		PDPlanarReflection.SetStandardCameraParameters(component);
+		if (PDPlanarReflection.ShadowFogLayer < 0)
+		{
+			PDPlanarReflection.ShadowFogLayer = LayerMask.NameToLayer("ShadowFog");
+		}
+		component.cullingMask &= ~(1 << PDPlanarReflection.ShadowFogLayer);
+		gameObject.hideFlags = 61;
+		return component;
+	}
+
+	// Token: 0x0600174D RID: 5965 RVA: 0x000CB854 File Offset: 0x000C9A54
+	private static void SetStandardCameraParameters(Camera cam)
+	{
+		cam.renderingPath = 1;
+		cam.enabled = false;
+		cam.clearFlags = 2;
+	}
+
+	// Token: 0x0600174E RID: 5966 RVA: 0x000CB86C File Offset: 0x000C9A6C
+	private void RenderReflectionCamera(Camera currentCamera, PDPlanarReflection.ReflectionCam refcam, bool isPrewarming = false)
+	{
+		PDReflectionUtils.RenderReflectionFor(currentCamera, refcam.camera, this, isPrewarming);
+		refcam.lastrendered = Time.frameCount;
+	}
+
+	// Token: 0x0600174F RID: 5967 RVA: 0x000CB888 File Offset: 0x000C9A88
+	public void OnWillRenderObject()
+	{
+		PDReflectionCuller pdreflectionCuller = Camera.current.GetComponent<PDReflectionCuller>();
+		if (pdreflectionCuller == null)
+		{
+			pdreflectionCuller = Camera.current.gameObject.AddComponent<PDReflectionCuller>();
+		}
+		if (pdreflectionCuller.enabled)
+		{
+			pdreflectionCuller.AddReflection(this);
+		}
+	}
+
+	// Token: 0x06001750 RID: 5968 RVA: 0x000CB8D0 File Offset: 0x000C9AD0
+	public void WarmupReflectionCam(Camera curCam)
+	{
+		PDPlanarReflection.ReflectionCam reflectionCam = this.GetReflectionCam(curCam);
+		this.RenderReflectionCamera(curCam, reflectionCam, true);
+		this.matinstance_cached.SetVectorProperty(this.prop_reflcrop, this.cropVecTex);
+		this.matinstance_cached.UpdateMaterialPropertyBlock();
+	}
+
+	// Token: 0x06001751 RID: 5969 RVA: 0x000CB910 File Offset: 0x000C9B10
+	private void init()
+	{
+		if (this.ReflectionMask == 0)
+		{
+			this.ReflectionMask = 1 << LayerMask.NameToLayer("Reflection");
+		}
+		this.matinstance_cached = base.gameObject.GetComponent<MaterialInstance>();
+		this.prop_refltex = this.matinstance_cached.GetOrAddTextureProperty(this.ShaderPropertyName);
+		this.prop_reflcrop = this.matinstance_cached.GetOrAddVectorProperty("_ReflCrop");
+		if (this.pushObjects != null)
+		{
+			this.prop_refltexPush = new MaterialInstance.TextureProperty[this.pushObjects.Length];
+			this.prop_reflcropPush = new MaterialInstance.VectorProperty[this.pushObjects.Length];
+			int i = 0;
+			int num = this.pushObjects.Length;
+			while (i < num)
+			{
+				if (this.pushObjects[i] != null)
+				{
+					this.prop_refltexPush[i] = this.pushObjects[i].GetOrAddTextureProperty(this.ShaderPropertyName);
+					this.prop_reflcropPush[i] = this.pushObjects[i].GetOrAddVectorProperty("_ReflCrop");
+				}
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x06001752 RID: 5970 RVA: 0x000CBA1C File Offset: 0x000C9C1C
+	public bool PreAwake(int callcount)
+	{
+		this.init();
+		return true;
+	}
+
+	// Token: 0x06001753 RID: 5971 RVA: 0x000CBA28 File Offset: 0x000C9C28
+	public void SubscribeToReflectionTexture(MaterialInstance matinst)
+	{
+		int num = this.pushObjects.Length;
+		int newSize = num + 1;
+		Array.Resize<MaterialInstance>(ref this.pushObjects, newSize);
+		Array.Resize<MaterialInstance.TextureProperty>(ref this.prop_refltexPush, newSize);
+		Array.Resize<MaterialInstance.VectorProperty>(ref this.prop_reflcropPush, newSize);
+		this.pushObjects[num] = matinst;
+		this.prop_refltexPush[num] = matinst.GetOrAddTextureProperty(this.ShaderPropertyName);
+		this.prop_reflcropPush[num] = matinst.GetOrAddVectorProperty("_ReflCrop");
+	}
+
+	// Token: 0x06001754 RID: 5972 RVA: 0x000CBA98 File Offset: 0x000C9C98
+	public void ClearMaterialInstanceTexRefs()
+	{
+		if (this.matinstance_cached)
+		{
+			this.matinstance_cached.SetTextureProperty(this.prop_refltex, null);
+		}
+		if (this.pushObjects != null)
+		{
+			int i = 0;
+			int num = this.pushObjects.Length;
+			while (i < num)
+			{
+				if (this.pushObjects[i] != null)
+				{
+					this.pushObjects[i].SetTextureProperty(this.prop_refltexPush[i], null);
+				}
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x06001755 RID: 5973 RVA: 0x000CBB18 File Offset: 0x000C9D18
+	public RenderTexture UpdateReflection(Camera currentCamera)
+	{
+		PDPlanarReflection.ReflectionCam reflectionCam = this.GetReflectionCam(currentCamera);
+		Vector2 vector = this.resolutionFraction();
+		int num = (int)((float)currentCamera.pixelWidth * vector.x * this.cropScale.x);
+		int num2 = (int)((float)currentCamera.pixelHeight * vector.y * this.cropScale.y);
+		RenderTexture renderTexture = RenderTexture.GetTemporary(num, num2, 24, 7, 0, (int)this.antialiasing);
+		if (renderTexture.texelSize.y < 0f)
+		{
+			RenderTexture temporary = RenderTexture.GetTemporary(renderTexture.width, renderTexture.height, 24, 7, 0, (int)this.antialiasing);
+			RenderTexture.ReleaseTemporary(renderTexture);
+			renderTexture = temporary;
+		}
+		reflectionCam.camera.targetTexture = renderTexture;
+		this.RenderReflectionCamera(currentCamera, reflectionCam, false);
+		return renderTexture;
+	}
+
+	// Token: 0x06001756 RID: 5974 RVA: 0x000CBBE0 File Offset: 0x000C9DE0
+	public void SetShaderProperties(RenderTexture rt_target)
+	{
+		this.matinstance_cached.SetTextureProperty(this.prop_refltex, rt_target);
+		this.matinstance_cached.SetVectorProperty(this.prop_reflcrop, this.cropVecTex);
+		this.matinstance_cached.UpdateMaterialPropertyBlock();
+		if (this.pushObjects != null)
+		{
+			int i = 0;
+			int num = this.pushObjects.Length;
+			while (i < num)
+			{
+				if (this.pushObjects[i] != null)
+				{
+					this.pushObjects[i].SetTextureProperty(this.prop_refltexPush[i], rt_target);
+					this.pushObjects[i].SetVectorProperty(this.prop_reflcropPush[i], this.cropVecTex);
+					this.pushObjects[i].UpdateMaterialPropertyBlock();
+				}
+				i++;
+			}
+		}
+	}
+
+	// Token: 0x0400299F RID: 10655
+	private const string ShaderPropertyName_default = "_ReflectionTex";
+
+	// Token: 0x040029A0 RID: 10656
+	public LayerMask ReflectionMask = 0;
+
+	// Token: 0x040029A1 RID: 10657
+	public int ReflectionGroupID = -1;
+
+	// Token: 0x040029A2 RID: 10658
+	public MaterialInstance[] pushObjects;
+
+	// Token: 0x040029A3 RID: 10659
+	private string ShaderPropertyName = "_ReflectionTex";
+
+	// Token: 0x040029A4 RID: 10660
+	public Color ClearColor = Color.grey;
+
+	// Token: 0x040029A5 RID: 10661
+	public bool ApplyFogToReflection;
+
+	// Token: 0x040029A6 RID: 10662
+	public Color BoyReflectionColor = Color.white;
+
+	// Token: 0x040029A7 RID: 10663
+	[HideInInspector]
+	public Vector4 cropVec = default(Vector4);
+
+	// Token: 0x040029A8 RID: 10664
+	[HideInInspector]
+	public Vector4 cropVecTex = default(Vector4);
+
+	// Token: 0x040029A9 RID: 10665
+	[HideInInspector]
+	public Vector2 cropScale = default(Vector2);
+
+	// Token: 0x040029AA RID: 10666
+	public float clipPlaneOffset = 0.1f;
+
+	// Token: 0x040029AB RID: 10667
+	public PDPlanarReflection.resFraction ResolutionFractionHorz = PDPlanarReflection.resFraction.FULL;
+
+	// Token: 0x040029AC RID: 10668
+	public PDPlanarReflection.resFraction ResolutionFractionVert = PDPlanarReflection.resFraction.FULL;
+
+	// Token: 0x040029AD RID: 10669
+	private Renderer render;
+
+	// Token: 0x040029AE RID: 10670
+	[NonSerialized]
+	private static Dictionary<Camera, PDPlanarReflection.ReflectionCam[]> reflCameraPool;
+
+	// Token: 0x040029AF RID: 10671
+	private static int ShadowFogLayer = -1;
+
+	// Token: 0x040029B0 RID: 10672
+	private MaterialInstance matinstance_cached;
+
+	// Token: 0x040029B1 RID: 10673
+	private MaterialInstance.TextureProperty prop_refltex;
+
+	// Token: 0x040029B2 RID: 10674
+	private MaterialInstance.VectorProperty prop_reflcrop;
+
+	// Token: 0x040029B3 RID: 10675
+	private MaterialInstance.TextureProperty[] prop_refltexPush;
+
+	// Token: 0x040029B4 RID: 10676
+	private MaterialInstance.VectorProperty[] prop_reflcropPush;
+
+	// Token: 0x040029B5 RID: 10677
+	public PDPlanarReflection.AnitAliasing antialiasing = PDPlanarReflection.AnitAliasing.Off;
+
+	// Token: 0x02000345 RID: 837
+	public enum resFraction
+	{
+		// Token: 0x040029B7 RID: 10679
+		FULL = 1,
+		// Token: 0x040029B8 RID: 10680
+		HALF,
+		// Token: 0x040029B9 RID: 10681
+		QUARTER = 4,
+		// Token: 0x040029BA RID: 10682
+		EIGHTH = 8,
+		// Token: 0x040029BB RID: 10683
+		SIXTEENTH = 16
+	}
+
+	// Token: 0x02000346 RID: 838
+	private class ReflectionCam
+	{
+		// Token: 0x040029BC RID: 10684
+		public Camera camera;
+
+		// Token: 0x040029BD RID: 10685
+		public int lastrendered = -1;
+
+		// Token: 0x040029BE RID: 10686
+		public GameObject sourceGameObject;
+	}
+
+	// Token: 0x02000347 RID: 839
+	public enum AnitAliasing
+	{
+		// Token: 0x040029C0 RID: 10688
+		Off = 1,
+		// Token: 0x040029C1 RID: 10689
+		Low,
+		// Token: 0x040029C2 RID: 10690
+		High = 4
+	}
+}

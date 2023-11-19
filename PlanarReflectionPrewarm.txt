@@ -1,0 +1,26 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000356 RID: 854
+public class PlanarReflectionPrewarm : MonoBehaviour
+{
+	// Token: 0x0600179E RID: 6046 RVA: 0x000CE2BC File Offset: 0x000CC4BC
+	private void OnEnable()
+	{
+		this.reflection.WarmupReflectionCam(this.culler.gameObject.GetComponent<Camera>());
+		this.culler.WarmUp(this.reflection);
+		WaterCameraRendering component = this.culler.gameObject.GetComponent<WaterCameraRendering>();
+		component.WarmUp();
+		for (int i = base.transform.childCount - 1; i >= 0; i--)
+		{
+			Object.Destroy(base.transform.GetChild(i).gameObject);
+		}
+		base.gameObject.SetActive(false);
+	}
+
+	// Token: 0x04002A2E RID: 10798
+	public PDPlanarReflection reflection;
+
+	// Token: 0x04002A2F RID: 10799
+	public PDReflectionCuller culler;
+}

@@ -1,0 +1,158 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000351 RID: 849
+public class ParticleEmissionByVelocity : MonoBehaviour
+{
+	// Token: 0x0600178C RID: 6028 RVA: 0x000CDBD0 File Offset: 0x000CBDD0
+	private void Start()
+	{
+		this.orgEmissionRates.Clear();
+		this.particleSpeedScale.Clear();
+		switch (this.direction)
+		{
+		case ParticleEmissionByVelocity.Direction.Right:
+			this.directionVector = Vector3.right;
+			break;
+		case ParticleEmissionByVelocity.Direction.Left:
+			this.directionVector = Vector3.left;
+			break;
+		case ParticleEmissionByVelocity.Direction.Up:
+			this.directionVector = Vector3.up;
+			break;
+		case ParticleEmissionByVelocity.Direction.Down:
+			this.directionVector = Vector3.down;
+			break;
+		}
+		this.lastPosition = base.transform.position;
+		int i = 0;
+		int count = this.particleSystems.Count;
+		while (i < count)
+		{
+			this.orgEmissionRates.Add(this.particleSystems[i].emissionRate);
+			ParticleSpeedScale component = this.particleSystems[i].GetComponent<ParticleSpeedScale>();
+			if (component != null)
+			{
+				this.particleSpeedScale.Add(component);
+				component.setSpeed = true;
+			}
+			i++;
+		}
+	}
+
+	// Token: 0x0600178D RID: 6029 RVA: 0x000CDCD8 File Offset: 0x000CBED8
+	private void FixedUpdate()
+	{
+		Vector3 position = base.transform.position;
+		float num = Vector3.Distance(position, this.lastPosition) * this.velocityMul;
+		int i = 0;
+		int count = this.particleSystems.Count;
+		while (i < count)
+		{
+			num = Mathf.Clamp01(num);
+			if (this.setEmissionColor)
+			{
+				Color startColor = Color.Lerp(this.minVelocityColor, this.maxVelocityColor, num);
+				this.particleSystems[i].startColor = startColor;
+			}
+			if (this.setEmissionRate)
+			{
+				float num2 = Mathf.Lerp(this.minVelocityEmission * this.orgEmissionRates[i], this.maxVelocityEmission * this.orgEmissionRates[i], num);
+				if (this.setByDirection)
+				{
+					this.orientation = base.transform.InverseTransformDirection(this.directionVector);
+					float num3 = Mathf.Clamp01(this.orientation.y);
+					if (this.debug)
+					{
+					}
+					num2 *= num3;
+				}
+				this.particleSystems[i].emissionRate = num2;
+			}
+			i++;
+		}
+		if (this.setParticleSpeed)
+		{
+			int j = 0;
+			int count2 = this.particleSpeedScale.Count;
+			while (j < count2)
+			{
+				float speed = Mathf.Lerp(this.minVelocitySpeed, this.maxVelocitySpeed, num);
+				this.particleSpeedScale[j].speed = speed;
+				j++;
+			}
+		}
+		this.lastPosition = position;
+	}
+
+	// Token: 0x040029FF RID: 10751
+	public List<ParticleSystem> particleSystems = new List<ParticleSystem>();
+
+	// Token: 0x04002A00 RID: 10752
+	public float velocityMul = 1f;
+
+	// Token: 0x04002A01 RID: 10753
+	public bool setEmissionRate;
+
+	// Token: 0x04002A02 RID: 10754
+	public float minVelocityEmission = 1f;
+
+	// Token: 0x04002A03 RID: 10755
+	public float maxVelocityEmission = 1f;
+
+	// Token: 0x04002A04 RID: 10756
+	public bool setEmissionColor;
+
+	// Token: 0x04002A05 RID: 10757
+	public Color minVelocityColor = Color.white;
+
+	// Token: 0x04002A06 RID: 10758
+	public Color maxVelocityColor = Color.white;
+
+	// Token: 0x04002A07 RID: 10759
+	public bool setParticleSpeed;
+
+	// Token: 0x04002A08 RID: 10760
+	public float minVelocitySpeed = 1f;
+
+	// Token: 0x04002A09 RID: 10761
+	public float maxVelocitySpeed = 1f;
+
+	// Token: 0x04002A0A RID: 10762
+	public bool setByDirection;
+
+	// Token: 0x04002A0B RID: 10763
+	public ParticleEmissionByVelocity.Direction direction;
+
+	// Token: 0x04002A0C RID: 10764
+	private Vector3 directionVector = Vector3.zero;
+
+	// Token: 0x04002A0D RID: 10765
+	private Vector3 orientation = Vector3.zero;
+
+	// Token: 0x04002A0E RID: 10766
+	private Vector3 lastPosition;
+
+	// Token: 0x04002A0F RID: 10767
+	private List<float> orgEmissionRates = new List<float>();
+
+	// Token: 0x04002A10 RID: 10768
+	private List<ParticleSpeedScale> particleSpeedScale = new List<ParticleSpeedScale>();
+
+	// Token: 0x04002A11 RID: 10769
+	public bool debug;
+
+	// Token: 0x02000352 RID: 850
+	public enum Direction
+	{
+		// Token: 0x04002A13 RID: 10771
+		Right,
+		// Token: 0x04002A14 RID: 10772
+		Left,
+		// Token: 0x04002A15 RID: 10773
+		Up,
+		// Token: 0x04002A16 RID: 10774
+		Down
+	}
+}

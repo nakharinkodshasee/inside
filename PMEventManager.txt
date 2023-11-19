@@ -1,0 +1,35 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200027A RID: 634
+[ExecuteInEditMode]
+public class PMEventManager : MonoBehaviour
+{
+	// Token: 0x06001387 RID: 4999 RVA: 0x000B866C File Offset: 0x000B686C
+	private void OnEnable()
+	{
+		PMEventManager.UpdateFsmsWithEvents();
+	}
+
+	// Token: 0x06001388 RID: 5000 RVA: 0x000B8674 File Offset: 0x000B6874
+	[ContextMenu("Refresh Events")]
+	private static void UpdateFsmsWithEventsMenu()
+	{
+		PMEventManager.UpdateFsmsWithEvents();
+	}
+
+	// Token: 0x06001389 RID: 5001 RVA: 0x000B867C File Offset: 0x000B687C
+	private static void UpdateFsmsWithEvents()
+	{
+	}
+
+	// Token: 0x0600138A RID: 5002 RVA: 0x000B8680 File Offset: 0x000B6880
+	private static string FullHierachyPathName(Transform root)
+	{
+		if (root == null)
+		{
+			return string.Empty;
+		}
+		return PMEventManager.FullHierachyPathName(root.parent) + "/" + root.name;
+	}
+}

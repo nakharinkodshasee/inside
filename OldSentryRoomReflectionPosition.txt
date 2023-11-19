@@ -1,0 +1,50 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200040F RID: 1039
+public class OldSentryRoomReflectionPosition : MonoBehaviour
+{
+	// Token: 0x06001B48 RID: 6984 RVA: 0x000EE36C File Offset: 0x000EC56C
+	private void UpdatePosition()
+	{
+		Vector3 position = this.lightLeft.position + this.lightLeft.forward.normalized * 9f;
+		position.z = 0f;
+		position.y = this.orgYLeft;
+		this.reflectionLeft.position = position;
+		Vector3 position2 = this.lightRight.position + this.lightRight.forward.normalized * 9f;
+		position2.z = 0f;
+		position2.y = this.orgYRight;
+		this.reflectionRight.position = position2;
+	}
+
+	// Token: 0x06001B49 RID: 6985 RVA: 0x000EE420 File Offset: 0x000EC620
+	private void Start()
+	{
+		this.orgYLeft = this.reflectionLeft.position.y;
+		this.orgYRight = this.reflectionRight.position.y;
+	}
+
+	// Token: 0x06001B4A RID: 6986 RVA: 0x000EE460 File Offset: 0x000EC660
+	private void Update()
+	{
+		this.UpdatePosition();
+	}
+
+	// Token: 0x04003174 RID: 12660
+	public Transform reflectionRight;
+
+	// Token: 0x04003175 RID: 12661
+	public Transform reflectionLeft;
+
+	// Token: 0x04003176 RID: 12662
+	public Transform lightRight;
+
+	// Token: 0x04003177 RID: 12663
+	public Transform lightLeft;
+
+	// Token: 0x04003178 RID: 12664
+	private float orgYLeft;
+
+	// Token: 0x04003179 RID: 12665
+	private float orgYRight;
+}

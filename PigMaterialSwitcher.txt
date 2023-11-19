@@ -1,0 +1,42 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000445 RID: 1093
+public class PigMaterialSwitcher : MonoBehaviour
+{
+	// Token: 0x06001C9D RID: 7325 RVA: 0x000F956C File Offset: 0x000F776C
+	private void Start()
+	{
+		this.akGameObj = this.pigAudioObject.GetComponent<AkGameObj>();
+	}
+
+	// Token: 0x06001C9E RID: 7326 RVA: 0x000F9580 File Offset: 0x000F7780
+	private void Update()
+	{
+		this.pigInside = (this.pigAudioObject.transform.position.x > base.transform.position.x);
+		if (this.pigInside != this.pigInsideLastFrame)
+		{
+			if (this.pigInside)
+			{
+				SoundEngine.Switches.material.Set(10, this.akGameObj);
+			}
+			else
+			{
+				SoundEngine.Switches.material.Set(6, this.akGameObj);
+			}
+		}
+		this.pigInsideLastFrame = this.pigInside;
+	}
+
+	// Token: 0x04003470 RID: 13424
+	public GameObject pigAudioObject;
+
+	// Token: 0x04003471 RID: 13425
+	private bool pigInside;
+
+	// Token: 0x04003472 RID: 13426
+	private bool pigInsideLastFrame = true;
+
+	// Token: 0x04003473 RID: 13427
+	private AkGameObj akGameObj;
+}

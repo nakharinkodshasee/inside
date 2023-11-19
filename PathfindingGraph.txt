@@ -1,0 +1,33 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020000C2 RID: 194
+[Serializable]
+public class PathfindingGraph
+{
+	// Token: 0x1700001F RID: 31
+	// (get) Token: 0x06000634 RID: 1588 RVA: 0x00047AD0 File Offset: 0x00045CD0
+	public List<PathfindingNode> nodes
+	{
+		get
+		{
+			return this.mNodes;
+		}
+	}
+
+	// Token: 0x06000635 RID: 1589 RVA: 0x00047AD8 File Offset: 0x00045CD8
+	public void AddNode(PathfindingNode aNode)
+	{
+		this.mNodes.Add(aNode);
+	}
+
+	// Token: 0x06000636 RID: 1590 RVA: 0x00047AE8 File Offset: 0x00045CE8
+	public PathfindingNode GetNodeFromPos(Vector3 aPosition)
+	{
+		return this.mNodes.MinElement((PathfindingNode o) => (o.position - aPosition).magnitude);
+	}
+
+	// Token: 0x04000AA9 RID: 2729
+	private List<PathfindingNode> mNodes = new List<PathfindingNode>();
+}

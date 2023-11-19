@@ -1,0 +1,94 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003E2 RID: 994
+public class ParticleCollisionSpawner : MonoBehaviour
+{
+	// Token: 0x06001A91 RID: 6801 RVA: 0x000E881C File Offset: 0x000E6A1C
+	private void Start()
+	{
+		this.collisionParticles = base.GetComponent<ParticleSystem>();
+		if (this.groundHitParticles != null)
+		{
+			this.groundParticlesPlayback = Dynamics.Create<ParticleSystem>(this.groundHitParticles).GetComponent<ParticleSystem>();
+		}
+		if (this.waterHitParticles != null)
+		{
+			this.waterParticlesPlayback = Dynamics.Create<ParticleSystem>(this.waterHitParticles).GetComponent<ParticleSystem>();
+		}
+	}
+
+	// Token: 0x06001A92 RID: 6802 RVA: 0x000E8884 File Offset: 0x000E6A84
+	private void OnParticleCollision(GameObject go)
+	{
+		ParticleCollisionType component = go.GetComponent<ParticleCollisionType>();
+		if (component == null)
+		{
+			return;
+		}
+		ParticleCollisionType.CollisionType collisionType = component.collisionType;
+		int safeCollisionEventSize = ParticlePhysicsExtensions.GetSafeCollisionEventSize(this.collisionParticles);
+		if (this.collisionEvents.Length < safeCollisionEventSize)
+		{
+			this.collisionEvents = new ParticleCollisionEvent[safeCollisionEventSize];
+		}
+		int num = ParticlePhysicsExtensions.GetCollisionEvents(this.collisionParticles, go, this.collisionEvents);
+		for (int i = 0; i < num; i++)
+		{
+			Vector3 intersection = this.collisionEvents[i].intersection;
+			ParticleCollisionType.CollisionType collisionType2 = collisionType;
+			if (collisionType2 != ParticleCollisionType.CollisionType.Ground)
+			{
+				if (collisionType2 == ParticleCollisionType.CollisionType.Water)
+				{
+					if (!(this.waterParticlesPlayback == null))
+					{
+						this.EmitParticles(ref this.waterParticlesPlayback, ref intersection, ref component.colorTint);
+					}
+				}
+			}
+			else if (!(this.groundParticlesPlayback == null))
+			{
+				this.EmitParticles(ref this.groundParticlesPlayback, ref intersection, ref component.colorTint);
+			}
+		}
+	}
+
+	// Token: 0x06001A93 RID: 6803 RVA: 0x000E898C File Offset: 0x000E6B8C
+	private void EmitParticles(ref ParticleSystem ps, ref Vector3 pos, ref Color colorTint)
+	{
+		int num = Random.Range(this.emitAmountMin, this.emitAmountMax + 1);
+		Color startColor = ps.startColor;
+		ps.startColor = startColor * colorTint;
+		ps.transform.position = pos + this.emitOffset;
+		ps.Emit(num);
+		ps.startColor = startColor;
+	}
+
+	// Token: 0x04002FFD RID: 12285
+	public ParticleSystem groundHitParticles;
+
+	// Token: 0x04002FFE RID: 12286
+	public ParticleSystem waterHitParticles;
+
+	// Token: 0x04002FFF RID: 12287
+	public int emitAmountMin = 1;
+
+	// Token: 0x04003000 RID: 12288
+	public int emitAmountMax = 1;
+
+	// Token: 0x04003001 RID: 12289
+	public Vector3 emitOffset = Vector3.zero;
+
+	// Token: 0x04003002 RID: 12290
+	private ParticleSystem groundParticlesPlayback;
+
+	// Token: 0x04003003 RID: 12291
+	private ParticleSystem waterParticlesPlayback;
+
+	// Token: 0x04003004 RID: 12292
+	private ParticleSystem collisionParticles;
+
+	// Token: 0x04003005 RID: 12293
+	private ParticleCollisionEvent[] collisionEvents = new ParticleCollisionEvent[16];
+}

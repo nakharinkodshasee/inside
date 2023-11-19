@@ -1,0 +1,101 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200060F RID: 1551
+public class PointVelocity : MonoBehaviour
+{
+	// Token: 0x060026C1 RID: 9921 RVA: 0x001396D4 File Offset: 0x001378D4
+	private void Awake()
+	{
+		this.start.AddComponent<Rigidbody>();
+		this.start.GetComponent<Rigidbody>().useGravity = false;
+		this.start.GetComponent<Rigidbody>().angularDrag = 0f;
+		this.start.GetComponent<Rigidbody>().velocity = Vector3.zero;
+	}
+
+	// Token: 0x060026C2 RID: 9922 RVA: 0x00139728 File Offset: 0x00137928
+	private void Update()
+	{
+		Quaternion identity = Quaternion.identity;
+		identity.SetFromToRotation(this.start.transform.TransformDirection(Vector3.one), this.end.transform.TransformDirection(Vector3.one));
+		Matrix4x4 matrix4x = Matrix4x4.TRS(this.end.transform.position - this.start.transform.position, identity, Vector3.one);
+		Vector3 vector = Vector3.one * 0.5f;
+		Vector3 vector2 = vector;
+		Debug.DrawLine(this.start.transform.TransformPoint(vector2), this.start.transform.TransformPoint(matrix4x.MultiplyPoint(vector2)));
+	}
+
+	// Token: 0x060026C3 RID: 9923 RVA: 0x001397E0 File Offset: 0x001379E0
+	private void FixedUpdate()
+	{
+		this.start.GetComponent<Rigidbody>().angularVelocity = this.angularVelocity;
+		this.velocityPreviousFrame = this.velocityThisFrame;
+		this.velocityThisFrame = this.start.GetComponent<Rigidbody>().velocity;
+		this.angularVelocityPreviousFrame = this.angularVelocityThisFrame;
+		this.angularVelocityThisFrame = this.start.GetComponent<Rigidbody>().angularVelocity;
+	}
+
+	// Token: 0x060026C4 RID: 9924 RVA: 0x00139848 File Offset: 0x00137A48
+	private void OnDrawGizmos()
+	{
+		Vector3 point_local = new Vector3(1f, 1f, 1f) * 0.5f;
+		Vector3 vector = this.RenderPointVelocity(point_local);
+		point_local = new Vector3(-1f, 1f, 1f) * 0.5f;
+		vector = this.RenderPointVelocity(point_local);
+		point_local = new Vector3(1f, -1f, 1f) * 0.5f;
+		vector = this.RenderPointVelocity(point_local);
+		point_local = new Vector3(1f, 1f, -1f) * 0.5f;
+		vector = this.RenderPointVelocity(point_local);
+		point_local = new Vector3(-1f, -1f, 1f) * 0.5f;
+		vector = this.RenderPointVelocity(point_local);
+		point_local = new Vector3(1f, -1f, -1f) * 0.5f;
+		vector = this.RenderPointVelocity(point_local);
+		point_local = new Vector3(-1f, 1f, -1f) * 0.5f;
+		vector = this.RenderPointVelocity(point_local);
+		point_local = new Vector3(-1f, -1f, -1f) * 0.5f;
+		vector = this.RenderPointVelocity(point_local);
+	}
+
+	// Token: 0x060026C5 RID: 9925 RVA: 0x00139990 File Offset: 0x00137B90
+	private Vector3 RenderPointVelocity(Vector3 point_local)
+	{
+		Vector3 vector = this.start.transform.TransformPoint(point_local);
+		Debug.DrawRay(vector, this.GetPointVelocity(vector, true), Color.green);
+		Debug.DrawRay(vector, this.GetPointVelocity(vector, false), Color.red);
+		return vector;
+	}
+
+	// Token: 0x060026C6 RID: 9926 RVA: 0x001399D8 File Offset: 0x00137BD8
+	private Vector3 GetPointVelocity(Vector3 point, bool useBuiltInPointVelocity)
+	{
+		if (useBuiltInPointVelocity)
+		{
+			return this.start.GetComponent<Rigidbody>().GetPointVelocity(point);
+		}
+		Vector3 vector = point - this.start.GetComponent<Rigidbody>().position;
+		return -Vector3.Cross(vector, this.start.GetComponent<Rigidbody>().angularVelocity) + this.start.GetComponent<Rigidbody>().velocity;
+	}
+
+	// Token: 0x04004618 RID: 17944
+	public GameObject start;
+
+	// Token: 0x04004619 RID: 17945
+	public GameObject end;
+
+	// Token: 0x0400461A RID: 17946
+	public Vector3 angularVelocity;
+
+	// Token: 0x0400461B RID: 17947
+	private Vector3 velocityThisFrame = Vector3.zero;
+
+	// Token: 0x0400461C RID: 17948
+	private Vector3 angularVelocityThisFrame = Vector3.zero;
+
+	// Token: 0x0400461D RID: 17949
+	private Vector3 velocityPreviousFrame = Vector3.zero;
+
+	// Token: 0x0400461E RID: 17950
+	private Vector3 angularVelocityPreviousFrame = Vector3.zero;
+
+	// Token: 0x0400461F RID: 17951
+	public bool usePreviousFramePointVelocity;
+}

@@ -1,0 +1,122 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200019F RID: 415
+public class PDExplosion : MonoBehaviour
+{
+	// Token: 0x06000C19 RID: 3097 RVA: 0x00075F68 File Offset: 0x00074168
+	private void Start()
+	{
+		base.GetComponent<Renderer>().enabled = false;
+		this.addForceToRagdollComponent = base.gameObject.AddComponent<AddForceToRagdoll>();
+	}
+
+	// Token: 0x06000C1A RID: 3098 RVA: 0x00075F94 File Offset: 0x00074194
+	public float GetExplosionRadius()
+	{
+		return base.transform.lossyScale.x * 0.5f;
+	}
+
+	// Token: 0x06000C1B RID: 3099 RVA: 0x00075FBC File Offset: 0x000741BC
+	public void EnableExplode()
+	{
+		if (this.enableDebugRendering)
+		{
+			base.GetComponent<Renderer>().enabled = true;
+		}
+		this.explodeTimer = 1f;
+		Vector3 vector = ScriptGlobals.boy.transform.position - base.transform.position;
+		SphereCollider sphereCollider = base.GetComponent<Collider>() as SphereCollider;
+		if (this.killBoy && vector.magnitude < this.GetExplosionRadius() + 0.5f)
+		{
+			if (ScriptGlobals.boyActive)
+			{
+				BoyUtils.ClearState(ScriptGlobals.boy, -1f);
+				ScriptGlobals.boy.Kill();
+			}
+			this.addForceNextFrame = true;
+		}
+		this.checkReceiversNextFrame = true;
+	}
+
+	// Token: 0x06000C1C RID: 3100 RVA: 0x0007606C File Offset: 0x0007426C
+	private void UpdateSendToReceivers()
+	{
+		if (this.checkReceiversNextFrame)
+		{
+			foreach (ExplosionReceiver explosionReceiver in this.explosionReceivers)
+			{
+				if (explosionReceiver)
+				{
+					explosionReceiver.Explode(this);
+				}
+			}
+			this.checkReceiversNextFrame = false;
+		}
+	}
+
+	// Token: 0x06000C1D RID: 3101 RVA: 0x000760F0 File Offset: 0x000742F0
+	private void FixedUpdate()
+	{
+		this.UpdateSendToReceivers();
+		if (this.addForceNextFrame)
+		{
+			Vector3 vector = ScriptGlobals.boy.transform.position - base.transform.position;
+			vector.Normalize();
+			this.addForceToRagdollComponent.force = new Vector3(vector.x, vector.y, 0f) * 0.2f;
+			this.addForceToRagdollComponent.AddForce();
+			this.addForceNextFrame = false;
+		}
+		this.explodeTimer -= Time.deltaTime;
+		Color color = base.GetComponent<Renderer>().material.color;
+		color.a = Mathf.InverseLerp(0f, 1f, this.explodeTimer);
+		base.GetComponent<Renderer>().material.color = color;
+		if (this.explodeTimer <= 0f && this.explosionEmitter)
+		{
+			base.transform.position = this.explosionEmitter.transform.position;
+		}
+	}
+
+	// Token: 0x06000C1E RID: 3102 RVA: 0x00076200 File Offset: 0x00074400
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<ExplosionReceiver>())
+		{
+			this.explosionReceivers.Add(coll.GetComponent<ExplosionReceiver>());
+		}
+	}
+
+	// Token: 0x06000C1F RID: 3103 RVA: 0x00076224 File Offset: 0x00074424
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<ExplosionReceiver>())
+		{
+			this.explosionReceivers.Remove(coll.GetComponent<ExplosionReceiver>());
+		}
+	}
+
+	// Token: 0x0400152C RID: 5420
+	public GameObject explosionEmitter;
+
+	// Token: 0x0400152D RID: 5421
+	public bool killBoy = true;
+
+	// Token: 0x0400152E RID: 5422
+	public bool enableDebugRendering = true;
+
+	// Token: 0x0400152F RID: 5423
+	private List<ExplosionReceiver> explosionReceivers = new List<ExplosionReceiver>();
+
+	// Token: 0x04001530 RID: 5424
+	private AddForceToRagdoll addForceToRagdollComponent;
+
+	// Token: 0x04001531 RID: 5425
+	private float explodeTimer;
+
+	// Token: 0x04001532 RID: 5426
+	private bool checkReceiversNextFrame;
+
+	// Token: 0x04001533 RID: 5427
+	private bool addForceNextFrame;
+}

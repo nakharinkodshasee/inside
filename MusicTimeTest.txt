@@ -1,0 +1,111 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200059E RID: 1438
+public class MusicTimeTest : MonoBehaviour
+{
+	// Token: 0x060024CB RID: 9419 RVA: 0x0012EB74 File Offset: 0x0012CD74
+	private void Start()
+	{
+		if (this.musicCycleTime == 0f)
+		{
+			this.musicCycleTime = PersistentBehaviour<GlobalAudio>.instance.music.GetLoopLength_s();
+		}
+		this.animMusicRotate = this.animSound["Rotate"];
+		this.animMusicRotate.speed = 0f;
+		this.anim["Rotate"].speed = 0.25f;
+	}
+
+	// Token: 0x060024CC RID: 9420 RVA: 0x0012EBE8 File Offset: 0x0012CDE8
+	private void Update()
+	{
+		this.SetAudioDeltaTime();
+		this.accumulatedMusicTime += this.musicDeltaTime;
+		this.accumulatedUpdateTime += Time.deltaTime;
+		this.accumulatedDiff += this.musicDeltaTime - Time.deltaTime;
+		float normalizedTime;
+		if (this.userUpdate)
+		{
+			this.currentRotation += Time.deltaTime * this.speed;
+			normalizedTime = this.currentRotation % 1f;
+		}
+		else if (this.absoluteSound)
+		{
+			normalizedTime = (this.absoluteMusicTime + this.currentMusicTime) % this.absoluteSpeed / this.absoluteSpeed;
+		}
+		else
+		{
+			this.currentRotation += this.musicDeltaTime * this.speed;
+			normalizedTime = this.currentRotation % 1f;
+		}
+		this.animMusicRotate.normalizedTime = normalizedTime;
+	}
+
+	// Token: 0x060024CD RID: 9421 RVA: 0x0012ECD4 File Offset: 0x0012CED4
+	private void SetAudioDeltaTime()
+	{
+		this.currentMusicTime = PersistentBehaviour<GlobalAudio>.instance.music.GetMusicPosition_s();
+		if (this.currentMusicTime > this.musicCycleTime)
+		{
+			this.currentMusicTime -= this.musicCycleTime;
+		}
+		if (this.currentMusicTime < this.previousMusicTime && this.currentMusicTime < 0.1f && this.previousMusicTime > this.musicCycleTime - 0.1f)
+		{
+			this.musicDeltaTime = this.currentMusicTime + this.musicCycleTime - this.previousMusicTime;
+			this.absoluteMusicTime += this.musicCycleTime;
+		}
+		else
+		{
+			this.musicDeltaTime = this.currentMusicTime - this.previousMusicTime;
+		}
+		this.previousMusicTime = this.currentMusicTime;
+	}
+
+	// Token: 0x0400437E RID: 17278
+	public float musicCycleTime;
+
+	// Token: 0x0400437F RID: 17279
+	public Animation anim;
+
+	// Token: 0x04004380 RID: 17280
+	public Animation animSound;
+
+	// Token: 0x04004381 RID: 17281
+	public float speed = 0.25f;
+
+	// Token: 0x04004382 RID: 17282
+	public float absoluteSpeed = 16f;
+
+	// Token: 0x04004383 RID: 17283
+	public bool userUpdate;
+
+	// Token: 0x04004384 RID: 17284
+	public bool absoluteSound;
+
+	// Token: 0x04004385 RID: 17285
+	private float previousMusicTime;
+
+	// Token: 0x04004386 RID: 17286
+	private float musicDeltaTime;
+
+	// Token: 0x04004387 RID: 17287
+	private float accumulatedMusicTime;
+
+	// Token: 0x04004388 RID: 17288
+	private float accumulatedUpdateTime;
+
+	// Token: 0x04004389 RID: 17289
+	private float accumulatedDiff;
+
+	// Token: 0x0400438A RID: 17290
+	private float currentRotation;
+
+	// Token: 0x0400438B RID: 17291
+	private AnimationState animMusicRotate;
+
+	// Token: 0x0400438C RID: 17292
+	private float currentMusicTime;
+
+	// Token: 0x0400438D RID: 17293
+	private float absoluteMusicTime;
+}

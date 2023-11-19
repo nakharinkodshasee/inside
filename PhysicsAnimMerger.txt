@@ -1,0 +1,77 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000548 RID: 1352
+public class PhysicsAnimMerger : MonoBehaviour
+{
+	// Token: 0x0600231A RID: 8986 RVA: 0x00125810 File Offset: 0x00123A10
+	private static GameObject FindChildRec(Transform t, string name)
+	{
+		if (t.name == name)
+		{
+			return t.gameObject;
+		}
+		foreach (object obj in t)
+		{
+			Transform t2 = (Transform)obj;
+			GameObject gameObject = PhysicsAnimMerger.FindChildRec(t2, name);
+			if (gameObject)
+			{
+				return gameObject;
+			}
+		}
+		return null;
+	}
+
+	// Token: 0x0600231B RID: 8987 RVA: 0x001258AC File Offset: 0x00123AAC
+	private GameObject FindBone(Rigidbody body)
+	{
+		return PhysicsAnimMerger.FindChildRec(this.animSkeleton.transform, body.name);
+	}
+
+	// Token: 0x0600231C RID: 8988 RVA: 0x001258C4 File Offset: 0x00123AC4
+	private void FixedUpdate()
+	{
+		Rigidbody[] componentsInChildren = this.physicsSkeleton.transform.GetComponentsInChildren<Rigidbody>();
+		foreach (Rigidbody rigidbody in componentsInChildren)
+		{
+			if (rigidbody.isKinematic)
+			{
+				GameObject gameObject = this.FindBone(rigidbody);
+				if (gameObject)
+				{
+					Quaternion rotation = gameObject.transform.rotation;
+					Quaternion quaternion = Quaternion.LookRotation(-(rotation * Vector3.up), -(rotation * Vector3.forward));
+					rigidbody.MovePosition(gameObject.transform.position);
+					rigidbody.MoveRotation(quaternion);
+				}
+			}
+		}
+	}
+
+	// Token: 0x0600231D RID: 8989 RVA: 0x00125970 File Offset: 0x00123B70
+	private void LateUpdate()
+	{
+		Rigidbody[] componentsInChildren = this.physicsSkeleton.transform.GetComponentsInChildren<Rigidbody>();
+		foreach (Rigidbody rigidbody in componentsInChildren)
+		{
+			if (!rigidbody.isKinematic)
+			{
+				GameObject gameObject = this.FindBone(rigidbody);
+				if (gameObject)
+				{
+					Quaternion rotation = rigidbody.transform.rotation;
+					Quaternion rotation2 = Quaternion.LookRotation(-(rotation * Vector3.up), -(rotation * Vector3.forward));
+					gameObject.transform.position = rigidbody.transform.position;
+					gameObject.transform.rotation = rotation2;
+				}
+			}
+		}
+	}
+
+	// Token: 0x040041A5 RID: 16805
+	public GameObject physicsSkeleton;
+
+	// Token: 0x040041A6 RID: 16806
+	public GameObject animSkeleton;
+}

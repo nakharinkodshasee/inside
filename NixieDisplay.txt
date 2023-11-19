@@ -1,0 +1,412 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004E5 RID: 1253
+public class NixieDisplay : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060020DD RID: 8413 RVA: 0x00114F4C File Offset: 0x0011314C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.firstDigit.PreProcess(this);
+		this.secondDigit.PreProcess(this);
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioCountUp = new AudioEventSimpleLocal("env_mines_cargoLift_displayCountUp", akGameObj);
+		this.audioCountDown = new AudioEventSimpleLocal("env_mines_cargoLift_displayCountDown", akGameObj);
+	}
+
+	// Token: 0x060020DE RID: 8414 RVA: 0x00114FB4 File Offset: 0x001131B4
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		this.turnOn = SignalIn.Create("turnOn", base.gameObject, new Action(this.OnTurnOn));
+		this.turnOff = SignalIn.Create("turnOff", base.gameObject, new Action(this.OnTurnOff));
+		this.setToZero = SignalIn.Create("setToZero", base.gameObject, new Action(this.OnSetToZero));
+		if (this.secondDigit.numbers.Length > 0)
+		{
+			this.doubleDigit = true;
+		}
+		this.firstDigit.Init();
+		this.secondDigit.Init();
+		this.refreshTimer = this.refreshRate;
+		return true;
+	}
+
+	// Token: 0x060020DF RID: 8415 RVA: 0x0011506C File Offset: 0x0011326C
+	private void OnSetToZero()
+	{
+		this.displayOn = true;
+		this.shownNumber = 0;
+		this.targetNumber = 0;
+		this.UpdateNumber();
+		this.isCompleted = true;
+	}
+
+	// Token: 0x060020E0 RID: 8416 RVA: 0x0011509C File Offset: 0x0011329C
+	private void OnTurnOff()
+	{
+		this.displayOn = false;
+		this.firstDigit.TurnOffCurrent();
+		this.secondDigit.TurnOffCurrent();
+	}
+
+	// Token: 0x060020E1 RID: 8417 RVA: 0x001150BC File Offset: 0x001132BC
+	private void OnTurnOn()
+	{
+		this.displayOn = true;
+		this.shownNumber = this.targetNumber;
+		this.UpdateNumber();
+	}
+
+	// Token: 0x060020E2 RID: 8418 RVA: 0x001150D8 File Offset: 0x001132D8
+	public void SetNumber(int value)
+	{
+		this.targetNumber = value;
+	}
+
+	// Token: 0x060020E3 RID: 8419 RVA: 0x001150E4 File Offset: 0x001132E4
+	public int GetNumberTarget()
+	{
+		return this.targetNumber;
+	}
+
+	// Token: 0x060020E4 RID: 8420 RVA: 0x001150EC File Offset: 0x001132EC
+	public int GetNumberShown()
+	{
+		return this.shownNumber;
+	}
+
+	// Token: 0x060020E5 RID: 8421 RVA: 0x001150F4 File Offset: 0x001132F4
+	private void UpdateNumber()
+	{
+		if (this.isCompleted)
+		{
+			return;
+		}
+		int number = this.shownNumber % 10;
+		this.firstDigit.SetNumber(number);
+		if (this.doubleDigit)
+		{
+			int number2 = (int)Mathf.Floor((float)(this.shownNumber / 10));
+			this.secondDigit.SetNumber(number2);
+		}
+	}
+
+	// Token: 0x060020E6 RID: 8422 RVA: 0x0011514C File Offset: 0x0011334C
+	public void Update()
+	{
+		this.firstDigit.UpdateTubes();
+		this.secondDigit.UpdateTubes();
+		if (this.isCompleted)
+		{
+			return;
+		}
+		if (this.refreshTimer > 0f)
+		{
+			this.refreshTimer -= Time.deltaTime;
+		}
+		else
+		{
+			this.refreshTimer = this.refreshRate;
+			if (this.displayOn && this.shownNumber != this.targetNumber)
+			{
+				if (this.targetNumber > this.shownNumber)
+				{
+					this.audioCountUp.PostFast();
+					this.shownNumber++;
+				}
+				else
+				{
+					this.audioCountDown.PostFast();
+					this.shownNumber--;
+				}
+				this.UpdateNumber();
+				if (this.shownNumber == 0)
+				{
+					this.isCompleted = true;
+				}
+			}
+		}
+	}
+
+	// Token: 0x060020E7 RID: 8423 RVA: 0x0011522C File Offset: 0x0011342C
+	public Color GetTubeColor(float fraction)
+	{
+		float num = this.fadeCurve.Evaluate(fraction);
+		Color result;
+		if (num > 0.5f)
+		{
+			result = Color.Lerp(this.colorFade, this.colorFadeStart, (num - 0.5f) * 2f);
+		}
+		else
+		{
+			result = Color.Lerp(this.colorFadeEnd, this.colorFade, num * 2f);
+		}
+		return result;
+	}
+
+	// Token: 0x04003D15 RID: 15637
+	public NixieDisplay.NixieDigit firstDigit;
+
+	// Token: 0x04003D16 RID: 15638
+	public NixieDisplay.NixieDigit secondDigit;
+
+	// Token: 0x04003D17 RID: 15639
+	public bool displayOn;
+
+	// Token: 0x04003D18 RID: 15640
+	public float refreshRate = 0.3f;
+
+	// Token: 0x04003D19 RID: 15641
+	[Header("--- On ---")]
+	public Color colorOn;
+
+	// Token: 0x04003D1A RID: 15642
+	public float glowOn = 0.35f;
+
+	// Token: 0x04003D1B RID: 15643
+	public float forwardOffset = 0.01f;
+
+	// Token: 0x04003D1C RID: 15644
+	[Header("--- FadeOut ---")]
+	public string colorPropertyName = "_TintColor";
+
+	// Token: 0x04003D1D RID: 15645
+	public string glowPropertyName = "_GlowIntensity";
+
+	// Token: 0x04003D1E RID: 15646
+	public float glowFading;
+
+	// Token: 0x04003D1F RID: 15647
+	public float fadeDuration = 1f;
+
+	// Token: 0x04003D20 RID: 15648
+	public AnimationCurve fadeCurve;
+
+	// Token: 0x04003D21 RID: 15649
+	public Color colorFadeStart;
+
+	// Token: 0x04003D22 RID: 15650
+	public Color colorFade;
+
+	// Token: 0x04003D23 RID: 15651
+	public Color colorFadeEnd;
+
+	// Token: 0x04003D24 RID: 15652
+	private SignalIn turnOn;
+
+	// Token: 0x04003D25 RID: 15653
+	private SignalIn turnOff;
+
+	// Token: 0x04003D26 RID: 15654
+	private SignalIn setToZero;
+
+	// Token: 0x04003D27 RID: 15655
+	private bool doubleDigit;
+
+	// Token: 0x04003D28 RID: 15656
+	private float refreshTimer;
+
+	// Token: 0x04003D29 RID: 15657
+	private int targetNumber = 20;
+
+	// Token: 0x04003D2A RID: 15658
+	private int shownNumber;
+
+	// Token: 0x04003D2B RID: 15659
+	private bool isCompleted;
+
+	// Token: 0x04003D2C RID: 15660
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioCountUp;
+
+	// Token: 0x04003D2D RID: 15661
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioCountDown;
+
+	// Token: 0x04003D2E RID: 15662
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x020004E6 RID: 1254
+	[Serializable]
+	public class NixieDigit
+	{
+		// Token: 0x060020E9 RID: 8425 RVA: 0x00115298 File Offset: 0x00113498
+		internal void PreProcess(NixieDisplay display)
+		{
+			this.tubes = new NixieDisplay.NixieTube[this.numbers.Length];
+			int i = 0;
+			int num = this.numbers.Length;
+			while (i < num)
+			{
+				this.tubes[i] = new NixieDisplay.NixieTube(this.numbers[i], display);
+				i++;
+			}
+		}
+
+		// Token: 0x060020EA RID: 8426 RVA: 0x001152EC File Offset: 0x001134EC
+		public void Init()
+		{
+			int i = 0;
+			int num = this.numbers.Length;
+			while (i < num)
+			{
+				this.tubes[i].Init();
+				i++;
+			}
+		}
+
+		// Token: 0x060020EB RID: 8427 RVA: 0x00115324 File Offset: 0x00113524
+		public void SetNumber(int value)
+		{
+			if (value >= this.numbers.Length || value < 0)
+			{
+				value = 0;
+			}
+			this.TurnOffCurrent();
+			this.currentNumber = this.tubes[value];
+			this.currentNumber.On();
+		}
+
+		// Token: 0x060020EC RID: 8428 RVA: 0x00115360 File Offset: 0x00113560
+		public void TurnOffCurrent()
+		{
+			if (this.currentNumber != null)
+			{
+				this.currentNumber.Off();
+			}
+		}
+
+		// Token: 0x060020ED RID: 8429 RVA: 0x00115378 File Offset: 0x00113578
+		public void UpdateTubes()
+		{
+			int i = 0;
+			int num = this.tubes.Length;
+			while (i < num)
+			{
+				this.tubes[i].Update();
+				i++;
+			}
+		}
+
+		// Token: 0x04003D2F RID: 15663
+		public MaterialInstance[] numbers;
+
+		// Token: 0x04003D30 RID: 15664
+		private NixieDisplay.NixieTube currentNumber;
+
+		// Token: 0x04003D31 RID: 15665
+		[SerializeField]
+		private NixieDisplay.NixieTube[] tubes;
+	}
+
+	// Token: 0x020004E7 RID: 1255
+	[Serializable]
+	private class NixieTube
+	{
+		// Token: 0x060020EE RID: 8430 RVA: 0x001153B0 File Offset: 0x001135B0
+		public NixieTube(MaterialInstance mi, NixieDisplay nixieDisaplay)
+		{
+			this.instance = mi;
+			this.offset = nixieDisaplay.forwardOffset;
+			this.fadeDuration = nixieDisaplay.fadeDuration;
+			this.display = nixieDisaplay;
+			this.transform = mi.transform;
+			this.startPos = this.transform.localPosition;
+			this.transparencyQueue = mi.GetComponent<QueueInstance>();
+		}
+
+		// Token: 0x060020EF RID: 8431 RVA: 0x00115414 File Offset: 0x00113614
+		internal void Init()
+		{
+			this.property = this.instance.GetOrAddColorProperty(this.display.colorPropertyName);
+			this.propertyGlow = this.instance.GetOrAddFloatProperty(this.display.glowPropertyName);
+		}
+
+		// Token: 0x060020F0 RID: 8432 RVA: 0x0011545C File Offset: 0x0011365C
+		public void On()
+		{
+			this.instance.SetColorProperty(this.property, this.display.colorOn);
+			this.instance.SetFloatProperty(this.propertyGlow, this.display.glowOn);
+			Vector3 localPosition = this.startPos;
+			localPosition.z = this.offset;
+			this.transform.localPosition = localPosition;
+			if (this.transparencyQueue)
+			{
+				this.transparencyQueue.queueOffs = 1;
+			}
+			this.fadeTimer = 0f;
+		}
+
+		// Token: 0x060020F1 RID: 8433 RVA: 0x001154E8 File Offset: 0x001136E8
+		public void Off()
+		{
+			this.instance.SetColorProperty(this.property, this.display.GetTubeColor(1f));
+			this.instance.SetFloatProperty(this.propertyGlow, this.display.glowFading);
+			if (this.transparencyQueue)
+			{
+				this.transparencyQueue.queueOffs = -4;
+			}
+			this.fadeTimer = this.fadeDuration;
+			this.transform.localPosition = this.startPos;
+		}
+
+		// Token: 0x060020F2 RID: 8434 RVA: 0x0011556C File Offset: 0x0011376C
+		public void Update()
+		{
+			if (this.fadeTimer > 0f)
+			{
+				this.fadeTimer -= Time.deltaTime;
+				float fraction = Mathf.Clamp01(this.fadeTimer / this.fadeDuration);
+				Color tubeColor = this.display.GetTubeColor(fraction);
+				this.instance.SetColorProperty(this.property, tubeColor);
+			}
+		}
+
+		// Token: 0x04003D32 RID: 15666
+		[SerializeField]
+		private MaterialInstance instance;
+
+		// Token: 0x04003D33 RID: 15667
+		[SerializeField]
+		private NixieDisplay display;
+
+		// Token: 0x04003D34 RID: 15668
+		[SerializeField]
+		private float offset;
+
+		// Token: 0x04003D35 RID: 15669
+		[SerializeField]
+		private float fadeDuration;
+
+		// Token: 0x04003D36 RID: 15670
+		[SerializeField]
+		private Transform transform;
+
+		// Token: 0x04003D37 RID: 15671
+		[SerializeField]
+		private Vector3 startPos;
+
+		// Token: 0x04003D38 RID: 15672
+		[SerializeField]
+		private QueueInstance transparencyQueue;
+
+		// Token: 0x04003D39 RID: 15673
+		private MaterialInstance.ColorProperty property;
+
+		// Token: 0x04003D3A RID: 15674
+		private MaterialInstance.FloatProperty propertyGlow;
+
+		// Token: 0x04003D3B RID: 15675
+		private float fadeTimer;
+	}
+}

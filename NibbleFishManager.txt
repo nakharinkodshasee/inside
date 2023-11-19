@@ -1,0 +1,80 @@
+using System;
+using System.Linq;
+using UnityEngine;
+
+// Token: 0x02000510 RID: 1296
+public class NibbleFishManager : MonoBehaviour
+{
+	// Token: 0x060021CD RID: 8653 RVA: 0x0011B474 File Offset: 0x00119674
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.nibblePostions = (from p in this.nibblePostions
+		orderby p.position.y descending
+		select p).ToArray<Transform>();
+		this.allFish = new NibbleFish[this.fishCount];
+		for (int i = 0; i < this.fishCount; i++)
+		{
+			int num = Random.Range(0, this.nibblePostions.Length);
+			Transform target = this.GetTarget(num);
+			GameObject gameObject = Object.Instantiate(this.fishPrefab, target.position, target.rotation) as GameObject;
+			gameObject.transform.parent = base.transform;
+			NibbleFish component = gameObject.GetComponent<NibbleFish>();
+			component.SetupPreprocess(this, num, target);
+			this.allFish[i] = component;
+		}
+		this.swimRange = Mathf.CeilToInt((float)(this.nibblePostions.Length / 2));
+	}
+
+	// Token: 0x060021CE RID: 8654 RVA: 0x0011B568 File Offset: 0x00119768
+	public int GetTargetIndex(int currentIndex)
+	{
+		int num = currentIndex - this.swimRange / 2;
+		num = FastMath.Max(num, 0);
+		int num2 = num + this.swimRange;
+		if (num2 > this.nibblePostions.Length)
+		{
+			num2 = this.nibblePostions.Length;
+			num = num2 - this.swimRange;
+		}
+		return Random.Range(num, num2);
+	}
+
+	// Token: 0x060021CF RID: 8655 RVA: 0x0011B5B8 File Offset: 0x001197B8
+	public Transform GetTarget(int index)
+	{
+		return this.nibblePostions[index];
+	}
+
+	// Token: 0x04003EFA RID: 16122
+	public GameObject fishPrefab;
+
+	// Token: 0x04003EFB RID: 16123
+	public int fishCount = 5;
+
+	// Token: 0x04003EFC RID: 16124
+	public Transform[] nibblePostions;
+
+	// Token: 0x04003EFD RID: 16125
+	public bool debug;
+
+	// Token: 0x04003EFE RID: 16126
+	[SerializeField]
+	[HideInInspector]
+	private NibbleFish[] allFish;
+
+	// Token: 0x04003EFF RID: 16127
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04003F00 RID: 16128
+	[SerializeField]
+	[HideInInspector]
+	private int swimRange;
+}

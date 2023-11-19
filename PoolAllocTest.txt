@@ -1,0 +1,197 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000571 RID: 1393
+public class PoolAllocTest : MonoBehaviour
+{
+	// Token: 0x06002416 RID: 9238 RVA: 0x0012AA6C File Offset: 0x00128C6C
+	private void Start()
+	{
+		this.actor = ScriptGlobals.boy.visualBoy.actor;
+		this.initialAnimBone = ScriptGlobals.boy.visualBoy.GetPose();
+		PoolAllocTest.boyPoseAlloc = new FrameAllocator<AnimBone[]>(() => new AnimBone[this.actor.numBones], 0);
+		this.initialPose = PoolAllocTest.boyPoseAlloc.New(this.initialAnimBone);
+		this.initialPose.RemoveFromPool();
+		this.UnitTestPool();
+		this.UnitTestEqual();
+	}
+
+	// Token: 0x06002417 RID: 9239 RVA: 0x0012AAE8 File Offset: 0x00128CE8
+	private void FixedUpdate()
+	{
+		if (this.testCount++ > 60)
+		{
+			this.testingPool = !this.testingPool;
+			this.testCount = 0;
+		}
+		if (this.testingPool)
+		{
+			this.TestPool();
+		}
+		else
+		{
+			this.TestOrg();
+		}
+	}
+
+	// Token: 0x06002418 RID: 9240 RVA: 0x0012AB40 File Offset: 0x00128D40
+	private void UnitTestPool()
+	{
+		FrameAllocator<AnimBone[]>.IPoolObject poolObject = PoolAllocTest.boyPoseAlloc.New();
+		FrameAllocator<AnimBone[]>.IPoolObject poolObject2 = PoolAllocTest.boyPoseAlloc.New();
+		FrameAllocator<AnimBone[]>.IPoolObject poolObject3 = PoolAllocTest.boyPoseAlloc.New();
+		PoolAllocTest.SetAll(ref poolObject, new Vector3(1f, 1f, 1f), Quaternion.identity);
+		PoolAllocTest.SetAll(ref poolObject2, new Vector3(2f, 2f, 2f), Quaternion.identity);
+		PoolAllocTest.SetAll(ref poolObject3, new Vector3(3f, 3f, 3f), Quaternion.identity);
+		Debug.Log("#UnitTest 1 : Step0 : expected (2,2,2), actual: " + poolObject2.V[0].pos);
+		PoolAllocTest.boyPoseAlloc.FreeAll();
+		FrameAllocator<AnimBone[]>.IPoolObject poolObject4 = PoolAllocTest.boyPoseAlloc.New();
+		FrameAllocator<AnimBone[]>.IPoolObject poolObject5 = PoolAllocTest.boyPoseAlloc.New();
+		FrameAllocator<AnimBone[]>.IPoolObject poolObject6 = PoolAllocTest.boyPoseAlloc.New();
+		PoolAllocTest.SetAll(ref poolObject4, new Vector3(11f, 11f, 11f), Quaternion.identity);
+		PoolAllocTest.SetAll(ref poolObject5, new Vector3(12f, 12f, 12f), Quaternion.identity);
+		PoolAllocTest.SetAll(ref poolObject6, new Vector3(13f, 13f, 13f), Quaternion.identity);
+		Debug.Log("#UnitTest 2 : Step1 : expected (12,12,12), actual: " + poolObject5.V[0].pos);
+		try
+		{
+			Debug.Log("POOLALLOCATOR_NOFRAMECHECK: Step1 : expected (2,2,2), actual: " + poolObject2.V[0].pos);
+		}
+		catch (FrameAllocatorException ex)
+		{
+			Debug.Log("#UnitTest 3 : Catched Step1 'FrameAllocatorException' with message : " + ex.Message);
+		}
+		finally
+		{
+		}
+		PoolAllocTest.boyPoseAlloc.FreeAll();
+		FrameAllocator<AnimBone[]>.IPoolObject poolObject7 = PoolAllocTest.boyPoseAlloc.New();
+		FrameAllocator<AnimBone[]>.IPoolObject poolObject8 = PoolAllocTest.boyPoseAlloc.New();
+		FrameAllocator<AnimBone[]>.IPoolObject poolObject9 = PoolAllocTest.boyPoseAlloc.New();
+		PoolAllocTest.SetAll(ref poolObject7, new Vector3(101f, 101f, 101f), Quaternion.identity);
+		PoolAllocTest.SetAll(ref poolObject8, new Vector3(102f, 102f, 102f), Quaternion.identity);
+		PoolAllocTest.SetAll(ref poolObject9, new Vector3(103f, 103f, 103f), Quaternion.identity);
+		try
+		{
+			Debug.Log("POOLALLOCATOR_NOFRAMECHECK: Step2 : expected (2,2,2), actual: " + poolObject5.V[0].pos);
+		}
+		catch (FrameAllocatorException ex2)
+		{
+			Debug.Log("#UnitTest 4 : Catched Step2 'FrameAllocatorException' with message : " + ex2.Message);
+		}
+		finally
+		{
+		}
+		Debug.Log("#UnitTest 5 : Step2 : expected (102,102,102), actual: " + poolObject8.V[0].pos);
+		PoolAllocTest.boyPoseAlloc.FreeAll();
+	}
+
+	// Token: 0x06002419 RID: 9241 RVA: 0x0012AE5C File Offset: 0x0012905C
+	private void UnitTestEqual()
+	{
+		this.savedAnimBone = PoolAllocTest.GetLocalPoseOrg(this.actor, this.initialAnimBone);
+		this.savedPose = PoolAllocTest.GetLocalPosePool(this.actor, this.initialPose);
+		AnimBone[] v = this.savedPose.V;
+		for (int num = 0; num != v.Length; num++)
+		{
+		}
+	}
+
+	// Token: 0x0600241A RID: 9242 RVA: 0x0012AEB8 File Offset: 0x001290B8
+	private static void SetAll(ref FrameAllocator<AnimBone[]>.IPoolObject p, Vector3 pos, Quaternion rot)
+	{
+		for (int i = 0; i < p.V.Length; i++)
+		{
+			p.V[i].pos = pos;
+			p.V[i].rot = rot;
+		}
+	}
+
+	// Token: 0x0600241B RID: 9243 RVA: 0x0012AF08 File Offset: 0x00129108
+	private void TestPool()
+	{
+		for (int i = 0; i < 300; i++)
+		{
+			this.savedPose = PoolAllocTest.GetLocalPosePool(this.actor, this.initialPose);
+		}
+		PoolAllocTest.boyPoseAlloc.FreeAll();
+	}
+
+	// Token: 0x0600241C RID: 9244 RVA: 0x0012AF4C File Offset: 0x0012914C
+	private void TestOrg()
+	{
+		for (int i = 0; i < 300; i++)
+		{
+			this.savedAnimBone = PoolAllocTest.GetLocalPoseOrg(this.actor, this.initialAnimBone);
+		}
+	}
+
+	// Token: 0x0600241D RID: 9245 RVA: 0x0012AF88 File Offset: 0x00129188
+	private static FrameAllocator<AnimBone[]>.IPoolObject GetLocalPosePool(Actor actor, FrameAllocator<AnimBone[]>.IPoolObject pose)
+	{
+		FrameAllocator<AnimBone[]>.IPoolObject poolObject = PoolAllocTest.boyPoseAlloc.New();
+		AnimBone[] v = pose.V;
+		AnimBone[] v2 = poolObject.V;
+		int firstChildBone = actor.firstChildBone;
+		for (int num = 0; num != firstChildBone; num++)
+		{
+			v2[num] = v[num];
+		}
+		for (int num2 = firstChildBone; num2 != v.Length; num2++)
+		{
+			AnimBone animBone = v[actor.bones[num2].parent];
+			Quaternion quaternion = Quaternion.Inverse(animBone.rot);
+			v2[num2].pos = quaternion * (v[num2].pos - animBone.pos);
+			v2[num2].rot = quaternion * v[num2].rot;
+		}
+		return poolObject;
+	}
+
+	// Token: 0x0600241E RID: 9246 RVA: 0x0012B080 File Offset: 0x00129280
+	private static AnimBone[] GetLocalPoseOrg(Actor actor, AnimBone[] pose)
+	{
+		AnimBone[] array = new AnimBone[pose.Length];
+		int firstChildBone = actor.firstChildBone;
+		for (int num = 0; num != firstChildBone; num++)
+		{
+			array[num] = pose[num];
+		}
+		for (int num2 = firstChildBone; num2 != pose.Length; num2++)
+		{
+			AnimBone animBone = pose[actor.bones[num2].parent];
+			Quaternion quaternion = Quaternion.Inverse(animBone.rot);
+			array[num2].pos = quaternion * (pose[num2].pos - animBone.pos);
+			array[num2].rot = quaternion * pose[num2].rot;
+		}
+		return array;
+	}
+
+	// Token: 0x0400426A RID: 17002
+	private const int testLength = 300;
+
+	// Token: 0x0400426B RID: 17003
+	private const int testsBetweenShift = 60;
+
+	// Token: 0x0400426C RID: 17004
+	private static FrameAllocator<AnimBone[]> boyPoseAlloc;
+
+	// Token: 0x0400426D RID: 17005
+	private Actor actor;
+
+	// Token: 0x0400426E RID: 17006
+	private AnimBone[] initialAnimBone;
+
+	// Token: 0x0400426F RID: 17007
+	private FrameAllocator<AnimBone[]>.IPoolObject initialPose;
+
+	// Token: 0x04004270 RID: 17008
+	private AnimBone[] savedAnimBone;
+
+	// Token: 0x04004271 RID: 17009
+	private FrameAllocator<AnimBone[]>.IPoolObject savedPose;
+
+	// Token: 0x04004272 RID: 17010
+	private int testCount;
+
+	// Token: 0x04004273 RID: 17011
+	private bool testingPool;
+}

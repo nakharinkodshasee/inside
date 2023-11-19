@@ -1,0 +1,144 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200034C RID: 844
+public class PDReflectionUtils : MonoBehaviour
+{
+	// Token: 0x06001779 RID: 6009 RVA: 0x000CD32C File Offset: 0x000CB52C
+	private static int fogFactsID()
+	{
+		if (PDReflectionUtils.m_fogfact_id < 0)
+		{
+			PDReflectionUtils.m_fogfact_id = Shader.PropertyToID("PD_fogFacts");
+		}
+		return PDReflectionUtils.m_fogfact_id;
+	}
+
+	// Token: 0x0600177A RID: 6010 RVA: 0x000CD350 File Offset: 0x000CB550
+	private static int fogWaterColorID()
+	{
+		if (PDReflectionUtils.m_fogwatercol_id < 0)
+		{
+			PDReflectionUtils.m_fogwatercol_id = Shader.PropertyToID("PD_fogWaterColor");
+		}
+		return PDReflectionUtils.m_fogwatercol_id;
+	}
+
+	// Token: 0x0600177B RID: 6011 RVA: 0x000CD374 File Offset: 0x000CB574
+	private static int reflPlaneViewID()
+	{
+		if (PDReflectionUtils.m_reflplaneview_id < 0)
+		{
+			PDReflectionUtils.m_reflplaneview_id = Shader.PropertyToID("PD_reflectionPlaneView");
+		}
+		return PDReflectionUtils.m_reflplaneview_id;
+	}
+
+	// Token: 0x0600177C RID: 6012 RVA: 0x000CD398 File Offset: 0x000CB598
+	private static int reflPlaneWorldID()
+	{
+		if (PDReflectionUtils.m_reflplaneworld_id < 0)
+		{
+			PDReflectionUtils.m_reflplaneworld_id = Shader.PropertyToID("PD_reflectionPlaneWorld");
+		}
+		return PDReflectionUtils.m_reflplaneworld_id;
+	}
+
+	// Token: 0x0600177D RID: 6013 RVA: 0x000CD3BC File Offset: 0x000CB5BC
+	public static void RenderReflectionFor(Camera currentCamera, Camera refcam, PDPlanarReflection planarRef, bool isPrewarming = false)
+	{
+		PDReflectionUtils.SaneCameraSettings(refcam);
+		refcam.backgroundColor = planarRef.ClearColor;
+		refcam.cullingMask = planarRef.ReflectionMask;
+		GL.invertCulling = true;
+		Quaternion rotation = currentCamera.transform.rotation;
+		Vector3 position = currentCamera.transform.position;
+		Vector3 up = planarRef.transform.up;
+		float num = Vector3.Dot(up, planarRef.transform.position);
+		float num2 = Vector3.Dot(up, position) - num;
+		refcam.transform.SetPositionRotation(position - up * num2 * 2f, new Quaternion(rotation.w, rotation.z, -rotation.y, -rotation.x));
+		refcam.worldToCameraMatrix = currentCamera.worldToCameraMatrix * PDReflectionUtils.CalculateReflectionMatrix(up, num);
+		Matrix4x4 projectionMatrix = Matrix4x4.Perspective(currentCamera.fieldOfView, currentCamera.aspect, currentCamera.nearClipPlane, currentCamera.farClipPlane);
+		projectionMatrix.m00 *= planarRef.cropVec.x;
+		projectionMatrix.m11 *= planarRef.cropVec.y;
+		projectionMatrix.m02 += planarRef.cropVec.z;
+		projectionMatrix.m12 += planarRef.cropVec.w;
+		refcam.projectionMatrix = projectionMatrix;
+		Vector4 zero = Vector4Fast.zero;
+		Vector3 vector = refcam.worldToCameraMatrix.MultiplyVector((num2 >= 0f) ? up : (-up));
+		zero..ctor(vector.x, vector.y, vector.z, 0.025f - Mathf.Abs(num2));
+		if (zero.w < 0f)
+		{
+			refcam.projectionMatrix = refcam.CalculateObliqueMatrix(zero);
+		}
+		float a = RenderSettings.fogColor.a;
+		PDReflectionCuller component = currentCamera.GetComponent<PDReflectionCuller>();
+		float num3 = 1f / (component.WaterFogEnd - component.WaterFogStart);
+		Vector3 vector2;
+		vector2..ctor(num3, component.WaterFogStart * -num3, component.WaterFogOverride);
+		Shader.SetGlobalVector(PDReflectionUtils.fogFactsID(), vector2);
+		Color color = component.WaterFogColor.Alpha(component.WaterFogColor.a * Mathf.Clamp01(-num2));
+		Shader.SetGlobalColor(PDReflectionUtils.fogWaterColorID(), color);
+		Vector4 vector3 = refcam.cameraToWorldMatrix.GetRow(1) / num2;
+		Shader.SetGlobalVector(PDReflectionUtils.reflPlaneViewID(), vector3);
+		Vector4 vector4 = (num2 <= 0f) ? new Vector4(-up.x, -up.y, -up.z, num) : new Vector4(up.x, up.y, up.z, -num);
+		Shader.SetGlobalVector(PDReflectionUtils.reflPlaneWorldID(), vector4);
+		if (QualitySettings.softVegetation)
+		{
+			Shader.EnableKeyword("SOFTPARTICLES_OFF");
+			Shader.DisableKeyword("SOFTPARTICLES_ON");
+		}
+		if (!isPrewarming)
+		{
+			refcam.Render();
+		}
+		if (QualitySettings.softVegetation)
+		{
+			Shader.DisableKeyword("SOFTPARTICLES_OFF");
+			Shader.EnableKeyword("SOFTPARTICLES_ON");
+		}
+		GL.invertCulling = false;
+	}
+
+	// Token: 0x0600177E RID: 6014 RVA: 0x000CD6EC File Offset: 0x000CB8EC
+	private static void SaneCameraSettings(Camera refCam)
+	{
+		refCam.clearFlags = 2;
+	}
+
+	// Token: 0x0600177F RID: 6015 RVA: 0x000CD6F8 File Offset: 0x000CB8F8
+	private static Matrix4x4 CalculateReflectionMatrix(Vector3 plane, float ofs)
+	{
+		plane *= 1.4142135f;
+		ofs *= 1.4142135f;
+		Matrix4x4 identity = Matrix4x4.identity;
+		identity.m00 = plane.x * -plane.x + 1f;
+		identity.m01 = plane.x * -plane.y;
+		identity.m02 = plane.x * -plane.z;
+		identity.m03 = plane.x * ofs;
+		identity.m10 = plane.y * -plane.x;
+		identity.m11 = plane.y * -plane.y + 1f;
+		identity.m12 = plane.y * -plane.z;
+		identity.m13 = plane.y * ofs;
+		identity.m20 = plane.z * -plane.x;
+		identity.m21 = plane.z * -plane.y;
+		identity.m22 = plane.z * -plane.z + 1f;
+		identity.m23 = plane.z * ofs;
+		return identity;
+	}
+
+	// Token: 0x040029E8 RID: 10728
+	private const float SQRT2 = 1.4142135f;
+
+	// Token: 0x040029E9 RID: 10729
+	private static int m_fogfact_id = -1;
+
+	// Token: 0x040029EA RID: 10730
+	private static int m_fogwatercol_id = -1;
+
+	// Token: 0x040029EB RID: 10731
+	private static int m_reflplaneview_id = -1;
+
+	// Token: 0x040029EC RID: 10732
+	private static int m_reflplaneworld_id = -1;
+}

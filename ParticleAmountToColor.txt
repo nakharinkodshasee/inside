@@ -1,0 +1,116 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200034E RID: 846
+public class ParticleAmountToColor : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001784 RID: 6020 RVA: 0x000CD8B4 File Offset: 0x000CBAB4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		if (this.useRtpc)
+		{
+			this.rtpc = new RTPCFiltered("rtpc_flicker", this.attackFilter, this.releaseFilter);
+			this.akGameObj = AudioUtils.EnsureAkGameObj(this.audioSource, this);
+		}
+	}
+
+	// Token: 0x06001785 RID: 6021 RVA: 0x000CD910 File Offset: 0x000CBB10
+	public bool PreAwake(int callcount)
+	{
+		this.OnPreProcess();
+		int i = 0;
+		int count = this.materialInstances.Count;
+		while (i < count)
+		{
+			this.miCPs.Add(this.materialInstances[i].GetOrAddColorProperty(this.colorPropertyName));
+			this.miColors.Add(this.materialInstances[i].GetColorValue(this.miCPs[i]));
+			i++;
+		}
+		return true;
+	}
+
+	// Token: 0x06001786 RID: 6022 RVA: 0x000CD98C File Offset: 0x000CBB8C
+	private void Update()
+	{
+		int num = 0;
+		int i = 0;
+		int count = this.particleSystems.Count;
+		while (i < count)
+		{
+			num += this.particleSystems[i].particleCount;
+			i++;
+		}
+		float num2 = (float)num * this.amountMultiplier;
+		int j = 0;
+		int count2 = this.materialInstances.Count;
+		while (j < count2)
+		{
+			this.materialInstances[j].SetColorProperty(this.miCPs[j], Color.Lerp(this.blendColor, this.miColors[j], num2));
+			j++;
+		}
+		if (this.useRtpc)
+		{
+			float value = Mathf.Min((float)num * this.rtpcMultiplier, 100f);
+			this.rtpc.SetFast(value, this.akGameObj);
+		}
+	}
+
+	// Token: 0x040029ED RID: 10733
+	public List<ParticleSystem> particleSystems = new List<ParticleSystem>();
+
+	// Token: 0x040029EE RID: 10734
+	public List<MaterialInstance> materialInstances = new List<MaterialInstance>();
+
+	// Token: 0x040029EF RID: 10735
+	public string colorPropertyName = "_Color";
+
+	// Token: 0x040029F0 RID: 10736
+	public float amountMultiplier = 0.1f;
+
+	// Token: 0x040029F1 RID: 10737
+	public Color blendColor = Color.black;
+
+	// Token: 0x040029F2 RID: 10738
+	[Header("---- Audio ----")]
+	public bool useRtpc;
+
+	// Token: 0x040029F3 RID: 10739
+	public float rtpcMultiplier = 1f;
+
+	// Token: 0x040029F4 RID: 10740
+	public int attackFilter;
+
+	// Token: 0x040029F5 RID: 10741
+	public int releaseFilter;
+
+	// Token: 0x040029F6 RID: 10742
+	public GameObject audioSource;
+
+	// Token: 0x040029F7 RID: 10743
+	private List<MaterialInstance.ColorProperty> miCPs = new List<MaterialInstance.ColorProperty>();
+
+	// Token: 0x040029F8 RID: 10744
+	private List<Color> miColors = new List<Color>();
+
+	// Token: 0x040029F9 RID: 10745
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObj;
+
+	// Token: 0x040029FA RID: 10746
+	[SerializeField]
+	[HideInInspector]
+	private RTPCFiltered rtpc;
+
+	// Token: 0x040029FB RID: 10747
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+}

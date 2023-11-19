@@ -1,0 +1,53 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200020B RID: 523
+public class ObjectSpawner : MonoBehaviour
+{
+	// Token: 0x06001029 RID: 4137 RVA: 0x00098BA4 File Offset: 0x00096DA4
+	private void SpawnObject()
+	{
+		if (this.spawnPoint)
+		{
+			GameObject gameObject = Object.Instantiate<GameObject>(this.objectToCopy);
+			gameObject.transform.position = this.spawnPoint.transform.position;
+			gameObject.transform.rotation = this.spawnPoint.transform.rotation;
+		}
+		this.timer = this.time;
+	}
+
+	// Token: 0x0600102A RID: 4138 RVA: 0x00098C10 File Offset: 0x00096E10
+	private void OnSpawnObject()
+	{
+		this.SpawnObject();
+	}
+
+	// Token: 0x0600102B RID: 4139 RVA: 0x00098C18 File Offset: 0x00096E18
+	private void FixedUpdate()
+	{
+		if (!this.timedSpawn)
+		{
+			return;
+		}
+		this.timer -= Time.deltaTime;
+		if (this.timer <= 0f)
+		{
+			this.SpawnObject();
+		}
+	}
+
+	// Token: 0x04001D33 RID: 7475
+	public bool timedSpawn;
+
+	// Token: 0x04001D34 RID: 7476
+	public float time = 10f;
+
+	// Token: 0x04001D35 RID: 7477
+	public GameObject objectToCopy;
+
+	// Token: 0x04001D36 RID: 7478
+	public GameObject spawnPoint;
+
+	// Token: 0x04001D37 RID: 7479
+	private float timer;
+}

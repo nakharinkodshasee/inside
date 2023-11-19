@@ -1,0 +1,305 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000416 RID: 1046
+public class PowerSwitchLever : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001B7D RID: 7037 RVA: 0x000F0A14 File Offset: 0x000EEC14
+	public bool PreAwake(int callcount)
+	{
+		this.pushedUp = SignalOut.Create("pushedUp", base.gameObject);
+		this.pulledDown = SignalOut.Create("pulledDown", base.gameObject);
+		this.moveUp = SignalIn.Create("moveUp", base.gameObject, new Action(this.SetLeverPulledUp));
+		this.moveDown = SignalIn.Create("moveDown", base.gameObject, new Action(this.SetLeverPulledDown));
+		this.loadDown = SignalIn.Create("loadDown", base.gameObject, new Action(this.OnLoadDown));
+		return true;
+	}
+
+	// Token: 0x06001B7E RID: 7038 RVA: 0x000F0AB4 File Offset: 0x000EECB4
+	private void Start()
+	{
+		this.state = PowerSwitchLever.State.Idle;
+		this.startRot = this.switchModel.transform.localRotation.eulerAngles.x;
+	}
+
+	// Token: 0x06001B7F RID: 7039 RVA: 0x000F0AF0 File Offset: 0x000EECF0
+	private void SetLeverRotation(float r)
+	{
+		Vector3 zero = Vector3.zero;
+		zero.x = this.startRot - r * 60f;
+		zero.y = 180f;
+		zero.z = 180f;
+		this.switchModel.transform.localRotation = Quaternion.Euler(zero);
+	}
+
+	// Token: 0x06001B80 RID: 7040 RVA: 0x000F0B48 File Offset: 0x000EED48
+	private void PulledDownState()
+	{
+		this.delayTimer -= Time.deltaTime;
+		if (this.delayTimer < 0f)
+		{
+			this.state = PowerSwitchLever.State.Idle;
+		}
+	}
+
+	// Token: 0x06001B81 RID: 7041 RVA: 0x000F0B74 File Offset: 0x000EED74
+	private void PullDownState()
+	{
+		if (GameInput.stick.y > -0.4f)
+		{
+			BoyUtils.ClearState(this.boyUsingLever, -1f);
+			this.boyUsingLever = null;
+			this.state = PowerSwitchLever.State.Idle;
+		}
+		this.pullFrac += Time.deltaTime * this.pullSpeedScale;
+		if (this.pullFrac >= 1f)
+		{
+			this.SetLeverRotation(1f);
+			AnimClipNode component = this.animPullDown.GetComponent<AnimClipNode>();
+			BoyUtils.StartCustomAnim(this.boyUsingLever, component, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.state = PowerSwitchLever.State.PulledDown;
+			this.leverPulledDown.OnEvent(this);
+			this.pulledDown.Signal();
+			this.delayTimer = 1f;
+			this.leverIsDown = true;
+		}
+	}
+
+	// Token: 0x06001B82 RID: 7042 RVA: 0x000F0C3C File Offset: 0x000EEE3C
+	private void SetLeverPulledUp()
+	{
+		this.SetLeverRotation(0f);
+		this.leverPushedUp.OnEvent(this);
+		this.pushedUp.Signal();
+		this.leverIsDown = false;
+		this.state = PowerSwitchLever.State.PulledDown;
+	}
+
+	// Token: 0x06001B83 RID: 7043 RVA: 0x000F0C7C File Offset: 0x000EEE7C
+	private void OnLoadDown()
+	{
+		this.SetLeverRotation(1f);
+		this.loadedDown.OnEvent(this);
+		this.leverIsDown = true;
+		this.state = PowerSwitchLever.State.PulledDown;
+	}
+
+	// Token: 0x06001B84 RID: 7044 RVA: 0x000F0CA4 File Offset: 0x000EEEA4
+	private void SetLeverPulledDown()
+	{
+		this.SetLeverRotation(1f);
+		this.leverPulledDown.OnEvent(this);
+		this.pulledDown.Signal();
+		this.leverIsDown = true;
+		this.state = PowerSwitchLever.State.PulledDown;
+	}
+
+	// Token: 0x06001B85 RID: 7045 RVA: 0x000F0CE4 File Offset: 0x000EEEE4
+	private void PullUpState()
+	{
+		if (GameInput.stick.y < 0.4f)
+		{
+			BoyUtils.ClearState(this.boyUsingLever, -1f);
+			this.boyUsingLever = null;
+			this.state = PowerSwitchLever.State.Idle;
+		}
+		this.pullFrac += Time.deltaTime;
+		if (this.pullFrac >= 1f)
+		{
+			this.SetLeverPulledUp();
+			AnimClipNode component = this.animPullUp.GetComponent<AnimClipNode>();
+			BoyUtils.StartCustomAnim(this.boyUsingLever, component, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.delayTimer = 1f;
+		}
+	}
+
+	// Token: 0x06001B86 RID: 7046 RVA: 0x000F0D7C File Offset: 0x000EEF7C
+	private void GrabState()
+	{
+		if (!GameInput.rawAction)
+		{
+			BoyUtils.ClearState(this.boyUsingLever, -1f);
+			this.state = PowerSwitchLever.State.Idle;
+			this.boyUsingLever = null;
+		}
+		else if (!this.leverIsDown && GameInput.stick.y <= -0.6f)
+		{
+			this.SetLeverRotation(0.2f);
+			AnimClipNode component = this.animPullingDown.GetComponent<AnimClipNode>();
+			BoyUtils.StartCustomAnim(this.boyUsingLever, component, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.state = PowerSwitchLever.State.PullDown;
+			this.pullFrac = 0f;
+		}
+		else if (this.leverIsDown && GameInput.stick.y >= 0.4f)
+		{
+			AnimClipNode component2 = this.animPullingUp.GetComponent<AnimClipNode>();
+			BoyUtils.StartCustomAnim(this.boyUsingLever, component2, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.state = PowerSwitchLever.State.PullUp;
+			this.pullFrac = 0f;
+		}
+	}
+
+	// Token: 0x06001B87 RID: 7047 RVA: 0x000F0E70 File Offset: 0x000EF070
+	private void IdleState()
+	{
+		Boy boy = null;
+		foreach (Boy boy2 in this.boysInside)
+		{
+			if (boy2.input.rawAction)
+			{
+				boy = boy2;
+				break;
+			}
+		}
+		if (!this.leverIsDown && boy != null)
+		{
+			this.boyUsingLever = boy;
+			this.SetLeverRotation(0f);
+			AnimClipNode component = this.animGrabDown.GetComponent<AnimClipNode>();
+			BoyUtils.StartCustomAnim(this.boyUsingLever, component, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.state = PowerSwitchLever.State.Grab;
+		}
+		else if (this.leverIsDown && boy != null && !this.lockWhenDown)
+		{
+			this.boyUsingLever = boy;
+			this.SetLeverRotation(1f);
+			AnimClipNode component2 = this.animGrabUp.GetComponent<AnimClipNode>();
+			BoyUtils.StartCustomAnim(this.boyUsingLever, component2, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			this.state = PowerSwitchLever.State.Grab;
+		}
+	}
+
+	// Token: 0x06001B88 RID: 7048 RVA: 0x000F0F9C File Offset: 0x000EF19C
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case PowerSwitchLever.State.Idle:
+			this.IdleState();
+			break;
+		case PowerSwitchLever.State.Grab:
+			this.GrabState();
+			break;
+		case PowerSwitchLever.State.PullDown:
+			this.PullDownState();
+			break;
+		case PowerSwitchLever.State.PullUp:
+			this.PullUpState();
+			break;
+		case PowerSwitchLever.State.PulledDown:
+			this.PulledDownState();
+			break;
+		}
+	}
+
+	// Token: 0x06001B89 RID: 7049 RVA: 0x000F1008 File Offset: 0x000EF208
+	private void OnTriggerEnter(Collider collider)
+	{
+		if (collider.attachedRigidbody && collider.attachedRigidbody.GetComponent<Boy>() && !this.boysInside.Contains(collider.attachedRigidbody.GetComponent<Boy>()))
+		{
+			this.boysInside.Add(collider.attachedRigidbody.GetComponent<Boy>());
+		}
+	}
+
+	// Token: 0x06001B8A RID: 7050 RVA: 0x000F106C File Offset: 0x000EF26C
+	private void OnTriggerExit(Collider collider)
+	{
+		if (collider.attachedRigidbody && collider.attachedRigidbody.GetComponent<Boy>() && this.boysInside.Contains(collider.attachedRigidbody.GetComponent<Boy>()))
+		{
+			this.boysInside.Remove(collider.attachedRigidbody.GetComponent<Boy>());
+		}
+	}
+
+	// Token: 0x040031F8 RID: 12792
+	public GameObject switchModel;
+
+	// Token: 0x040031F9 RID: 12793
+	public GameObject animGrabDown;
+
+	// Token: 0x040031FA RID: 12794
+	public GameObject animPullingDown;
+
+	// Token: 0x040031FB RID: 12795
+	public GameObject animPullDown;
+
+	// Token: 0x040031FC RID: 12796
+	public GameObject animGrabUp;
+
+	// Token: 0x040031FD RID: 12797
+	public GameObject animPullingUp;
+
+	// Token: 0x040031FE RID: 12798
+	public GameObject animPullUp;
+
+	// Token: 0x040031FF RID: 12799
+	public bool lockWhenDown;
+
+	// Token: 0x04003200 RID: 12800
+	public float pullSpeedScale = 1f;
+
+	// Token: 0x04003201 RID: 12801
+	private SignalOut pushedUp;
+
+	// Token: 0x04003202 RID: 12802
+	private SignalOut pulledDown;
+
+	// Token: 0x04003203 RID: 12803
+	private bool boyInsideTrigger;
+
+	// Token: 0x04003204 RID: 12804
+	private bool leverIsDown;
+
+	// Token: 0x04003205 RID: 12805
+	private float startRot;
+
+	// Token: 0x04003206 RID: 12806
+	private PowerSwitchLever.State state;
+
+	// Token: 0x04003207 RID: 12807
+	public SimpleEvent<PowerSwitchLever> leverPulledDown = new SimpleEvent<PowerSwitchLever>("leverPulledDown");
+
+	// Token: 0x04003208 RID: 12808
+	public SimpleEvent<PowerSwitchLever> loadedDown = new SimpleEvent<PowerSwitchLever>("loadedDown");
+
+	// Token: 0x04003209 RID: 12809
+	public SimpleEvent<PowerSwitchLever> leverPushedUp = new SimpleEvent<PowerSwitchLever>("leverPushedUp");
+
+	// Token: 0x0400320A RID: 12810
+	private SignalIn moveUp;
+
+	// Token: 0x0400320B RID: 12811
+	private SignalIn moveDown;
+
+	// Token: 0x0400320C RID: 12812
+	private SignalIn loadDown;
+
+	// Token: 0x0400320D RID: 12813
+	private float pullFrac;
+
+	// Token: 0x0400320E RID: 12814
+	private float delayTimer;
+
+	// Token: 0x0400320F RID: 12815
+	private Boy boyUsingLever;
+
+	// Token: 0x04003210 RID: 12816
+	private List<Boy> boysInside = new List<Boy>();
+
+	// Token: 0x02000417 RID: 1047
+	private enum State
+	{
+		// Token: 0x04003212 RID: 12818
+		None,
+		// Token: 0x04003213 RID: 12819
+		Idle,
+		// Token: 0x04003214 RID: 12820
+		Grab,
+		// Token: 0x04003215 RID: 12821
+		PullDown,
+		// Token: 0x04003216 RID: 12822
+		PullUp,
+		// Token: 0x04003217 RID: 12823
+		PulledDown
+	}
+}

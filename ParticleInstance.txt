@@ -1,0 +1,28 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200063D RID: 1597
+public class ParticleInstance : MonoBehaviour
+{
+	// Token: 0x06002786 RID: 10118 RVA: 0x0013DE94 File Offset: 0x0013C094
+	public void ApplyInstanceProperties()
+	{
+		if (this.particleSystem == null)
+		{
+			this.particleSystem = base.GetComponentInChildren<ParticleSystem>();
+		}
+		if (this.particleSystem)
+		{
+			this.particleSystem.startSize = this.startSize;
+		}
+	}
+
+	// Token: 0x04004700 RID: 18176
+	public bool showParticleSize;
+
+	// Token: 0x04004701 RID: 18177
+	public float startSize;
+
+	// Token: 0x04004702 RID: 18178
+	private ParticleSystem particleSystem;
+}

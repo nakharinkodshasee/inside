@@ -1,0 +1,27 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004EB RID: 1259
+public class PersistentElevatorSetter : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002108 RID: 8456 RVA: 0x0011593C File Offset: 0x00113B3C
+	public bool PreAwake(int callcount)
+	{
+		this.SaveElevatorDown = SignalIn.Create("SaveElevatorDown", base.gameObject, new Action(this.OnSaveElevatorDown));
+		return true;
+	}
+
+	// Token: 0x06002109 RID: 8457 RVA: 0x00115964 File Offset: 0x00113B64
+	private void OnSaveElevatorDown()
+	{
+		PersistentElevatorHandler.PersistentData persistentData = PersistentDataManager.Get<PersistentElevatorHandler.PersistentData>(this.uniqueID, () => new PersistentElevatorHandler.PersistentData());
+		PersistentElevatorHandler.ElevatorPosition value = PersistentElevatorHandler.ElevatorPosition.Down;
+		persistentData.value = value;
+	}
+
+	// Token: 0x04003D50 RID: 15696
+	public string uniqueID;
+
+	// Token: 0x04003D51 RID: 15697
+	private SignalIn SaveElevatorDown;
+}

@@ -1,0 +1,449 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x0200011E RID: 286
+public class PrintingPaperEasterEgg : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060008AA RID: 2218 RVA: 0x0005BFD8 File Offset: 0x0005A1D8
+	public bool PreAwake(int callcount)
+	{
+		switch (callcount)
+		{
+		case 0:
+			if (PersistentBehaviour<SignalManager>.instance != null)
+			{
+				this.printSecretMessage = SignalIn.Create("printSecretMessage", base.gameObject, new Action(this.OnPrintSecretMessage));
+			}
+			return false;
+		case 1:
+			if (PrintingPaperEasterEgg.unreadMessages.size == 0)
+			{
+				this.CreateUnreadList();
+			}
+			return false;
+		case 2:
+		{
+			int index = Random.Range(0, PrintingPaperEasterEgg.unreadMessages.size);
+			int num = PrintingPaperEasterEgg.unreadMessages[index];
+			this.morseMessage = PrintingPaperEasterEgg.message[num];
+			PrintingPaperEasterEgg.unreadMessages.RemoveAt(index);
+			this.morseMessage.TrimStart(new char[]
+			{
+				' '
+			});
+			this.morseMessage.TrimEnd(new char[]
+			{
+				' '
+			});
+			return false;
+		}
+		case 3:
+			this.animState = base.GetComponent<Animation>()["Take 001"];
+			this.paperRenderer = this.paper.GetComponent<Renderer>();
+			this.paperMaterials = this.paperRenderer.sharedMaterials;
+			this.preAwoken = true;
+			return true;
+		default:
+			return true;
+		}
+	}
+
+	// Token: 0x060008AB RID: 2219 RVA: 0x0005C0F4 File Offset: 0x0005A2F4
+	private void CreateUnreadList()
+	{
+		PrintingPaperEasterEgg.unreadMessages.size = 0;
+		int num = PrintingPaperEasterEgg.message.Length;
+		for (int i = 0; i < num; i++)
+		{
+			PrintingPaperEasterEgg.unreadMessages.Add(i);
+			if (Random.value < 0.15f)
+			{
+				PrintingPaperEasterEgg.unreadMessages.Add(i);
+			}
+		}
+	}
+
+	// Token: 0x060008AC RID: 2220 RVA: 0x0005C14C File Offset: 0x0005A34C
+	private string BuildMorseMessage(string inMessage)
+	{
+		string text = string.Empty;
+		string text2 = inMessage.ToLower();
+		int length = text2.Length;
+		for (int i = 0; i < length; i++)
+		{
+			string str;
+			if (this.morseConvert.TryGetValue(text2[i], out str))
+			{
+				text += str;
+				if (i < length - 1)
+				{
+					text += " ";
+				}
+			}
+			else
+			{
+				text += " ";
+			}
+		}
+		return text;
+	}
+
+	// Token: 0x060008AD RID: 2221 RVA: 0x0005C1D0 File Offset: 0x0005A3D0
+	private void OnPrintSecretMessage()
+	{
+		this.printingSecretMessage = true;
+	}
+
+	// Token: 0x060008AE RID: 2222 RVA: 0x0005C1DC File Offset: 0x0005A3DC
+	private Material GetMaterial(int messageLetter)
+	{
+		if (messageLetter >= 0 && messageLetter < this.morseMessage.Length)
+		{
+			char c = this.morseMessage[messageLetter];
+			if (c == '.')
+			{
+				return this.DotMaterial;
+			}
+			if (c == '-')
+			{
+				return this.DashMaterial;
+			}
+			if (c == '/')
+			{
+				return this.SpaceMaterial;
+			}
+		}
+		if (this.TextPaperMaterial != null && messageLetter < 0)
+		{
+			return this.TextPaperMaterial;
+		}
+		return this.BlankPaperMaterial;
+	}
+
+	// Token: 0x060008AF RID: 2223 RVA: 0x0005C260 File Offset: 0x0005A460
+	private void Update()
+	{
+		if (this.printingSecretMessage && this.messageDelaySeconds > 0f)
+		{
+			this.messageDelaySeconds -= Time.deltaTime;
+		}
+		D11VelocityBufferTag component = this.paper.GetComponent<D11VelocityBufferTag>();
+		if (this.animState.normalizedTime >= 1f)
+		{
+			this.animState.normalizedTime -= 1f;
+			if (component != null)
+			{
+				component.wrapAroundFrame = true;
+			}
+			if (this.printingSecretMessage && this.messageDelaySeconds <= 0f)
+			{
+				if (this.paper != null)
+				{
+					for (int i = 0; i < 6; i++)
+					{
+						this.paperMaterials[this.sheetOrder[i]] = this.GetMaterial(this.currentMessageLetter - i);
+						if (i == 0)
+						{
+							bool flag = this.paperMaterials[this.sheetOrder[i]] == this.BlankPaperMaterial;
+						}
+						else if (i == 1)
+						{
+							bool flag2 = this.paperMaterials[this.sheetOrder[i]] == this.BlankPaperMaterial;
+						}
+					}
+					this.paperRenderer.sharedMaterials = this.paperMaterials;
+					this.currentMessageLetter += 2;
+				}
+			}
+		}
+		else if (component != null)
+		{
+			component.wrapAroundFrame = false;
+		}
+	}
+
+	// Token: 0x04000EAA RID: 3754
+	private static FastList<int> unreadMessages = new FastList<int>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04000EAB RID: 3755
+	public string preMessage;
+
+	// Token: 0x04000EAC RID: 3756
+	public string postMessage;
+
+	// Token: 0x04000EAD RID: 3757
+	public float messageDelaySeconds;
+
+	// Token: 0x04000EAE RID: 3758
+	public Material DotMaterial;
+
+	// Token: 0x04000EAF RID: 3759
+	public Material DashMaterial;
+
+	// Token: 0x04000EB0 RID: 3760
+	public Material BlankPaperMaterial;
+
+	// Token: 0x04000EB1 RID: 3761
+	public Material SpaceMaterial;
+
+	// Token: 0x04000EB2 RID: 3762
+	public Material TextPaperMaterial;
+
+	// Token: 0x04000EB3 RID: 3763
+	public GameObject paper;
+
+	// Token: 0x04000EB4 RID: 3764
+	public bool printingSecretMessage;
+
+	// Token: 0x04000EB5 RID: 3765
+	private SignalIn printSecretMessage;
+
+	// Token: 0x04000EB6 RID: 3766
+	private AnimationState animState;
+
+	// Token: 0x04000EB7 RID: 3767
+	private int currentMessageLetter;
+
+	// Token: 0x04000EB8 RID: 3768
+	private Material[] paperMaterials;
+
+	// Token: 0x04000EB9 RID: 3769
+	private Renderer paperRenderer;
+
+	// Token: 0x04000EBA RID: 3770
+	private int[] sheetOrder = new int[]
+	{
+		1,
+		0,
+		2,
+		3,
+		4,
+		5
+	};
+
+	// Token: 0x04000EBB RID: 3771
+	private Dictionary<char, string> morseConvert = new Dictionary<char, string>
+	{
+		{
+			'a',
+			".-"
+		},
+		{
+			'b',
+			"-..."
+		},
+		{
+			'c',
+			"-.-."
+		},
+		{
+			'd',
+			"-.."
+		},
+		{
+			'e',
+			"."
+		},
+		{
+			'f',
+			"..-."
+		},
+		{
+			'g',
+			"--."
+		},
+		{
+			'h',
+			"...."
+		},
+		{
+			'i',
+			".."
+		},
+		{
+			'j',
+			".---"
+		},
+		{
+			'k',
+			"-.-"
+		},
+		{
+			'l',
+			".-.."
+		},
+		{
+			'm',
+			"--"
+		},
+		{
+			'n',
+			"-."
+		},
+		{
+			'o',
+			"---"
+		},
+		{
+			'p',
+			".--."
+		},
+		{
+			'q',
+			"--.-"
+		},
+		{
+			'r',
+			".-."
+		},
+		{
+			's',
+			"..."
+		},
+		{
+			't',
+			"-"
+		},
+		{
+			'u',
+			"..-"
+		},
+		{
+			'v',
+			"...-"
+		},
+		{
+			'w',
+			".--"
+		},
+		{
+			'x',
+			"-..-"
+		},
+		{
+			'y',
+			"-.--"
+		},
+		{
+			'z',
+			"--.."
+		},
+		{
+			'1',
+			".----"
+		},
+		{
+			'2',
+			"..---"
+		},
+		{
+			'3',
+			"...--"
+		},
+		{
+			'4',
+			"....-"
+		},
+		{
+			'5',
+			"....."
+		},
+		{
+			'6',
+			"-...."
+		},
+		{
+			'7',
+			"--..."
+		},
+		{
+			'8',
+			"---.."
+		},
+		{
+			'9',
+			"----."
+		},
+		{
+			'0',
+			"-----"
+		},
+		{
+			'.',
+			".-.-.-"
+		},
+		{
+			',',
+			"--..--"
+		},
+		{
+			'?',
+			"..--.."
+		},
+		{
+			'/',
+			"-..-."
+		},
+		{
+			'@',
+			".--.-."
+		},
+		{
+			' ',
+			"/"
+		}
+	};
+
+	// Token: 0x04000EBC RID: 3772
+	private static readonly string[] message = new string[]
+	{
+		"-.-.././----..----./.--.--...--/",
+		"----.-//////////-------/-/-//--/",
+		"----/--/------/----...///.//.--/",
+		"/----..-//////---------///--/---",
+		"-------------------------/-///-/",
+		"------------////-----//-///-----",
+		"--------///-/-///-///--////----/",
+		"/--/----.-/-----..-...//..--..-/",
+		"--------//-//-//-----//-/-//----",
+		"/--------/////--//-////-/////--/",
+		"-----/--/------/-----//./-./..--",
+		"/---/-/------/------.---/.-...--",
+		"------/---/------/-//////-/-//--",
+		"--------////-//--//-////-------/",
+		"---/-/.-----/----.-/..--/.--.--/",
+		"--------/----/-////-////--////-/",
+		"/----------------------///------",
+		"---//-.----/----.-/--.--/----.--",
+		"--.....-.--.-.--------/.--.---.-",
+		"--./-...//--.--/.--..//-/.-.-.-/",
+		"--------//--//////-/////-/-//---",
+		"/------/----/---///-//--////-/--",
+		"-...//..----.---..//.--.-..-----",
+		"------/----/-----///--//-///-/-/",
+		"----------------------//-//----/",
+		"/---------////-///--//-///-----/",
+		"---.-///../---////-..--/-/--/---",
+		"---------//-/////////-///-------",
+		"/--/.-......--.------//....-----",
+		"/-------/-//---//-///////-------",
+		"/---//----//-..-///-----.------/",
+		"/----/---/------/---/////////--/",
+		".-.--..-.-.-.-/",
+		".-.-.-.-.///",
+		"-.-.-.-.-.-",
+		"-.-.-.///",
+		"-------.",
+		"-.-./",
+		"-.-.-",
+		"--/.",
+		"/.-."
+	};
+
+	// Token: 0x04000EBD RID: 3773
+	private bool preAwoken;
+
+	// Token: 0x04000EBE RID: 3774
+	private string morseMessage = string.Empty;
+}

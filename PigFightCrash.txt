@@ -1,0 +1,364 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000440 RID: 1088
+public class PigFightCrash : MonoBehaviour, IPreAwake, IUnityAnimEventHandler, IUnityAnimEventComponent
+{
+	// Token: 0x06001C72 RID: 7282 RVA: 0x000F89DC File Offset: 0x000F6BDC
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioContructionCollapse = new AudioEventSimple("amb_sws_farm_pigFight_constructionCollapse");
+	}
+
+	// Token: 0x06001C73 RID: 7283 RVA: 0x000F8A04 File Offset: 0x000F6C04
+	public bool PreAwake(int callcount)
+	{
+		this.loadCompleted = SignalIn.Create("loadCompleted", base.gameObject, new Action(this.OnLoadCompleted));
+		this.crash = SignalOut.Create("crash", base.gameObject);
+		this.crashed = SignalOut.Create("crashed", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x06001C74 RID: 7284 RVA: 0x000F8A60 File Offset: 0x000F6C60
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.animDevicePullState = this.animDevice[this.animDevicePull.name];
+		this.animDevicePullState.speed = 0f;
+		this.animDevice.Play(this.animDevicePullState.name);
+		this.currentPullTime = this.animDevicePullState.length * this.initialPulLFraction;
+		this.animDevicePullState.time = this.currentPullTime;
+		this.animDeviceCrashState = this.animDevice[this.animDeviceCrash.name];
+		this.dudes = new Boy[this.dudeSpawners.Length];
+		this.boy = ScriptGlobals.boy;
+		this.SetInitState();
+	}
+
+	// Token: 0x06001C75 RID: 7285 RVA: 0x000F8B20 File Offset: 0x000F6D20
+	private void SetInitState()
+	{
+		this.state = PigFightCrash.State.Init;
+	}
+
+	// Token: 0x06001C76 RID: 7286 RVA: 0x000F8B2C File Offset: 0x000F6D2C
+	private void InitState()
+	{
+		int i = 0;
+		int num = this.dudeSpawners.Length;
+		while (i < num)
+		{
+			Boy boy = this.dudeSpawners[i].GetBoy();
+			if (boy == null)
+			{
+				return;
+			}
+			this.dudes[i] = this.dudeSpawners[i].GetBoy();
+			i++;
+		}
+		this.SetIdleState();
+	}
+
+	// Token: 0x06001C77 RID: 7287 RVA: 0x000F8B8C File Offset: 0x000F6D8C
+	private void SetIdleState()
+	{
+		this.state = PigFightCrash.State.Idle;
+	}
+
+	// Token: 0x06001C78 RID: 7288 RVA: 0x000F8B98 File Offset: 0x000F6D98
+	private void IdleState()
+	{
+		if (this.GrabCheck())
+		{
+			this.SetGrabState();
+		}
+	}
+
+	// Token: 0x06001C79 RID: 7289 RVA: 0x000F8BAC File Offset: 0x000F6DAC
+	private void SetGrabState()
+	{
+		this.state = PigFightCrash.State.Grab;
+	}
+
+	// Token: 0x06001C7A RID: 7290 RVA: 0x000F8BB8 File Offset: 0x000F6DB8
+	private void GrabState()
+	{
+		if (!this.GrabCheck())
+		{
+			this.SetIdleState();
+		}
+		float x = this.boy.input.stick.x;
+		if (Mathf.Abs(x) > 0.4f)
+		{
+			this.SetPullState();
+		}
+	}
+
+	// Token: 0x06001C7B RID: 7291 RVA: 0x000F8C08 File Offset: 0x000F6E08
+	private void SetPullState()
+	{
+		this.state = PigFightCrash.State.Pull;
+	}
+
+	// Token: 0x06001C7C RID: 7292 RVA: 0x000F8C14 File Offset: 0x000F6E14
+	private void PullState()
+	{
+		if (!this.GrabCheck())
+		{
+			this.SetIdleState();
+		}
+		float x = this.boy.input.stick.x;
+		if (Mathf.Abs(x) < 0.4f)
+		{
+			this.SetGrabState();
+			return;
+		}
+		float num = -Mathf.Sign(x);
+		this.currentPullTime += Time.deltaTime * this.pullSpeed * num;
+		this.currentPullTime = Mathf.Clamp(this.currentPullTime, 0f, this.animDevicePullState.length);
+		this.animDevicePullState.time = this.currentPullTime;
+		if (this.currentPullTime >= this.animDevicePullState.length)
+		{
+			this.SetCrashState();
+		}
+	}
+
+	// Token: 0x06001C7D RID: 7293 RVA: 0x000F8CD4 File Offset: 0x000F6ED4
+	private void SetCrashState()
+	{
+		this.animDevice.Play(this.animDeviceCrashState.name);
+		this.vfxAnimation.Play(this.vfxAnimationClip.name);
+		int i = 0;
+		int num = this.dudes.Length;
+		while (i < num)
+		{
+			BoyUtils.StartCustomAnim(this.dudes[i], this.animPushBack[i], null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			i++;
+		}
+		this.scaffoldRigidbody.isKinematic = true;
+		this.colliderPlayer.SetActive(true);
+		this.colliderDudes.SetActive(true);
+		this.audioContructionCollapse.PostFast(AudioKeyObject.AkGameObjs.global);
+		RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.4f, 0.2f, 0, 0f);
+		this.crash.Signal();
+		this.state = PigFightCrash.State.Crash;
+	}
+
+	// Token: 0x06001C7E RID: 7294 RVA: 0x000F8DA8 File Offset: 0x000F6FA8
+	private void CrashState()
+	{
+		if (this.animDevice[this.animDeviceCrashState.name].normalizedTime >= 1f)
+		{
+			this.crashed.Signal();
+			this.state = PigFightCrash.State.Crashed;
+		}
+	}
+
+	// Token: 0x06001C7F RID: 7295 RVA: 0x000F8DEC File Offset: 0x000F6FEC
+	private void CrashedState()
+	{
+	}
+
+	// Token: 0x06001C80 RID: 7296 RVA: 0x000F8DF0 File Offset: 0x000F6FF0
+	private void FixedUpdate()
+	{
+		switch (this.state)
+		{
+		case PigFightCrash.State.Init:
+			this.InitState();
+			break;
+		case PigFightCrash.State.Idle:
+			this.IdleState();
+			break;
+		case PigFightCrash.State.Grab:
+			this.GrabState();
+			break;
+		case PigFightCrash.State.Pull:
+			this.PullState();
+			break;
+		case PigFightCrash.State.Crash:
+			this.CrashState();
+			break;
+		case PigFightCrash.State.Crashed:
+			this.CrashedState();
+			break;
+		}
+	}
+
+	// Token: 0x06001C81 RID: 7297 RVA: 0x000F8E6C File Offset: 0x000F706C
+	private bool GrabCheck()
+	{
+		int i = 0;
+		int num = this.dudes.Length;
+		while (i < num)
+		{
+			if (!(this.dudes[i].state is BoyGrabState))
+			{
+				return false;
+			}
+			i++;
+		}
+		return true;
+	}
+
+	// Token: 0x06001C82 RID: 7298 RVA: 0x000F8EB0 File Offset: 0x000F70B0
+	private void OnLoadCompleted()
+	{
+		this.animDevice.Play(this.animDeviceCrashState.name);
+		this.animDeviceCrashState.normalizedTime = 1f;
+		this.scaffoldRigidbody.isKinematic = true;
+		this.colliderPlayer.SetActive(true);
+		this.colliderDudes.SetActive(true);
+		this.state = PigFightCrash.State.Crash;
+	}
+
+	// Token: 0x06001C83 RID: 7299 RVA: 0x000F8F10 File Offset: 0x000F7110
+	public void HandleAnimEvent(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent)
+	{
+		if (animEvent.output == UnityAnimEvent.Output.Audio)
+		{
+			string customEvent = animEvent.customEvent;
+			if (customEvent == "impact1")
+			{
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.3f, 0.3f, 0, 0f);
+			}
+			else if (customEvent == "impact2")
+			{
+				RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.2f, 0.3f, 0, 0f);
+			}
+			else if (customEvent == "impact3")
+			{
+			}
+		}
+	}
+
+	// Token: 0x06001C84 RID: 7300 RVA: 0x000F8FA0 File Offset: 0x000F71A0
+	public void HandleAnimEventEditor(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent)
+	{
+	}
+
+	// Token: 0x06001C85 RID: 7301 RVA: 0x000F8FA4 File Offset: 0x000F71A4
+	public void HandleContinuousAnimEvent(IUnityAnimEventTrigger trigger, UnityAnimEvent animEvent, bool isActive)
+	{
+	}
+
+	// Token: 0x06001C86 RID: 7302 RVA: 0x000F8FA8 File Offset: 0x000F71A8
+	public void HandleAnimationChange(IUnityAnimEventTrigger trigger, Object oldAnim, Object newAnim)
+	{
+	}
+
+	// Token: 0x06001C87 RID: 7303 RVA: 0x000F8FAC File Offset: 0x000F71AC
+	public void PreprocessUnityAnimEvents(int animID, List<UnityAnimEvent> events)
+	{
+	}
+
+	// Token: 0x06001C88 RID: 7304 RVA: 0x000F8FB0 File Offset: 0x000F71B0
+	virtual bool get_enabled()
+	{
+		return base.enabled;
+	}
+
+	// Token: 0x06001C89 RID: 7305 RVA: 0x000F8FB8 File Offset: 0x000F71B8
+	virtual GameObject get_gameObject()
+	{
+		return base.gameObject;
+	}
+
+	// Token: 0x0400342E RID: 13358
+	public Animation animDevice;
+
+	// Token: 0x0400342F RID: 13359
+	public AnimationClip animDevicePull;
+
+	// Token: 0x04003430 RID: 13360
+	public AnimationClip animDeviceCrash;
+
+	// Token: 0x04003431 RID: 13361
+	public Animation vfxAnimation;
+
+	// Token: 0x04003432 RID: 13362
+	public AnimationClip vfxAnimationClip;
+
+	// Token: 0x04003433 RID: 13363
+	public MindHatDudeSpawner[] dudeSpawners;
+
+	// Token: 0x04003434 RID: 13364
+	public float pullSpeed = 0.75f;
+
+	// Token: 0x04003435 RID: 13365
+	public float initialPulLFraction = 0.5f;
+
+	// Token: 0x04003436 RID: 13366
+	public GameObject colliderPlayer;
+
+	// Token: 0x04003437 RID: 13367
+	public GameObject colliderDudes;
+
+	// Token: 0x04003438 RID: 13368
+	public Rigidbody scaffoldRigidbody;
+
+	// Token: 0x04003439 RID: 13369
+	public AnimClipNode[] animPushBack;
+
+	// Token: 0x0400343A RID: 13370
+	private SignalIn loadCompleted;
+
+	// Token: 0x0400343B RID: 13371
+	private SignalOut crash;
+
+	// Token: 0x0400343C RID: 13372
+	private SignalOut crashed;
+
+	// Token: 0x0400343D RID: 13373
+	private AnimationState animDevicePullState;
+
+	// Token: 0x0400343E RID: 13374
+	private AnimationState animDeviceCrashState;
+
+	// Token: 0x0400343F RID: 13375
+	private Boy[] dudes;
+
+	// Token: 0x04003440 RID: 13376
+	private Boy boy;
+
+	// Token: 0x04003441 RID: 13377
+	private float currentPullTime;
+
+	// Token: 0x04003442 RID: 13378
+	private PigFightCrash.State state;
+
+	// Token: 0x04003443 RID: 13379
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioContructionCollapse;
+
+	// Token: 0x04003444 RID: 13380
+	[HideInInspector]
+	[SerializeField]
+	private bool preProcessed;
+
+	// Token: 0x02000441 RID: 1089
+	private enum State
+	{
+		// Token: 0x04003446 RID: 13382
+		None,
+		// Token: 0x04003447 RID: 13383
+		Init,
+		// Token: 0x04003448 RID: 13384
+		Idle,
+		// Token: 0x04003449 RID: 13385
+		Grab,
+		// Token: 0x0400344A RID: 13386
+		Pull,
+		// Token: 0x0400344B RID: 13387
+		Crash,
+		// Token: 0x0400344C RID: 13388
+		Crashed
+	}
+}

@@ -1,0 +1,25 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000341 RID: 833
+public class ObjectScaleToShader : MonoBehaviour
+{
+	// Token: 0x06001730 RID: 5936 RVA: 0x000CAE08 File Offset: 0x000C9008
+	[PreprocessBuildPrefab(0)]
+	private void SelfDestructPrefab()
+	{
+		Object.DestroyImmediate(this, true);
+	}
+
+	// Token: 0x06001731 RID: 5937 RVA: 0x000CAE14 File Offset: 0x000C9014
+	[EarlyProcessBuild(0)]
+	private void SelfDestruct()
+	{
+		PDUtilities.Destroy(this);
+	}
+
+	// Token: 0x06001732 RID: 5938 RVA: 0x000CAE1C File Offset: 0x000C901C
+	public void OnDrawGizmos()
+	{
+	}
+}

@@ -1,0 +1,28 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000210 RID: 528
+public class PresurePlate : MonoBehaviour
+{
+	// Token: 0x0600104A RID: 4170 RVA: 0x00099A68 File Offset: 0x00097C68
+	private void Start()
+	{
+		TriggerCount componentInChildren = base.gameObject.GetComponentInChildren<TriggerCount>();
+		if (componentInChildren)
+		{
+			componentInChildren.targetProbes = this.targetProbes;
+			componentInChildren.useBoyProbes = this.useBoyProbes;
+			componentInChildren.useHuddleProbe = this.useHuddleProbe;
+		}
+	}
+
+	// Token: 0x04001D61 RID: 7521
+	public List<Collider> targetProbes;
+
+	// Token: 0x04001D62 RID: 7522
+	public bool useBoyProbes;
+
+	// Token: 0x04001D63 RID: 7523
+	public bool useHuddleProbe;
+}

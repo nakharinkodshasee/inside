@@ -1,0 +1,77 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005E0 RID: 1504
+public class moveBoxInZ : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06002606 RID: 9734 RVA: 0x001359A8 File Offset: 0x00133BA8
+	private void OnstopFollow()
+	{
+		this.doFollow = false;
+	}
+
+	// Token: 0x06002607 RID: 9735 RVA: 0x001359B4 File Offset: 0x00133BB4
+	private void OnstartFollow()
+	{
+		this.doFollow = true;
+	}
+
+	// Token: 0x06002608 RID: 9736 RVA: 0x001359C0 File Offset: 0x00133BC0
+	private void Onreset()
+	{
+		this.boxCopy.transform.position = this.boxOrg.transform.position;
+		this.boxCopy.transform.rotation = this.boxOrg.transform.rotation;
+		this.boxOrg.transform.localPosition = this.boxCopy.transform.localPosition;
+		this.boxOrg.transform.localRotation = this.boxCopy.transform.localRotation;
+	}
+
+	// Token: 0x06002609 RID: 9737 RVA: 0x00135A50 File Offset: 0x00133C50
+	private void OnChange()
+	{
+		this.boxOrg.transform.position = this.boxCopy.transform.position;
+		this.boxOrg.transform.rotation = this.boxCopy.transform.rotation;
+		this.boxCopy.transform.localPosition = this.boxOrg.transform.localPosition;
+		this.boxCopy.transform.localRotation = this.boxOrg.transform.localRotation;
+	}
+
+	// Token: 0x0600260A RID: 9738 RVA: 0x00135AE0 File Offset: 0x00133CE0
+	public bool PreAwake(int callcount)
+	{
+		this.stopFollow = SignalIn.Create("stopFollow", base.gameObject, new Action(this.OnstopFollow));
+		this.startFollow = SignalIn.Create("startFollow", base.gameObject, new Action(this.OnstartFollow));
+		this.reset = SignalIn.Create("reset", base.gameObject, new Action(this.Onreset));
+		this.changePosOfOrg = SignalIn.Create("changePosOfOrg", base.gameObject, new Action(this.OnChange));
+		return true;
+	}
+
+	// Token: 0x0600260B RID: 9739 RVA: 0x00135B78 File Offset: 0x00133D78
+	private void Update()
+	{
+		if (this.doFollow)
+		{
+			this.boxCopy.transform.localPosition = this.boxOrg.transform.localPosition;
+			this.boxCopy.transform.localRotation = this.boxOrg.transform.localRotation;
+		}
+	}
+
+	// Token: 0x04004540 RID: 17728
+	public GameObject boxOrg;
+
+	// Token: 0x04004541 RID: 17729
+	public GameObject boxCopy;
+
+	// Token: 0x04004542 RID: 17730
+	private SignalIn stopFollow;
+
+	// Token: 0x04004543 RID: 17731
+	private SignalIn startFollow;
+
+	// Token: 0x04004544 RID: 17732
+	private SignalIn reset;
+
+	// Token: 0x04004545 RID: 17733
+	private SignalIn changePosOfOrg;
+
+	// Token: 0x04004546 RID: 17734
+	private bool doFollow = true;
+}

@@ -1,0 +1,35 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000348 RID: 840
+[ExecuteInEditMode]
+public class PDReflectionCharacterColor : MonoBehaviour
+{
+	// Token: 0x06001759 RID: 5977 RVA: 0x000CBCBC File Offset: 0x000C9EBC
+	private void OnEnable()
+	{
+		bool flag = this.matinstance != null;
+		if (flag && Camera.main != null)
+		{
+			PDReflectionCuller component = Camera.main.gameObject.GetComponent<PDReflectionCuller>();
+			component.CharRefl_add(this.matinstance, this.property_name);
+		}
+	}
+
+	// Token: 0x0600175A RID: 5978 RVA: 0x000CBD10 File Offset: 0x000C9F10
+	private void OnDisable()
+	{
+		bool flag = this.matinstance != null;
+		if (flag && Camera.main != null)
+		{
+			PDReflectionCuller component = Camera.main.gameObject.GetComponent<PDReflectionCuller>();
+			component.CharRefl_remove(this.matinstance, this.property_name);
+		}
+	}
+
+	// Token: 0x040029C3 RID: 10691
+	public MaterialInstance matinstance;
+
+	// Token: 0x040029C4 RID: 10692
+	public string property_name = "_ReflectionColor";
+}

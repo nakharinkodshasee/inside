@@ -1,0 +1,234 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200050E RID: 1294
+[Serializable]
+public class NibbleFish : UmbrellaBehaviour<NibbleFish>
+{
+	// Token: 0x060021C3 RID: 8643 RVA: 0x0011B030 File Offset: 0x00119230
+	public void SetupPreprocess(NibbleFishManager manager, int targetIndex, Transform target)
+	{
+		this.fishManager = manager;
+		this.currentTarget = target;
+		this.currentTargetIndex = targetIndex;
+		this.rotOffset = Quaternion.Euler(Random.insideUnitSphere * this.rotationOffet);
+		base.transform.position = (this.currentPos = this.currentTarget.position);
+		base.transform.rotation = (this.currentRot = this.currentTarget.rotation * this.rotOffset);
+		this.animSpeed = 1f + Random.Range(-this.animSpeedVariation, this.animSpeedVariation);
+	}
+
+	// Token: 0x060021C4 RID: 8644 RVA: 0x0011B0D4 File Offset: 0x001192D4
+	protected override void OnEnable()
+	{
+		if (this.state != NibbleFish.State.None)
+		{
+			base.transform.SetPositionRotation(this.currentPos, this.currentRot);
+			this.SetNibbleState();
+		}
+		base.OnEnable();
+	}
+
+	// Token: 0x060021C5 RID: 8645 RVA: 0x0011B110 File Offset: 0x00119310
+	private void Start()
+	{
+		if (this.animNibble.Length <= 0 || this.animSwim.Length <= 0)
+		{
+			base.gameObject.SetActive(false);
+		}
+		else
+		{
+			this.SetNibbleState();
+		}
+	}
+
+	// Token: 0x060021C6 RID: 8646 RVA: 0x0011B148 File Offset: 0x00119348
+	private void SetSwimState()
+	{
+		this.currentTarget.GetPositionRotation(ref this.previousPos, ref this.previousRot);
+		QuaternionFast.RotateReplaceLhs(ref this.previousRot, ref this.rotOffset);
+		this.currentTargetIndex = this.fishManager.GetTargetIndex(this.currentTargetIndex);
+		this.currentTarget = this.fishManager.GetTarget(this.currentTargetIndex);
+		int num = (this.currentTarget.position.y < this.previousPos.y) ? 180 : 0;
+		Vector3 vector = Random.insideUnitSphere * this.rotationOffet;
+		this.rotOffset = Quaternion.Euler(vector.x + (float)num, vector.y + (float)num, vector.z);
+		string name = this.animSwim[Random.Range(0, this.animSwim.Length)].name;
+		this.currentSwimState = this.anim.CrossFadeQueued(name, 0.2f, 2);
+		this.currentSwimState.speed = this.animSpeed;
+		this.state = NibbleFish.State.Swim;
+	}
+
+	// Token: 0x060021C7 RID: 8647 RVA: 0x0011B25C File Offset: 0x0011945C
+	private void SwimState()
+	{
+		float normalizedTime = this.currentSwimState.normalizedTime;
+		Vector3 vector;
+		Quaternion quaternion;
+		this.currentTarget.GetPositionRotation(ref vector, ref quaternion);
+		QuaternionFast.RotateReplaceLhs(ref quaternion, ref this.rotOffset);
+		this.currentPos = Vector3.Slerp(this.previousPos, vector, normalizedTime);
+		this.currentRot = Quaternion.Slerp(this.previousRot, quaternion, normalizedTime);
+		base.transform.SetPositionRotation(this.currentPos, this.currentRot);
+		if (normalizedTime >= 1f)
+		{
+			this.SetNibbleState();
+		}
+	}
+
+	// Token: 0x060021C8 RID: 8648 RVA: 0x0011B2E0 File Offset: 0x001194E0
+	private void SetNibbleState()
+	{
+		this.nibbleTimer = Random.Range(this.minNibbleTime, this.maxNibbleTime);
+		this.nibbleAnimTimer = Random.Range(4f, 8f);
+		this.PlayRandomNibble();
+		this.state = NibbleFish.State.Nibble;
+	}
+
+	// Token: 0x060021C9 RID: 8649 RVA: 0x0011B31C File Offset: 0x0011951C
+	private void NibbleState()
+	{
+		Vector3 vector;
+		Quaternion quaternion;
+		this.currentTarget.GetPositionRotation(ref vector, ref quaternion);
+		QuaternionFast.RotateReplaceLhs(ref quaternion, ref this.rotOffset);
+		base.transform.SetPositionRotation(vector, quaternion);
+		this.nibbleAnimTimer -= Time.deltaTime;
+		if (this.nibbleAnimTimer <= 0f)
+		{
+			this.nibbleAnimTimer = Random.Range(4f, 8f);
+			this.PlayRandomNibble();
+		}
+		this.nibbleTimer -= Time.deltaTime;
+		if (this.nibbleTimer <= 0f)
+		{
+			this.SetSwimState();
+		}
+	}
+
+	// Token: 0x060021CA RID: 8650 RVA: 0x0011B3B8 File Offset: 0x001195B8
+	public void UmbrellaUpdate()
+	{
+		if (this.state != NibbleFish.State.None)
+		{
+			NibbleFish.State state = this.state;
+			if (state != NibbleFish.State.Swim)
+			{
+				if (state == NibbleFish.State.Nibble)
+				{
+					this.NibbleState();
+				}
+			}
+			else
+			{
+				this.SwimState();
+			}
+		}
+	}
+
+	// Token: 0x060021CB RID: 8651 RVA: 0x0011B400 File Offset: 0x00119600
+	private void PlayRandomNibble()
+	{
+		string name = this.animNibble[Random.Range(0, this.animNibble.Length)].name;
+		this.currentNibbleState = this.anim.CrossFadeQueued(name, 0.2f, 2);
+		this.currentNibbleState.normalizedTime = Random.value;
+		this.currentNibbleState.speed = this.animSpeed;
+	}
+
+	// Token: 0x04003EDE RID: 16094
+	public float minNibbleTime = 3f;
+
+	// Token: 0x04003EDF RID: 16095
+	public float maxNibbleTime = 7f;
+
+	// Token: 0x04003EE0 RID: 16096
+	public float moveSpeed = 1f;
+
+	// Token: 0x04003EE1 RID: 16097
+	public float rotationSpeed = 1f;
+
+	// Token: 0x04003EE2 RID: 16098
+	public float rotationOffet = 45f;
+
+	// Token: 0x04003EE3 RID: 16099
+	public float animSpeedVariation = 0.1f;
+
+	// Token: 0x04003EE4 RID: 16100
+	public Animation anim;
+
+	// Token: 0x04003EE5 RID: 16101
+	public AnimationClip[] animNibble;
+
+	// Token: 0x04003EE6 RID: 16102
+	public AnimationClip[] animSwim;
+
+	// Token: 0x04003EE7 RID: 16103
+	private bool swimming;
+
+	// Token: 0x04003EE8 RID: 16104
+	private AnimationState currentSwimState;
+
+	// Token: 0x04003EE9 RID: 16105
+	private AnimationState currentNibbleState;
+
+	// Token: 0x04003EEA RID: 16106
+	private float nibbleAnimTimer;
+
+	// Token: 0x04003EEB RID: 16107
+	private Vector3 previousPos;
+
+	// Token: 0x04003EEC RID: 16108
+	private Quaternion previousRot;
+
+	// Token: 0x04003EED RID: 16109
+	[SerializeField]
+	[HideInInspector]
+	private float animSpeed;
+
+	// Token: 0x04003EEE RID: 16110
+	[HideInInspector]
+	[SerializeField]
+	private NibbleFishManager fishManager;
+
+	// Token: 0x04003EEF RID: 16111
+	[SerializeField]
+	[HideInInspector]
+	private float nibbleTimer;
+
+	// Token: 0x04003EF0 RID: 16112
+	[HideInInspector]
+	[SerializeField]
+	private Transform currentTarget;
+
+	// Token: 0x04003EF1 RID: 16113
+	[SerializeField]
+	[HideInInspector]
+	private int currentTargetIndex;
+
+	// Token: 0x04003EF2 RID: 16114
+	[SerializeField]
+	[HideInInspector]
+	private Vector3 currentPos;
+
+	// Token: 0x04003EF3 RID: 16115
+	[SerializeField]
+	[HideInInspector]
+	private Quaternion currentRot;
+
+	// Token: 0x04003EF4 RID: 16116
+	[HideInInspector]
+	[SerializeField]
+	private Quaternion rotOffset;
+
+	// Token: 0x04003EF5 RID: 16117
+	private NibbleFish.State state;
+
+	// Token: 0x0200050F RID: 1295
+	private enum State
+	{
+		// Token: 0x04003EF7 RID: 16119
+		None,
+		// Token: 0x04003EF8 RID: 16120
+		Swim,
+		// Token: 0x04003EF9 RID: 16121
+		Nibble
+	}
+}

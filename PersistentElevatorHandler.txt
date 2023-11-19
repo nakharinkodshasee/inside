@@ -1,0 +1,194 @@
+using System;
+using System.Collections;
+using System.IO;
+using System.Xml.Linq;
+using UnityEngine;
+
+// Token: 0x020004E8 RID: 1256
+public class PersistentElevatorHandler : MonoBehaviour, IFastEventExListener<SavepointManager.SavepointIndex>, IPreAwake
+{
+	// Token: 0x17000090 RID: 144
+	// (get) Token: 0x060020F4 RID: 8436 RVA: 0x001155E0 File Offset: 0x001137E0
+	// (set) Token: 0x060020F5 RID: 8437 RVA: 0x001155E8 File Offset: 0x001137E8
+	public PersistentElevatorHandler.ElevatorPosition current { get; set; }
+
+	// Token: 0x060020F6 RID: 8438 RVA: 0x001155F4 File Offset: 0x001137F4
+	public bool PreAwake(int callcount)
+	{
+		this.SetElevatorUp = SignalOut.Create("SetElevatorUp", base.gameObject);
+		this.SetElevatorMiddle = SignalOut.Create("SetElevatorMiddle", base.gameObject);
+		this.SetElevatorDown = SignalOut.Create("SetElevatorDown", base.gameObject);
+		this.LoadTurnedOn = SignalOut.Create("LoadTurnedOn", base.gameObject);
+		this.ElevatorTurnedOn = SignalIn.Create("ElevatorTurnedOn", base.gameObject, new Action(this.SetElevatorOn));
+		this.LoadMinesCompleted = SignalIn.Create("LoadMinesCompleted", base.gameObject, new Action(this.DoLoadMinesCompleted));
+		this.FloorReached = SignalIn.Create("FloorReached", base.gameObject, new Action(this.OnFloorReached));
+		return true;
+	}
+
+	// Token: 0x060020F7 RID: 8439 RVA: 0x001156C0 File Offset: 0x001138C0
+	private void Awake()
+	{
+		Savegame.savepointSaved.Register(this, ref this.savepointSavedHandle);
+		PersistentElevatorHandler.PersistentData persistentData = PersistentDataManager.Get<PersistentElevatorHandler.PersistentData>(this.uniqueID, () => new PersistentElevatorHandler.PersistentData());
+		this.current = persistentData.value;
+	}
+
+	// Token: 0x060020F8 RID: 8440 RVA: 0x00115714 File Offset: 0x00113914
+	private void OnDestroy()
+	{
+		Savegame.savepointSaved.Unregister(ref this.savepointSavedHandle);
+	}
+
+	// Token: 0x060020F9 RID: 8441 RVA: 0x00115728 File Offset: 0x00113928
+	private IEnumerator Start()
+	{
+		yield return null;
+		yield return null;
+		this.GetValueAndRaiseSignal();
+		yield break;
+	}
+
+	// Token: 0x060020FA RID: 8442 RVA: 0x00115744 File Offset: 0x00113944
+	private void DoLoadMinesCompleted()
+	{
+		this.current = PersistentElevatorHandler.ElevatorPosition.Off;
+	}
+
+	// Token: 0x060020FB RID: 8443 RVA: 0x00115750 File Offset: 0x00113950
+	private void SetElevatorOn()
+	{
+		this.current = PersistentElevatorHandler.ElevatorPosition.Middle;
+	}
+
+	// Token: 0x060020FC RID: 8444 RVA: 0x0011575C File Offset: 0x0011395C
+	private void OnFloorReached()
+	{
+		if (this.lift.position.y > this.centerPos.position.y + 2f)
+		{
+			this.current = PersistentElevatorHandler.ElevatorPosition.Up;
+		}
+		else if (this.lift.position.y < this.centerPos.position.y - 2f)
+		{
+			this.current = PersistentElevatorHandler.ElevatorPosition.Down;
+		}
+		else
+		{
+			this.current = PersistentElevatorHandler.ElevatorPosition.Middle;
+		}
+	}
+
+	// Token: 0x060020FD RID: 8445 RVA: 0x001157EC File Offset: 0x001139EC
+	private void GetValueAndRaiseSignal()
+	{
+		if (this.current != PersistentElevatorHandler.ElevatorPosition.Off)
+		{
+			this.LoadTurnedOn.Signal();
+		}
+		if (this.current == PersistentElevatorHandler.ElevatorPosition.Up)
+		{
+			this.SetElevatorUp.Signal();
+		}
+		else if (this.current == PersistentElevatorHandler.ElevatorPosition.Down)
+		{
+			this.SetElevatorDown.Signal();
+		}
+		else if (this.current == PersistentElevatorHandler.ElevatorPosition.Middle)
+		{
+			this.SetElevatorMiddle.Signal();
+		}
+	}
+
+	// Token: 0x060020FE RID: 8446 RVA: 0x00115860 File Offset: 0x00113A60
+	public void OnFastEventEx(FastEventEx<SavepointManager.SavepointIndex> sender, ref SavepointManager.SavepointIndex arg)
+	{
+		if (sender == Savegame.savepointSaved)
+		{
+			PersistentElevatorHandler.PersistentData persistentData = PersistentDataManager.Get<PersistentElevatorHandler.PersistentData>(this.uniqueID, () => new PersistentElevatorHandler.PersistentData());
+			persistentData.value = this.current;
+		}
+	}
+
+	// Token: 0x04003D3C RID: 15676
+	public string uniqueID;
+
+	// Token: 0x04003D3D RID: 15677
+	public Transform lift;
+
+	// Token: 0x04003D3E RID: 15678
+	public Transform centerPos;
+
+	// Token: 0x04003D3F RID: 15679
+	private SignalOut SetElevatorUp;
+
+	// Token: 0x04003D40 RID: 15680
+	private SignalOut SetElevatorMiddle;
+
+	// Token: 0x04003D41 RID: 15681
+	private SignalOut SetElevatorDown;
+
+	// Token: 0x04003D42 RID: 15682
+	private SignalOut LoadTurnedOn;
+
+	// Token: 0x04003D43 RID: 15683
+	private SignalIn ElevatorTurnedOn;
+
+	// Token: 0x04003D44 RID: 15684
+	private SignalIn LoadMinesCompleted;
+
+	// Token: 0x04003D45 RID: 15685
+	private SignalIn FloorReached;
+
+	// Token: 0x04003D46 RID: 15686
+	private int savepointSavedHandle = -1;
+
+	// Token: 0x020004E9 RID: 1257
+	public enum ElevatorPosition
+	{
+		// Token: 0x04003D4B RID: 15691
+		Up = 3,
+		// Token: 0x04003D4C RID: 15692
+		Middle = 2,
+		// Token: 0x04003D4D RID: 15693
+		Down = 1,
+		// Token: 0x04003D4E RID: 15694
+		Off = 0
+	}
+
+	// Token: 0x020004EA RID: 1258
+	public class PersistentData : IPersistentData
+	{
+		// Token: 0x06002102 RID: 8450 RVA: 0x001158C8 File Offset: 0x00113AC8
+		public void Unserialize(BinaryReader reader)
+		{
+			this.value = (PersistentElevatorHandler.ElevatorPosition)reader.ReadInt32();
+		}
+
+		// Token: 0x06002103 RID: 8451 RVA: 0x001158D8 File Offset: 0x00113AD8
+		public void Serialize(BinaryWriter writer)
+		{
+			writer.Write((int)this.value);
+		}
+
+		// Token: 0x06002104 RID: 8452 RVA: 0x001158E8 File Offset: 0x00113AE8
+		public void Serialize(XElement element)
+		{
+			int num = (int)this.value;
+			element.Value = num.ToString();
+		}
+
+		// Token: 0x06002105 RID: 8453 RVA: 0x0011590C File Offset: 0x00113B0C
+		public void Unserialize(XElement element)
+		{
+			this.value = (PersistentElevatorHandler.ElevatorPosition)int.Parse(element.Value);
+		}
+
+		// Token: 0x06002106 RID: 8454 RVA: 0x00115920 File Offset: 0x00113B20
+		public int GetHash()
+		{
+			return this.value.GetHashCode();
+		}
+
+		// Token: 0x04003D4F RID: 15695
+		public PersistentElevatorHandler.ElevatorPosition value;
+	}
+}

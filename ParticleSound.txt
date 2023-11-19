@@ -1,0 +1,313 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000131 RID: 305
+public class ParticleSound : MonoBehaviour
+{
+	// Token: 0x0600092F RID: 2351 RVA: 0x0005E630 File Offset: 0x0005C830
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		int count = this.particleColliders.Count;
+		this.soundListeners = new ParticleSoundListener[count];
+		for (int i = 0; i < count; i++)
+		{
+			this.soundListeners[i] = this.particleColliders[i].gameObject.AddComponent<ParticleSoundListener>();
+		}
+		int j = 0;
+		int count2 = this.objectsToMoveAround.Count;
+		while (j < count2)
+		{
+			GameObject gameObject = this.objectsToMoveAround[j];
+			AkGameObj akGameObj = gameObject.GetComponent<AkGameObj>();
+			if (akGameObj == null)
+			{
+				akGameObj = gameObject.AddComponent<AkGameObj>();
+			}
+			akGameObj.ToggleAutoUpdateTransform(false);
+			this.akGameObjectsToMoveAround.Add(akGameObj);
+			j++;
+		}
+		if (this.audioObject == null && !this.useGeometricCollision)
+		{
+			this.audioObject = base.gameObject;
+		}
+		if (this.audioObject)
+		{
+			this.akGameObjAudio = AudioUtils.EnsureAkGameObj(this.audioObject, null);
+		}
+		this.audioEvent = new AudioEventSimple(this.audioPrefix);
+	}
+
+	// Token: 0x06000930 RID: 2352 RVA: 0x0005E754 File Offset: 0x0005C954
+	private void Start()
+	{
+		this.OnPreProcess();
+		int i = 0;
+		int num = this.soundListeners.Length;
+		while (i < num)
+		{
+			this.soundListeners[i].Initialize(this, this.particle);
+			i++;
+		}
+	}
+
+	// Token: 0x06000931 RID: 2353 RVA: 0x0005E798 File Offset: 0x0005C998
+	private GameObject GetAudioGameObject()
+	{
+		GameObject result = this.objectsToMoveAround[this.currentAudioGameObject];
+		this.currentAudioGameObject++;
+		if (this.currentAudioGameObject >= this.objectsToMoveAround.Count)
+		{
+			this.currentAudioGameObject = 0;
+		}
+		return result;
+	}
+
+	// Token: 0x06000932 RID: 2354 RVA: 0x0005E7E4 File Offset: 0x0005C9E4
+	public void MakeActive()
+	{
+		this.isActive = true;
+	}
+
+	// Token: 0x06000933 RID: 2355 RVA: 0x0005E7F0 File Offset: 0x0005C9F0
+	public void MakeInactive()
+	{
+		this.isActive = false;
+	}
+
+	// Token: 0x06000934 RID: 2356 RVA: 0x0005E7FC File Offset: 0x0005C9FC
+	private bool IsPlayerCloseEnough(Vector3 posToCheck)
+	{
+		float sqrMagnitude = (posToCheck - ScriptGlobals.mainCharacter.pos3).sqrMagnitude;
+		return sqrMagnitude <= this.maximumDistance * this.maximumDistance;
+	}
+
+	// Token: 0x06000935 RID: 2357 RVA: 0x0005E838 File Offset: 0x0005CA38
+	private void UpdateBurst()
+	{
+		bool isPlaying = this.particle.isPlaying;
+		if (this.doPostEvents && this.isActive && isPlaying && !this.playingLastFrame && this.particle.time < 0.1f && this.IsPlayerCloseEnough(this.audioObject.transform.position))
+		{
+			this.audioEvent.PostFast(this.akGameObjAudio);
+		}
+		this.playingLastFrame = isPlaying;
+	}
+
+	// Token: 0x06000936 RID: 2358 RVA: 0x0005E8C0 File Offset: 0x0005CAC0
+	private void UpdateSingleParticle()
+	{
+		bool isPlaying = this.particle.isPlaying;
+		int particleCount = this.particle.particleCount;
+		if (this.doPostEvents && this.isActive && isPlaying && particleCount > this.countLastFrame && this.IsPlayerCloseEnough(this.audioObject.transform.position) && Time.timeDbl >= this.nextAllowedTime)
+		{
+			this.nextAllowedTime = Time.timeDbl + (double)Random.Range(0.05f, 0.09f);
+			this.audioEvent.PostFast(this.akGameObjAudio);
+		}
+		this.countLastFrame = particleCount;
+	}
+
+	// Token: 0x06000937 RID: 2359 RVA: 0x0005E96C File Offset: 0x0005CB6C
+	private void UpdateRTPCCount()
+	{
+		bool isPlaying = this.particle.isPlaying;
+		if (isPlaying)
+		{
+			int particleCount = this.particle.particleCount;
+			float num = Mathf.InverseLerp(0f, (float)this.maxCount, (float)particleCount);
+			SoundEngine.RTPCs.count.Set01ClampedFast(num, this.akGameObjAudio);
+			if (this.debugSound)
+			{
+				if (particleCount > this.maxDebugCount)
+				{
+					this.maxDebugCount = particleCount;
+				}
+				SoundEngine.SetRTPCValue("rtpc_test", num * 100f, this.audioObject, 0f);
+			}
+		}
+		if (this.playingLastFrame != isPlaying)
+		{
+			if (!isPlaying)
+			{
+				SoundEngine.RTPCs.count.Set01ClampedFast(0f, this.akGameObjAudio);
+			}
+		}
+		this.playingLastFrame = isPlaying;
+	}
+
+	// Token: 0x06000938 RID: 2360 RVA: 0x0005EA2C File Offset: 0x0005CC2C
+	private void Update()
+	{
+		if (this.sendCountRTPC)
+		{
+			this.UpdateRTPCCount();
+		}
+		if (this.bursts)
+		{
+			this.UpdateBurst();
+		}
+		else if (!this.useGeometricCollision)
+		{
+			this.UpdateSingleParticle();
+		}
+		this.PlayScheduledSounds();
+	}
+
+	// Token: 0x06000939 RID: 2361 RVA: 0x0005EA78 File Offset: 0x0005CC78
+	private bool HasValidInternalState()
+	{
+		int count = this.akGameObjectsToMoveAround.Count;
+		return (this.currentAudioGameObject >= 0 || this.currentAudioGameObject < count) && this.objectsToMoveAround.Count == this.akGameObjectsToMoveAround.Count;
+	}
+
+	// Token: 0x0600093A RID: 2362 RVA: 0x0005EACC File Offset: 0x0005CCCC
+	public void SchedulePlaySoundHere(Vector3 pos)
+	{
+		if (this.objectsToMoveAround.Count > 0 && this.HasValidInternalState())
+		{
+			float sqrMagnitude = (pos - ScriptGlobals.mainCharacter.pos3).sqrMagnitude;
+			if (sqrMagnitude <= this.maximumDistance * this.maximumDistance)
+			{
+				this.soundPositions.Add(pos);
+				this.soundDistances.Add(sqrMagnitude);
+			}
+		}
+	}
+
+	// Token: 0x0600093B RID: 2363 RVA: 0x0005EB3C File Offset: 0x0005CD3C
+	private void PlayAtPos(Vector3 pos)
+	{
+		AkGameObj akGameObj = this.akGameObjectsToMoveAround[this.currentAudioGameObject];
+		GameObject audioGameObject = this.GetAudioGameObject();
+		audioGameObject.transform.position = pos;
+		AkGameObjUmbrella.UpdateTransform(akGameObj, true);
+		this.audioEvent.PostFast(akGameObj);
+	}
+
+	// Token: 0x0600093C RID: 2364 RVA: 0x0005EB84 File Offset: 0x0005CD84
+	public void PlayScheduledSounds()
+	{
+		if (this.soundDistances.size > 0)
+		{
+			float num = float.MaxValue;
+			int num2 = -1;
+			int i = 0;
+			int size = this.soundDistances.size;
+			while (i < size)
+			{
+				if (this.soundDistances.raw[i] < num)
+				{
+					num = this.soundDistances.raw[i];
+					num2 = i;
+				}
+				i++;
+			}
+			if (num2 > -1)
+			{
+				this.PlayAtPos(this.soundPositions.raw[num2]);
+			}
+			if (this.soundDistances.size > 1)
+			{
+				int num3 = Random.Range(0, this.soundDistances.size);
+				if (num3 == num2)
+				{
+					num3 = (num3 + 1) % this.soundDistances.size;
+				}
+				this.PlayAtPos(this.soundPositions.raw[num3]);
+			}
+			this.soundPositions.size = 0;
+			this.soundDistances.size = 0;
+		}
+	}
+
+	// Token: 0x04000F71 RID: 3953
+	public bool doPostEvents = true;
+
+	// Token: 0x04000F72 RID: 3954
+	public string audioPrefix;
+
+	// Token: 0x04000F73 RID: 3955
+	public ParticleSystem particle;
+
+	// Token: 0x04000F74 RID: 3956
+	public float maximumDistance = 25f;
+
+	// Token: 0x04000F75 RID: 3957
+	public GameObject audioObject;
+
+	// Token: 0x04000F76 RID: 3958
+	public bool bursts;
+
+	// Token: 0x04000F77 RID: 3959
+	public bool useGeometricCollision;
+
+	// Token: 0x04000F78 RID: 3960
+	public List<Collider> particleColliders;
+
+	// Token: 0x04000F79 RID: 3961
+	public List<GameObject> objectsToMoveAround;
+
+	// Token: 0x04000F7A RID: 3962
+	public bool sendCountRTPC;
+
+	// Token: 0x04000F7B RID: 3963
+	public int maxCount = 30;
+
+	// Token: 0x04000F7C RID: 3964
+	public bool debugSound;
+
+	// Token: 0x04000F7D RID: 3965
+	private bool playingLastFrame;
+
+	// Token: 0x04000F7E RID: 3966
+	private int countLastFrame;
+
+	// Token: 0x04000F7F RID: 3967
+	private bool isActive = true;
+
+	// Token: 0x04000F80 RID: 3968
+	private int maxDebugCount;
+
+	// Token: 0x04000F81 RID: 3969
+	private int currentAudioGameObject;
+
+	// Token: 0x04000F82 RID: 3970
+	[SerializeField]
+	[HideInInspector]
+	private AkGameObj akGameObjAudio;
+
+	// Token: 0x04000F83 RID: 3971
+	[HideInInspector]
+	[SerializeField]
+	private List<AkGameObj> akGameObjectsToMoveAround = new List<AkGameObj>();
+
+	// Token: 0x04000F84 RID: 3972
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04000F85 RID: 3973
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioEvent;
+
+	// Token: 0x04000F86 RID: 3974
+	[HideInInspector]
+	[SerializeField]
+	private ParticleSoundListener[] soundListeners;
+
+	// Token: 0x04000F87 RID: 3975
+	private double nextAllowedTime;
+
+	// Token: 0x04000F88 RID: 3976
+	private FastList<Vector3> soundPositions = new FastList<Vector3>(0, FastListExpandMode.Exponential, 100);
+
+	// Token: 0x04000F89 RID: 3977
+	private FastList<float> soundDistances = new FastList<float>(0, FastListExpandMode.Exponential, 100);
+}

@@ -1,0 +1,594 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000410 RID: 1040
+public class OpenElevatorDoors : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001B4C RID: 6988 RVA: 0x000EE530 File Offset: 0x000EC730
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, null);
+		this.audioGrab = new AudioEventSimpleLocal(this.audioPrefix + "_gateGrab", this.akGameObj);
+		this.audioLetGo = new AudioEventSimpleLocal(this.audioPrefix + "_gateLetGo", this.akGameObj);
+		this.audioImpactDown = new AudioEventSimpleLocal(this.audioPrefix + "_gateImpactDown", this.akGameObj);
+		this.audioAutoOpen = new AudioEventSimpleLocal(this.audioPrefix + "_gateOpenSuccess", this.akGameObj);
+		this.audioImpactUp = new AudioEventSimpleLocal(this.audioPrefix + "_gateImpactUp", this.akGameObj);
+	}
+
+	// Token: 0x06001B4D RID: 6989 RVA: 0x000EE608 File Offset: 0x000EC808
+	public bool PreAwake(int callcount)
+	{
+		this.doorOpened = SignalOut.Create("doorOpened", base.gameObject);
+		this.DoOpenDoor = SignalIn.Create("DoOpenDoor", base.gameObject, new Action(this.OnOpenWithSignal));
+		this.loadOpen = SignalIn.Create("loadOpen", base.gameObject, new Action(this.OnLoadOpen));
+		this.readyDoor = SignalIn.Create("readyDoor", base.gameObject, new Action(this.OnReadyDoor));
+		return true;
+	}
+
+	// Token: 0x06001B4E RID: 6990 RVA: 0x000EE694 File Offset: 0x000EC894
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.doorAnimation = this.doorVisualObject.GetComponent<Animation>();
+		this.animstateOpenDoor = ((!(this.animOpenDoor == null)) ? this.doorAnimation[this.animOpenDoor.name] : this.doorAnimation["ElevatorDoor"]);
+		this.doorAnimation.Play(this.animstateOpenDoor.name);
+		this.animstateOpenDoor.speed = 0f;
+		this.state = OpenElevatorDoors.State.Initial;
+	}
+
+	// Token: 0x06001B4F RID: 6991 RVA: 0x000EE728 File Offset: 0x000EC928
+	private void InitialState()
+	{
+		if (this.releaseTimer > 0f)
+		{
+			this.releaseTimer -= Time.deltaTime;
+			return;
+		}
+		Boy boy = ScriptGlobals.boy;
+		bool flag = this.mBoyInsideTrigger && Device.GrabCheck(boy, !(boy.state is BoySwimState));
+		bool flag2 = false;
+		if (flag)
+		{
+			flag2 = (Mathf.Sign(boy.facing) == Mathf.Sign(base.transform.right.x) && boy.visualBoy.IsPoseFacing(Mathf.Sign(base.transform.right.x), 100f));
+		}
+		if (flag && (flag2 || boy.state is BoySwimState))
+		{
+			this.SetWaitForGrabFinishState();
+		}
+		else
+		{
+			this.grabWhileClosing = false;
+		}
+	}
+
+	// Token: 0x06001B50 RID: 6992 RVA: 0x000EE810 File Offset: 0x000ECA10
+	private void SetWaitForGrabFinishState()
+	{
+		float num = 0f;
+		if (this.doorPos && this.idleToGrabStepAnim)
+		{
+			num = Mathf.Abs(ScriptGlobals.boy.pos.x - this.doorPos.position.x);
+		}
+		if (num > 0.75f)
+		{
+			this.currentGrabTransition = this.idleToGrabStepAnim;
+		}
+		else
+		{
+			this.currentGrabTransition = this.idleToGrabAnim;
+		}
+		BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.currentGrabTransition, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.grabStunTimer = this.grabStunDelay;
+		if (!Device.IsVoiceFrantic())
+		{
+			Device.SetVoicePassive();
+		}
+		this.state = OpenElevatorDoors.State.WaitForGrabFinish;
+	}
+
+	// Token: 0x06001B51 RID: 6993 RVA: 0x000EE8D4 File Offset: 0x000ECAD4
+	private void WaitForGrabFinishState()
+	{
+		if (this.TestForGrabFinish(OpenElevatorDoors.State.Initial))
+		{
+			this.releaseTimer = this.releaseDelay;
+			return;
+		}
+		if (this.currentGrabTransition.animFinished)
+		{
+			this.SetLiftDoorState();
+		}
+	}
+
+	// Token: 0x06001B52 RID: 6994 RVA: 0x000EE908 File Offset: 0x000ECB08
+	private void SetLiftDoorState()
+	{
+		BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.idleGrabbingAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+		this.mIsIdle = true;
+		this.strainTimer = 0f;
+		this.grabWhileClosing = false;
+		RumbleManager.instance.AddSource(this.mLiftRumble);
+		if (this.boyLetGoDoorSoundSent)
+		{
+			this.boyLetGoDoorSoundSent = false;
+		}
+		this.audioGrab.PostFast();
+		this.state = OpenElevatorDoors.State.LiftDoor;
+	}
+
+	// Token: 0x06001B53 RID: 6995 RVA: 0x000EE97C File Offset: 0x000ECB7C
+	private void LiftDoorState()
+	{
+		if (this.TestForGrabFinish(OpenElevatorDoors.State.CloseDoor))
+		{
+			this.liftQuarentine = 0f;
+			return;
+		}
+		float num = Mathf.Clamp(GameInput.stick.y, -1f, 1f) * this.strengthModifier;
+		if (Mathf.Abs(num) < 0.1f)
+		{
+			num = -0.1f;
+			this.liftQuarentine = 0f;
+		}
+		if (this.liftQuarentine > 0f)
+		{
+			this.liftQuarentine -= Time.deltaTime;
+			this.mOpenTimeFraction = 0f;
+			this.liftingAnim.frame = this.mOpenTimeFraction * this.liftingAnim.numFrames;
+			return;
+		}
+		float num3;
+		if (num > 0f)
+		{
+			if (!Device.IsVoiceFrantic())
+			{
+				Device.SetVoiceActive();
+			}
+			float num2 = 0.06f * Mathf.Max(1f - this.liftSpeedCurve.Evaluate(this.mOpenTimeFraction), 0f);
+			this.mLiftRumble.SetRumble(num2, num2);
+			num3 = num * this.liftSpeedCurve.Evaluate(this.mOpenTimeFraction) * Time.deltaTime;
+			this.mFallVelocity = 0f;
+		}
+		else
+		{
+			this.mLiftRumble.SetRumble(0f, 0f);
+			this.mFallVelocity += this.fallAcceleration * -num * Time.deltaTime;
+			num3 = -this.mFallVelocity * Time.deltaTime;
+			this.strainTimer = 0f;
+		}
+		if (this.strainTimer > 0f)
+		{
+			float num4 = Mathf.Sin(this.strainTimer * 8f * 3.1415927f);
+			num4 *= 0.01f;
+			this.mOpenTimeFraction = 0.2f + num4;
+			this.mLiftRumble.SetRumble(0.1f + num4 * 2f, 0.1f - num4 * 2f);
+			this.strainTimer -= Time.deltaTime;
+			if (this.strainTimer <= 0f)
+			{
+				this.mLiftRumble.SetRumble(0f, 0f);
+				this.grabWhileClosing = true;
+				this.audioGrab.PostFast();
+				this.state = OpenElevatorDoors.State.CloseDoor;
+				this.mFallVelocity = 0f;
+			}
+		}
+		else
+		{
+			this.mOpenTimeFraction = Mathf.Clamp(this.mOpenTimeFraction + num3, 0f, 1f);
+		}
+		if (this.mOpenTimeFraction > 0f)
+		{
+			if (this.mIsIdle)
+			{
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.liftingAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				this.mIsIdle = false;
+			}
+			this.liftingAnim.frame = this.mOpenTimeFraction * this.liftingAnim.numFrames;
+		}
+		else if (this.mOpenTimeFraction <= 0f)
+		{
+			if (!this.mIsIdle)
+			{
+				BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.idleGrabbingAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+				if (!Device.IsVoiceFrantic())
+				{
+					Device.SetVoicePassive();
+				}
+				this.mIsIdle = true;
+			}
+			this.liftingAnim.frame = 0f;
+			this.mFallVelocity = 0f;
+		}
+		this.animstateOpenDoor.time = 1f / this.animstateOpenDoor.clip.frameRate * this.mOpenTimeFraction;
+		if (this.animstateOpenDoor.normalizedTime < 0.0001f && this.openDoorAnimTimeLastFrame >= 0.0001f)
+		{
+			this.audioImpactDown.PostFast();
+		}
+		this.openDoorAnimTimeLastFrame = this.animstateOpenDoor.normalizedTime;
+		if (this.mOpenTimeFraction >= this.openAtFraction)
+		{
+			this.SetOpenDoorState();
+		}
+	}
+
+	// Token: 0x06001B54 RID: 6996 RVA: 0x000EED18 File Offset: 0x000ECF18
+	private void CloseDoorState()
+	{
+		if (!this.boyLetGoDoorSoundSent)
+		{
+			this.audioLetGo.PostFast();
+			this.boyLetGoDoorSoundSent = true;
+		}
+		if (this.grabWhileClosing)
+		{
+			if (ScriptGlobals.boy.isDead)
+			{
+				ScriptGlobals.boy.Kill();
+				this.grabWhileClosing = false;
+			}
+			if (!GameInput.rawAction)
+			{
+				BoyUtils.ClearState(ScriptGlobals.boy, 0.3f);
+				this.grabWhileClosing = false;
+			}
+		}
+		this.mFallVelocity += Time.deltaTime * this.fallAcceleration;
+		this.mOpenTimeFraction = Mathf.Max(this.mOpenTimeFraction - this.mFallVelocity * Time.deltaTime, 0f);
+		this.liftingAnim.frame = this.mOpenTimeFraction * this.liftingAnim.numFrames;
+		this.animstateOpenDoor.time = 1f / this.animstateOpenDoor.clip.frameRate * this.mOpenTimeFraction;
+		if (this.animstateOpenDoor.normalizedTime < 0.0001f && this.openDoorAnimTimeLastFrame >= 0.0001f)
+		{
+			this.audioImpactDown.PostFast();
+		}
+		this.openDoorAnimTimeLastFrame = this.animstateOpenDoor.normalizedTime;
+		if (this.mOpenTimeFraction <= 0f)
+		{
+			float power = 0.25f * Mathf.Clamp((this.mFallVelocity - 1.5f) / 2f, 0f, 1f);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, power, 0.2f, 0, 0f);
+			this.mFallVelocity = 0f;
+			if (this.grabWhileClosing)
+			{
+				this.liftQuarentine = 2f;
+				this.state = OpenElevatorDoors.State.LiftDoor;
+			}
+			else
+			{
+				this.releaseTimer = this.releaseDelay;
+				RumbleManager.instance.RemoveSource(this.mLiftRumble.Name);
+				this.state = OpenElevatorDoors.State.Initial;
+			}
+		}
+	}
+
+	// Token: 0x06001B55 RID: 6997 RVA: 0x000EEEF8 File Offset: 0x000ED0F8
+	private void SetOpenDoorState()
+	{
+		RumbleManager.instance.RemoveSource(this.mLiftRumble.Name);
+		this.animstateOpenDoor.speed = this.openingAnimationSpeed;
+		this.mOpenTimeFraction = 0f;
+		if (!this.isOpenedBySignal)
+		{
+			Device.SetVoiceNone();
+			BoyUtils.StartCustomAnim(ScriptGlobals.boy, this.throwOpenAnim, null, 0f, Boy.AffectMode.Default, EffectMaterial.Material.None);
+			RumbleManager.instance.AddOneTimeEffect(RumbleEffect.RumbleEffects.Spike, 0.3f, 0.2f, 0, 0f);
+		}
+		this.audioAutoOpen.PostFast();
+		this.openedElevatorDoors.OnEvent(this);
+		this.doorOpened.Signal();
+		this.state = OpenElevatorDoors.State.OpenDoor;
+	}
+
+	// Token: 0x06001B56 RID: 6998 RVA: 0x000EEFA4 File Offset: 0x000ED1A4
+	private void OpenDoorState()
+	{
+		float normalizedTime = this.animstateOpenDoor.normalizedTime;
+		if (this.animstateOpenDoor.normalizedTime >= 0.25f)
+		{
+			this.audioImpactUp.PostFast();
+			RumbleManager.instance.RemoveSource(this.mLiftRumble.Name);
+			this.state = OpenElevatorDoors.State.Complete;
+		}
+	}
+
+	// Token: 0x06001B57 RID: 6999 RVA: 0x000EEFFC File Offset: 0x000ED1FC
+	private void CompleteState()
+	{
+	}
+
+	// Token: 0x06001B58 RID: 7000 RVA: 0x000EF000 File Offset: 0x000ED200
+	private void Update()
+	{
+		switch (this.state)
+		{
+		case OpenElevatorDoors.State.Initial:
+			this.InitialState();
+			break;
+		case OpenElevatorDoors.State.WaitForGrabFinish:
+			this.WaitForGrabFinishState();
+			break;
+		case OpenElevatorDoors.State.LiftDoor:
+			this.LiftDoorState();
+			break;
+		case OpenElevatorDoors.State.CloseDoor:
+			this.CloseDoorState();
+			break;
+		case OpenElevatorDoors.State.OpenDoor:
+			this.OpenDoorState();
+			break;
+		case OpenElevatorDoors.State.Complete:
+			this.CompleteState();
+			break;
+		}
+	}
+
+	// Token: 0x06001B59 RID: 7001 RVA: 0x000EF07C File Offset: 0x000ED27C
+	private void UpdateMoveRTPC()
+	{
+		Vector3 position = this.doorVisualObject.transform.position;
+		Vector3 vector = position - this.oldPos;
+		float magnitude = (vector / Time.deltaTime).magnitude;
+		this.oldPos = position;
+		float value = Mathf.InverseLerp(0f, 19f, magnitude) * 100f;
+		SoundEngine.RTPCs.animMove.SetFast(value, this.akGameObj);
+	}
+
+	// Token: 0x06001B5A RID: 7002 RVA: 0x000EF0EC File Offset: 0x000ED2EC
+	private bool TestForGrabFinish(OpenElevatorDoors.State stateToUse)
+	{
+		bool flag = false;
+		if (this.grabStunTimer > 0f)
+		{
+			this.grabStunTimer -= Time.deltaTime;
+		}
+		else
+		{
+			if (ScriptGlobals.boy.isDead)
+			{
+				ScriptGlobals.boy.Kill();
+				flag = true;
+			}
+			if (!GameInput.rawAction)
+			{
+				BoyUtils.ClearState(ScriptGlobals.boy, 0.3f);
+				flag = true;
+			}
+		}
+		if (flag)
+		{
+			this.mLiftRumble.SetRumble(0f, 0f);
+			this.state = stateToUse;
+			RumbleManager.instance.RemoveSource(this.mLiftRumble.Name);
+			Device.SetVoiceNone();
+			return true;
+		}
+		return false;
+	}
+
+	// Token: 0x06001B5B RID: 7003 RVA: 0x000EF198 File Offset: 0x000ED398
+	private void OnReadyDoor()
+	{
+		this.doorAnimation.Play(this.animstateOpenDoor.name);
+		this.animstateOpenDoor.speed = 0f;
+		RumbleManager.instance.RemoveSource(this.mLiftRumble.Name);
+		this.state = OpenElevatorDoors.State.Initial;
+	}
+
+	// Token: 0x06001B5C RID: 7004 RVA: 0x000EF1E8 File Offset: 0x000ED3E8
+	private void OnOpenWithSignal()
+	{
+		this.isOpenedBySignal = true;
+		this.SetOpenDoorState();
+	}
+
+	// Token: 0x06001B5D RID: 7005 RVA: 0x000EF1F8 File Offset: 0x000ED3F8
+	private void OnLoadOpen()
+	{
+		this.animstateOpenDoor.speed = this.openingAnimationSpeed;
+		this.animstateOpenDoor.normalizedTime = 1f;
+		this.mOpenTimeFraction = 0f;
+		this.loadedOpen.OnEvent(this);
+		RumbleManager.instance.RemoveSource(this.mLiftRumble.Name);
+		this.state = OpenElevatorDoors.State.None;
+	}
+
+	// Token: 0x06001B5E RID: 7006 RVA: 0x000EF25C File Offset: 0x000ED45C
+	private void OnTriggerEnter(Collider col)
+	{
+		if (col.GetComponent<BoyProbe>())
+		{
+			this.mBoyInsideTrigger = true;
+		}
+	}
+
+	// Token: 0x06001B5F RID: 7007 RVA: 0x000EF278 File Offset: 0x000ED478
+	private void OnTriggerExit(Collider col)
+	{
+		if (col.GetComponent<BoyProbe>())
+		{
+			this.mBoyInsideTrigger = false;
+		}
+	}
+
+	// Token: 0x0400317A RID: 12666
+	public AnimClipNode idleToGrabAnim;
+
+	// Token: 0x0400317B RID: 12667
+	public AnimClipNode idleToGrabStepAnim;
+
+	// Token: 0x0400317C RID: 12668
+	public AnimClipNode idleGrabbingAnim;
+
+	// Token: 0x0400317D RID: 12669
+	public AnimClipNode liftingAnim;
+
+	// Token: 0x0400317E RID: 12670
+	public AnimClipNode throwOpenAnim;
+
+	// Token: 0x0400317F RID: 12671
+	public AnimationClip animOpenDoor;
+
+	// Token: 0x04003180 RID: 12672
+	public GameObject doorVisualObject;
+
+	// Token: 0x04003181 RID: 12673
+	public Transform doorPos;
+
+	// Token: 0x04003182 RID: 12674
+	public AnimationCurve liftSpeedCurve = new AnimationCurve();
+
+	// Token: 0x04003183 RID: 12675
+	public float fallAcceleration = 5f;
+
+	// Token: 0x04003184 RID: 12676
+	public float openingAnimationSpeed = 0.8f;
+
+	// Token: 0x04003185 RID: 12677
+	public float openAtFraction = 1f;
+
+	// Token: 0x04003186 RID: 12678
+	public float strengthModifier = 1f;
+
+	// Token: 0x04003187 RID: 12679
+	public string audioPrefix = string.Empty;
+
+	// Token: 0x04003188 RID: 12680
+	public SimpleEvent<OpenElevatorDoors> openedElevatorDoors = new SimpleEvent<OpenElevatorDoors>("openedElevatorDoors");
+
+	// Token: 0x04003189 RID: 12681
+	public SimpleEvent<OpenElevatorDoors> loadedOpen = new SimpleEvent<OpenElevatorDoors>("loadedOpen");
+
+	// Token: 0x0400318A RID: 12682
+	private SignalOut doorOpened;
+
+	// Token: 0x0400318B RID: 12683
+	private SignalIn DoOpenDoor;
+
+	// Token: 0x0400318C RID: 12684
+	private SignalIn loadOpen;
+
+	// Token: 0x0400318D RID: 12685
+	private SignalIn readyDoor;
+
+	// Token: 0x0400318E RID: 12686
+	private AnimationState animstateOpenDoor;
+
+	// Token: 0x0400318F RID: 12687
+	private bool mBoyInsideTrigger;
+
+	// Token: 0x04003190 RID: 12688
+	private bool mIsIdle = true;
+
+	// Token: 0x04003191 RID: 12689
+	private bool boyLetGoDoorSoundSent;
+
+	// Token: 0x04003192 RID: 12690
+	private bool isOpenedBySignal;
+
+	// Token: 0x04003193 RID: 12691
+	private bool grabWhileClosing;
+
+	// Token: 0x04003194 RID: 12692
+	private OpenElevatorDoors.State state;
+
+	// Token: 0x04003195 RID: 12693
+	private ModifiableRumbleSource mLiftRumble = new ModifiableRumbleSource("ElevatorLiftRumble", false, 0f, null, default(Vector3));
+
+	// Token: 0x04003196 RID: 12694
+	private float mOpenTimeFraction;
+
+	// Token: 0x04003197 RID: 12695
+	private float mFallVelocity;
+
+	// Token: 0x04003198 RID: 12696
+	private float strainTimer;
+
+	// Token: 0x04003199 RID: 12697
+	private float liftQuarentine;
+
+	// Token: 0x0400319A RID: 12698
+	private float grabStunTimer;
+
+	// Token: 0x0400319B RID: 12699
+	private float grabStunDelay = 0.1f;
+
+	// Token: 0x0400319C RID: 12700
+	private float releaseTimer;
+
+	// Token: 0x0400319D RID: 12701
+	private float releaseDelay = 0.15f;
+
+	// Token: 0x0400319E RID: 12702
+	private Vector3 oldPos;
+
+	// Token: 0x0400319F RID: 12703
+	private float openDoorAnimTimeLastFrame = float.MaxValue;
+
+	// Token: 0x040031A0 RID: 12704
+	private float closeDoorAnimTimeLastFrame = float.MaxValue;
+
+	// Token: 0x040031A1 RID: 12705
+	private AnimClipNode currentGrabTransition;
+
+	// Token: 0x040031A2 RID: 12706
+	private Animation doorAnimation;
+
+	// Token: 0x040031A3 RID: 12707
+	[HideInInspector]
+	[SerializeField]
+	private AkGameObj akGameObj;
+
+	// Token: 0x040031A4 RID: 12708
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x040031A5 RID: 12709
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioGrab;
+
+	// Token: 0x040031A6 RID: 12710
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioLetGo;
+
+	// Token: 0x040031A7 RID: 12711
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioImpactDown;
+
+	// Token: 0x040031A8 RID: 12712
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioAutoOpen;
+
+	// Token: 0x040031A9 RID: 12713
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioImpactUp;
+
+	// Token: 0x02000411 RID: 1041
+	private enum State
+	{
+		// Token: 0x040031AB RID: 12715
+		None,
+		// Token: 0x040031AC RID: 12716
+		Initial,
+		// Token: 0x040031AD RID: 12717
+		WaitForGrabFinish,
+		// Token: 0x040031AE RID: 12718
+		LiftDoor,
+		// Token: 0x040031AF RID: 12719
+		CloseDoor,
+		// Token: 0x040031B0 RID: 12720
+		OpenDoor,
+		// Token: 0x040031B1 RID: 12721
+		Complete
+	}
+}

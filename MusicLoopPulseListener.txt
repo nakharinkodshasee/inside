@@ -1,0 +1,73 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200040D RID: 1037
+public class MusicLoopPulseListener : MonoBehaviour
+{
+	// Token: 0x06001B42 RID: 6978 RVA: 0x000EE084 File Offset: 0x000EC284
+	private void Awake()
+	{
+		this.intervalLength = this.fullMusicLength / 8f;
+		this.on.SetEventTime(0f);
+		this.off.SetEventTime(this.intervalLength / 2f);
+		this.lastFrame = PersistentBehaviour<GlobalAudio>.instance.music.GetLoopLength_s();
+	}
+
+	// Token: 0x06001B43 RID: 6979 RVA: 0x000EE0E0 File Offset: 0x000EC2E0
+	private void Update()
+	{
+		if (this.debug)
+		{
+			this.thisFrame = PersistentBehaviour<GlobalAudio>.instance.music.GetLoopLength_s();
+			if (this.thisFrame != this.lastFrame)
+			{
+			}
+			this.lastFrame = this.thisFrame;
+			return;
+		}
+		this.intervalTime = PersistentBehaviour<GlobalAudio>.instance.music.GetMusicPosition_s() % this.intervalLength;
+		this.on.UpdateMusicTimeManually(this.intervalTime);
+		this.off.UpdateMusicTimeManually(this.intervalTime);
+		if (this.on.didEventOccurThisUpdate)
+		{
+			this.pulseOn.OnEvent(this);
+		}
+		if (this.off.didEventOccurThisUpdate)
+		{
+			this.pulseOff.OnEvent(this);
+		}
+	}
+
+	// Token: 0x0400315E RID: 12638
+	public bool debug;
+
+	// Token: 0x0400315F RID: 12639
+	private SimpleEvent<MusicLoopPulseListener> pulseOn = new SimpleEvent<MusicLoopPulseListener>("pulseOn");
+
+	// Token: 0x04003160 RID: 12640
+	private SimpleEvent<MusicLoopPulseListener> pulseOff = new SimpleEvent<MusicLoopPulseListener>("pulseOff");
+
+	// Token: 0x04003161 RID: 12641
+	private MusicEventChecker on = new MusicEventChecker(0f);
+
+	// Token: 0x04003162 RID: 12642
+	private MusicEventChecker off = new MusicEventChecker(0f);
+
+	// Token: 0x04003163 RID: 12643
+	private float fullMusicLength = 8.64865f;
+
+	// Token: 0x04003164 RID: 12644
+	private float intervalLength;
+
+	// Token: 0x04003165 RID: 12645
+	private float intervalTime;
+
+	// Token: 0x04003166 RID: 12646
+	private bool isActive;
+
+	// Token: 0x04003167 RID: 12647
+	private float thisFrame;
+
+	// Token: 0x04003168 RID: 12648
+	private float lastFrame;
+}

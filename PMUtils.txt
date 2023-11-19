@@ -1,0 +1,14 @@
+using System;
+using HutongGames.PlayMaker;
+using UnityEngine;
+
+// Token: 0x0200027B RID: 635
+public static class PMUtils
+{
+	// Token: 0x0600138B RID: 5003 RVA: 0x000B86BC File Offset: 0x000B68BC
+	public static string GetOwnerDefaultTargetName(Fsm fsm, FsmOwnerDefault fsmGameObject)
+	{
+		GameObject ownerDefaultTarget = fsm.GetOwnerDefaultTarget(fsmGameObject);
+		return (!(ownerDefaultTarget == null)) ? ownerDefaultTarget.name : "null";
+	}
+}

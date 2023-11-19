@@ -1,0 +1,155 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020000CC RID: 204
+public class PigIdle : MonoBehaviour, IFastEventExListener<Collider>
+{
+	// Token: 0x0600065B RID: 1627 RVA: 0x000488B0 File Offset: 0x00046AB0
+	private void Start()
+	{
+		if (this.triggerMove)
+		{
+			this.triggerMove.enterTrigger.Register(this, ref this.moveTriggerEnterHandle);
+		}
+		int num = this.animIdle.Length;
+		this.animIdleStates = new AnimationState[num];
+		for (int i = 0; i < num; i++)
+		{
+			this.animIdleStates[i] = this.anim[this.animIdle[i].name];
+		}
+		this.PlayRandomIdle(true);
+		if (num > 1)
+		{
+			this.randomIdle = true;
+		}
+	}
+
+	// Token: 0x0600065C RID: 1628 RVA: 0x00048940 File Offset: 0x00046B40
+	private void Update()
+	{
+		if (this.moving)
+		{
+			float num = Vector3.Distance(this.currentPos, this.currentMoveTarget);
+			if (num > 0.25f)
+			{
+				Vector3 vector = this.currentLookTarget - this.currentPos;
+				Quaternion quaternion = Quaternion.LookRotation(vector, Vector3.up);
+				this.currentRotation = Quaternion.Slerp(this.currentRotation, quaternion, 3.5f * Time.deltaTime);
+				this.holder.rotation = this.currentRotation;
+				this.currentPos = Vector3.MoveTowards(this.currentPos, this.currentMoveTarget, 1.35f * Time.deltaTime);
+				this.holder.position = this.currentPos;
+			}
+			this.timerMove -= Time.deltaTime;
+			if (this.timerMove <= 0f)
+			{
+				this.moving = false;
+				this.PlayRandomIdle(false);
+			}
+		}
+		else if (this.randomIdle)
+		{
+			this.timerIdle -= Time.deltaTime;
+			if (this.timerIdle <= 0f)
+			{
+				this.PlayRandomIdle(false);
+			}
+		}
+	}
+
+	// Token: 0x0600065D RID: 1629 RVA: 0x00048A60 File Offset: 0x00046C60
+	private void PlayRandomIdle(bool randomStart = false)
+	{
+		int num = Random.Range(0, this.animIdleStates.Length);
+		AnimationState animationState = this.animIdleStates[num];
+		this.anim.CrossFade(animationState.name, 0.3f);
+		if (randomStart)
+		{
+			animationState.normalizedTime = Random.Range(0f, 0.75f);
+		}
+		animationState.speed = Random.Range(0.7f, 1.2f);
+		this.timerIdle = Random.Range(this.minIdleDuration, this.maxIdleDuration);
+	}
+
+	// Token: 0x0600065E RID: 1630 RVA: 0x00048AE4 File Offset: 0x00046CE4
+	public void OnFastEventEx(FastEventEx<Collider> sender, ref Collider collider)
+	{
+		if (sender == this.triggerMove.enterTrigger)
+		{
+			this.OnTriggerMoveEnter(collider);
+		}
+	}
+
+	// Token: 0x0600065F RID: 1631 RVA: 0x00048B00 File Offset: 0x00046D00
+	private void OnTriggerMoveEnter(Collider collider)
+	{
+		if (!this.moving && collider.GetComponent<BoyProbe>())
+		{
+			this.moving = true;
+			this.currentPos = this.holder.position;
+			this.currentMoveTarget = this.moveTarget.position;
+			this.currentMoveTarget.y = this.currentPos.y;
+			this.currentLookTarget = this.lookTarget.position;
+			this.currentLookTarget.y = this.holder.position.y;
+			this.currentRotation = this.holder.rotation;
+			this.anim.CrossFade(this.animMove.name);
+			this.timerMove = this.animMove.length;
+		}
+	}
+
+	// Token: 0x04000AD3 RID: 2771
+	public CollisionEvents triggerMove;
+
+	// Token: 0x04000AD4 RID: 2772
+	public Transform holder;
+
+	// Token: 0x04000AD5 RID: 2773
+	public Transform moveTarget;
+
+	// Token: 0x04000AD6 RID: 2774
+	public Transform lookTarget;
+
+	// Token: 0x04000AD7 RID: 2775
+	public Animation anim;
+
+	// Token: 0x04000AD8 RID: 2776
+	public AnimationClip animMove;
+
+	// Token: 0x04000AD9 RID: 2777
+	public AnimationClip[] animIdle;
+
+	// Token: 0x04000ADA RID: 2778
+	private AnimationState[] animIdleStates;
+
+	// Token: 0x04000ADB RID: 2779
+	private float timerIdle;
+
+	// Token: 0x04000ADC RID: 2780
+	private float timerMove;
+
+	// Token: 0x04000ADD RID: 2781
+	private float minIdleDuration = 1.5f;
+
+	// Token: 0x04000ADE RID: 2782
+	private float maxIdleDuration = 6f;
+
+	// Token: 0x04000ADF RID: 2783
+	private bool moving;
+
+	// Token: 0x04000AE0 RID: 2784
+	private bool randomIdle;
+
+	// Token: 0x04000AE1 RID: 2785
+	private Vector3 currentPos;
+
+	// Token: 0x04000AE2 RID: 2786
+	private Vector3 currentMoveTarget;
+
+	// Token: 0x04000AE3 RID: 2787
+	private Vector3 currentLookTarget;
+
+	// Token: 0x04000AE4 RID: 2788
+	private Quaternion currentRotation;
+
+	// Token: 0x04000AE5 RID: 2789
+	private int moveTriggerEnterHandle = -1;
+}

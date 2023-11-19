@@ -1,0 +1,79 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000343 RID: 835
+public class PDParticleEmitter : MonoBehaviour
+{
+	// Token: 0x06001742 RID: 5954 RVA: 0x000CB428 File Offset: 0x000C9628
+	private void Start()
+	{
+	}
+
+	// Token: 0x06001743 RID: 5955 RVA: 0x000CB42C File Offset: 0x000C962C
+	private void EmitParticle()
+	{
+		float z = Random.Range(this.velocityMin, this.velocityMax);
+		Vector3 vector = Random.insideUnitCircle * this.emissionSpread;
+		vector.z = z;
+		vector = base.transform.TransformDirection(vector);
+		float num = Random.Range(this.sizeMin, this.sizeMax);
+		float num2 = Random.Range(this.lifetimeMin, this.lifetimeMax);
+		this.parentParticleSystem.Emit(base.transform.position, vector, num, num2, this.parentParticleSystem.startColor);
+	}
+
+	// Token: 0x06001744 RID: 5956 RVA: 0x000CB4C4 File Offset: 0x000C96C4
+	private void Update()
+	{
+		if (this.enableEmission && this.emissionRate > 0f)
+		{
+			float num = Time.deltaTime;
+			this.emitCounter += this.emissionRate * num;
+			int num2 = Mathf.FloorToInt(this.emitCounter);
+			this.emitCounter -= (float)num2;
+			for (int i = 0; i < num2; i++)
+			{
+				this.EmitParticle();
+			}
+		}
+		else
+		{
+			this.emitCounter = 0f;
+		}
+	}
+
+	// Token: 0x04002993 RID: 10643
+	public ParticleSystem parentParticleSystem;
+
+	// Token: 0x04002994 RID: 10644
+	public bool enableEmission = true;
+
+	// Token: 0x04002995 RID: 10645
+	public float emissionRate = 10f;
+
+	// Token: 0x04002996 RID: 10646
+	public float emissionSpread = 5f;
+
+	// Token: 0x04002997 RID: 10647
+	public float velocityMin = 5f;
+
+	// Token: 0x04002998 RID: 10648
+	public float velocityMax = 5f;
+
+	// Token: 0x04002999 RID: 10649
+	public float lifetimeMin = 5f;
+
+	// Token: 0x0400299A RID: 10650
+	public float lifetimeMax = 5f;
+
+	// Token: 0x0400299B RID: 10651
+	public float sizeMin = 1f;
+
+	// Token: 0x0400299C RID: 10652
+	public float sizeMax = 1f;
+
+	// Token: 0x0400299D RID: 10653
+	private float deltaTime;
+
+	// Token: 0x0400299E RID: 10654
+	private float emitCounter;
+}

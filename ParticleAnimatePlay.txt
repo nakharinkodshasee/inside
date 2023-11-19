@@ -1,0 +1,29 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200034F RID: 847
+public class ParticleAnimatePlay : UmbrellaBehaviour<ParticleAnimatePlay>
+{
+	// Token: 0x06001788 RID: 6024 RVA: 0x000CDA70 File Offset: 0x000CBC70
+	public void UmbrellaUpdate()
+	{
+		if (this.playParticles != this.playParticlesOld && this.playParticles && this.particles.isStopped)
+		{
+			this.particles.Play(true);
+		}
+		if (this.playParticles != this.playParticlesOld && !this.playParticles && this.particles.isPlaying)
+		{
+			this.particles.Stop(true);
+		}
+		this.playParticlesOld = this.playParticles;
+	}
+
+	// Token: 0x040029FC RID: 10748
+	public bool playParticles;
+
+	// Token: 0x040029FD RID: 10749
+	public ParticleSystem particles;
+
+	// Token: 0x040029FE RID: 10750
+	private bool playParticlesOld;
+}

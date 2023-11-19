@@ -1,0 +1,29 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000357 RID: 855
+public class PrewarmOnLoad : MonoBehaviour
+{
+	// Token: 0x060017A0 RID: 6048 RVA: 0x000CE354 File Offset: 0x000CC554
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		this.partSys = base.GetComponent<ParticleSystem>();
+	}
+
+	// Token: 0x060017A1 RID: 6049 RVA: 0x000CE364 File Offset: 0x000CC564
+	private void Awake()
+	{
+		this.OnPreProcess();
+		if (GameManager.IsLoading() && this.partSys)
+		{
+			this.partSys.Simulate(this.partSys.startLifetime, true, true);
+			this.partSys.Play(true);
+		}
+	}
+
+	// Token: 0x04002A30 RID: 10800
+	[HideInInspector]
+	[SerializeField]
+	private ParticleSystem partSys;
+}

@@ -1,0 +1,272 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004E3 RID: 1251
+public class MovingCoverSurviveLogic : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060020D0 RID: 8400 RVA: 0x00114A7C File Offset: 0x00112C7C
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		this.audioShieldDownMusic = new AudioEventSimple("music_mines_forcePushMovingCover_shieldDown");
+		this.audioShieldDownAmb = new AudioEventSimple("amb_sws_mines_forcePushMovingCover_shieldDown");
+		this.audioFirstSurviveMusic = new AudioEventSimple("music_mines_forcePushMovingCover_firstSurvive");
+		this.audioFirstSurviveAmb = new AudioEventSimple("amb_sws_mines_forcePushMovingCover_firstSurvive");
+		this.audioSecondSurviveMusic = new AudioEventSimple("music_mines_forcePushMovingCover_secondSurvive");
+		this.audioSecondSurviveAmb = new AudioEventSimple("amb_sws_mines_forcePushMovingCover_secondSurvive");
+		this.audioThirdSurviveMusic = new AudioEventSimple("music_mines_forcePushMovingCover_thirdSurvive");
+		this.audioThirdSurviveAmb = new AudioEventSimple("amb_sws_mines_forcePushMovingCover_thirdSurvive");
+		this.audioFourthSurviveMusic = new AudioEventSimple("music_mines_forcePushMovingCover_fourthSurvive");
+		this.audioFourthSurviveAmb = new AudioEventSimple("amb_sws_mines_forcePushMovingCover_fourthSurvive");
+	}
+
+	// Token: 0x060020D1 RID: 8401 RVA: 0x00114B3C File Offset: 0x00112D3C
+	public bool PreAwake(int callcount)
+	{
+		this.checkIfForceSurvival = SignalIn.Create("checkIfForceSurvival", base.gameObject, new Action(this.CheckForSurvival));
+		this.shieldsDown = SignalIn.Create("shieldsDown", base.gameObject, new Action(this.DoShieldsDown));
+		this.spawnAtSave2 = SignalIn.Create("spawnAtSave2", base.gameObject, new Action(this.DoSpawnAtSave2));
+		this.spawnAtSave3 = SignalIn.Create("spawnAtSave3", base.gameObject, new Action(this.DoSpawnAtSave3));
+		this.survivedFirst = SignalOut.Create("survivedFirst", base.gameObject);
+		this.survivedSecond = SignalOut.Create("survivedSecond", base.gameObject);
+		return true;
+	}
+
+	// Token: 0x060020D2 RID: 8402 RVA: 0x00114C00 File Offset: 0x00112E00
+	private void Awake()
+	{
+		this.OnPreProcess();
+		this.state = MovingCoverSurviveLogic.State.Idle;
+		this.boy = ScriptGlobals.boy;
+	}
+
+	// Token: 0x060020D3 RID: 8403 RVA: 0x00114C1C File Offset: 0x00112E1C
+	private void CheckForSurvival()
+	{
+		switch (this.state)
+		{
+		case MovingCoverSurviveLogic.State.BehindRotatingCover:
+			this.BehindRotatingCover();
+			break;
+		case MovingCoverSurviveLogic.State.BehindMovingCoverOutside:
+			this.BehindMovingCoverOutside();
+			break;
+		case MovingCoverSurviveLogic.State.BehindMovingCoverInRoom:
+			this.BehindMovingCoverInRoomState();
+			break;
+		}
+	}
+
+	// Token: 0x060020D4 RID: 8404 RVA: 0x00114C70 File Offset: 0x00112E70
+	private void DoShieldsDown()
+	{
+		this.staticPoint = this.rightRailCollider.bounds.center.x - this.rightRailCollider.bounds.extents.x;
+		this.audioShieldDownMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.audioShieldDownAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+		this.state = MovingCoverSurviveLogic.State.BehindMovingCoverInRoom;
+	}
+
+	// Token: 0x060020D5 RID: 8405 RVA: 0x00114CE4 File Offset: 0x00112EE4
+	private void DoSpawnAtSave2()
+	{
+		this.state = MovingCoverSurviveLogic.State.BehindMovingCoverInRoom;
+	}
+
+	// Token: 0x060020D6 RID: 8406 RVA: 0x00114CF0 File Offset: 0x00112EF0
+	private void DoSpawnAtSave3()
+	{
+		this.state = MovingCoverSurviveLogic.State.BehindRotatingCover;
+	}
+
+	// Token: 0x060020D7 RID: 8407 RVA: 0x00114CFC File Offset: 0x00112EFC
+	private void BehindMovingCoverInRoomState()
+	{
+		bool flag = this.movingCover.isInsideThisTrigger();
+		if (flag)
+		{
+			this.survivedFirst.Signal();
+			this.audioFirstSurviveMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioFirstSurviveAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.state = MovingCoverSurviveLogic.State.BehindMovingCoverOutside;
+		}
+	}
+
+	// Token: 0x060020D8 RID: 8408 RVA: 0x00114D50 File Offset: 0x00112F50
+	private void BehindMovingCoverOutside()
+	{
+		bool flag = this.movingCover.isInsideThisTrigger();
+		bool flag2 = this.boy.pos.x > this.movingCoverNotSafePoint.position.x;
+		if (flag2 && flag)
+		{
+			float num = this.movingCover.GetComponent<Collider>().bounds.center.x + this.movingCover.GetComponent<Collider>().bounds.extents.x;
+			if (num > this.staticPoint && this.movingCoverLogic.GetColliderCount() > 0)
+			{
+				this.audioSecondSurviveMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+				this.audioSecondSurviveAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+				this.survivedSecond.Signal();
+				this.state = MovingCoverSurviveLogic.State.BehindRotatingCover;
+			}
+		}
+	}
+
+	// Token: 0x060020D9 RID: 8409 RVA: 0x00114E34 File Offset: 0x00113034
+	private void BehindRotatingCover()
+	{
+		bool flag = this.rotatingCover.isInsideThisTrigger();
+		if (flag)
+		{
+			this.audioThirdSurviveMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioThirdSurviveAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.state = MovingCoverSurviveLogic.State.BehindSlideCover;
+		}
+	}
+
+	// Token: 0x060020DA RID: 8410 RVA: 0x00114E7C File Offset: 0x0011307C
+	private void BehindSlideCover()
+	{
+		bool flag = this.slideCover.isInsideThisTrigger();
+		if (flag)
+		{
+			this.audioFourthSurviveMusic.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.audioFourthSurviveAmb.PostFast(AudioKeyObject.AkGameObjs.global);
+			this.state = MovingCoverSurviveLogic.State.Finished;
+		}
+	}
+
+	// Token: 0x060020DB RID: 8411 RVA: 0x00114EC4 File Offset: 0x001130C4
+	private void Update()
+	{
+		if (this.boy.isDead)
+		{
+			return;
+		}
+		if (this.state == MovingCoverSurviveLogic.State.BehindSlideCover)
+		{
+			this.BehindSlideCover();
+		}
+	}
+
+	// Token: 0x04003CF3 RID: 15603
+	public ForcePushCover movingCover;
+
+	// Token: 0x04003CF4 RID: 15604
+	public ForcePushCover rotatingCover;
+
+	// Token: 0x04003CF5 RID: 15605
+	public ForcePushCover slideCover;
+
+	// Token: 0x04003CF6 RID: 15606
+	public Transform movingCoverNotSafePoint;
+
+	// Token: 0x04003CF7 RID: 15607
+	public Collider rightRailCollider;
+
+	// Token: 0x04003CF8 RID: 15608
+	public ForcePushMovingCover movingCoverLogic;
+
+	// Token: 0x04003CF9 RID: 15609
+	private SignalIn checkIfForceSurvival;
+
+	// Token: 0x04003CFA RID: 15610
+	private SignalIn shieldsDown;
+
+	// Token: 0x04003CFB RID: 15611
+	private SignalIn spawnAtSave2;
+
+	// Token: 0x04003CFC RID: 15612
+	private SignalIn spawnAtSave3;
+
+	// Token: 0x04003CFD RID: 15613
+	private SignalOut survivedFirst;
+
+	// Token: 0x04003CFE RID: 15614
+	private SignalOut survivedSecond;
+
+	// Token: 0x04003CFF RID: 15615
+	private Boy boy;
+
+	// Token: 0x04003D00 RID: 15616
+	private float staticPoint;
+
+	// Token: 0x04003D01 RID: 15617
+	private MovingCoverSurviveLogic.State state;
+
+	// Token: 0x04003D02 RID: 15618
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioShieldDownMusic;
+
+	// Token: 0x04003D03 RID: 15619
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioFirstSurviveMusic;
+
+	// Token: 0x04003D04 RID: 15620
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioSecondSurviveMusic;
+
+	// Token: 0x04003D05 RID: 15621
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioThirdSurviveMusic;
+
+	// Token: 0x04003D06 RID: 15622
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioFourthSurviveMusic;
+
+	// Token: 0x04003D07 RID: 15623
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioShieldDownAmb;
+
+	// Token: 0x04003D08 RID: 15624
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioFirstSurviveAmb;
+
+	// Token: 0x04003D09 RID: 15625
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimple audioSecondSurviveAmb;
+
+	// Token: 0x04003D0A RID: 15626
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioThirdSurviveAmb;
+
+	// Token: 0x04003D0B RID: 15627
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimple audioFourthSurviveAmb;
+
+	// Token: 0x04003D0C RID: 15628
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x020004E4 RID: 1252
+	private enum State
+	{
+		// Token: 0x04003D0E RID: 15630
+		None,
+		// Token: 0x04003D0F RID: 15631
+		Idle,
+		// Token: 0x04003D10 RID: 15632
+		BehindRotatingCover,
+		// Token: 0x04003D11 RID: 15633
+		BehindSlideCover,
+		// Token: 0x04003D12 RID: 15634
+		BehindMovingCoverOutside,
+		// Token: 0x04003D13 RID: 15635
+		BehindMovingCoverInRoom,
+		// Token: 0x04003D14 RID: 15636
+		Finished
+	}
+}

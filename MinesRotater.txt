@@ -1,0 +1,450 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004DE RID: 1246
+public class MinesRotater : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060020AC RID: 8364 RVA: 0x00113D14 File Offset: 0x00111F14
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioStartRotate = new AudioEventSimpleLocal(this.audioPrefix + "_startRotate", akGameObj);
+		this.audioStopRotate = new AudioEventSimpleLocal(this.audioPrefix + "_stopRotate", akGameObj);
+		this.audioBlast = new AudioEventSimpleLocal(this.audioPrefix + "_blast", akGameObj);
+		this.audioLadderEnter = new AudioEventSimpleLocal(this.audioPrefix + "_ladderEnter", akGameObj);
+		this.audioLadderExit = new AudioEventSimpleLocal(this.audioPrefix + "_ladderExit", akGameObj);
+		this.audioLadderStart = new AudioEventSimpleLocal(this.audioPrefix + "_ladderStart", akGameObj);
+		this.audioLadderStop = new AudioEventSimpleLocal(this.audioPrefix + "_ladderStop", akGameObj);
+	}
+
+	// Token: 0x060020AD RID: 8365 RVA: 0x00113E08 File Offset: 0x00112008
+	public bool PreAwake(int callcount)
+	{
+		this.startRotator = SignalIn.Create("startRotator", base.gameObject, new Action(this.OnStartRotater));
+		this.stopRotater = SignalIn.Create("stopRotater", base.gameObject, new Action(this.OnStopRotater));
+		this.shakeRotater = SignalIn.Create("shakeRotater", base.gameObject, new Action(this.OnShake));
+		this.loadComplete = SignalIn.Create("loadComplete", base.gameObject, new Action(this.OnLoadComplete));
+		this.offsetCheck = SignalIn.Create("offsetCheck", base.gameObject, new Action(this.OnOffsetCheck));
+		return true;
+	}
+
+	// Token: 0x060020AE RID: 8366 RVA: 0x00113EC0 File Offset: 0x001120C0
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.animRotateState = this.anim[this.animRotate.name];
+		this.animRotateState.speed = 0f;
+		this.animRotateState.layer = 0;
+		this.animBlastState = this.anim[this.animBlast.name];
+		this.animBlastState.blendMode = 1;
+		this.animBlastState.layer = 1;
+		this.anim.Play(this.animRotateState.name);
+		this.vel = (this.defaultVelocity = 1f / (float)(this.musicCycleTime * this.cyclesPerRotation));
+		this.SetRotateState();
+	}
+
+	// Token: 0x060020AF RID: 8367 RVA: 0x00113F80 File Offset: 0x00112180
+	private void SetRotateState()
+	{
+		if (!this.firstStartRotate)
+		{
+			this.audioStartRotate.PostFast();
+		}
+		this.firstStartRotate = false;
+		float num = this.RoundPhase(this.rot - this.musicFraction);
+		if (Mathf.Abs(num) < 0.25f + this.winDist && Mathf.Abs(num) > 0.25f - this.winDist)
+		{
+			this.offset = 0.25f * Mathf.Sign(num);
+		}
+		else
+		{
+			this.offset = this.RoundPhase(this.rot - this.musicFraction);
+		}
+		if (this.isAtLadder)
+		{
+			this.audioLadderStart.PostFast();
+		}
+		this.state = MinesRotater.State.Rotate;
+	}
+
+	// Token: 0x060020B0 RID: 8368 RVA: 0x0011403C File Offset: 0x0011223C
+	private void RotateState()
+	{
+		float num = Mathf.Abs(this.musicFraction + this.offset - this.rot);
+		num = ((num <= 0.5f) ? num : (1f - num));
+		if (num > 0.1f)
+		{
+			this.rot = this.musicFraction + this.offset;
+		}
+		else
+		{
+			this.MatchFreqAndPhase(Time.deltaTime, this.defaultVelocity, this.musicFraction + this.offset, this.rot, ref this.vel);
+			this.rot += this.vel * Time.deltaTime;
+			this.rot %= 1f;
+		}
+		this.animRotateState.normalizedTime = ((!this.clockwise) ? (1f - this.rot) : this.rot) + this.animOffset;
+		this.MoveCover(this.velocityOffset, this.boyVelocityOffset);
+		if (this.debugCurrentRotater)
+		{
+			this.debugCurrentRotater.transform.localRotation = Quaternion.Euler(0f, 0f, -360f * (this.musicFraction + this.offset));
+		}
+	}
+
+	// Token: 0x060020B1 RID: 8369 RVA: 0x0011417C File Offset: 0x0011237C
+	private void SetStopState()
+	{
+		this.audioStopRotate.PostFast();
+		if (this.isAtLadder)
+		{
+			this.audioLadderStop.PostFast();
+		}
+		this.state = MinesRotater.State.Stop;
+	}
+
+	// Token: 0x060020B2 RID: 8370 RVA: 0x001141B4 File Offset: 0x001123B4
+	private void StopState()
+	{
+		this.MoveCover(0f, this.staticBoyVelocityOffset);
+	}
+
+	// Token: 0x060020B3 RID: 8371 RVA: 0x001141C8 File Offset: 0x001123C8
+	private void Update()
+	{
+		this.UpdateMusicTime();
+		if (this.state == MinesRotater.State.Rotate)
+		{
+			this.RotateState();
+		}
+		else if (this.state == MinesRotater.State.Stop)
+		{
+			this.StopState();
+		}
+	}
+
+	// Token: 0x060020B4 RID: 8372 RVA: 0x001141FC File Offset: 0x001123FC
+	private void MoveCover(float offset = 0f, float boyOffset = 0f)
+	{
+		if (this.cover && this.attachPoint)
+		{
+			Vector3 vector = this.attachPoint.position;
+			if (offset != 0f && this.rotatingArm)
+			{
+				vector += this.rotatingArm.up * offset;
+			}
+			if (this.setCoverRotation)
+			{
+				vector.x += ScriptGlobals.boy.velocity.x * boyOffset;
+			}
+			else
+			{
+				vector.y += ScriptGlobals.boy.velocity.y * boyOffset;
+			}
+			this.cover.MovePosition(vector);
+			if (this.setCoverRotation)
+			{
+				Vector3 eulerAngles = this.attachPoint.rotation.eulerAngles;
+				eulerAngles.x = 0f;
+				eulerAngles.y = 0f;
+				this.cover.MoveRotation(Quaternion.Euler(eulerAngles));
+			}
+		}
+	}
+
+	// Token: 0x060020B5 RID: 8373 RVA: 0x00114314 File Offset: 0x00112514
+	private void UpdateAudioEvents(float fraction)
+	{
+		if (this.isAtLadder && fraction <= 0.121f && (double)this.fractionLastFrame > 0.121)
+		{
+			this.isAtLadder = false;
+		}
+		else if (!this.isAtLadder && fraction <= 0.38f && (double)this.fractionLastFrame > 0.38 && fraction < 0.5f)
+		{
+			this.isAtLadder = true;
+		}
+		if (this.isAtLadder != this.atLadderLastFrame && this.state == MinesRotater.State.Rotate)
+		{
+			if (this.isAtLadder)
+			{
+				this.audioLadderEnter.PostFast();
+			}
+			else
+			{
+				this.audioLadderExit.PostFast();
+			}
+		}
+		this.fractionLastFrame = fraction;
+		this.atLadderLastFrame = this.isAtLadder;
+	}
+
+	// Token: 0x060020B6 RID: 8374 RVA: 0x001143F0 File Offset: 0x001125F0
+	private void UpdateMusicTime()
+	{
+		float musicPosition_s = PersistentBehaviour<GlobalAudio>.instance.music.GetMusicPosition_s();
+		if (musicPosition_s < this.previousMusicTime)
+		{
+			this.secondCycle = !this.secondCycle;
+		}
+		float num = musicPosition_s;
+		if (this.secondCycle)
+		{
+			num += (float)this.musicCycleTime;
+		}
+		this.musicFraction = num / (float)(this.musicCycleTime * this.cyclesPerRotation);
+		this.UpdateAudioEvents(this.animRotateState.normalizedTime);
+		if (this.debugRotater)
+		{
+			this.debugRotater.transform.localRotation = Quaternion.Euler(0f, 0f, -360f * this.musicFraction);
+		}
+		if (this.debugTargetRotater)
+		{
+			this.debugTargetRotater.transform.localRotation = Quaternion.Euler(0f, 0f, -360f * (this.musicFraction + 0.25f));
+		}
+		this.previousMusicTime = musicPosition_s;
+	}
+
+	// Token: 0x060020B7 RID: 8375 RVA: 0x001144EC File Offset: 0x001126EC
+	public void MatchFreqAndPhase(float dt, float targetFreq, float targetPhase, float phase, ref float freq)
+	{
+		float num = this.RoundPhase(targetPhase - phase);
+		float num2 = targetFreq + num * this.phaseAcceleration;
+		float num3 = (freq >= num2) ? this.accelDown : this.accelUp;
+		freq = Mathf.Lerp(freq, num2, num3 * dt);
+	}
+
+	// Token: 0x060020B8 RID: 8376 RVA: 0x0011453C File Offset: 0x0011273C
+	public float RoundPhase(float value)
+	{
+		if (value > 0.5f)
+		{
+			return value - 1f;
+		}
+		if (value < -0.5f)
+		{
+			return value + 1f;
+		}
+		return value;
+	}
+
+	// Token: 0x060020B9 RID: 8377 RVA: 0x00114568 File Offset: 0x00112768
+	private void OnStopRotater()
+	{
+		this.SetStopState();
+	}
+
+	// Token: 0x060020BA RID: 8378 RVA: 0x00114570 File Offset: 0x00112770
+	private void OnStartRotater()
+	{
+		if (this.state == MinesRotater.State.Stop)
+		{
+			this.SetRotateState();
+		}
+	}
+
+	// Token: 0x060020BB RID: 8379 RVA: 0x00114584 File Offset: 0x00112784
+	private void OnShake()
+	{
+		this.audioBlast.PostFast();
+		AnimationState animationState = this.anim.CrossFadeQueued(this.animBlastState.name, 0.1f, 2);
+		animationState.layer = this.animBlastState.layer;
+		animationState.blendMode = this.animBlastState.blendMode;
+	}
+
+	// Token: 0x060020BC RID: 8380 RVA: 0x001145DC File Offset: 0x001127DC
+	public void OnOffsetCheck()
+	{
+		if (this.secondCycle)
+		{
+			this.offset += 0.5f;
+			this.rot = this.musicFraction + this.offset;
+		}
+	}
+
+	// Token: 0x060020BD RID: 8381 RVA: 0x0011461C File Offset: 0x0011281C
+	private void OnLoadComplete()
+	{
+		this.offset = 0.25f;
+	}
+
+	// Token: 0x04003CA5 RID: 15525
+	public int musicCycleTime = 6;
+
+	// Token: 0x04003CA6 RID: 15526
+	public int cyclesPerRotation = 2;
+
+	// Token: 0x04003CA7 RID: 15527
+	public bool clockwise = true;
+
+	// Token: 0x04003CA8 RID: 15528
+	public float animOffset;
+
+	// Token: 0x04003CA9 RID: 15529
+	public Rigidbody cover;
+
+	// Token: 0x04003CAA RID: 15530
+	public Transform attachPoint;
+
+	// Token: 0x04003CAB RID: 15531
+	public Transform rotatingArm;
+
+	// Token: 0x04003CAC RID: 15532
+	public Animation anim;
+
+	// Token: 0x04003CAD RID: 15533
+	public AnimationClip animRotate;
+
+	// Token: 0x04003CAE RID: 15534
+	public AnimationClip animBlast;
+
+	// Token: 0x04003CAF RID: 15535
+	public float winDist = 0.05f;
+
+	// Token: 0x04003CB0 RID: 15536
+	public float phaseAcceleration = 2f;
+
+	// Token: 0x04003CB1 RID: 15537
+	public float accelUp = 0.5f;
+
+	// Token: 0x04003CB2 RID: 15538
+	public float accelDown = 1f;
+
+	// Token: 0x04003CB3 RID: 15539
+	public float velocityOffset;
+
+	// Token: 0x04003CB4 RID: 15540
+	public float boyVelocityOffset;
+
+	// Token: 0x04003CB5 RID: 15541
+	public float staticBoyVelocityOffset;
+
+	// Token: 0x04003CB6 RID: 15542
+	public Transform debugRotater;
+
+	// Token: 0x04003CB7 RID: 15543
+	public Transform debugCurrentRotater;
+
+	// Token: 0x04003CB8 RID: 15544
+	public Transform debugTargetRotater;
+
+	// Token: 0x04003CB9 RID: 15545
+	public string audioPrefix;
+
+	// Token: 0x04003CBA RID: 15546
+	public bool setCoverRotation;
+
+	// Token: 0x04003CBB RID: 15547
+	private SignalIn startRotator;
+
+	// Token: 0x04003CBC RID: 15548
+	private SignalIn stopRotater;
+
+	// Token: 0x04003CBD RID: 15549
+	private SignalIn shakeRotater;
+
+	// Token: 0x04003CBE RID: 15550
+	private SignalIn loadComplete;
+
+	// Token: 0x04003CBF RID: 15551
+	private SignalIn offsetCheck;
+
+	// Token: 0x04003CC0 RID: 15552
+	private AnimationState animRotateState;
+
+	// Token: 0x04003CC1 RID: 15553
+	private AnimationState animBlastState;
+
+	// Token: 0x04003CC2 RID: 15554
+	private float previousMusicTime;
+
+	// Token: 0x04003CC3 RID: 15555
+	private bool secondCycle;
+
+	// Token: 0x04003CC4 RID: 15556
+	private float musicFraction;
+
+	// Token: 0x04003CC5 RID: 15557
+	private float vel;
+
+	// Token: 0x04003CC6 RID: 15558
+	private float rot;
+
+	// Token: 0x04003CC7 RID: 15559
+	private bool audioHalfRoundSend;
+
+	// Token: 0x04003CC8 RID: 15560
+	private MinesRotater.State state;
+
+	// Token: 0x04003CC9 RID: 15561
+	private float offset;
+
+	// Token: 0x04003CCA RID: 15562
+	private float defaultVelocity;
+
+	// Token: 0x04003CCB RID: 15563
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04003CCC RID: 15564
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStartRotate;
+
+	// Token: 0x04003CCD RID: 15565
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStopRotate;
+
+	// Token: 0x04003CCE RID: 15566
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioBlast;
+
+	// Token: 0x04003CCF RID: 15567
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioLadderEnter;
+
+	// Token: 0x04003CD0 RID: 15568
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioLadderExit;
+
+	// Token: 0x04003CD1 RID: 15569
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioLadderStart;
+
+	// Token: 0x04003CD2 RID: 15570
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioLadderStop;
+
+	// Token: 0x04003CD3 RID: 15571
+	private bool firstStartRotate = true;
+
+	// Token: 0x04003CD4 RID: 15572
+	private bool isAtLadder;
+
+	// Token: 0x04003CD5 RID: 15573
+	private bool atLadderLastFrame;
+
+	// Token: 0x04003CD6 RID: 15574
+	private float fractionLastFrame;
+
+	// Token: 0x020004DF RID: 1247
+	private enum State
+	{
+		// Token: 0x04003CD8 RID: 15576
+		None,
+		// Token: 0x04003CD9 RID: 15577
+		Rotate,
+		// Token: 0x04003CDA RID: 15578
+		Stop
+	}
+}

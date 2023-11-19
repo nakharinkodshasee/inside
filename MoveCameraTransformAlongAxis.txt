@@ -1,0 +1,29 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000168 RID: 360
+public class MoveCameraTransformAlongAxis : CameraBlendBoxPivot
+{
+	// Token: 0x06000A99 RID: 2713 RVA: 0x00067978 File Offset: 0x00065B78
+	public override Vector3 GetPosition(CameraBlendBox cameraBlendBox, Vector3 probePosition)
+	{
+		float num = probePosition.x - base.transform.position.x;
+		float num2 = base.transform.right.y / base.transform.right.x;
+		float num3 = num2 * num;
+		probePosition.y = base.transform.position.y + num3;
+		probePosition.z = base.transform.position.z;
+		return probePosition;
+	}
+
+	// Token: 0x06000A9A RID: 2714 RVA: 0x00067A08 File Offset: 0x00065C08
+	private void OnDrawGizmos()
+	{
+		if (EditorMode.DebugLayerActive(EditorMode.EDebugLayers.Camera))
+		{
+			Color color = Gizmos.color;
+			Gizmos.color = Color.red;
+			Gizmos.DrawLine(-2f * base.transform.right + base.transform.position, 2f * base.transform.right + base.transform.position);
+			Gizmos.color = color;
+		}
+	}
+}

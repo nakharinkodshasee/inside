@@ -1,0 +1,55 @@
+using System;
+using HutongGames.PlayMaker;
+using UnityEngine;
+
+// Token: 0x0200040E RID: 1038
+public class OldSentryLightDirectionCheck : MonoBehaviour
+{
+	// Token: 0x06001B45 RID: 6981 RVA: 0x000EE1AC File Offset: 0x000EC3AC
+	private void Start()
+	{
+		this.lightStatus = this.voiceLogic.FsmVariables.FindFsmBool("lightTowardsBoy");
+	}
+
+	// Token: 0x06001B46 RID: 6982 RVA: 0x000EE1CC File Offset: 0x000EC3CC
+	private void Update()
+	{
+		this.distToRightLight = (ScriptGlobals.boy.pos3 - this.lightCenterRight.position).magnitude;
+		this.distToLeftLight = (ScriptGlobals.boy.pos3 - this.lightCenterLeft.position).magnitude;
+		bool value = (this.distToRightLight < 5f && ((ScriptGlobals.boy.pos3.x < this.lightCenterRight.position.x && this.sentryGunRight.GetRotationSign() > 0f) || (ScriptGlobals.boy.pos3.x > this.lightCenterRight.position.x && this.sentryGunRight.GetRotationSign() < 0f))) || (this.distToLeftLight < 5f && ((ScriptGlobals.boy.pos3.x < this.lightCenterLeft.position.x && this.sentryGunLeft.GetRotationSign() > 0f) || (ScriptGlobals.boy.pos3.x > this.lightCenterLeft.position.x && this.sentryGunLeft.GetRotationSign() < 0f)));
+		this.lightStatus.Value = value;
+	}
+
+	// Token: 0x04003169 RID: 12649
+	public PlayMakerFSM voiceLogic;
+
+	// Token: 0x0400316A RID: 12650
+	public SentryGun sentryGunRight;
+
+	// Token: 0x0400316B RID: 12651
+	public SentryGun sentryGunLeft;
+
+	// Token: 0x0400316C RID: 12652
+	public Transform lightCenterRight;
+
+	// Token: 0x0400316D RID: 12653
+	public Transform lightCenterLeft;
+
+	// Token: 0x0400316E RID: 12654
+	private bool lightTowardsBoy;
+
+	// Token: 0x0400316F RID: 12655
+	private bool lightTowardsBoyLastFrame;
+
+	// Token: 0x04003170 RID: 12656
+	private FsmBool lightStatus;
+
+	// Token: 0x04003171 RID: 12657
+	private float lightRotationDir;
+
+	// Token: 0x04003172 RID: 12658
+	private float distToRightLight;
+
+	// Token: 0x04003173 RID: 12659
+	private float distToLeftLight;
+}

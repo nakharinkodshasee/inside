@@ -1,0 +1,95 @@
+using System;
+using System.IO;
+using System.Xml.Linq;
+using UnityEngine;
+
+// Token: 0x020004EC RID: 1260
+public class PersistentPositionPushBlock : MonoBehaviour, IFastEventExListener<SavepointManager.SavepointIndex>
+{
+	// Token: 0x0600210C RID: 8460 RVA: 0x001159D4 File Offset: 0x00113BD4
+	private void Awake()
+	{
+		Savegame.savepointSaved.Register(this, ref this.savepointSavedHandle);
+		PersistentPositionPushBlock.PersistentData persistentData = PersistentDataManager.Get<PersistentPositionPushBlock.PersistentData>(this.uniqueID, () => new PersistentPositionPushBlock.PersistentData());
+		this.current = persistentData.value;
+		if (this.current != 0f && this.blockToPush.position.x != this.current)
+		{
+			if (this.current < this.xSafePosLeft + 4f)
+			{
+				this.current = this.xSafePosLeft;
+			}
+			Vector3 position = this.blockToPush.position;
+			position.x = this.current;
+			this.blockToPush.position = position;
+		}
+	}
+
+	// Token: 0x0600210D RID: 8461 RVA: 0x00115AA0 File Offset: 0x00113CA0
+	private void OnDestroy()
+	{
+		Savegame.savepointSaved.Unregister(ref this.savepointSavedHandle);
+	}
+
+	// Token: 0x0600210E RID: 8462 RVA: 0x00115AB4 File Offset: 0x00113CB4
+	public void OnFastEventEx(FastEventEx<SavepointManager.SavepointIndex> sender, ref SavepointManager.SavepointIndex arg)
+	{
+		if (sender == Savegame.savepointSaved)
+		{
+			this.current = this.blockToPush.position.x;
+			PersistentPositionPushBlock.PersistentData persistentData = PersistentDataManager.Get<PersistentPositionPushBlock.PersistentData>(this.uniqueID, () => new PersistentPositionPushBlock.PersistentData());
+			persistentData.value = this.current;
+		}
+	}
+
+	// Token: 0x04003D53 RID: 15699
+	public Transform blockToPush;
+
+	// Token: 0x04003D54 RID: 15700
+	private float xSafePosLeft = 2056.453f;
+
+	// Token: 0x04003D55 RID: 15701
+	private int savepointSavedHandle = -1;
+
+	// Token: 0x04003D56 RID: 15702
+	private string uniqueID = "pushBlockPos";
+
+	// Token: 0x04003D57 RID: 15703
+	private float current;
+
+	// Token: 0x020004ED RID: 1261
+	public class PersistentData : IPersistentData
+	{
+		// Token: 0x06002112 RID: 8466 RVA: 0x00115B34 File Offset: 0x00113D34
+		public void Unserialize(BinaryReader reader)
+		{
+			this.value = reader.ReadSingle();
+		}
+
+		// Token: 0x06002113 RID: 8467 RVA: 0x00115B44 File Offset: 0x00113D44
+		public void Serialize(BinaryWriter writer)
+		{
+			writer.Write(this.value);
+		}
+
+		// Token: 0x06002114 RID: 8468 RVA: 0x00115B54 File Offset: 0x00113D54
+		public void Serialize(XElement element)
+		{
+			element.Value = this.value.ToString();
+		}
+
+		// Token: 0x06002115 RID: 8469 RVA: 0x00115B68 File Offset: 0x00113D68
+		public void Unserialize(XElement element)
+		{
+			this.value = float.Parse(element.Value);
+		}
+
+		// Token: 0x06002116 RID: 8470 RVA: 0x00115B7C File Offset: 0x00113D7C
+		public int GetHash()
+		{
+			return this.value.GetHashCode();
+		}
+
+		// Token: 0x04003D5A RID: 15706
+		public float value;
+	}
+}

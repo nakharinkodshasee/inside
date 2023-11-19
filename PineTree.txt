@@ -1,0 +1,124 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020003E6 RID: 998
+public class PineTree : MonoBehaviour
+{
+	// Token: 0x06001A99 RID: 6809 RVA: 0x000E8AD8 File Offset: 0x000E6CD8
+	private void Start()
+	{
+		this.initialRotation = base.transform.localRotation;
+		this.verticalDir = ((Random.value < 0.5f) ? -1 : 1);
+		this.currentRot = Vector2.zero;
+		this.branchTransform = base.transform;
+		if (this.branches)
+		{
+			this.leafMaterial = this.branches.GetComponent<MaterialInstance>();
+			if (this.leafMaterial)
+			{
+				this.leafWobbleSpeed = this.leafMaterial.GetFloatProperty("_LeafTime");
+				this.noiseWobbleSpeed = this.leafMaterial.GetFloatProperty("_WobbleTime");
+			}
+		}
+		this.minWave *= 1f + Random.value * this.randomDeviation;
+		this.maxWave *= 1f + Random.value * this.randomDeviation;
+		this.speed *= 1f + Random.value * this.randomDeviation;
+	}
+
+	// Token: 0x06001A9A RID: 6810 RVA: 0x000E8BE8 File Offset: 0x000E6DE8
+	private void Update()
+	{
+		this.timer += Time.deltaTime;
+		if (this.timer >= this.transitionTime)
+		{
+			this.SetTransition();
+		}
+		if (this.leafWobbleSpeed != null)
+		{
+			this.leafMaterial.SetFloatProperty(this.leafWobbleSpeed, WindManager.leafTime * this.leafWobbleFactor);
+		}
+		if (this.noiseWobbleSpeed != null)
+		{
+			this.leafMaterial.SetFloatProperty(this.noiseWobbleSpeed, WindManager.leafTime * this.noiseWobbleFactor);
+		}
+		if (this.transitionTime == 0f)
+		{
+			return;
+		}
+		float f = this.timer / this.transitionTime;
+		this.currentRot = this.fromRotation + (this.targetRotation - this.fromRotation) * MathUtils.SmoothFraction(f);
+		this.branchTransform.localRotation = this.initialRotation * Quaternion.Euler(this.currentRot.x, this.currentRot.y, this.currentRot.z);
+	}
+
+	// Token: 0x06001A9B RID: 6811 RVA: 0x000E8CF8 File Offset: 0x000E6EF8
+	private void SetTransition()
+	{
+		float windStrength = WindManager.windStrength;
+		this.timer = 0f;
+		this.verticalDir *= -1;
+		this.targetRotation.x = this.rotationAmount.x * Random.Range(-this.maxWave * windStrength, this.maxWave * windStrength);
+		this.targetRotation.y = this.rotationAmount.y * Random.Range(-this.maxWave * windStrength, this.maxWave * windStrength);
+		this.targetRotation.z = this.rotationAmount.z * Random.Range(-this.maxWave * windStrength, this.maxWave * windStrength);
+		this.fromRotation = this.currentRot;
+		this.speed = Mathf.Clamp(this.speed, 0.1f, 99f);
+		float num = this.speed * windStrength * (1f + Random.Range(-this.randomDeviation, this.randomDeviation));
+		this.transitionTime = (this.targetRotation - this.currentRot).magnitude / num;
+	}
+
+	// Token: 0x0400300D RID: 12301
+	public float minWave = 0.5f;
+
+	// Token: 0x0400300E RID: 12302
+	public float maxWave = 5f;
+
+	// Token: 0x0400300F RID: 12303
+	public float speed = 4.5f;
+
+	// Token: 0x04003010 RID: 12304
+	public float randomDeviation = 0.15f;
+
+	// Token: 0x04003011 RID: 12305
+	public Vector3 rotationAmount = new Vector3(1f, 0.35f, 1.75f);
+
+	// Token: 0x04003012 RID: 12306
+	public Transform branches;
+
+	// Token: 0x04003013 RID: 12307
+	public float noiseWobbleFactor = 1f;
+
+	// Token: 0x04003014 RID: 12308
+	public float leafWobbleFactor = 1f;
+
+	// Token: 0x04003015 RID: 12309
+	private Quaternion initialRotation;
+
+	// Token: 0x04003016 RID: 12310
+	private Vector3 currentRot;
+
+	// Token: 0x04003017 RID: 12311
+	private Vector3 fromRotation;
+
+	// Token: 0x04003018 RID: 12312
+	private Vector3 targetRotation;
+
+	// Token: 0x04003019 RID: 12313
+	private float transitionTime;
+
+	// Token: 0x0400301A RID: 12314
+	private float timer;
+
+	// Token: 0x0400301B RID: 12315
+	private int verticalDir = 1;
+
+	// Token: 0x0400301C RID: 12316
+	private Transform branchTransform;
+
+	// Token: 0x0400301D RID: 12317
+	private MaterialInstance leafMaterial;
+
+	// Token: 0x0400301E RID: 12318
+	private MaterialInstance.FloatProperty leafWobbleSpeed;
+
+	// Token: 0x0400301F RID: 12319
+	private MaterialInstance.FloatProperty noiseWobbleSpeed;
+}

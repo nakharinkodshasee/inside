@@ -1,0 +1,31 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004E2 RID: 1250
+public class ModifyBoySlideSpeed : MonoBehaviour
+{
+	// Token: 0x060020CD RID: 8397 RVA: 0x001149E8 File Offset: 0x00112BE8
+	private void OnTriggerEnter(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			this.oldFriction = ScriptGlobals.boy.properties.slide.friction;
+			ScriptGlobals.boy.properties.slide.friction = this.customFriction;
+		}
+	}
+
+	// Token: 0x060020CE RID: 8398 RVA: 0x00114A3C File Offset: 0x00112C3C
+	private void OnTriggerExit(Collider coll)
+	{
+		if (coll.GetComponent<BoyProbe>())
+		{
+			ScriptGlobals.boy.properties.slide.friction = this.oldFriction;
+		}
+	}
+
+	// Token: 0x04003CF1 RID: 15601
+	public float customFriction;
+
+	// Token: 0x04003CF2 RID: 15602
+	private float oldFriction;
+}

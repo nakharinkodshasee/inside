@@ -1,0 +1,174 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000655 RID: 1621
+public class PerformanceTest : MonoBehaviour
+{
+	// Token: 0x060027EF RID: 10223 RVA: 0x00141C34 File Offset: 0x0013FE34
+	private void Start()
+	{
+		this.bones = new PerformanceTest.Bone[42];
+		for (int num = 0; num != this.bones.Length; num++)
+		{
+			this.bones[num] = new PerformanceTest.Bone();
+			this.bones[num].pos = Vector3.one * Random.value;
+			this.bones[num].posq = new PerformanceTest.Vec3(Random.value, Random.value, Random.value);
+		}
+	}
+
+	// Token: 0x060027F0 RID: 10224 RVA: 0x00141CB4 File Offset: 0x0013FEB4
+	private void Add(ref Vector3 a, Vector3 b)
+	{
+		a.x += b.x;
+		a.y += b.y;
+		a.z += b.z;
+	}
+
+	// Token: 0x060027F1 RID: 10225 RVA: 0x00141D00 File Offset: 0x0013FF00
+	private void AddSlow(ref Vector3 a, Vector3 b)
+	{
+		a..ctor(a.x + b.x, a.y + b.y, a.z + b.z);
+	}
+
+	// Token: 0x060027F2 RID: 10226 RVA: 0x00141D40 File Offset: 0x0013FF40
+	private void ProfilerBeginSample(string nameArg)
+	{
+		this.currentName = nameArg;
+		this.currentTime = Time.realtimeSinceStartup;
+	}
+
+	// Token: 0x060027F3 RID: 10227 RVA: 0x00141D54 File Offset: 0x0013FF54
+	private void ProfilerEndSample()
+	{
+		this.mProfiling[this.currentName] = (Time.realtimeSinceStartup - this.currentTime) * 1000f;
+	}
+
+	// Token: 0x060027F4 RID: 10228 RVA: 0x00141D7C File Offset: 0x0013FF7C
+	private void Update()
+	{
+		this.mStepCount++;
+		if (this.mStepCount != 30)
+		{
+			return;
+		}
+		Vector3 vector = Vector3.zero;
+		PerformanceTest.Vec3 a = new PerformanceTest.Vec3(0f, 0f, 0f);
+		this.ProfilerBeginSample("Vector3+=");
+		for (int num = 0; num != 1000; num++)
+		{
+			foreach (PerformanceTest.Bone bone in this.bones)
+			{
+				vector += bone.pos;
+			}
+		}
+		this.ProfilerEndSample();
+		this.ProfilerBeginSample("Add3floats");
+		for (int num2 = 0; num2 != 1000; num2++)
+		{
+			foreach (PerformanceTest.Bone bone2 in this.bones)
+			{
+				vector.x += bone2.pos.x;
+				vector.y += bone2.pos.y;
+				vector.z += bone2.pos.z;
+			}
+		}
+		this.ProfilerEndSample();
+		this.ProfilerBeginSample("AddRef");
+		for (int num3 = 0; num3 != 1000; num3++)
+		{
+			foreach (PerformanceTest.Bone bone3 in this.bones)
+			{
+				this.Add(ref vector, bone3.pos);
+			}
+		}
+		this.ProfilerEndSample();
+		this.ProfilerBeginSample("Vec3Add");
+		for (int num4 = 0; num4 != 1000; num4++)
+		{
+			foreach (PerformanceTest.Bone bone4 in this.bones)
+			{
+				a.Add(bone4.posq);
+			}
+		}
+		this.ProfilerEndSample();
+		this.ProfilerBeginSample("Vec3+=");
+		for (int num5 = 0; num5 != 1000; num5++)
+		{
+			foreach (PerformanceTest.Bone bone5 in this.bones)
+			{
+				a += bone5.posq;
+			}
+		}
+		this.ProfilerEndSample();
+	}
+
+	// Token: 0x060027F5 RID: 10229 RVA: 0x00141FE4 File Offset: 0x001401E4
+	private void OnGUI()
+	{
+		foreach (KeyValuePair<string, float> keyValuePair in this.mProfiling)
+		{
+			GUILayout.Label(keyValuePair.Key + ": " + keyValuePair.Value, new GUILayoutOption[0]);
+		}
+	}
+
+	// Token: 0x0400479A RID: 18330
+	private PerformanceTest.Bone[] bones;
+
+	// Token: 0x0400479B RID: 18331
+	private Dictionary<string, float> mProfiling = new Dictionary<string, float>();
+
+	// Token: 0x0400479C RID: 18332
+	private float currentTime;
+
+	// Token: 0x0400479D RID: 18333
+	private string currentName;
+
+	// Token: 0x0400479E RID: 18334
+	private int mStepCount;
+
+	// Token: 0x02000656 RID: 1622
+	private struct Vec3
+	{
+		// Token: 0x060027F6 RID: 10230 RVA: 0x0014206C File Offset: 0x0014026C
+		public Vec3(float ax, float ay, float az)
+		{
+			this.x = ax;
+			this.y = ay;
+			this.z = az;
+		}
+
+		// Token: 0x060027F7 RID: 10231 RVA: 0x00142084 File Offset: 0x00140284
+		public void Add(PerformanceTest.Vec3 a)
+		{
+			this.x += a.x;
+			this.y += a.y;
+			this.z += a.z;
+		}
+
+		// Token: 0x060027F8 RID: 10232 RVA: 0x001420D0 File Offset: 0x001402D0
+		public static PerformanceTest.Vec3 operator +(PerformanceTest.Vec3 a, PerformanceTest.Vec3 b)
+		{
+			return new PerformanceTest.Vec3(a.x + b.x, a.y + b.y, a.z + b.z);
+		}
+
+		// Token: 0x0400479F RID: 18335
+		public float x;
+
+		// Token: 0x040047A0 RID: 18336
+		public float y;
+
+		// Token: 0x040047A1 RID: 18337
+		public float z;
+	}
+
+	// Token: 0x02000657 RID: 1623
+	private class Bone
+	{
+		// Token: 0x040047A2 RID: 18338
+		public Vector3 pos;
+
+		// Token: 0x040047A3 RID: 18339
+		public PerformanceTest.Vec3 posq;
+	}
+}

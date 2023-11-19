@@ -1,0 +1,124 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000442 RID: 1090
+public class PigFightDudeVoiceControl : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001C8B RID: 7307 RVA: 0x000F8FD4 File Offset: 0x000F71D4
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(this.voiceAudioObject, this);
+		this.audioVoiceStart = new AudioEventSimpleLocal("env_farm_pigFight_dudeVoices_start", akGameObj);
+		this.audioVoiceStop = new AudioEventSimpleLocal("env_farm_pigFight_dudeVoices_stop", akGameObj);
+		this.audioGateOpen = new AudioEventSimpleLocal("env_farm_pigFight_dudeVoices_gateOpen", akGameObj);
+	}
+
+	// Token: 0x06001C8C RID: 7308 RVA: 0x000F9034 File Offset: 0x000F7234
+	public bool PreAwake(int callcount)
+	{
+		this.enableMove = SignalIn.Create("enableMove", base.gameObject, new Action(this.DoEnableVoices));
+		this.disableMove = SignalIn.Create("disableMove", base.gameObject, new Action(this.DoDisableVoices));
+		this.gateOpen = SignalIn.Create("gateOpen", base.gameObject, new Action(this.DoGateOpen));
+		return true;
+	}
+
+	// Token: 0x06001C8D RID: 7309 RVA: 0x000F90A8 File Offset: 0x000F72A8
+	private void Start()
+	{
+		this.OnPreProcess();
+	}
+
+	// Token: 0x06001C8E RID: 7310 RVA: 0x000F90B0 File Offset: 0x000F72B0
+	private void Update()
+	{
+		if (this.voicesEnabled)
+		{
+			this.SetCorrectAudioPos();
+		}
+	}
+
+	// Token: 0x06001C8F RID: 7311 RVA: 0x000F90C4 File Offset: 0x000F72C4
+	private void SetCorrectAudioPos()
+	{
+		Vector3 vector = Vector3.zero;
+		int i = 0;
+		int num = this.dudes.Length;
+		while (i < num)
+		{
+			vector += this.dudes[i].position;
+			i++;
+		}
+		vector /= (float)this.dudes.Length;
+		this.voiceAudioObject.transform.position = vector;
+	}
+
+	// Token: 0x06001C90 RID: 7312 RVA: 0x000F9128 File Offset: 0x000F7328
+	private void DoEnableVoices()
+	{
+		if (!this.voicesEnabled)
+		{
+			this.voicesEnabled = true;
+			this.audioVoiceStart.PostFast();
+		}
+	}
+
+	// Token: 0x06001C91 RID: 7313 RVA: 0x000F9148 File Offset: 0x000F7348
+	private void DoDisableVoices()
+	{
+		if (this.voicesEnabled)
+		{
+			this.voicesEnabled = false;
+			this.audioVoiceStop.PostFast();
+		}
+	}
+
+	// Token: 0x06001C92 RID: 7314 RVA: 0x000F9168 File Offset: 0x000F7368
+	private void DoGateOpen()
+	{
+		this.audioGateOpen.PostFast();
+	}
+
+	// Token: 0x0400344D RID: 13389
+	public Transform[] dudes = new Transform[4];
+
+	// Token: 0x0400344E RID: 13390
+	public GameObject voiceAudioObject;
+
+	// Token: 0x0400344F RID: 13391
+	private SignalIn enableMove;
+
+	// Token: 0x04003450 RID: 13392
+	private SignalIn disableMove;
+
+	// Token: 0x04003451 RID: 13393
+	private SignalIn gateOpen;
+
+	// Token: 0x04003452 RID: 13394
+	private bool voicesEnabled;
+
+	// Token: 0x04003453 RID: 13395
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioVoiceStart;
+
+	// Token: 0x04003454 RID: 13396
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioVoiceStop;
+
+	// Token: 0x04003455 RID: 13397
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioGateOpen;
+
+	// Token: 0x04003456 RID: 13398
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+}

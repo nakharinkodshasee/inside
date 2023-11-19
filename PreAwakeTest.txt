@@ -1,0 +1,12 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000384 RID: 900
+public class PreAwakeTest : MonoBehaviour, IPreAwake
+{
+	// Token: 0x06001861 RID: 6241 RVA: 0x000D4AA4 File Offset: 0x000D2CA4
+	public bool PreAwake(int callcount)
+	{
+		return callcount >= 10;
+	}
+}

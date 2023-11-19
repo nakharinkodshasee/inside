@@ -1,0 +1,25 @@
+using System;
+using UnityEngine;
+
+// Token: 0x0200059F RID: 1439
+public class ParticleSpawnTest : MonoBehaviour
+{
+	// Token: 0x060024CF RID: 9423 RVA: 0x0012EDAC File Offset: 0x0012CFAC
+	private void Start()
+	{
+		this.particles = base.GetComponent<ParticleSystem>();
+	}
+
+	// Token: 0x060024D0 RID: 9424 RVA: 0x0012EDBC File Offset: 0x0012CFBC
+	private void Update()
+	{
+		if (GameInput.action)
+		{
+			this.particles.transform.position = ScriptGlobals.boy.pos3;
+			this.particles.Play();
+		}
+	}
+
+	// Token: 0x0400438E RID: 17294
+	private ParticleSystem particles;
+}

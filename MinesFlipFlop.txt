@@ -1,0 +1,246 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004DA RID: 1242
+public class MinesFlipFlop : MonoBehaviour, IPreAwake
+{
+	// Token: 0x0600208E RID: 8334 RVA: 0x00112CE8 File Offset: 0x00110EE8
+	[LateProcessBuild(0)]
+	private void OnPreProcess()
+	{
+		if (this.preProcessed)
+		{
+			return;
+		}
+		this.preProcessed = true;
+		AkGameObj akGameObj = AudioUtils.EnsureAkGameObj(base.gameObject, this);
+		this.audioStartDown = new AudioEventSimpleLocal(this.audioPrefix + "_StartDown", akGameObj);
+		this.audioStartUp = new AudioEventSimpleLocal(this.audioPrefix + "_StartUp", akGameObj);
+		this.audioDown = new AudioEventSimpleLocal(this.audioPrefix + "_Down", akGameObj);
+		this.audioUp = new AudioEventSimpleLocal(this.audioPrefix + "_Up", akGameObj);
+	}
+
+	// Token: 0x0600208F RID: 8335 RVA: 0x00112D88 File Offset: 0x00110F88
+	public bool PreAwake(int callcount)
+	{
+		this.down = SignalIn.Create("down", base.gameObject, new Action(this.OnDown));
+		this.up = SignalIn.Create("up", base.gameObject, new Action(this.OnUp));
+		return true;
+	}
+
+	// Token: 0x06002090 RID: 8336 RVA: 0x00112DDC File Offset: 0x00110FDC
+	private void Start()
+	{
+		this.OnPreProcess();
+		this.animUpState = this.anim[this.animUp.name];
+		this.animDownState = this.anim[this.animDown.name];
+		if (this.startDown)
+		{
+			this.SetDownState();
+		}
+		else
+		{
+			this.SetUpState();
+		}
+	}
+
+	// Token: 0x06002091 RID: 8337 RVA: 0x00112E44 File Offset: 0x00111044
+	private void OnEnable()
+	{
+		if (this.state == MinesFlipFlop.State.Down)
+		{
+			this.anim.CrossFade(this.animDownState.name, 0.3f);
+		}
+	}
+
+	// Token: 0x06002092 RID: 8338 RVA: 0x00112E70 File Offset: 0x00111070
+	private void SetUpState()
+	{
+		if (this.doSendAudioEvents)
+		{
+			this.atTargetAudioSend = false;
+			this.audioStartUp.PostFast();
+		}
+		this.forcePushObj.useBlowAlternative = false;
+		this.anim.CrossFade(this.animUpState.name, 0.3f);
+		this.state = MinesFlipFlop.State.Up;
+	}
+
+	// Token: 0x06002093 RID: 8339 RVA: 0x00112ECC File Offset: 0x001110CC
+	private void UpState()
+	{
+		if (!this.forcePushCover.isInEnabledState() && this.animUpState.time > this.inCoverTime)
+		{
+			this.forcePushCover.enable();
+			if (this.leverBehindCover)
+			{
+				this.leverBehindCover.allowRunningPush = false;
+			}
+		}
+		if (!this.headKillActive && this.animUpState.time > this.headKillTime)
+		{
+			this.headKillActive = true;
+			this.headKillTrigger.isActive = true;
+		}
+		if (this.doSendAudioEvents && this.animUpState.normalizedTime >= 0.6f && !this.atTargetAudioSend)
+		{
+			this.audioUp.PostFast();
+			this.atTargetAudioSend = true;
+		}
+	}
+
+	// Token: 0x06002094 RID: 8340 RVA: 0x00112F98 File Offset: 0x00111198
+	private void SetDownState()
+	{
+		if (this.doSendAudioEvents)
+		{
+			this.atTargetAudioSend = false;
+			this.audioStartDown.PostFast();
+		}
+		this.forcePushObj.useBlowAlternative = true;
+		this.anim.CrossFade(this.animDownState.name, 0.3f);
+		this.state = MinesFlipFlop.State.Down;
+	}
+
+	// Token: 0x06002095 RID: 8341 RVA: 0x00112FF4 File Offset: 0x001111F4
+	private void DownState()
+	{
+		if (this.forcePushCover.isInEnabledState() && this.animDownState.time > this.outCoverTime)
+		{
+			this.headKillActive = false;
+			this.headKillTrigger.isActive = false;
+			if (this.leverBehindCover)
+			{
+				this.leverBehindCover.allowRunningPush = true;
+			}
+			this.forcePushCover.disable();
+		}
+		if (this.doSendAudioEvents && this.animDownState.normalizedTime >= 0.95f && !this.atTargetAudioSend)
+		{
+			this.audioDown.PostFast();
+			this.atTargetAudioSend = true;
+		}
+	}
+
+	// Token: 0x06002096 RID: 8342 RVA: 0x001130A0 File Offset: 0x001112A0
+	private void Update()
+	{
+		if (this.state == MinesFlipFlop.State.Down)
+		{
+			this.DownState();
+		}
+		else if (this.state == MinesFlipFlop.State.Up)
+		{
+			this.UpState();
+		}
+	}
+
+	// Token: 0x06002097 RID: 8343 RVA: 0x001130CC File Offset: 0x001112CC
+	private void OnUp()
+	{
+		this.SetUpState();
+	}
+
+	// Token: 0x06002098 RID: 8344 RVA: 0x001130D4 File Offset: 0x001112D4
+	private void OnDown()
+	{
+		this.SetDownState();
+	}
+
+	// Token: 0x04003C54 RID: 15444
+	public Animation anim;
+
+	// Token: 0x04003C55 RID: 15445
+	public AnimationClip animUp;
+
+	// Token: 0x04003C56 RID: 15446
+	public AnimationClip animDown;
+
+	// Token: 0x04003C57 RID: 15447
+	public ForcePushObject forcePushObj;
+
+	// Token: 0x04003C58 RID: 15448
+	public ForcePushCover forcePushCover;
+
+	// Token: 0x04003C59 RID: 15449
+	public HeadlessKillTrigger headKillTrigger;
+
+	// Token: 0x04003C5A RID: 15450
+	public float inCoverTime = 0.15f;
+
+	// Token: 0x04003C5B RID: 15451
+	public float outCoverTime = 0.25f;
+
+	// Token: 0x04003C5C RID: 15452
+	public float headKillTime = 0.3f;
+
+	// Token: 0x04003C5D RID: 15453
+	public bool startDown;
+
+	// Token: 0x04003C5E RID: 15454
+	public string audioPrefix = string.Empty;
+
+	// Token: 0x04003C5F RID: 15455
+	public bool doSendAudioEvents;
+
+	// Token: 0x04003C60 RID: 15456
+	public Lever leverBehindCover;
+
+	// Token: 0x04003C61 RID: 15457
+	private SignalIn down;
+
+	// Token: 0x04003C62 RID: 15458
+	private SignalIn up;
+
+	// Token: 0x04003C63 RID: 15459
+	private MinesFlipFlop.State state;
+
+	// Token: 0x04003C64 RID: 15460
+	private AnimationState animUpState;
+
+	// Token: 0x04003C65 RID: 15461
+	private AnimationState animDownState;
+
+	// Token: 0x04003C66 RID: 15462
+	private bool headKillActive = true;
+
+	// Token: 0x04003C67 RID: 15463
+	private bool atTargetAudioSend;
+
+	// Token: 0x04003C68 RID: 15464
+	[SerializeField]
+	[HideInInspector]
+	private bool preProcessed;
+
+	// Token: 0x04003C69 RID: 15465
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioStartDown;
+
+	// Token: 0x04003C6A RID: 15466
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioStartUp;
+
+	// Token: 0x04003C6B RID: 15467
+	[SerializeField]
+	[HideInInspector]
+	private AudioEventSimpleLocal audioDown;
+
+	// Token: 0x04003C6C RID: 15468
+	[HideInInspector]
+	[SerializeField]
+	private AudioEventSimpleLocal audioUp;
+
+	// Token: 0x020004DB RID: 1243
+	private enum State
+	{
+		// Token: 0x04003C6E RID: 15470
+		None,
+		// Token: 0x04003C6F RID: 15471
+		Up,
+		// Token: 0x04003C70 RID: 15472
+		Down
+	}
+}
+

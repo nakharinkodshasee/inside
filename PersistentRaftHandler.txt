@@ -1,0 +1,90 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020004EE RID: 1262
+public class PersistentRaftHandler : MonoBehaviour, IFastEventExListener<SavepointManager.SavepointIndex>, IPreAwake
+{
+	// Token: 0x06002118 RID: 8472 RVA: 0x00115B9C File Offset: 0x00113D9C
+	public bool PreAwake(int callcount)
+	{
+		this.RaftIsAfloatSignal = SignalIn.Create("RaftIsAfloatSignal", base.gameObject, new Action(this.RaftIsAfloat));
+		this.SaveRaftIsAfloatSignal = SignalIn.Create("SaveRaftIsAfloatSignal", base.gameObject, new Action(this.SaveRaftIsAfloat));
+		return true;
+	}
+
+	// Token: 0x06002119 RID: 8473 RVA: 0x00115BF0 File Offset: 0x00113DF0
+	private void Start()
+	{
+		OnNextUpdate.Do(new Action(this.LoadData));
+		Savegame.savepointSaved.Register(this, ref this.savepointSavedHandle);
+	}
+
+	// Token: 0x0600211A RID: 8474 RVA: 0x00115C20 File Offset: 0x00113E20
+	private void OnDestroy()
+	{
+		Savegame.savepointSaved.Unregister(ref this.savepointSavedHandle);
+	}
+
+	// Token: 0x0600211B RID: 8475 RVA: 0x00115C34 File Offset: 0x00113E34
+	private void RaftIsAfloat()
+	{
+		this.raftIsAfloat = true;
+	}
+
+	// Token: 0x0600211C RID: 8476 RVA: 0x00115C40 File Offset: 0x00113E40
+	public void OnFastEventEx(FastEventEx<SavepointManager.SavepointIndex> sender, ref SavepointManager.SavepointIndex arg)
+	{
+		if (sender == Savegame.savepointSaved)
+		{
+			this.SaveRaftIsAfloat();
+		}
+	}
+
+	// Token: 0x0600211D RID: 8477 RVA: 0x00115C54 File Offset: 0x00113E54
+	private void SavepointManager_SavepointLoaded(int loadedSubsceneIndex, int loadedSavepointIndex)
+	{
+		this.LoadData();
+	}
+
+	// Token: 0x0600211E RID: 8478 RVA: 0x00115C5C File Offset: 0x00113E5C
+	private void SaveRaftIsAfloat()
+	{
+	}
+
+	// Token: 0x0600211F RID: 8479 RVA: 0x00115C60 File Offset: 0x00113E60
+	private void LoadData()
+	{
+	}
+
+	// Token: 0x06002120 RID: 8480 RVA: 0x00115C64 File Offset: 0x00113E64
+	private void Update()
+	{
+	}
+
+	// Token: 0x04003D5B RID: 15707
+	public Transform raft;
+
+	// Token: 0x04003D5C RID: 15708
+	public Transform raftAfloatPos;
+
+	// Token: 0x04003D5D RID: 15709
+	public Transform weight;
+
+	// Token: 0x04003D5E RID: 15710
+	public Transform weightOffPos;
+
+	// Token: 0x04003D5F RID: 15711
+	private SignalIn RaftIsAfloatSignal;
+
+	// Token: 0x04003D60 RID: 15712
+	private SignalIn SaveRaftIsAfloatSignal;
+
+	// Token: 0x04003D61 RID: 15713
+	private SignalIn LoadDataSignal;
+
+	// Token: 0x04003D62 RID: 15714
+	private bool raftIsAfloat;
+
+	// Token: 0x04003D63 RID: 15715
+	private int savepointSavedHandle = -1;
+}

@@ -1,0 +1,100 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x02000250 RID: 592
+public class pointOfGravity : MonoBehaviour
+{
+	// Token: 0x06001263 RID: 4707 RVA: 0x000AC6A0 File Offset: 0x000AA8A0
+	private void Start()
+	{
+		Physics.gravity = this.orgGravity;
+	}
+
+	// Token: 0x06001264 RID: 4708 RVA: 0x000AC6B0 File Offset: 0x000AA8B0
+	private void FixedUpdate()
+	{
+		this.GetGravityFromSpheres();
+		this.boyToCenterDist = (ScriptGlobals.boy.pos3 - base.transform.position).magnitude;
+		if (this.boyToCenterDist <= this.gravityRadius)
+		{
+			float num = Mathf.InverseLerp(this.gravityRadius, this.gravityRadius / 100f * this.gravityCorePercentage, this.boyToCenterDist);
+			float ay = Mathf.Lerp(this.orgGravity.y, this.gravityNew, num);
+			ScriptGlobals.boy.properties.customGravity = new vector2fClass(new vector2f(0f, ay));
+		}
+		foreach (Rigidbody rigidbody in this.bodiesToInfluence)
+		{
+			float magnitude = (rigidbody.transform.position - base.transform.position).magnitude;
+			if (magnitude <= this.gravityRadius)
+			{
+				if (rigidbody.useGravity)
+				{
+					rigidbody.useGravity = false;
+				}
+				float num2 = Mathf.InverseLerp(this.gravityRadius, this.gravityRadius / 100f * this.gravityCorePercentage, magnitude);
+				float num3 = Mathf.Lerp(this.orgGravity.y, this.gravityNew, num2);
+				rigidbody.AddForce(new Vector3(0f, num3 * rigidbody.mass * Time.fixedDeltaTime, 0f), 1);
+			}
+			else if (magnitude > this.gravityRadius && !rigidbody.useGravity)
+			{
+				rigidbody.useGravity = true;
+			}
+		}
+	}
+
+	// Token: 0x06001265 RID: 4709 RVA: 0x000AC878 File Offset: 0x000AAA78
+	private void GetGravityFromSpheres()
+	{
+		this.gravityRadius = this.radius;
+		this.radiusSphere.transform.localScale = new Vector3(this.radius * 2f, this.radius * 2f, this.radius * 2f);
+		this.gravityCorePercentage = this.corePercentage;
+		float num = this.radius * 2f / 100f * this.corePercentage;
+		this.coreSphere.transform.localScale = new Vector3(num, num, num);
+	}
+
+	// Token: 0x06001266 RID: 4710 RVA: 0x000AC908 File Offset: 0x000AAB08
+	private void OnDrawGizmos()
+	{
+		if (PhysicsUtils.stepCount < 1L)
+		{
+			Gizmos.color = Color.yellow;
+			Gizmos.DrawSphere(base.transform.position, this.radius);
+			Gizmos.color = Color.red;
+			float num = this.radius * 2f / 100f * this.corePercentage;
+			Gizmos.DrawWireSphere(base.transform.position, num / 2f);
+		}
+	}
+
+	// Token: 0x040021C5 RID: 8645
+	public GameObject radiusSphere;
+
+	// Token: 0x040021C6 RID: 8646
+	public GameObject coreSphere;
+
+	// Token: 0x040021C7 RID: 8647
+	public float gravityNew = -3f;
+
+	// Token: 0x040021C8 RID: 8648
+	public float corePercentage;
+
+	// Token: 0x040021C9 RID: 8649
+	public float radius;
+
+	// Token: 0x040021CA RID: 8650
+	public List<Rigidbody> bodiesToInfluence;
+
+	// Token: 0x040021CB RID: 8651
+	private float gravityRadius;
+
+	// Token: 0x040021CC RID: 8652
+	private float gravityCorePercentage;
+
+	// Token: 0x040021CD RID: 8653
+	private float boyToCenterDist;
+
+	// Token: 0x040021CE RID: 8654
+	private GameObject debugSphere;
+
+	// Token: 0x040021CF RID: 8655
+	private Vector3 orgGravity = new Vector3(0f, -9.81f, 0f);
+}

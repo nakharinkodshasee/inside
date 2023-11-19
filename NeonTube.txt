@@ -1,0 +1,215 @@
+using System;
+using UnityEngine;
+
+// Token: 0x02000209 RID: 521
+public class NeonTube : MonoBehaviour, IFastEventExListener<Collision>
+{
+	// Token: 0x0600101B RID: 4123 RVA: 0x00098808 File Offset: 0x00096A08
+	private void Start()
+	{
+		this.collisionEvents.collisionEnter.Register(this, ref this.collisionEnterHandle);
+	}
+
+	// Token: 0x0600101C RID: 4124 RVA: 0x00098824 File Offset: 0x00096A24
+	private void SetFallState(Vector3 velocity, Vector3 angularVelocity)
+	{
+		if (this.state != NeonTube.State.None)
+		{
+			return;
+		}
+		this.tubeRigidbody.transform.parent = this.detachParent;
+		this.tubeRigidbody.isKinematic = false;
+		this.tubeRigidbody.interpolation = 1;
+		this.tubeRigidbody.velocity = velocity;
+		this.tubeRigidbody.angularVelocity = angularVelocity;
+		this.state = NeonTube.State.Fall;
+	}
+
+	// Token: 0x0600101D RID: 4125 RVA: 0x0009888C File Offset: 0x00096A8C
+	private void FallState()
+	{
+	}
+
+	// Token: 0x0600101E RID: 4126 RVA: 0x00098890 File Offset: 0x00096A90
+	private void SetImpactState(Vector3 impactPos)
+	{
+		this.state = NeonTube.State.Impact;
+	}
+
+	// Token: 0x0600101F RID: 4127 RVA: 0x0009889C File Offset: 0x00096A9C
+	private void ImpactState()
+	{
+		if (Mathf.Abs(this.tubeRigidbody.rotation.eulerAngles.x) < 8f)
+		{
+			this.Break();
+		}
+	}
+
+	// Token: 0x06001020 RID: 4128 RVA: 0x000988DC File Offset: 0x00096ADC
+	private void SetBrokenState()
+	{
+		this.state = NeonTube.State.Broken;
+	}
+
+	// Token: 0x06001021 RID: 4129 RVA: 0x000988E8 File Offset: 0x00096AE8
+	private void BrokenState()
+	{
+	}
+
+	// Token: 0x06001022 RID: 4130 RVA: 0x000988EC File Offset: 0x00096AEC
+	private void Update()
+	{
+		if (this.state != NeonTube.State.None)
+		{
+			switch (this.state)
+			{
+			case NeonTube.State.Fall:
+				this.FallState();
+				break;
+			case NeonTube.State.Broken:
+				this.BrokenState();
+				break;
+			case NeonTube.State.Impact:
+				this.ImpactState();
+				break;
+			}
+		}
+	}
+
+	// Token: 0x06001023 RID: 4131 RVA: 0x00098948 File Offset: 0x00096B48
+	private void Break()
+	{
+		if (this.state == NeonTube.State.Broken)
+		{
+			return;
+		}
+		Vector3 position = this.tubeRigidbody.position;
+		position.y = this.smashEffect.transform.position.y;
+		this.smashEffect.transform.position = position;
+		Vector3 eulerAngles = this.smashEffect.transform.rotation.eulerAngles;
+		eulerAngles.y = this.tubeRigidbody.rotation.eulerAngles.y;
+		if (Random.value > 0.5f)
+		{
+			eulerAngles.y += 180f;
+		}
+		this.smashEffect.transform.rotation = Quaternion.Euler(eulerAngles);
+		Vector3 one = Vector3.one;
+		if (Random.value > 0.5f)
+		{
+			one.x = -1f;
+		}
+		if (Random.value > 0.5f)
+		{
+			one.z = -1f;
+		}
+		this.smashEffect.transform.localScale = one;
+		this.tube.SetActive(false);
+		this.smashEffect.SetActive(true);
+		this.SetBrokenState();
+	}
+
+	// Token: 0x06001024 RID: 4132 RVA: 0x00098A80 File Offset: 0x00096C80
+	private void BreakAttached()
+	{
+		if (this.state == NeonTube.State.Broken)
+		{
+			return;
+		}
+		Vector3 one = Vector3.one;
+		if (Random.value > 0.5f)
+		{
+			one.x = -1f;
+		}
+		if (Random.value > 0.5f)
+		{
+			one.z = -1f;
+		}
+		this.smashEffectAttached.transform.localScale = one;
+		this.originalTube.gameObject.SetActive(false);
+		this.attachedShards.SetActive(true);
+		this.SetBrokenState();
+	}
+
+	// Token: 0x06001025 RID: 4133 RVA: 0x00098B0C File Offset: 0x00096D0C
+	public void OnFastEventEx(FastEventEx<Collision> sender, ref Collision collision)
+	{
+		if (sender != this.collisionEvents.collisionEnter)
+		{
+			return;
+		}
+		if (this.state != NeonTube.State.Fall)
+		{
+			return;
+		}
+		Collider collider = collision.collider;
+		if (!collider)
+		{
+			return;
+		}
+		HuddleClothBody component = collider.GetComponent<HuddleClothBody>();
+		if (component)
+		{
+			return;
+		}
+		Vector3 point = collision.contacts[0].point;
+		this.SetImpactState(point);
+	}
+
+	// Token: 0x06001026 RID: 4134 RVA: 0x00098B7C File Offset: 0x00096D7C
+	public void Fall(Vector3 velocity, Vector3 angularVelocity)
+	{
+		this.SetFallState(velocity, angularVelocity);
+	}
+
+	// Token: 0x06001027 RID: 4135 RVA: 0x00098B88 File Offset: 0x00096D88
+	public void BreakImpact()
+	{
+		this.BreakAttached();
+	}
+
+	// Token: 0x04001D23 RID: 7459
+	public GameObject tube;
+
+	// Token: 0x04001D24 RID: 7460
+	public GameObject smashEffect;
+
+	// Token: 0x04001D25 RID: 7461
+	public GameObject smashEffectAttached;
+
+	// Token: 0x04001D26 RID: 7462
+	public GameObject attachedShards;
+
+	// Token: 0x04001D27 RID: 7463
+	public Transform detachParent;
+
+	// Token: 0x04001D28 RID: 7464
+	public Rigidbody tubeRigidbody;
+
+	// Token: 0x04001D29 RID: 7465
+	public Transform originalTube;
+
+	// Token: 0x04001D2A RID: 7466
+	public CollisionEvents collisionEvents;
+
+	// Token: 0x04001D2B RID: 7467
+	public bool debug;
+
+	// Token: 0x04001D2C RID: 7468
+	private NeonTube.State state;
+
+	// Token: 0x04001D2D RID: 7469
+	private int collisionEnterHandle = -1;
+
+	// Token: 0x0200020A RID: 522
+	private enum State
+	{
+		// Token: 0x04001D2F RID: 7471
+		None,
+		// Token: 0x04001D30 RID: 7472
+		Fall,
+		// Token: 0x04001D31 RID: 7473
+		Broken,
+		// Token: 0x04001D32 RID: 7474
+		Impact
+	}
+}

@@ -1,0 +1,63 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005CA RID: 1482
+public class PB_stretchFakeWater : MonoBehaviour, IPreAwake
+{
+	// Token: 0x060025AA RID: 9642 RVA: 0x00133ACC File Offset: 0x00131CCC
+	public bool PreAwake(int callcount)
+	{
+		this.empty = SignalIn.Create("empty", base.gameObject, delegate
+		{
+			this.doEmptyWater = true;
+		});
+		return true;
+	}
+
+	// Token: 0x060025AB RID: 9643 RVA: 0x00133AF4 File Offset: 0x00131CF4
+	private void FixedUpdate()
+	{
+		if (this.doEmptyWater)
+		{
+			if (!this.particles.isPlaying)
+			{
+				this.particles.Play();
+			}
+			Vector3 localScale = this.waterObject.localScale;
+			localScale.y -= this.speed;
+			this.waterObject.localScale = localScale;
+			localScale = this.cylinderTop.localScale;
+			localScale.z += this.speed;
+			this.cylinderTop.localScale = localScale;
+			localScale = this.cylinderObject.localScale;
+			localScale.z -= this.speed;
+			this.cylinderObject.localScale = localScale;
+			if (localScale.z <= 0f)
+			{
+				this.doEmptyWater = false;
+				this.particles.Stop();
+			}
+		}
+	}
+
+	// Token: 0x040044D0 RID: 17616
+	public Transform waterObject;
+
+	// Token: 0x040044D1 RID: 17617
+	public Transform cylinderObject;
+
+	// Token: 0x040044D2 RID: 17618
+	public Transform cylinderTop;
+
+	// Token: 0x040044D3 RID: 17619
+	public ParticleSystem particles;
+
+	// Token: 0x040044D4 RID: 17620
+	public float speed;
+
+	// Token: 0x040044D5 RID: 17621
+	private SignalIn empty;
+
+	// Token: 0x040044D6 RID: 17622
+	private bool doEmptyWater;
+}

@@ -1,0 +1,189 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Token: 0x020000CA RID: 202
+public class PigLabAnimator : MonoBehaviour
+{
+	// Token: 0x06000654 RID: 1620 RVA: 0x000482E4 File Offset: 0x000464E4
+	private void Start()
+	{
+		this.myAnim = base.GetComponent<Animator>();
+		this.LRID = Animator.StringToHash("LR");
+		this.StoppedID = Animator.StringToHash("Stopped");
+		this.Walk();
+		this.LR = 0.5f;
+		this.wantedLR = 0.5f;
+		this.curTurnTimer = this.turnUpdateFrequency;
+		this.myAnim.SetFloat(this.LRID, this.LR);
+	}
+
+	// Token: 0x06000655 RID: 1621 RVA: 0x0004835C File Offset: 0x0004655C
+	private void Walk()
+	{
+		this.moveMode = PigLabAnimator.MoveMode.Walking;
+		this.curTimer = Random.Range(this.walkTimeMin, this.walkTimeMax);
+		this.myAnim.SetBool(this.StoppedID, false);
+	}
+
+	// Token: 0x06000656 RID: 1622 RVA: 0x0004839C File Offset: 0x0004659C
+	private void StandStill()
+	{
+		this.moveMode = PigLabAnimator.MoveMode.Stopped;
+		this.curTimer = Random.Range(this.waitTimeMin, this.waitTimeMax);
+		this.myAnim.SetBool(this.StoppedID, true);
+	}
+
+	// Token: 0x06000657 RID: 1623 RVA: 0x000483DC File Offset: 0x000465DC
+	private void StayAway(GameObject avoidObject)
+	{
+		Vector3 vector = avoidObject.transform.InverseTransformPoint(base.transform.position);
+		if (Mathf.Abs(vector.x) > 0.5f + 1.5f / avoidObject.transform.localScale.x || Mathf.Abs(vector.z) > 0.5f + 1.5f / avoidObject.transform.localScale.z)
+		{
+			return;
+		}
+		Vector3 vector2 = avoidObject.transform.InverseTransformDirection(base.transform.forward);
+		if (Vector3.Dot(vector2, vector) >= 0f)
+		{
+			return;
+		}
+		Vector3 vector3;
+		vector3..ctor(-vector.z, 0f, vector.x);
+		float num = Mathf.Sign(Vector3.Dot(vector3, vector2));
+		float magnitude = vector.magnitude;
+		float magnitude2 = (base.transform.position - avoidObject.transform.position).magnitude;
+		float num2 = Mathf.Max(0.01f, 3f - magnitude2) * 20f;
+		this.wantedLR = Mathf.Clamp(this.wantedLR + num * num2 * Time.deltaTime, 0f, 1f);
+		if (magnitude < 0.5f)
+		{
+			vector = 0.5f * vector / magnitude;
+			base.transform.position = avoidObject.transform.TransformPoint(vector);
+		}
+	}
+
+	// Token: 0x06000658 RID: 1624 RVA: 0x0004855C File Offset: 0x0004675C
+	private void DoStayInsideCode()
+	{
+		Vector3 vector = this.stayInsideBox.transform.InverseTransformPoint(base.transform.position);
+		Vector3 vector2 = this.stayInsideBox.transform.InverseTransformDirection(base.transform.forward);
+		bool flag = false;
+		if ((double)Mathf.Abs(vector.x) > 0.3 && vector2.x * vector.x > 0f)
+		{
+			flag = true;
+			float num = 1f;
+			if (vector2.z * vector.x > 0f)
+			{
+				num = -1f;
+			}
+			float num2 = Mathf.Abs(vector2.x) * (0.2f + (Mathf.Abs(vector.x) - 0.3f) * 5f) * 20f;
+			this.wantedLR = Mathf.Clamp(this.wantedLR + num * num2 * Time.deltaTime, 0f, 1f);
+		}
+		if ((double)Mathf.Abs(vector.z) > 0.3 && vector2.z * vector.z > 0f)
+		{
+			flag = true;
+			float num3 = 1f;
+			if (vector2.x * vector.z < 0f)
+			{
+				num3 = -1f;
+			}
+			float num4 = Mathf.Abs(vector2.z) * (0.2f + (Mathf.Abs(vector.z) - 0.3f) * 5f) * 20f;
+			this.wantedLR = Mathf.Clamp(this.wantedLR + num3 * num4 * Time.deltaTime, 0f, 1f);
+		}
+		if (flag)
+		{
+			vector.x = Mathf.Clamp(vector.x, -0.45f, 0.45f);
+			vector.z = Mathf.Clamp(vector.z, -0.45f, 0.45f);
+			base.transform.position = this.stayInsideBox.transform.TransformPoint(vector);
+		}
+	}
+
+	// Token: 0x06000659 RID: 1625 RVA: 0x0004876C File Offset: 0x0004696C
+	private void Update()
+	{
+		this.curTimer -= Time.deltaTime;
+		if (this.curTimer <= 0f)
+		{
+			if (this.moveMode == PigLabAnimator.MoveMode.Stopped)
+			{
+				this.Walk();
+			}
+			else
+			{
+				this.StandStill();
+			}
+		}
+		this.curTurnTimer -= Time.deltaTime;
+		if (this.curTurnTimer <= 0f)
+		{
+			this.wantedLR = Mathf.Clamp(this.wantedLR + Random.Range(-this.turnUpdateMaxDelta, this.turnUpdateMaxDelta), 0f, 1f);
+			this.curTurnTimer = this.turnUpdateFrequency;
+		}
+		this.LR += (this.wantedLR - this.LR) * Time.deltaTime * 2f;
+		this.myAnim.SetFloat(this.LRID, this.LR);
+		this.DoStayInsideCode();
+		int i = 0;
+		int count = this.avoidSpheres.Count;
+		while (i < count)
+		{
+			this.StayAway(this.avoidSpheres[i]);
+			i++;
+		}
+	}
+
+	// Token: 0x04000AC0 RID: 2752
+	private Animator myAnim;
+
+	// Token: 0x04000AC1 RID: 2753
+	public float walkTimeMin = 5f;
+
+	// Token: 0x04000AC2 RID: 2754
+	public float walkTimeMax = 12f;
+
+	// Token: 0x04000AC3 RID: 2755
+	public float waitTimeMin = 3f;
+
+	// Token: 0x04000AC4 RID: 2756
+	public float waitTimeMax = 6f;
+
+	// Token: 0x04000AC5 RID: 2757
+	public float turnUpdateFrequency = 0.3f;
+
+	// Token: 0x04000AC6 RID: 2758
+	public float turnUpdateMaxDelta = 0.5f;
+
+	// Token: 0x04000AC7 RID: 2759
+	public GameObject stayInsideBox;
+
+	// Token: 0x04000AC8 RID: 2760
+	public List<GameObject> avoidSpheres;
+
+	// Token: 0x04000AC9 RID: 2761
+	private PigLabAnimator.MoveMode moveMode;
+
+	// Token: 0x04000ACA RID: 2762
+	private float curTimer;
+
+	// Token: 0x04000ACB RID: 2763
+	private float curTurnTimer;
+
+	// Token: 0x04000ACC RID: 2764
+	private float wantedLR = 0.5f;
+
+	// Token: 0x04000ACD RID: 2765
+	private float LR = 0.5f;
+
+	// Token: 0x04000ACE RID: 2766
+	private int LRID;
+
+	// Token: 0x04000ACF RID: 2767
+	private int StoppedID;
+
+	// Token: 0x020000CB RID: 203
+	private enum MoveMode
+	{
+		// Token: 0x04000AD1 RID: 2769
+		Walking,
+		// Token: 0x04000AD2 RID: 2770
+		Stopped
+	}
+}

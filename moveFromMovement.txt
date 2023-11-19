@@ -1,0 +1,199 @@
+using System;
+using UnityEngine;
+
+// Token: 0x020005E1 RID: 1505
+public class moveFromMovement : MonoBehaviour
+{
+	// Token: 0x0600260D RID: 9741 RVA: 0x00135BE4 File Offset: 0x00133DE4
+	private void Start()
+	{
+		this.lastFrameX = this.objToMimic.transform.position.x;
+		this.lastFrameY = this.objToMimic.transform.position.y;
+		this.lastFrameZ = this.objToMimic.transform.position.z;
+	}
+
+	// Token: 0x0600260E RID: 9742 RVA: 0x00135C4C File Offset: 0x00133E4C
+	private void FixedUpdate()
+	{
+		this.thisFrameX = this.objToMimic.transform.position.x;
+		this.thisFrameY = this.objToMimic.transform.position.y;
+		this.thisFrameZ = this.objToMimic.transform.position.z;
+		float num = (this.thisFrameX - this.lastFrameX) * this.multiplier;
+		float num2 = (this.thisFrameY - this.lastFrameY) * this.multiplier;
+		float num3 = (this.thisFrameZ - this.lastFrameZ) * this.multiplier;
+		if (this.setXbasedOnX && num != 0f)
+		{
+			Vector3 position = base.transform.position;
+			if (this.invertMovement)
+			{
+				position.x -= num;
+			}
+			else
+			{
+				position.x += num;
+			}
+			base.transform.position = position;
+		}
+		if (this.setYbasedOnY && num2 != 0f)
+		{
+			Vector3 position2 = base.transform.position;
+			if (this.invertMovement)
+			{
+				position2.y -= num2;
+			}
+			else
+			{
+				position2.y += num2;
+			}
+			base.transform.position = position2;
+		}
+		if (this.setZbasedOnZ && num3 != 0f)
+		{
+			Vector3 position3 = base.transform.position;
+			if (this.invertMovement)
+			{
+				position3.z -= num3;
+			}
+			else
+			{
+				position3.z += num3;
+			}
+			base.transform.position = position3;
+		}
+		if (this.setXbasedOnY && num2 != 0f)
+		{
+			Vector3 position4 = base.transform.position;
+			if (this.invertMovement)
+			{
+				position4.x -= num2;
+			}
+			else
+			{
+				position4.x += num2;
+			}
+			base.transform.position = position4;
+		}
+		if (this.setXbasedOnZ && num3 != 0f)
+		{
+			Vector3 position5 = base.transform.position;
+			if (this.invertMovement)
+			{
+				position5.x -= num3;
+			}
+			else
+			{
+				position5.x += num3;
+			}
+			base.transform.position = position5;
+		}
+		if (this.setYbasedOnX && num != 0f)
+		{
+			Vector3 position6 = base.transform.position;
+			if (this.invertMovement)
+			{
+				position6.y -= num;
+			}
+			else
+			{
+				position6.y += num;
+			}
+			base.transform.position = position6;
+		}
+		if (this.setYbasedOnZ && num3 != 0f)
+		{
+			Vector3 position7 = base.transform.position;
+			if (this.invertMovement)
+			{
+				position7.y -= num3;
+			}
+			else
+			{
+				position7.y += num3;
+			}
+			base.transform.position = position7;
+		}
+		if (this.setZbasedOnX && num != 0f)
+		{
+			Vector3 position8 = base.transform.position;
+			if (this.invertMovement)
+			{
+				position8.z -= num;
+			}
+			else
+			{
+				position8.z += num;
+			}
+			base.transform.position = position8;
+		}
+		if (this.setZbasedOnY && num2 != 0f)
+		{
+			Vector3 position9 = base.transform.position;
+			if (this.invertMovement)
+			{
+				position9.z -= num2;
+			}
+			else
+			{
+				position9.z += num2;
+			}
+			base.transform.position = position9;
+		}
+		this.lastFrameX = this.objToMimic.transform.position.x;
+		this.lastFrameY = this.objToMimic.transform.position.y;
+		this.lastFrameZ = this.objToMimic.transform.position.z;
+	}
+
+	// Token: 0x04004547 RID: 17735
+	public GameObject objToMimic;
+
+	// Token: 0x04004548 RID: 17736
+	public bool setXbasedOnX;
+
+	// Token: 0x04004549 RID: 17737
+	public bool setYbasedOnY;
+
+	// Token: 0x0400454A RID: 17738
+	public bool setZbasedOnZ;
+
+	// Token: 0x0400454B RID: 17739
+	public bool setXbasedOnY;
+
+	// Token: 0x0400454C RID: 17740
+	public bool setXbasedOnZ;
+
+	// Token: 0x0400454D RID: 17741
+	public bool setYbasedOnX;
+
+	// Token: 0x0400454E RID: 17742
+	public bool setYbasedOnZ;
+
+	// Token: 0x0400454F RID: 17743
+	public bool setZbasedOnX;
+
+	// Token: 0x04004550 RID: 17744
+	public bool setZbasedOnY;
+
+	// Token: 0x04004551 RID: 17745
+	public float multiplier = 1f;
+
+	// Token: 0x04004552 RID: 17746
+	public bool invertMovement;
+
+	// Token: 0x04004553 RID: 17747
+	private float lastFrameX;
+
+	// Token: 0x04004554 RID: 17748
+	private float lastFrameY;
+
+	// Token: 0x04004555 RID: 17749
+	private float lastFrameZ;
+
+	// Token: 0x04004556 RID: 17750
+	private float thisFrameX;
+
+	// Token: 0x04004557 RID: 17751
+	private float thisFrameY;
+
+	// Token: 0x04004558 RID: 17752
+	private float thisFrameZ;
+}

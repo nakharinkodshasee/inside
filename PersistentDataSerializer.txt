@@ -1,0 +1,36 @@
+using System;
+using System.Collections.Generic;
+
+// Token: 0x02000385 RID: 901
+public class PersistentDataSerializer : PersistentDataManager
+{
+	// Token: 0x1700006C RID: 108
+	// (get) Token: 0x06001863 RID: 6243 RVA: 0x000D4ABC File Offset: 0x000D2CBC
+	protected override List<KeyValuePair<Type, Func<IPersistentData>>> typeTable
+	{
+		get
+		{
+			return PersistentDataSerializer.TypeTable.table;
+		}
+	}
+
+	// Token: 0x02000386 RID: 902
+	private static class TypeTable
+	{
+		// Token: 0x06001864 RID: 6244 RVA: 0x000D4AC4 File Offset: 0x000D2CC4
+		// Note: this type is marked as 'beforefieldinit'.
+		static TypeTable()
+		{
+			List<KeyValuePair<Type, Func<IPersistentData>>> list = new List<KeyValuePair<Type, Func<IPersistentData>>>();
+			list.Add(new KeyValuePair<Type, Func<IPersistentData>>(typeof(PersistentBool.PersistentData), () => new PersistentBool.PersistentData()));
+			list.Add(new KeyValuePair<Type, Func<IPersistentData>>(typeof(PersistentElevatorHandler.PersistentData), () => new PersistentElevatorHandler.PersistentData()));
+			list.Add(new KeyValuePair<Type, Func<IPersistentData>>(typeof(AlbinoPersistentData), () => new AlbinoPersistentData()));
+			list.Add(new KeyValuePair<Type, Func<IPersistentData>>(typeof(PersistentPositionPushBlock.PersistentData), () => new PersistentPositionPushBlock.PersistentData()));
+			list.Add(new KeyValuePair<Type, Func<IPersistentData>>(typeof(AlbinosInCagePersistentData.PersistentData), () => new AlbinosInCagePersistentData.PersistentData()));
+			PersistentDataSerializer.TypeTable.table = list;
+		}
+
+		// Token: 0x04002C11 RID: 11281
+		public static readonly List<KeyValuePair<Type, Func<IPersistentData>>> table;
+	}
+}

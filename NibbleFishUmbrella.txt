@@ -1,0 +1,17 @@
+using System;
+
+// Token: 0x02000512 RID: 1298
+public class NibbleFishUmbrella : Umbrella<NibbleFish>
+{
+	// Token: 0x060021D6 RID: 8662 RVA: 0x0011B624 File Offset: 0x00119824
+	public override void DispatchUpdate()
+	{
+		int num = 0;
+		int size = this.size;
+		while (num != size)
+		{
+			this.targets[num].UmbrellaUpdate();
+			num++;
+		}
+	}
+}
